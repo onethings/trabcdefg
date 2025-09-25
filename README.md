@@ -1,6 +1,6 @@
 # trabcdefg
 
-A new Flutter project.
+A new Flutter project using latest traccar openapi.yaml to generate model.
 
 ## Getting Started
 
@@ -16,57 +16,61 @@ For help getting started with Flutter development, view the
 samples, guidance on mobile development, and a full API reference.
 
 
-AndroidManifest.xml should like this
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
-<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-<uses-permission android:name="android.permission.INTERNET" />
-<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
-    <application
-        android:label="trabcdefg"
-        android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
-        <activity
-            android:name=".MainActivity"
-            android:exported="true"
-            android:launchMode="singleTop"
-            android:taskAffinity=""
-            android:theme="@style/LaunchTheme"
-            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
-            android:hardwareAccelerated="true"
-            android:windowSoftInputMode="adjustResize">
-            <!-- Specifies an Android theme to apply to this Activity as soon as
-                 the Android process has started. This theme is visible to the user
-                 while the Flutter UI initializes. After that, this theme continues
-                 to determine the Window background behind the Flutter UI. -->
-            <meta-data
-              android:name="io.flutter.embedding.android.NormalTheme"
-              android:resource="@style/NormalTheme"
-              />
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN"/>
-                <category android:name="android.intent.category.LAUNCHER"/>
-            </intent-filter>
-        </activity>
-        <meta-data
-    android:name="com.google.android.geo.API_KEY"
-    android:value="Your google map api key here" /> <!--Replace wi th your google map api key！！！-->
-        <!-- Don't delete the meta-data below.
-             This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
-        <meta-data
-            android:name="flutterEmbedding"
-            android:value="2" />
-    </application>
-    <!-- Required to query activities that can process text, see:
-         https://developer.android.com/training/package-visibility and
-         https://developer.android.com/reference/android/content/Intent#ACTION_PROCESS_TEXT.
+AndroidManifest.xml example in AndroidManifest.txt.
 
-         In particular, this is used by the Flutter engine in io.flutter.plugin.text.ProcessTextPlugin. -->
-    <queries>
-        <intent>
-            <action android:name="android.intent.action.PROCESS_TEXT"/>
-            <data android:mimeType="text/plain"/>
-        </intent>
-    </queries>
-</manifest>
+-------------------------------------------
+for using latest api, Download from https://www.traccar.org/api-reference/openapi.yaml and place on /lib/openapi.yaml
+
+run command in terminal <br />
+dart pub run build_runner build
+
+
+in /lib/src/generated_api/lib/ folder, 
+move below folder and file to /lib/src/generated_api/ and replace it.  api, auth, model, these 3 folder. api_client.dart, api_exception.dart, api_helper.dart, api.dart, these 4 file. after replace those file, under /lib/src/generated_api/ just have above folder and file. other can delete.
+-------------------------------------------
+
+if map screen marker not correct, use this 
+
+Future<void> _loadMarkerIcons() async {
+    const List<String> categories = ['animal', 'arrow', 'bicycle', 'boat', 'bus', 'car', 'crane', 'default', 'helicopter', 'motorcycle', 'null', 'offroad', 'person', 'pickup', 'plane', 'scooter', 'ship', 'tractor', 'train', 'tram', 'trolleybus', 'truck', 'van'];
+    const List<String> statuses = ['online', 'offline', 'static', 'idle', 'unknown'];
+    
+    // The "default" category is used for devices without a specified category.
+    // The "unknown" status is used when a device's status is not available.
+
+    for (var category in categories) {
+      for (var status in statuses) {
+        // Construct the file path for the marker icon
+        final iconPath = 'assets/images/marker_${category}_$status.png';
+        try {
+          final byteData = await rootBundle.load(iconPath);
+          final imageData = byteData.buffer.asUint8List();
+          final codec = await ui.instantiateImageCodec(
+            imageData,
+            targetHeight: 100, // Customize size as needed
+          );
+          final frameInfo = await codec.getNextFrame();
+          final image = frameInfo.image;
+          final byteDataResized =
+              await image.toByteData(format: ui.ImageByteFormat.png);
+          if (byteDataResized != null) {
+            final bitmap = BitmapDescriptor.fromBytes(
+                byteDataResized.buffer.asUint8List());
+            _markerIcons['$category-$status'] = bitmap;
+          }
+        } catch (e) {
+          // Fallback to default if icon is not found
+          print('Could not load icon: $iconPath');
+          // Fallback to a default icon
+        }
+      }
+    }
+    setState(() {
+      _markersLoaded = true;
+    });
+  }
+
+
+
+
 
