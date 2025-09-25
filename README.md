@@ -15,6 +15,15 @@ For help getting started with Flutter development, view the
 [online documentation](https://docs.flutter.dev/), which offers tutorials,
 samples, guidance on mobile development, and a full API reference.
 
+--------screenshot
+![alt text](https://raw.githubusercontent.com/onethings/trabcdefg/refs/heads/main/screenshot/1.jpg) <br />
+![alt text](https://raw.githubusercontent.com/onethings/trabcdefg/refs/heads/main/screenshot/2.jpg) <br />
+![alt text](https://raw.githubusercontent.com/onethings/trabcdefg/refs/heads/main/screenshot/3.jpg) <br />
+![alt text](https://raw.githubusercontent.com/onethings/trabcdefg/refs/heads/main/screenshot/4.jpg) <br />
+![alt text](https://raw.githubusercontent.com/onethings/trabcdefg/refs/heads/main/screenshot/5.jpg) <br />
+![alt text](https://raw.githubusercontent.com/onethings/trabcdefg/refs/heads/main/screenshot/6.jpg) <br />
+--------screenshot
+
 
 AndroidManifest.xml example in AndroidManifest.txt.
 
