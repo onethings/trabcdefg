@@ -15,6 +15,16 @@
 // import 'package:get/get.dart';
 // import 'package:intl/intl.dart';
 // import 'device_details_screen.dart';
+// import 'package:url_launcher/url_launcher.dart';
+// import 'package:http/http.dart' as http;
+// import 'dart:convert';
+// import 'settings/geofences_screen.dart';
+// import 'package:trabcdefg/constants.dart';
+// import 'dart:io';
+// import 'share_device_screen.dart'; // Import the new screen
+// import 'command_screen.dart'; 
+// import 'package:trabcdefg/screens/settings/devices_screen.dart';
+// import 'package:trabcdefg/screens/settings/add_device_screen.dart';
 
 // class MapScreen extends StatefulWidget {
 //   final Device? selectedDevice;
@@ -157,6 +167,87 @@
 //     }
 //   }
 
+//   Future<void> _launchUrl(Uri url) async {
+//     if (!await launchUrl(url)) {
+//       throw 'Could not launch $url';
+//     }
+//   }
+
+//   void _showMoreOptionsDialog(Device device, Position position) {
+//     showDialog(
+//       context: context,
+//       builder: (BuildContext context) {
+//         return AlertDialog(
+//           title: const Text('More Options'),
+//           content: SingleChildScrollView(
+//             child: ListBody(
+//               children: <Widget>[
+//                 ListTile(
+//                   title: const Text('Create Geofence'),
+//                   onTap: () {
+//                     Navigator.of(context).pop();
+//                     Navigator.push(
+//                       context,
+//                       MaterialPageRoute(
+//                         builder: (context) => const AddGeofenceScreen(),
+//                       ),
+//                     );
+//                   },
+//                 ),
+//                 ListTile(
+//                   title: const Text('Google Maps'),
+//                   onTap: () {
+//                     Navigator.of(context).pop();
+//                     if (position.latitude != null && position.longitude != null) {
+//                       final url = Uri.parse(
+//                           'https://maps.google.com/?q=${position.latitude},${position.longitude}');
+//                       _launchUrl(url);
+//                     }
+//                   },
+//                 ),
+//                 ListTile(
+//                   title: const Text('Apple Maps'),
+//                   onTap: () {
+//                     Navigator.of(context).pop();
+//                     if (position.latitude != null && position.longitude != null) {
+//                       final url = Uri.parse(
+//                           'https://maps.apple.com/?q=${position.latitude},${position.longitude}');
+//                       _launchUrl(url);
+//                     }
+//                   },
+//                 ),
+//                 ListTile(
+//                   title: const Text('Street View'),
+//                   onTap: () {
+//                     Navigator.of(context).pop();
+//                     if (position.latitude != null && position.longitude != null) {
+//                       final url = Uri.parse(
+//                           'google.streetview:cbll=${position.latitude},${position.longitude}');
+//                       _launchUrl(url);
+//                     }
+//                   },
+//                 ),
+//                 ListTile(
+//                   title: const Text('Share Device'),
+//                   onTap: () async {
+//                     Navigator.of(context).pop();
+//                     final prefs = await SharedPreferences.getInstance();
+//                     await prefs.setInt('sharedDeviceId', device.id!);
+//                     await prefs.setString('sharedDeviceName', device.name!);
+//                     Navigator.push(
+//                       context,
+//                       MaterialPageRoute(builder: (context) => const ShareDeviceScreen()),
+//                     );
+//                   },
+//                 ),
+//               ],
+//             ),
+//           ),
+//         );
+//       },
+//     );
+//   }
+
 //   void _showDeviceDetailPanel(Device device) {
 //     _bottomSheetController?.close();
 
@@ -214,29 +305,35 @@
 //                           Text(
 //                             device.name ?? 'Unknown Device'.tr,
 //                             style: const TextStyle(
-//                               fontSize: 24,
+//                               fontSize: 17,
 //                               fontWeight: FontWeight.bold,
 //                             ),
 //                           ),
 //                           IconButton(
-//                             icon: const Icon(Icons.info,
-//                                 color: Color(0xFF5B697B)),
+//                             icon: const Icon(Icons.info, color: Color(0xFF5B697B)),
 //                             onPressed: () async {
 //                               // Handle info button tap
 //                               final prefs = await SharedPreferences.getInstance();
 //                               await prefs.setInt('selectedDeviceId', device.id!);
-//                               await prefs.setString('selectedDeviceName', device.name!);
+//                               await prefs.setString(
+//                                   'selectedDeviceName', device.name!);
 //                               Navigator.push(
 //                                 context,
 //                                 MaterialPageRoute(
-//                                   builder: (context) => const DeviceDetailsScreen(),
+//                                   builder: (context) =>
+//                                       const DeviceDetailsScreen(),
 //                                 ),
 //                               );
 //                               print('Info button tapped!');
 //                             },
 //                           ),
-//                           if ((currentPosition.attributes as Map<String, dynamic>?)?['distance'] != null &&
-//                               ((currentPosition.attributes as Map<String, dynamic>)['distance'] as double) > 0.0)
+//                           if ((currentPosition.attributes
+//                                       as Map<String, dynamic>?)?['distance'] !=
+//                                   null &&
+//                               ((currentPosition.attributes
+//                                           as Map<String, dynamic>)['distance']
+//                                       as double) >
+//                                   0.0)
 //                             Text(
 //                               '${((currentPosition.attributes as Map<String, dynamic>)['distance'] as double).toStringAsFixed(2)} km',
 //                               style: const TextStyle(
@@ -274,8 +371,7 @@
 //                               ),
 //                               child: Icon(
 //                                 Icons.key,
-//                                 color:
-//                                     (currentPosition.attributes
+//                                 color: (currentPosition.attributes
 //                                             as Map<String, dynamic>?)?['ignition'] ==
 //                                         true
 //                                     ? Colors.green
@@ -330,7 +426,7 @@
 //                         totalDistance:
 //                             '${(currentPosition.attributes as Map<String, dynamic>?)?['totalDistance']?.toStringAsFixed(2) ?? 'N/A'} km',
 //                       ),
-//                      // const SizedBox(height: 16),
+//                       // const SizedBox(height: 16),
 //                       _buildReportPanel(
 //                         onRefreshPressed: () {
 //                           _bottomSheetController?.close();
@@ -340,6 +436,34 @@
 //                               builder: (context) => MonthlyMileageScreen(),
 //                             ),
 //                           );
+//                         },
+//                         onMoreOptionsPressed: () =>
+//                             _showMoreOptionsDialog(device, currentPosition),
+//                             onUploadPressed: () async { 
+//                           // The device ID is already in SharedPreferences
+//                           Navigator.push( 
+//                             context, 
+//                             MaterialPageRoute( 
+//                               builder: (context) => const CommandScreen(), 
+//                             ), 
+//                           ); 
+//                         }, 
+//                         onEditPressed: () async { // <--- ADDED EDIT LOGIC
+//                           _bottomSheetController?.close();
+//                            final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
+//                           // Navigate to AddDeviceScreen, passing the current device for editing
+//                           final updatedDevice = await Navigator.push(
+//                             context,
+//                             MaterialPageRoute(
+//                               // Assuming AddDeviceScreen is used for both add and edit
+//                               builder: (context) => AddDeviceScreen(device: device), 
+//                             ),
+//                           );
+//  // Logic to handle updated device (e.g., refresh devices list)
+//                           if (updatedDevice != null) {
+//                             // You might need a way to refresh the device data on the map/UI
+//                             await traccarProvider.fetchInitialData();
+//                           }
 //                         },
 //                       ),
 //                     ],
@@ -654,17 +778,19 @@
 // }
 
 // // Widget to build the report and history panel
-// Widget _buildReportPanel({required VoidCallback onRefreshPressed}) {
+// Widget _buildReportPanel({
+//   required VoidCallback onRefreshPressed,
+//   required VoidCallback onMoreOptionsPressed,
+//   required VoidCallback onUploadPressed,
+//   required VoidCallback onEditPressed,
+// }) {
 //   return Row(
 //     mainAxisAlignment: MainAxisAlignment.spaceAround,
 //     children: [
 //       // More options icon
 //       IconButton(
 //         icon: const Icon(Icons.more_horiz, color: Color(0xFF5B697B)),
-//         onPressed: () {
-//           // Handle more options tap
-//           print('More options tapped!');
-//         },
+//         onPressed: onMoreOptionsPressed,
 //       ),
 //       // Refresh icon
 //       IconButton(
@@ -674,18 +800,12 @@
 //       // Upload icon
 //       IconButton(
 //         icon: const Icon(Icons.cloud_upload_outlined, color: Color(0xFF246BFD)),
-//         onPressed: () {
-//           // Handle upload tap
-//           print('Upload tapped!');
-//         },
+//         onPressed: onUploadPressed,
 //       ),
 //       // Edit icon
 //       IconButton(
 //         icon: const Icon(Icons.edit, color: Color(0xFF5B697B)),
-//         onPressed: () {
-//           // Handle edit tap
-//           print('Edit tapped!');
-//         },
+//         onPressed: onEditPressed,
 //       ),
 //       // Delete icon
 //       IconButton(

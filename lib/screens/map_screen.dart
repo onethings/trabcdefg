@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:provider/provider.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
-import 'package:trabcdefg/src/generated_api/api.dart';
+import 'package:trabcdefg/src/generated_api/api.dart' as api; // FIX: Added 'as api'
 import 'package:trabcdefg/src/generated_api/model/device_extensions.dart';
 import 'dart:async';
 import 'package:flutter/services.dart';
@@ -22,9 +22,12 @@ import 'settings/geofences_screen.dart';
 import 'package:trabcdefg/constants.dart';
 import 'dart:io';
 import 'share_device_screen.dart'; // Import the new screen
+import 'command_screen.dart';
+import 'package:trabcdefg/screens/settings/devices_screen.dart';
+import 'package:trabcdefg/screens/settings/add_device_screen.dart'; // Import AddDeviceScreen
 
 class MapScreen extends StatefulWidget {
-  final Device? selectedDevice;
+  final api.Device? selectedDevice; // FIX: Use api.Device
 
   const MapScreen({super.key, this.selectedDevice});
 
@@ -38,7 +41,7 @@ class _MapScreenState extends State<MapScreen> {
   bool _isSatelliteView = false;
   GoogleMapController? mapController;
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
-  Device? _currentDevice;
+  api.Device? _currentDevice; // FIX: Use api.Device
 
   @override
   void initState() {
@@ -125,14 +128,83 @@ class _MapScreenState extends State<MapScreen> {
     return DateFormat('MM/dd/yyyy, hh:mm:ss a').format(date.toLocal());
   }
 
-  void _onDeviceSelected(Device device, List<Position> allPositions) async {
+  // IMPLEMENTATION: Delete confirmation dialog
+  Future<void> _showDeleteConfirmationDialog(api.Device device) async { // FIX: Use api.Device
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Delete Device'.tr),
+          content: Text(
+              'Are you sure you want to delete the device "${device.name}"?'.tr),
+          actions: <Widget>[
+            TextButton(
+              child: Text('Cancel'.tr),
+              onPressed: () {
+                Navigator.of(context).pop(false);
+              },
+            ),
+            TextButton(
+              child: Text('Delete'.tr, style: const TextStyle(color: Colors.red)),
+              onPressed: () {
+                Navigator.of(context).pop(true);
+              },
+            ),
+          ],
+        );
+      },
+    );
+
+    if (result == true && device.id != null) {
+      _deleteDevice(device.id!);
+    }
+  }
+
+  // IMPLEMENTATION: Perform the deletion
+  Future<void> _deleteDevice(int deviceId) async {
+    final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
+    final devicesApi = api.DevicesApi(traccarProvider.apiClient); // FIX: Use api.DevicesApi
+
+    try {
+      // API Call: DELETE /devices/{id}
+      await devicesApi.devicesIdDelete(deviceId);
+
+      _bottomSheetController?.close();
+
+      // Refresh the devices list and update the UI (using existing provider method)
+      await traccarProvider.fetchInitialData();
+
+      Get.snackbar(
+        'Success'.tr,
+        'Device deleted successfully.'.tr,
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.green.shade100,
+      );
+    } on api.ApiException catch (e) { // FIX: Use api.ApiException
+      Get.snackbar(
+        'Error'.tr,
+        'Failed to delete device: ${e.message}'.tr,
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red.shade100,
+      );
+    } catch (e) {
+      Get.snackbar(
+        'Error'.tr,
+        'An unknown error occurred.'.tr,
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red.shade100,
+      );
+    }
+  }
+
+  void _onDeviceSelected(api.Device device, List<api.Position> allPositions) async { // FIX: Use api.Device and api.Position
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt('selectedDeviceId', device.id!);
     await prefs.setString('selectedDeviceName', device.name!);
 
     final position = allPositions.firstWhere(
       (p) => p.deviceId == device.id,
-      orElse: () => Position(
+      orElse: () => api.Position( // FIX: Use api.Position
         deviceId: device.id,
         latitude: 0.0,
         longitude: 0.0,
@@ -151,7 +223,7 @@ class _MapScreenState extends State<MapScreen> {
     }
 
     // Show the detail panel for the selected device
-    _showDeviceDetailPanel(device);
+    _showDeviceDetailPanel(device, position); // Pass position here
   }
 
   Color _getBatteryColor(double batteryLevel) {
@@ -170,7 +242,7 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
-  void _showMoreOptionsDialog(Device device, Position position) {
+  void _showMoreOptionsDialog(api.Device device, api.Position? currentPosition) { // FIX: Use api.Device and api.Position
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -195,9 +267,12 @@ class _MapScreenState extends State<MapScreen> {
                   title: const Text('Google Maps'),
                   onTap: () {
                     Navigator.of(context).pop();
-                    if (position.latitude != null && position.longitude != null) {
+                    // Assuming position variable needs to be currentPosition
+                    if (currentPosition?.latitude != null &&
+                        currentPosition?.longitude != null) { 
                       final url = Uri.parse(
-                          'https://maps.google.com/?q=${position.latitude},${position.longitude}');
+                        'http://maps.google.com/?q=${currentPosition!.latitude},${currentPosition.longitude}',
+                      );
                       _launchUrl(url);
                     }
                   },
@@ -206,9 +281,12 @@ class _MapScreenState extends State<MapScreen> {
                   title: const Text('Apple Maps'),
                   onTap: () {
                     Navigator.of(context).pop();
-                    if (position.latitude != null && position.longitude != null) {
+                    // Assuming position variable needs to be currentPosition
+                    if (currentPosition?.latitude != null &&
+                        currentPosition?.longitude != null) { 
                       final url = Uri.parse(
-                          'https://maps.apple.com/?q=${position.latitude},${position.longitude}');
+                        'https://maps.apple.com/?q=${currentPosition!.latitude},${currentPosition.longitude}',
+                      );
                       _launchUrl(url);
                     }
                   },
@@ -217,9 +295,12 @@ class _MapScreenState extends State<MapScreen> {
                   title: const Text('Street View'),
                   onTap: () {
                     Navigator.of(context).pop();
-                    if (position.latitude != null && position.longitude != null) {
+                    // Assuming position variable needs to be currentPosition
+                    if (currentPosition?.latitude != null &&
+                        currentPosition?.longitude != null) { 
                       final url = Uri.parse(
-                          'google.streetview:cbll=${position.latitude},${position.longitude}');
+                        'google.streetview:cbll=${currentPosition!.latitude},${currentPosition.longitude}',
+                      );
                       _launchUrl(url);
                     }
                   },
@@ -233,7 +314,9 @@ class _MapScreenState extends State<MapScreen> {
                     await prefs.setString('sharedDeviceName', device.name!);
                     Navigator.push(
                       context,
-                      MaterialPageRoute(builder: (context) => const ShareDeviceScreen()),
+                      MaterialPageRoute(
+                        builder: (context) => const ShareDeviceScreen(),
+                      ),
                     );
                   },
                 ),
@@ -245,19 +328,23 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
-  void _showDeviceDetailPanel(Device device) {
+  void _showDeviceDetailPanel(api.Device device, api.Position? currentPosition) { // FIX: Use api.Device and api.Position
     _bottomSheetController?.close();
+    
+    // Get the TraccarProvider instance for use outside the inner builder
+    final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
 
     _bottomSheetController = _scaffoldKey.currentState!.showBottomSheet(
       (context) {
         // Find the current position for the device
-        final currentPosition = Provider.of<TraccarProvider>(
-          context,
-          listen: false,
-        ).positions.firstWhere(
-          (p) => p.deviceId == device.id,
-          orElse: () => Position(),
-        );
+        final currentPosition =
+            Provider.of<TraccarProvider>(
+              context,
+              listen: false,
+            ).positions.firstWhere(
+              (p) => p.deviceId == device.id,
+              orElse: () => api.Position(), // FIX: Use api.Position
+            );
 
         return Padding(
           padding: const EdgeInsets.all(16.0),
@@ -267,12 +354,12 @@ class _MapScreenState extends State<MapScreen> {
               color: Colors.white,
               borderRadius: BorderRadius.circular(24.0),
               boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 20,
-                  spreadRadius: 5,
-                ),
-              ],
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 20,
+                spreadRadius: 5,
+              ),
+            ],
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -302,35 +389,36 @@ class _MapScreenState extends State<MapScreen> {
                           Text(
                             device.name ?? 'Unknown Device'.tr,
                             style: const TextStyle(
-                              fontSize: 24,
+                              fontSize: 17,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
                           IconButton(
-                            icon: const Icon(Icons.info, color: Color(0xFF5B697B)),
+                            icon: const Icon(
+                              Icons.info,
+                              color: Color(0xFF5B697B),
+                            ),
                             onPressed: () async {
                               // Handle info button tap
                               final prefs = await SharedPreferences.getInstance();
-                              await prefs.setInt('selectedDeviceId', device.id!);
+                              await prefs.setInt(
+                                'selectedDeviceId',
+                                device.id!,
+                              );
                               await prefs.setString(
-                                  'selectedDeviceName', device.name!);
+                                'selectedDeviceName',
+                                device.name!,
+                              );
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                  builder: (context) =>
-                                      const DeviceDetailsScreen(),
+                                  builder: (context) => const DeviceDetailsScreen(),
                                 ),
                               );
                               print('Info button tapped!');
                             },
                           ),
-                          if ((currentPosition.attributes
-                                      as Map<String, dynamic>?)?['distance'] !=
-                                  null &&
-                              ((currentPosition.attributes
-                                          as Map<String, dynamic>)['distance']
-                                      as double) >
-                                  0.0)
+                          if ((currentPosition.attributes as Map<String, dynamic>?)?['distance'] != null && ((currentPosition.attributes as Map<String, dynamic>)['distance'] as double) > 0.0)
                             Text(
                               '${((currentPosition.attributes as Map<String, dynamic>)['distance'] as double).toStringAsFixed(2)} km',
                               style: const TextStyle(
@@ -343,8 +431,7 @@ class _MapScreenState extends State<MapScreen> {
                       Row(
                         children: [
                           //Speed
-                          if (currentPosition.speed != null &&
-                              currentPosition.speed != 0.0)
+                          if (currentPosition.speed != null && currentPosition.speed != 0.0)
                             Padding(
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 4.0,
@@ -359,26 +446,23 @@ class _MapScreenState extends State<MapScreen> {
                               ),
                             ),
                           // Ignition Icon
-                          if ((currentPosition.attributes
-                                  as Map<String, dynamic>?)?['ignition'] !=
-                              null)
+                          if ((currentPosition.attributes as Map<String, dynamic>?)?['ignition'] != null)
                             Padding(
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 4.0,
                               ),
                               child: Icon(
                                 Icons.key,
-                                color: (currentPosition.attributes
-                                            as Map<String, dynamic>?)?['ignition'] ==
+                                color: (currentPosition.attributes as Map<
+                                            String,
+                                            dynamic>?)?['ignition'] ==
                                         true
                                     ? Colors.green
                                     : Colors.red,
                               ),
                             ),
                           // Battery Icon with Percentage
-                          if ((currentPosition.attributes
-                                  as Map<String, dynamic>?)?['batteryLevel'] !=
-                              null)
+                          if ((currentPosition.attributes as Map<String, dynamic>?)?['batteryLevel'] != null)
                             Padding(
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 4.0,
@@ -389,9 +473,10 @@ class _MapScreenState extends State<MapScreen> {
                                   Icon(
                                     Icons.battery_full,
                                     color: _getBatteryColor(
-                                      ((currentPosition.attributes
-                                                  as Map<String, dynamic>)['batteryLevel']
-                                              as int)
+                                      ((currentPosition.attributes as Map<
+                                                  String,
+                                                  dynamic>)[
+                                                  'batteryLevel'] as int)
                                           .toDouble(), // Cast to double
                                     ),
                                   ),
@@ -436,7 +521,38 @@ class _MapScreenState extends State<MapScreen> {
                         },
                         onMoreOptionsPressed: () =>
                             _showMoreOptionsDialog(device, currentPosition),
+                        onUploadPressed: () async {
+                          // The device ID is already in SharedPreferences
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const CommandScreen(),
+                            ),
+                          );
+                        },
+                        onEditPressed: () async { // EDITED: Wires to Edit Screen
+                          _bottomSheetController?.close();
+
+                          final updatedDevice = await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              // Assuming AddDeviceScreen handles edit by passing the device
+                              builder: (context) => AddDeviceScreen(device: device), 
+                            ),
+                          );
+
+                          // If device was updated, refresh the map data
+                          if (updatedDevice != null) {
+                            await traccarProvider.fetchInitialData();
+                          }
+                        },
+                        onDeletePressed: () { // EDITED: Wires to Delete Dialog
+                          // Close the detail panel before showing the dialog for better UX
+                          _bottomSheetController?.close();
+                          _showDeleteConfirmationDialog(device);
+                        },
                       ),
+                      const SizedBox(height: 16),
                     ],
                   ),
                 ),
@@ -445,231 +561,10 @@ class _MapScreenState extends State<MapScreen> {
           ),
         );
       },
-      backgroundColor: Colors.transparent,
-      elevation: 0,
     );
   }
 
-  LatLng? _getInitialCameraPosition(List<Position> positions) {
-    if (_currentDevice != null) {
-      final position = positions.firstWhere(
-        (p) => p.deviceId == _currentDevice!.id,
-        orElse: () => Position(latitude: 0, longitude: 0),
-      );
-      return LatLng(
-        position.latitude?.toDouble() ?? 0,
-        position.longitude?.toDouble() ?? 0,
-      );
-    }
-    return positions.isNotEmpty
-        ? LatLng(
-            positions.first.latitude!.toDouble(),
-            positions.first.longitude!.toDouble(),
-          )
-        : null;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      key: _scaffoldKey,
-      appBar: AppBar(
-        title: Text('mapTitle'.tr),
-        actions: [
-          IconButton(
-            icon: Icon(_isSatelliteView ? Icons.satellite : Icons.map),
-            onPressed: () {
-              setState(() {
-                _isSatelliteView = !_isSatelliteView;
-              });
-            },
-          ),
-        ],
-      ),
-      drawer: Drawer(
-        child: Consumer<TraccarProvider>(
-          builder: (context, provider, child) {
-            return ListView.builder(
-              itemCount: provider.devices.length,
-              itemBuilder: (context, index) {
-                final device = provider.devices[index];
-                return ListTile(
-                  title: Text(device.name ?? 'Unknown Device'.tr),
-                  onTap: () {
-                    _onDeviceSelected(device, provider.positions);
-                    _scaffoldKey.currentState?.closeDrawer();
-                  },
-                );
-              },
-            );
-          },
-        ),
-      ),
-      body: Consumer<TraccarProvider>(
-        builder: (context, provider, child) {
-          if (!_markersLoaded || provider.devices.isEmpty) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          final Set<Marker> markers = {};
-          for (var position in provider.positions) {
-            if (position.latitude != null && position.longitude != null) {
-              final device = provider.devices.firstWhere(
-                (d) => d.id == position.deviceId,
-                orElse: () => Device(
-                  id: 0,
-                  name: 'Unknown'.tr,
-                  status: 'offline',
-                  category: 'default',
-                ),
-              );
-
-              final course = position.course?.toDouble() ?? 0.0;
-              markers.add(
-                Marker(
-                  markerId: MarkerId(position.deviceId.toString()),
-                  position: LatLng(
-                    position.latitude!.toDouble(),
-                    position.longitude!.toDouble(),
-                  ),
-                  icon: _getMarkerIcon(device, position),
-                  rotation: course,
-                  infoWindow: InfoWindow(title: device.name ?? 'Unknown'.tr),
-                  onTap: () => _onDeviceSelected(device, provider.positions),
-                ),
-              );
-            }
-          }
-
-          final initialLocation = _getInitialCameraPosition(provider.positions);
-
-          return Stack(
-            children: [
-              GoogleMap(
-                mapType: _isSatelliteView ? MapType.satellite : MapType.normal,
-                initialCameraPosition: CameraPosition(
-                  target: initialLocation ?? const LatLng(0, 0),
-                  zoom: 10,
-                ),
-                onMapCreated: (controller) {
-                  mapController = controller;
-                  if (_currentDevice != null) {
-                    _onDeviceSelected(_currentDevice!, provider.positions);
-                  }
-                },
-                markers: markers,
-              ),
-              if (_currentDevice != null)
-                Positioned(
-                  bottom: 0,
-                  left: 0,
-                  right: 0,
-                  child: Container(
-                    padding: const EdgeInsets.all(16.0),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: const BorderRadius.only(
-                        topLeft: Radius.circular(16.0),
-                        topRight: Radius.circular(16.0),
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.1),
-                          blurRadius: 10,
-                          spreadRadius: 5,
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              _currentDevice!.name ?? 'Unknown Device'.tr,
-                              style: const TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.close),
-                              onPressed: () {
-                                setState(() {
-                                  _currentDevice = null;
-                                });
-                              },
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Text('Status: ${(_currentDevice!.status ?? 'N/A').tr}'),
-                      ],
-                    ),
-                  ),
-                ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-
-  // Helper method for marker icon
-  BitmapDescriptor _getMarkerIcon(Device device, Position position) {
-    final status = device.status ?? 'unknown';
-    final category = device.category ?? 'default';
-    final key = '$category-$status';
-    if (_markerIcons.containsKey(key)) {
-      return _markerIcons[key]!;
-    }
-    // Fallback to the default icon if a specific one is not found
-    return _markerIcons['default-unknown']!;
-  }
-}
-
-// Widget to build the statistical info cards
-Widget _buildInfoCard({
-  required IconData icon,
-  required String value,
-  required String label,
-  required Color color,
-}) {
-  return Expanded(
-    child: Container(
-      padding: const EdgeInsets.all(16.0),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF0F3F9),
-        borderRadius: BorderRadius.circular(16.0),
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, color: color),
-              const SizedBox(width: 8),
-              Text(
-                value,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
-        ],
-      ),
-    ),
-  );
-}
-
-// Widget to build the main details panel with time and distance
+  // Widget to build the details panel (unchanged)
 Widget _buildDetailsPanel({
   required String fixTime,
   required String address,
@@ -680,71 +575,133 @@ Widget _buildDetailsPanel({
     children: [
       // Fix Time Row
       Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          const Text(
-            'Fix Time',
-            style: TextStyle(color: Color(0xFF5B697B), fontSize: 14),
-          ),
+          const Icon(Icons.access_time, size: 16, color: Colors.grey),
+          const SizedBox(width: 8),
           Text(
-            fixTime,
-            style: const TextStyle(
-              color: Colors.black,
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-            ),
+            'deviceLastUpdate'.tr+':',
+            style: const TextStyle(fontWeight: FontWeight.bold),
           ),
+          const SizedBox(width: 4),
+          Text(fixTime),
         ],
       ),
+      const SizedBox(height: 8),
+
       // Address Row
       if (address != 'N/A')
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Text(
-              'Address',
-              style: TextStyle(color: Color(0xFF5B697B), fontSize: 14),
-            ),
-            Expanded(
-              child: Text(
-                address,
-                textAlign: TextAlign.right,
-                style: const TextStyle(
-                  color: Colors.black,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ),
-      // Total Distance Row
       Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Total Distance',
-            style: TextStyle(color: Color(0xFF5B697B), fontSize: 14),
-          ),
-          Row(
-            children: [
-              Text(
-                totalDistance,
-                style: const TextStyle(
-                  color: Colors.black,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              const SizedBox(width: 8),
-              const Icon(Icons.settings, color: Color(0xFF5B697B), size: 16),
-            ],
+          const Icon(Icons.location_on, size: 16, color: Colors.grey),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(address),
           ),
         ],
       ),
+      const SizedBox(height: 8),
+
+      // Total Distance Row
+      Row(
+        children: [
+          const Icon(Icons.directions_car, size: 16, color: Colors.grey),
+          const SizedBox(width: 8),
+          Text(
+            'deviceTotalDistance'.tr+':',
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(width: 4),
+          Text(totalDistance),
+        ],
+      ),
+      const SizedBox(height: 16), // Separator before the report panel
     ],
+  );
+}
+
+Widget _buildDrawer(BuildContext context, TraccarProvider traccarProvider) {
+  return Drawer(
+    child: ListView(
+      padding: EdgeInsets.zero,
+      children: <Widget>[
+        DrawerHeader(
+          decoration: BoxDecoration(
+            color: Theme.of(context).primaryColor,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'trabcdefg',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              // Display current user email/login if available
+              Text(
+                traccarProvider.currentUser?.email ?? 'Logged in user'.tr,
+                style: const TextStyle(
+                  color: Colors.white70,
+                  fontSize: 14,
+                ),
+              ),
+            ],
+          ),
+        ),
+        ListTile(
+          leading: const Icon(Icons.devices),
+          title: Text('Devices'.tr),
+          onTap: () {
+            Navigator.of(context).pop(); // Close the drawer
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const DeviceListScreen(), // Use existing DeviceListScreen
+              ),
+            );
+          },
+        ),
+        ListTile(
+          leading: const Icon(Icons.fence),
+          title: Text('Geofences'.tr),
+          onTap: () {
+            Navigator.of(context).pop(); // Close the drawer
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const GeofencesScreen(), // Use existing GeofencesScreen
+              ),
+            );
+          },
+        ),
+        ListTile(
+          leading: const Icon(Icons.settings),
+          title: Text('Settings'.tr),
+          onTap: () {
+            Navigator.of(context).pop(); // Close the drawer
+            // You should navigate to your Settings screen here
+            // Assuming you have a SettingsScreen, otherwise replace with the correct screen
+            // Navigator.push(context, MaterialPageRoute(builder: (context) => const SettingsScreen()));
+            Get.snackbar('Coming Soon'.tr, 'Settings screen placeholder');
+          },
+        ),
+        const Divider(),
+        ListTile(
+          leading: const Icon(Icons.logout, color: Colors.red),
+          title: Text('Logout'.tr, style: const TextStyle(color: Colors.red)),
+          onTap: () async {
+            Navigator.of(context).pop(); // Close the drawer
+            
+            // // FIX: Changed 'logout()' to the actual method name 'clearSession()'
+            // await traccarProvider.clearSession(); 
+          },
+        ),
+      ],
+    ),
   );
 }
 
@@ -752,6 +709,9 @@ Widget _buildDetailsPanel({
 Widget _buildReportPanel({
   required VoidCallback onRefreshPressed,
   required VoidCallback onMoreOptionsPressed,
+  required VoidCallback onUploadPressed,
+  required VoidCallback onEditPressed, // ADDED: Edit callback
+  required VoidCallback onDeletePressed, // ADDED: Delete callback
 }) {
   return Row(
     mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -769,27 +729,269 @@ Widget _buildReportPanel({
       // Upload icon
       IconButton(
         icon: const Icon(Icons.cloud_upload_outlined, color: Color(0xFF246BFD)),
-        onPressed: () {
-          // Handle upload tap
-          print('Upload tapped!');
-        },
+        onPressed: onUploadPressed,
       ),
       // Edit icon
       IconButton(
         icon: const Icon(Icons.edit, color: Color(0xFF5B697B)),
-        onPressed: () {
-          // Handle edit tap
-          print('Edit tapped!');
-        },
+        onPressed: onEditPressed,
       ),
       // Delete icon
       IconButton(
         icon: const Icon(Icons.delete_outline, color: Colors.red),
-        onPressed: () {
-          // Handle delete tap
-          print('Delete tapped!');
-        },
+        onPressed: onDeletePressed, // Wires the delete logic
       ),
     ],
   );
+}
+
+// Helper to safely find a position (since GetX's .firstWhereOrNull is not guaranteed to be globally available)
+api.Position? _findPositionOrNull(List<api.Position> positions, int? deviceId) {
+  if (deviceId == null) return null;
+  try {
+    return positions.firstWhere((p) => p.deviceId == deviceId);
+  } catch (_) {
+    return null;
+  }
+}
+
+// Helper method to get status color (ensure this is defined)
+Color _getStatusColor(String? status) {
+  switch (status) {
+    case 'online':
+      return Colors.green;
+    case 'offline':
+      return Colors.red;
+    case 'unknown':
+      return Colors.grey;
+    case 'static':
+      return Colors.blue;
+    case 'idle':
+      return Colors.orange;
+    default:
+      return Colors.black;
+  }
+}
+
+Widget _buildDeviceListDrawer(BuildContext context, TraccarProvider traccarProvider) {
+  return Drawer(
+    child: Column(
+      children: [
+        DrawerHeader(
+          decoration: BoxDecoration(
+            color: Theme.of(context).primaryColor,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'trabcdefg',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                traccarProvider.currentUser?.email ?? 'Logged in user'.tr,
+                style: const TextStyle(
+                  color: Colors.white70,
+                  fontSize: 14,
+                ),
+              ),
+            ],
+          ),
+        ),
+        // Device List
+        Expanded(
+          child: ListView.builder(
+            itemCount: traccarProvider.devices.length,
+            itemBuilder: (context, index) {
+              final device = traccarProvider.devices[index];
+              final position = _findPositionOrNull(traccarProvider.positions, device.id);
+              
+              // Get status details
+              final speed = (position?.speed ?? 0.0).toStringAsFixed(1);
+              final isIgnitionOn = (position?.attributes as Map<String, dynamic>?)?['ignition'] == true;
+              
+              return ListTile(
+                leading: Icon(
+                  Icons.circle,
+                  color: _getStatusColor(device.status), // Online/Offline status
+                  size: 10,
+                ),
+                title: Text(
+                  device.name ?? 'Unknown Device'.tr,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w500),
+                ),
+                subtitle: Row(
+                  children: [
+                    // Speed
+                    if (double.parse(speed) > 0.0)
+                    Text('$speed km/h'),
+                    const SizedBox(width: 12),
+                    // Ignition Status
+                    Icon(
+                      Icons.key,
+                      color: isIgnitionOn ? Colors.green : Colors.red,
+                      size: 16,
+                    ),
+                  ],
+                ),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () {
+                  // 1. Close the drawer
+                  Navigator.of(context).pop(); 
+                  // 2. Call the existing method to select the device, focus the map, and show the detail panel
+                  if (position != null) {
+                    _onDeviceSelected(device, traccarProvider.positions);
+                  }
+                },
+              );
+            },
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+@override
+Widget build(BuildContext context) {
+  return Consumer<TraccarProvider>(
+    builder: (context, traccarProvider, child) {
+      // 1. Handle Loading State
+      if (traccarProvider.isLoading && traccarProvider.devices.isEmpty) {
+        return const Scaffold(
+          body: Center(
+            child: CircularProgressIndicator(),
+          ),
+        );
+      }
+
+      // 2. Prepare Markers (Logic preserved from previous fix)
+      final markers = <Marker>{};
+      
+      if (_markersLoaded) {
+        for (final api.Device device in traccarProvider.devices) {
+          final api.Position? position = _findPositionOrNull(
+            traccarProvider.positions,
+            device.id,
+          );
+
+          if (position != null && position.latitude != null && position.longitude != null) {
+            final LatLng markerPosition = LatLng(position.latitude!.toDouble(), position.longitude!.toDouble());
+            final String markerId = device.id.toString();
+            
+            final String category = device.category ?? 'default';
+            final String status = device.status ?? 'unknown';
+            final String iconKey = '$category-$status';
+            
+            markers.add(
+              Marker(
+                markerId: MarkerId(markerId),
+                position: markerPosition,
+                icon: _markerIcons[iconKey] ?? _markerIcons['default-unknown']!,
+                onTap: () {
+                  _onDeviceSelected(device, traccarProvider.positions);
+                },
+              ),
+            );
+          }
+        }
+      }
+
+      // 3. Determine Initial Camera Position (Logic preserved from previous fix)
+      LatLng initialCameraPosition = const LatLng(0, 0);
+      double initialZoom = 2.0;
+
+      if (_currentDevice != null) {
+        final initialPosition = _findPositionOrNull(
+            traccarProvider.positions,
+            _currentDevice!.id,
+        );
+        
+        if (initialPosition?.latitude != null && initialPosition?.longitude != null) {
+          initialCameraPosition = LatLng(initialPosition!.latitude!.toDouble(), initialPosition.longitude!.toDouble());
+          initialZoom = 15.0; 
+        }
+      } else if (traccarProvider.positions.isNotEmpty) {
+        final api.Position firstPosition = traccarProvider.positions.first;
+        if (firstPosition.latitude != null && firstPosition.longitude != null) {
+            initialCameraPosition = LatLng(firstPosition.latitude!.toDouble(), firstPosition.longitude!.toDouble());
+            initialZoom = 5.0;
+        }
+      }
+
+      // 4. Build the Scaffold and Map
+      return Scaffold(
+        key: _scaffoldKey,
+        appBar: AppBar(
+          title: Text('mapTitle'.tr),
+          actions: [
+            IconButton(
+            icon: Icon(_isSatelliteView ? Icons.satellite : Icons.map),
+            onPressed: () {
+              setState(() {
+                _isSatelliteView = !_isSatelliteView;
+              });
+            },
+          ),
+            // List of devices button
+            // IconButton(
+            //   icon: const Icon(Icons.list),
+            //   onPressed: () {
+            //     Navigator.push(
+            //       context,
+            //       MaterialPageRoute(builder: (context) => const DeviceListScreen()),
+            //     );
+            //   },
+            // ),
+          ],
+        ),
+        // ADDED: The Drawer
+        drawer: _buildDeviceListDrawer(context, traccarProvider),
+        body: Stack(
+          children: [
+            GoogleMap(
+              // Satellite Switch logic
+              mapType: _isSatelliteView ? MapType.satellite : MapType.normal,
+              initialCameraPosition: CameraPosition(
+                target: initialCameraPosition,
+                zoom: initialZoom,
+              ),
+              onMapCreated: (GoogleMapController controller) {
+                mapController = controller;
+              },
+              markers: markers,
+              onTap: (LatLng latLng) {
+                _bottomSheetController?.close();
+              },
+              myLocationButtonEnabled: true,
+              myLocationEnabled: true,
+            ),
+            // Floating action buttons for map type toggle (Satellite Switch)
+            Positioned(
+              bottom: 80,
+              right: 16,
+              child: FloatingActionButton.small(
+                heroTag: 'mapType',
+                backgroundColor: Colors.white,
+                onPressed: () {
+                  setState(() {
+                    _isSatelliteView = !_isSatelliteView;
+                  });
+                },
+                child: Icon(_isSatelliteView ? Icons.layers : Icons.satellite, color: Colors.blue),
+              ),
+            ),
+          ],
+        ),
+      );
+    },
+  );
+}
 }

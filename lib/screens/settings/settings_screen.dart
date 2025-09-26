@@ -194,6 +194,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text('settingsTitle'.tr),
+        automaticallyImplyLeading: false,
       ),
       body: SafeArea(
         child: Column(

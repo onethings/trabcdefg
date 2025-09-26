@@ -85,7 +85,7 @@ class TraccarApp extends StatelessWidget {
       ],
       // Changed MaterialApp to GetMaterialApp to correctly handle GetX localization.
       child: GetMaterialApp(
-        title: 'TRABCDEFG',
+        title: 'Traccar Client',
         theme: ThemeData(
           primarySwatch: Colors.blue,
         ),
