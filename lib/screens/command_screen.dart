@@ -44,7 +44,7 @@ class _CommandScreenState extends State<CommandScreen> {
   // Helper function to map API type (camelCase) to Translation Key (commandPascalCase)
   String _getCommandTranslationKey(String? type) {
     if (type == null || type.isEmpty) {
-      return 'Unknown Command'; // Fallback text if type is missing
+      return 'commandTitle'.tr; // Fallback text if type is missing
     }
     // E.g., 'custom' -> 'Custom' -> 'commandCustom'
     // E.g., 'engineStop' -> 'EngineStop' -> 'commandEngineStop'
@@ -158,7 +158,7 @@ class _CommandScreenState extends State<CommandScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Required'.tr), // "Required".tr is likely missing, consider using a provided key like "commandTitle"
+        title: Text('deviceCommand'.tr), // "Required".tr is likely missing, consider using a provided key like "commandTitle"
       ),
       body: Form(
         key: _formKey,
@@ -182,7 +182,7 @@ class _CommandScreenState extends State<CommandScreen> {
                 },
                 child: InputDecorator(
                   decoration: InputDecoration(
-                    labelText: 'Type'.tr,
+                    labelText: 'sharedType'.tr,
                     border: const OutlineInputBorder(),
                     suffixIcon: const Icon(Icons.arrow_drop_down),
                   ),
@@ -240,7 +240,7 @@ class _CommandScreenState extends State<CommandScreen> {
                     onPressed: () {
                       Navigator.of(context).pop(); // Cancel button
                     },
-                    child: Text('Cancel'.tr,
+                    child: Text('sharedCancel'.tr,
                         style: TextStyle(color: Theme.of(context).primaryColor)),
                   ),
                   const SizedBox(width: 8.0),

@@ -57,32 +57,32 @@ class DeviceDetailsScreen extends StatelessWidget {
                   final attributes = position.attributes as Map<String, dynamic>?;
 
                   String formatDate(DateTime? date) {
-                    if (date == null) return 'N/A';
+                    if (date == null) return 'sharedNoData'.tr;
                     return DateFormat('MM/dd/yyyy, hh:mm:ss a').format(date.toLocal());
                   }
 
                   String formatDistance(num? distance) {
-                    if (distance == null) return 'N/A';
+                    if (distance == null) return 'sharedNoData'.tr;
                     return '${(distance / 1000).toStringAsFixed(2)} km';
                   }
 
                   String formatSpeed(num? speed) {
-                    if (speed == null) return 'N/A';
+                    if (speed == null) return 'sharedNoData'.tr;
                     return '${speed.toStringAsFixed(2)} kn';
                   }
 
                   String formatCourse(num? course) {
-                    if (course == null) return 'N/A';
+                    if (course == null) return 'sharedNoData'.tr;
                     return '↑';
                   }
 
                   String formatHours(num? hours) {
-                    if (hours == null) return 'N/A';
+                    if (hours == null) return 'sharedNoData'.tr;
                     return (hours / 3600000).toStringAsFixed(2);
                   }
 
                   String formatBoolValue(bool? value) {
-                    if (value == null) return 'N/A';
+                    if (value == null) return 'sharedNoData'.tr;
                     return value ? 'sharedYes'.tr : 'sharedNo'.tr;
                   }
 
@@ -91,48 +91,48 @@ class DeviceDetailsScreen extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _buildDetailRow('Identifier', position.id?.toString() ?? 'N/A'),
-                        _buildDetailRow('Device ID', position.deviceId?.toString() ?? 'N/A'),
-                        _buildDetailRow('Protocol', position.protocol ?? 'N/A'),
-                        _buildDetailRow('Server Time', formatDate(position.serverTime)),
-                        _buildDetailRow('Device Time', formatDate(position.deviceTime)),
-                        _buildDetailRow('Fix Time', formatDate(position.fixTime)),
-                        _buildDetailRow('Valid', formatBoolValue(position.valid)),
+                        _buildDetailRow('deviceIdentifier'.tr, position.id?.toString() ?? 'sharedNoData'.tr),
+                        _buildDetailRow('Device ID', position.deviceId?.toString() ?? 'sharedNoData'.tr),
+                        _buildDetailRow('positionProtocol'.tr, position.protocol ?? 'sharedNoData'.tr),
+                        _buildDetailRow('positionServerTime'.tr, formatDate(position.serverTime)),
+                        _buildDetailRow('positionDeviceTime'.tr, formatDate(position.deviceTime)),
+                        _buildDetailRow('positionFixTime'.tr, formatDate(position.fixTime)),
+                        _buildDetailRow('positionValid'.tr, formatBoolValue(position.valid)),
                         _buildDetailRow(
-                            'Latitude', position.latitude != null ? '${position.latitude!.toStringAsFixed(6)}°' : 'N/A'),
+                            'positionLatitude'.tr, position.latitude != null ? '${position.latitude!.toStringAsFixed(6)}°' : 'sharedNoData'.tr),
                         _buildDetailRow(
-                            'Longitude', position.longitude != null ? '${position.longitude!.toStringAsFixed(6)}°' : 'N/A'),
+                            'positionLongitude'.tr, position.longitude != null ? '${position.longitude!.toStringAsFixed(6)}°' : 'sharedNoData'.tr),
                         _buildDetailRow(
-                            'Altitude', position.altitude != null ? '${position.altitude!.toStringAsFixed(2)} m' : 'N/A'),
-                        _buildDetailRow('Speed', formatSpeed(position.speed)),
-                        _buildDetailRow('Course', formatCourse(position.course)),
-                        _buildDetailRow('Address', position.address ?? 'N/A'),
-                        _buildDetailRow('Accuracy', position.accuracy?.toString() ?? 'N/A'),
-                        _buildDetailRow('Network', position.network?.toString() ?? 'N/A'),
-                        _buildDetailRow('Geofences', position.geofenceIds?.toString() ?? 'N/A'),
+                            'positionAltitude'.tr, position.altitude != null ? '${position.altitude!.toStringAsFixed(2)} m' : 'sharedNoData'.tr),
+                        _buildDetailRow('positionSpeed'.tr, formatSpeed(position.speed)),
+                        _buildDetailRow('positionCourse'.tr, formatCourse(position.course)),
+                        _buildDetailRow('positionAddress'.tr, position.address ?? 'sharedNoData'.tr),
+                        _buildDetailRow('positionAccuracy'.tr, position.accuracy?.toString() ?? 'sharedNoData'.tr),
+                        _buildDetailRow('Network'.tr, position.network?.toString() ?? 'sharedNoData'.tr),
+                        _buildDetailRow('sharedGeofences'.tr, position.geofenceIds?.toString() ?? 'sharedNoData'.tr),
                         const SizedBox(height: 20),
-                        const Text(
-                          'Attributes',
+                        Text(
+                          'sharedAttributes'.tr,
                           style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                         ),
                         const Divider(),
-                        _buildDetailRow('Type', attributes?['type']?.toString() ?? 'N/A'),
-                        _buildDetailRow('Status', attributes?['status']?.toString() ?? 'N/A'),
-                        _buildDetailRow('Ignition', formatBoolValue(attributes?['ignition'])),
-                        _buildDetailRow('Charge', formatBoolValue(attributes?['charge'])),
-                        _buildDetailRow('Blocked', formatBoolValue(attributes?['blocked'])),
-                        _buildDetailRow('Battery Level',
-                            attributes?['batteryLevel'] != null ? '${attributes!['batteryLevel']}%' : 'N/A'),
-                        _buildDetailRow('RSSI', attributes?['rssi']?.toString() ?? 'N/A'),
-                        _buildDetailRow('Distance (Trip)', formatDistance(attributes?['distance'])),
-                        _buildDetailRow('Total Distance', formatDistance(attributes?['totalDistance'])),
-                        _buildDetailRow('Hours', formatHours(attributes?['hours'])),
-                        _buildDetailRow('Motion', formatBoolValue(attributes?['motion'])),
+                        _buildDetailRow('sharedType'.tr, attributes?['type']?.toString() ?? 'sharedNoData'.tr),
+                        _buildDetailRow('deviceStatus'.tr, attributes?['status']?.toString() ?? 'sharedNoData'.tr),
+                        _buildDetailRow('positionIgnition'.tr, formatBoolValue(attributes?['ignition'])),
+                        _buildDetailRow('positionCharge'.tr, formatBoolValue(attributes?['charge'])),
+                        _buildDetailRow('positionBlocked'.tr, formatBoolValue(attributes?['blocked'])),
+                        _buildDetailRow('positionBatteryLevel'.tr,
+                            attributes?['batteryLevel'] != null ? '${attributes!['batteryLevel']}%' : 'sharedNoData'.tr),
+                        _buildDetailRow('positionRssi'.tr, attributes?['rssi']?.toString() ?? 'sharedNoData'.tr),
+                        _buildDetailRow('positionDistance'.tr, formatDistance(attributes?['distance'])),
+                        _buildDetailRow('deviceTotalDistance'.tr, formatDistance(attributes?['totalDistance'])),
+                        _buildDetailRow('reportEngineHours'.tr, formatHours(attributes?['hours'])),
+                        _buildDetailRow('positionMotion'.tr, formatBoolValue(attributes?['motion'])),
                       ],
                     ),
                   );
                 } else {
-                  return const Center(child: Text('No data available.'));
+                  return Center(child: Text('sharedNoData'.tr));
                 }
               },
             ),
