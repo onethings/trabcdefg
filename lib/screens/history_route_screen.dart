@@ -46,6 +46,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
   PolylineId _fullRoutePolylineId = PolylineId('full_route');
   PolylineId _playedRoutePolylineId = PolylineId('played_route');
   MapType _mapType = MapType.normal;
+  double _currentZoomLevel = 15.0;
 
   // Device & Date State
   int? _deviceId;
@@ -60,7 +61,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
   bool _isCalendarLoading = true;
   CalendarFormat _calendarFormat = CalendarFormat.month;
   // Speed control
-  double _playbackSpeed = 1.0;
+  double _playbackSpeed = 0.5; //1.0x speed
 
   @override
   void initState() {
@@ -70,6 +71,17 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
       _redDotMarkerIcon = icon;
     });
     _loadInitialParamsAndFetch(); // Renamed to handle both initial route and calendar data
+  }
+
+  void _updateZoomLevel() async {
+    if (mapController != null) {
+      final zoom = await mapController!.getZoomLevel();
+      if (mounted) {
+        setState(() {
+          _currentZoomLevel = zoom;
+        });
+      }
+    }
   }
 
   void _zoom(double amount) {
@@ -89,7 +101,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
     }
 
     _zoom(2.0);
-
+    _updateZoomLevel();
     // Resume playback if it was playing
     if (_isPlaying) {
       // Restarting playback will automatically re-engage the camera animation
@@ -105,7 +117,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
     }
 
     _zoom(-2.0);
-
+    _updateZoomLevel();
     // Resume playback if it was playing
     if (_isPlaying) {
       // Restarting playback will automatically re-engage the camera animation
@@ -671,32 +683,41 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
     setState(() {
       _isPlaying = !_isPlaying;
       if (_isPlaying) {
+        // mapController?.animateCamera(CameraUpdate.zoomTo(20.0)); //17.0 Zoom in for better view //now 18.0
         _playbackTimer?.cancel();
 
         // Calculate interval based on the required speed/smoothness
         final int intervalMs = (1000 / (10 * _playbackSpeed)).round();
+        _updatePlaybackMarker(
+          animateCamera: true,
+          forceZoom: true,
+        ); // Force zoom on first update
+       Future.delayed(const Duration(milliseconds: 300), () {
+          // Check if we are still in the playing state after the delay
+          if (!_isPlaying || !mounted) return;
+          
+          _playbackTimer = Timer.periodic(Duration(milliseconds: intervalMs), (
+            timer,
+          ) {
+            // The rest of the timer logic runs here as before
+            final stepIncrement = 0.5 * _playbackSpeed; //0.5
+            final maxIndex = _movingPositions.length - 1;
 
-        _playbackTimer = Timer.periodic(Duration(milliseconds: intervalMs), (
-          timer,
-        ) {
-          final stepIncrement = 0.5 * _playbackSpeed;
-          // Use _movingPositions.length for the end condition
-          final maxIndex = _movingPositions.length - 1;
-
-          if (_playbackPosition >= maxIndex) {
-            _playbackTimer?.cancel();
-            setState(() {
-              _isPlaying = false;
-              _playbackPosition = 0.0; // Reset or leave at max
-              _updatePlaybackMarker(animateCamera: true);
-            });
-          } else {
-            setState(() {
-              _playbackPosition += stepIncrement;
-              _playbackPosition = min(_playbackPosition, maxIndex.toDouble());
-              _updatePlaybackMarker(animateCamera: true);
-            });
-          }
+            if (_playbackPosition >= maxIndex) {
+              _playbackTimer?.cancel();
+              setState(() {
+                _isPlaying = false;
+                _playbackPosition = 0.0;
+                _updatePlaybackMarker(animateCamera: true);
+              });
+            } else {
+              setState(() {
+                _playbackPosition += stepIncrement;
+                _playbackPosition = min(_playbackPosition, maxIndex.toDouble());
+                _updatePlaybackMarker(animateCamera: true);
+              });
+            }
+          });
         });
       } else {
         _playbackTimer?.cancel();
@@ -716,7 +737,10 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
     }
   }
 
-  void _updatePlaybackMarker({bool animateCamera = false}) {
+  void _updatePlaybackMarker({
+    bool animateCamera = false,
+    bool forceZoom = false,
+  }) {
     // Use the filtered list for indexing
     final listForPlayback = _movingPositions;
     if (listForPlayback.isEmpty) return;
@@ -794,7 +818,26 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
     );
 
     if (animateCamera) {
-      mapController?.animateCamera(CameraUpdate.newLatLng(newLatLng));
+      if (forceZoom) {
+        // Use CameraUpdate.newLatLngZoom to center AND set the zoom in one shot.
+        mapController?.animateCamera(
+          CameraUpdate.newLatLngZoom(
+            newLatLng,
+            15.7,
+          ), // Set preferred zoom (15.7 is a good balance), after tap play force to 15.7 zoom level.
+        );
+      } else {
+        // Subsequent movements just center the camera, maintaining the current zoom.
+        mapController?.animateCamera(CameraUpdate.newLatLng(newLatLng));
+      }
+
+      // if (_isPlaying) {
+      //   mapController?.getZoomLevel().then((currentZoom) {
+      //     // Only zoom if the current level is significantly different
+      //     if (currentZoom < 16.9) {
+      //       mapController?.animateCamera(CameraUpdate.zoomTo(17.0));
+      //     }
+      //   });}
     }
 
     setState(() {
@@ -833,9 +876,10 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
         southwest: LatLng(minLat, minLon),
         northeast: LatLng(maxLat, maxLon),
       );
-      Future.delayed(const Duration(milliseconds: 100), () {
-        mapController?.animateCamera(CameraUpdate.newLatLngBounds(bounds, 50));
-      });
+      // Future.delayed(const Duration(milliseconds: 100), () {
+      //   mapController?.animateCamera(CameraUpdate.newLatLngBounds(bounds, 50));
+      // });
+      mapController?.animateCamera(CameraUpdate.newLatLngBounds(bounds, 50));
     }
   }
 
@@ -925,7 +969,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
         ? (_movingPositions.length - 1).toDouble()
         : 0.0;
 
-    final speedOptions = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0];
+    final speedOptions = [0.5, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0];
     // Helper variable for the title construction
     String devicePart = _selectedDeviceName != null
         ? ' | (${_selectedDeviceName!})'
@@ -950,6 +994,12 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
             onMapCreated: (controller) {
               mapController = controller;
               _animateCameraToRoute();
+              _updateZoomLevel();
+            },
+            onCameraMove: (position) {
+              if (position.zoom != _currentZoomLevel) {
+                _updateZoomLevel();
+              }
             },
             initialCameraPosition: const CameraPosition(
               target: LatLng(0, 0),
@@ -1071,7 +1121,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
                                   horizontal: 4,
                                 ),
                                 child: Text(
-                                  '${speed.toInt()}x',
+                                  speed == 0.5 ? '0.5x' : '${speed.toInt()}x',
                                   style: TextStyle(
                                     fontWeight: isSelected
                                         ? FontWeight.bold
@@ -1129,6 +1179,10 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
                         _buildInfoColumn('Time', time),
                         _buildInfoColumn('Speed', speed),
                         _buildInfoColumn('Distance', distanceText),
+                        // _buildInfoColumn(
+                        //   'Zoom',
+                        //   _currentZoomLevel.toStringAsFixed(1), // Display zoom level, e.g., 15.7 after playback start, on production you can hide it.
+                        // ),
                       ],
                     ),
                   ),
