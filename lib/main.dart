@@ -22,6 +22,7 @@ import 'package:trabcdefg/screens/register_screen.dart';
 import 'package:trabcdefg/screens/reset_password_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:trabcdefg/services/localization_service.dart';
+import 'package:intl/date_symbol_data_local.dart';
 
 
 void main() async {
@@ -37,6 +38,8 @@ void main() async {
   final savedUrl = prefs.getString('traccarServerUrl');
   final savedLanguageCode = prefs.getString('saved_language_code');
 
+  await initializeDateFormatting();
+  
   runApp(TraccarApp(
     initialUrl: savedUrl,
     initialLanguageCode: savedLanguageCode,

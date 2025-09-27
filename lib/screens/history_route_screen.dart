@@ -16,6 +16,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:trabcdefg/models/report_summary_hive.dart'; // REQUIRED MODEL
+import 'package:intl/date_symbol_data_local.dart';
 
 class HistoryRouteScreen extends StatefulWidget {
   const HistoryRouteScreen({super.key});
@@ -74,11 +75,9 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
   void _zoom(double amount) {
     if (mapController != null) {
       // 1. Temporarily pause continuous camera animation during playback
-      //    This is the key fix. The next playback update will re-center, 
+      //    This is the key fix. The next playback update will re-center,
       //    but the manual zoom will be executed immediately.
-      mapController!.animateCamera(
-        CameraUpdate.zoomBy(amount),
-      );
+      mapController!.animateCamera(CameraUpdate.zoomBy(amount));
     }
   }
 
@@ -86,32 +85,32 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
     // If the route is playing, cancel the playback timer for a moment
     // and force the next _updatePlaybackMarker call to NOT animate the camera.
     if (_isPlaying) {
-        _playbackTimer?.cancel();
+      _playbackTimer?.cancel();
     }
-    
+
     _zoom(2.0);
-    
+
     // Resume playback if it was playing
     if (_isPlaying) {
-        // Restarting playback will automatically re-engage the camera animation
-        _togglePlayback();
-        _togglePlayback();
+      // Restarting playback will automatically re-engage the camera animation
+      _togglePlayback();
+      _togglePlayback();
     }
   }
 
   void _zoomOut() {
     // If the route is playing, cancel the playback timer for a moment
     if (_isPlaying) {
-        _playbackTimer?.cancel();
+      _playbackTimer?.cancel();
     }
-    
+
     _zoom(-2.0);
 
     // Resume playback if it was playing
     if (_isPlaying) {
-        // Restarting playback will automatically re-engage the camera animation
-        _togglePlayback();
-        _togglePlayback();
+      // Restarting playback will automatically re-engage the camera animation
+      _togglePlayback();
+      _togglePlayback();
     }
   }
 
@@ -165,7 +164,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
   // MODIFIED: Load initial route from saved prefs OR default to today, then fetch calendar data
   Future<void> _loadInitialParamsAndFetch() async {
     final prefs = await SharedPreferences.getInstance();
-    final deviceName =  prefs.getString('selectedDeviceName');
+    final deviceName = prefs.getString('selectedDeviceName');
     final deviceId = prefs.getInt('selectedDeviceId');
     final fromString = prefs.getString('historyFrom');
     final toString = prefs.getString('historyTo');
@@ -176,7 +175,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
       _deviceId = deviceId;
       _focusedDay = defaultDate;
       _selectedCalendarDay = defaultDate;
-      _selectedDeviceName = deviceName; 
+      _selectedDeviceName = deviceName;
 
       // If history params exist, use them. Otherwise, default to today.
       if (fromString != null && toString != null) {
@@ -403,7 +402,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
   }
 
   // NEW: Shows the calendar in a clean dialog pop-up
-  void _showCalendarDialog() {
+  void _showCalendarDialog() async {
     if (_deviceId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please select a device first.')),
@@ -411,6 +410,12 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
       return;
     }
 
+    final currentLocale = Get.locale;
+    if (currentLocale != null) {
+      final localeString = currentLocale.toString();
+      // Await the initialization
+      await initializeDateFormatting(localeString, null);
+    }
     // Ensure data for the current focused month is loaded before showing
     // This call is now non-blocking as _fetchMonthlyData handles its own loading state.
     _fetchMonthlyData(_focusedDay);
@@ -445,6 +450,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
                               ),
                             )
                           : TableCalendar(
+                              locale: Get.locale?.languageCode,
                               firstDay: DateTime.utc(2020, 1, 1),
                               lastDay: DateTime.utc(2030, 12, 31),
                               focusedDay: _focusedDay,
@@ -920,18 +926,20 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
         : 0.0;
 
     final speedOptions = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0];
-// Helper variable for the title construction
-    String devicePart = _selectedDeviceName != null ? ' | (${_selectedDeviceName!})' : ''; 
+    // Helper variable for the title construction
+    String devicePart = _selectedDeviceName != null
+        ? ' | (${_selectedDeviceName!})'
+        : '';
     String datePart = (_historyFrom != null)
-        ? DateFormat.yMMMd().format(_historyFrom!.toLocal()) 
+        ? DateFormat.yMMMd().format(_historyFrom!.toLocal())
         : 'Select Date'.tr;
 
     return Scaffold(
       appBar: AppBar(
         title: Text(
           //'Route History: ${(_historyFrom != null) ? DateFormat('yyyy-MM-dd').format(_historyFrom!.toLocal()) : 'Select Date'}',
-        'reportReplay'.tr+': $datePart$devicePart',
-         style: const TextStyle(
+          'reportReplay'.tr + ': $datePart$devicePart',
+          style: const TextStyle(
             fontSize: 16, // Reduced font size (e.g., from default 20 to 16)
           ),
         ),
@@ -966,9 +974,9 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
                   heroTag: 'mapTypeToggle',
                   child: const Icon(Icons.layers),
                 ),
-                
+
                 const SizedBox(height: 10),
-                
+
                 // 2. Zoom In Button (NEW)
                 FloatingActionButton(
                   onPressed: _zoomIn,
@@ -976,7 +984,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
                   heroTag: 'zoomInButton',
                   child: const Icon(Icons.add),
                 ),
-                
+
                 const SizedBox(height: 10),
 
                 // 3. Zoom Out Button (NEW)

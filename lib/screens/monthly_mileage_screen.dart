@@ -11,7 +11,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:trabcdefg/models/report_summary_hive.dart';
 import 'package:get/get.dart';
-
+import 'package:intl/date_symbol_data_local.dart'; // Import for locale data
 
 class MonthlyMileageScreen extends StatefulWidget {
   const MonthlyMileageScreen({super.key});
@@ -42,6 +42,20 @@ class _MonthlyMileageScreenState extends State<MonthlyMileageScreen> {
       _selectedDeviceId = prefs.getInt('selectedDeviceId');
       _selectedDeviceName = prefs.getString('selectedDeviceName');
     });
+
+    final currentLocale = Get.locale;
+  if (currentLocale != null) {
+    // Use the full locale code (e.g., 'en_US') for initialization
+    final localeString = currentLocale.toString();
+    // The initializeDateFormatting function is a Future and needs to be awaited
+    try {
+      await initializeDateFormatting(localeString, null);
+    } catch (e) {
+      // Fallback or ignore if initialization fails for some reason
+      print('Failed to initialize date formatting for $localeString: $e');
+    }
+  }
+
 
     // Call the cleanup method before fetching new data
     await _deleteOldMileageData();
@@ -247,6 +261,7 @@ class _MonthlyMileageScreenState extends State<MonthlyMileageScreen> {
                   child: Column(
                     children: [
                       TableCalendar(
+                        locale: Get.locale?.languageCode,
                         firstDay: DateTime.utc(2020, 1, 1),
                         lastDay: DateTime.utc(2030, 12, 31),
                         focusedDay: _focusedDay,
@@ -315,32 +330,36 @@ class _MonthlyMileageScreenState extends State<MonthlyMileageScreen> {
                                 ),
                                 const SizedBox(height: 8),
                                 Text(
-                                  'Distance: ${((_selectedDaySummary!.distance ?? 0.0) / 1000).toStringAsFixed(2)} km',
+                                  'sharedDistance'.tr +
+                                      ': ${((_selectedDaySummary!.distance ?? 0.0) / 1000).toStringAsFixed(2)} km',
                                 ),
                                 Text(
-                                  'Average Speed: ${(_selectedDaySummary!.averageSpeed ?? 0.0).toStringAsFixed(2)} km/h',
+                                  'reportAverageSpeed'.tr +
+                                      ': ${(_selectedDaySummary!.averageSpeed ?? 0.0).toStringAsFixed(2)} km/h',
                                 ),
                                 Text(
-                                  'Max Speed: ${(_selectedDaySummary!.maxSpeed ?? 0.0).toStringAsFixed(2)} km/h',
+                                  'reportMaximumSpeed'.tr +
+                                      ': ${(_selectedDaySummary!.maxSpeed ?? 0.0).toStringAsFixed(2)} km/h',
                                 ),
                                 Text(
-                                  'Spent Fuel: ${(_selectedDaySummary!.spentFuel ?? 0.0).toStringAsFixed(2)} L',
+                                  'reportSpentFuel'.tr +
+                                      ': ${(_selectedDaySummary!.spentFuel ?? 0.0).toStringAsFixed(2)} L',
                                 ),
-                               // const Spacer(),
+                                // const Spacer(),
                                 const SizedBox(height: 50),
                                 ElevatedButton.icon(
                                   onPressed: _onPlayTapped,
                                   icon: const Icon(Icons.play_arrow),
-                                  label:  Text('reportReplay'.tr),
+                                  label: Text('reportReplay'.tr),
                                 ),
                               ],
                             ),
                           ),
                         ),
                       if (_selectedDaySummary == null)
-                        const Expanded(
+                         Expanded(
                           child: Center(
-                            child: Text('No data for selected day.'),
+                            child: Text('sharedNoData'.tr),
                           ),
                         ),
                     ],
