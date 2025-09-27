@@ -326,11 +326,12 @@ class _MonthlyMileageScreenState extends State<MonthlyMileageScreen> {
                                 Text(
                                   'Spent Fuel: ${(_selectedDaySummary!.spentFuel ?? 0.0).toStringAsFixed(2)} L',
                                 ),
-                                const Spacer(),
+                               // const Spacer(),
+                                const SizedBox(height: 50),
                                 ElevatedButton.icon(
                                   onPressed: _onPlayTapped,
                                   icon: const Icon(Icons.play_arrow),
-                                  label: const Text('Play Route'),
+                                  label:  Text('reportReplay'.tr),
                                 ),
                               ],
                             ),

@@ -237,6 +237,7 @@ class _MapScreenState extends State<MapScreen> {
           15, // A closer zoom level
         ),
       );
+      mapController!.showMarkerInfoWindow(MarkerId(device.id.toString()));
     }
 
     // Show the detail panel for the selected device
@@ -944,13 +945,15 @@ class _MapScreenState extends State<MapScreen> {
               final String category = device.category ?? 'default';
               final String status = device.status ?? 'unknown';
               final String iconKey = '$category-$status';
-
+              final double course = position.course?.toDouble() ?? 0.0;
               markers.add(
                 Marker(
                   markerId: MarkerId(markerId),
                   position: markerPosition,
                   icon:
                       _markerIcons[iconKey] ?? _markerIcons['default-unknown']!,
+                  rotation: course,
+                  infoWindow: InfoWindow(title: device.name ?? 'Unknown'.tr),
                   onTap: () {
                     _onDeviceSelected(device, traccarProvider.positions);
                   },
