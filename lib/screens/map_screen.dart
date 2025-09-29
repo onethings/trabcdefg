@@ -123,10 +123,18 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
+  // PersistentBottomSheetController? _bottomSheetController;
+  // String _formatDate(DateTime? date) {
+  //   if (date == null) return 'N/A';
+  //   return DateFormat('MM/dd/yyyy, hh:mm:ss a').format(date.toLocal());
+  // }
   PersistentBottomSheetController? _bottomSheetController;
   String _formatDate(DateTime? date) {
     if (date == null) return 'N/A';
-    return DateFormat('MM/dd/yyyy, hh:mm:ss a').format(date.toLocal());
+    // Changed to use locale-aware formatting methods. 
+    // DateFormat.yMd().add_Hms() provides a standard format 
+    // that respects the locale's conventions for date and time order.
+    return DateFormat.yMd().add_Hms().format(date.toLocal());
   }
 
   // IMPLEMENTATION: Delete confirmation dialog
@@ -269,12 +277,12 @@ class _MapScreenState extends State<MapScreen> {
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: const Text('More Options'),
+          title:  Text(device.name ?? 'More Options'.tr),
           content: SingleChildScrollView(
             child: ListBody(
               children: <Widget>[
                 ListTile(
-                  title: const Text('Create Geofence'),
+                  title: Text('sharedCreateGeofence'.tr),
                   onTap: () {
                     Navigator.of(context).pop();
                     Navigator.push(
@@ -286,7 +294,7 @@ class _MapScreenState extends State<MapScreen> {
                   },
                 ),
                 ListTile(
-                  title: const Text('Google Maps'),
+                  title: Text('linkGoogleMaps'.tr),
                   onTap: () {
                     Navigator.of(context).pop();
                     // Assuming position variable needs to be currentPosition
@@ -300,7 +308,7 @@ class _MapScreenState extends State<MapScreen> {
                   },
                 ),
                 ListTile(
-                  title: const Text('Apple Maps'),
+                  title: Text('linkAppleMaps'.tr),
                   onTap: () {
                     Navigator.of(context).pop();
                     // Assuming position variable needs to be currentPosition
@@ -314,7 +322,7 @@ class _MapScreenState extends State<MapScreen> {
                   },
                 ),
                 ListTile(
-                  title: const Text('Street View'),
+                  title: Text('linkStreetView'.tr),
                   onTap: () {
                     Navigator.of(context).pop();
                     // Assuming position variable needs to be currentPosition
@@ -328,7 +336,7 @@ class _MapScreenState extends State<MapScreen> {
                   },
                 ),
                 ListTile(
-                  title: const Text('Share Device'),
+                  title: Text('deviceShare'.tr),
                   onTap: () async {
                     Navigator.of(context).pop();
                     final prefs = await SharedPreferences.getInstance();
@@ -454,7 +462,7 @@ class _MapScreenState extends State<MapScreen> {
                                     as double) >
                                 0.0)
                           Text(
-                            '${((currentPosition.attributes as Map<String, dynamic>)['distance'] as double).toStringAsFixed(2)} km',
+                            '${((currentPosition.attributes as Map<String, dynamic>)['distance'] as double).toStringAsFixed(2)} '+'sharedKm'.tr,
                             style: const TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.bold,
@@ -551,7 +559,7 @@ class _MapScreenState extends State<MapScreen> {
                               as Map<String, dynamic>?)?['address'] ??
                           'N/A',
                       totalDistance:
-                          '${(currentPosition.attributes as Map<String, dynamic>?)?['totalDistance']?.toStringAsFixed(2) ?? 'N/A'} km',
+                          '${(currentPosition.attributes as Map<String, dynamic>?)?['totalDistance']?.toStringAsFixed(2) ?? 'N/A'} '+'sharedKm'.tr,
                     ),
                     // const SizedBox(height: 16),
                     _buildReportPanel(

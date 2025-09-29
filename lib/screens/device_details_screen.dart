@@ -41,7 +41,7 @@ class DeviceDetailsScreen extends StatelessWidget {
 
           return Scaffold(
             appBar: AppBar(
-              title: Text(deviceName),
+              title: Text(deviceName+' - '+'deviceSecondaryInfo'.tr),
             ),
             body: FutureBuilder<List<api.Position>?>(
               future: positionsApi.positionsGet(deviceId: deviceId),
@@ -63,12 +63,12 @@ class DeviceDetailsScreen extends StatelessWidget {
 
                   String formatDistance(num? distance) {
                     if (distance == null) return 'sharedNoData'.tr;
-                    return '${(distance / 1000).toStringAsFixed(2)} km';
+                    return '${(distance / 1000).toStringAsFixed(2)} '+'sharedKm'.tr;
                   }
 
                   String formatSpeed(num? speed) {
                     if (speed == null) return 'sharedNoData'.tr;
-                    return '${speed.toStringAsFixed(2)} kn';
+                    return '${speed.toStringAsFixed(2)} '+'sharedKn'.tr;
                   }
 
                   String formatCourse(num? course) {
@@ -103,7 +103,7 @@ class DeviceDetailsScreen extends StatelessWidget {
                         _buildDetailRow(
                             'positionLongitude'.tr, position.longitude != null ? '${position.longitude!.toStringAsFixed(6)}°' : 'sharedNoData'.tr),
                         _buildDetailRow(
-                            'positionAltitude'.tr, position.altitude != null ? '${position.altitude!.toStringAsFixed(2)} m' : 'sharedNoData'.tr),
+                            'positionAltitude'.tr, position.altitude != null ? '${position.altitude!.toStringAsFixed(2)} '+'sharedMeters'.tr : 'sharedNoData'.tr),
                         _buildDetailRow('positionSpeed'.tr, formatSpeed(position.speed)),
                         _buildDetailRow('positionCourse'.tr, formatCourse(position.course)),
                         _buildDetailRow('positionAddress'.tr, position.address ?? 'sharedNoData'.tr),

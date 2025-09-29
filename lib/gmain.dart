@@ -11,7 +11,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:get/get.dart';
-import 'dart:typed_data';
+import 'dart:typed_data'; 
 
 class LiveTrackingMapScreen extends StatefulWidget {
   final Device selectedDevice;
@@ -30,16 +30,13 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
   bool _isTrafficEnabled = false;
   final Map<String, BitmapDescriptor> _markerIcons = {};
   bool _isCameraLocked = true;
+  
+  bool _customIconsLoaded = false; 
 
-  bool _customIconsLoaded = false;
-
-  // Fallback icon variables
-  late final BitmapDescriptor
-  _transparentIcon; // Used as the initial invisible icon
-  final BitmapDescriptor _genericDefaultIcon = BitmapDescriptor
-      .defaultMarker; // Retained for true system safety fallback
-
-  Position? _currentDevicePosition;
+  // Fallback icon: The instantly available system default pin
+  final BitmapDescriptor _genericDefaultIcon = BitmapDescriptor.defaultMarker; 
+  
+  Position? _currentDevicePosition; 
 
   static const CameraPosition _defaultCameraPosition = CameraPosition(
     target: LatLng(0, 0),
@@ -49,20 +46,14 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
   @override
   void initState() {
     super.initState();
-
-    // Synchronously create the transparent marker icon immediately
-    // NOTE: Removed imageConfiguration to avoid old API conflicts.
-    _transparentIcon = BitmapDescriptor.fromBytes(
-      Uint8List.fromList([0, 0, 0, 0]),
-    );
-
+    
     // Start icon loading immediately in the background
     _loadMarkerIcons().then((_) {
       if (mounted) {
         setState(() {
-          _customIconsLoaded = true;
+          _customIconsLoaded = true; 
           _updateMarkersOnMap(); // Explicitly redraw markers with new icons
-        });
+        }); 
       }
     });
   }
@@ -70,21 +61,19 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
   @override
   void didUpdateWidget(covariant LiveTrackingMapScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
-
-    final traccarProvider = Provider.of<TraccarProvider>(
-      context,
-      listen: false,
-    );
-
+    
+    final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
+    
     final newPosition = traccarProvider.positions.firstWhere(
-      (pos) => pos.deviceId == widget.selectedDevice.id,
-      orElse: () => Position(),
+        (pos) => pos.deviceId == widget.selectedDevice.id,
+        orElse: () => Position(),
     );
 
     // Only update the map if the position data has actually changed
-    if (newPosition.id != _currentDevicePosition?.id) {
-      _currentDevicePosition = newPosition;
-      _updateMap(newPosition);
+    if (newPosition.id != _currentDevicePosition?.id) 
+    {
+        _currentDevicePosition = newPosition;
+        _updateMap(newPosition); 
     }
   }
 
@@ -96,29 +85,9 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
 
   Future<void> _loadMarkerIcons() async {
     const categories = [
-      'animal',
-      'arrow',
-      'bicycle',
-      'boat',
-      'bus',
-      'car',
-      'crane',
-      'default',
-      'helicopter',
-      'motorcycle',
-      'null',
-      'offroad',
-      'person',
-      'pickup',
-      'plane',
-      'scooter',
-      'ship',
-      'tractor',
-      'train',
-      'tram',
-      'trolleybus',
-      'truck',
-      'van',
+      'animal', 'arrow', 'bicycle', 'boat', 'bus', 'car', 'crane', 'default',
+      'helicopter', 'motorcycle', 'null', 'offroad', 'person', 'pickup', 'plane',
+      'scooter', 'ship', 'tractor', 'train', 'tram', 'trolleybus', 'truck', 'van',
     ];
     const statuses = ['online', 'offline', 'static', 'idle', 'unknown'];
 
@@ -128,19 +97,12 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
         try {
           final byteData = await rootBundle.load(iconPath);
           final imageData = byteData.buffer.asUint8List();
-          final codec = await ui.instantiateImageCodec(
-            imageData,
-            targetHeight: 100,
-          );
+          final codec = await ui.instantiateImageCodec(imageData, targetHeight: 100);
           final frameInfo = await codec.getNextFrame();
           final image = frameInfo.image;
-          final byteDataResized = await image.toByteData(
-            format: ui.ImageByteFormat.png,
-          );
+          final byteDataResized = await image.toByteData(format: ui.ImageByteFormat.png);
           if (byteDataResized != null) {
-            final bitmap = BitmapDescriptor.fromBytes(
-              byteDataResized.buffer.asUint8List(),
-            );
+            final bitmap = BitmapDescriptor.fromBytes(byteDataResized.buffer.asUint8List());
             _markerIcons['$category-$status'] = bitmap;
           }
         } catch (e) {
@@ -158,19 +120,12 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
 
   Future<BitmapDescriptor> _loadFallbackIcon() async {
     try {
-      final byteData = await rootBundle.load(
-        'assets/images/marker_default_unknown.png',
-      );
+      final byteData = await rootBundle.load('assets/images/marker_default_unknown.png');
       final imageData = byteData.buffer.asUint8List();
-      final codec = await ui.instantiateImageCodec(
-        imageData,
-        targetHeight: 100,
-      );
+      final codec = await ui.instantiateImageCodec(imageData, targetHeight: 100);
       final frameInfo = await codec.getNextFrame();
       final image = frameInfo.image;
-      final byteDataResized = await image.toByteData(
-        format: ui.ImageByteFormat.png,
-      );
+      final byteDataResized = await image.toByteData(format: ui.ImageByteFormat.png);
       return BitmapDescriptor.fromBytes(byteDataResized!.buffer.asUint8List());
     } catch (e) {
       // If even the dedicated custom fallback icon fails to load, return the system default
@@ -182,50 +137,41 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
     final status = device.status ?? 'unknown';
     final category = device.category ?? 'default';
     final key = '$category-$status';
-
+    
     // 1. Tier 1: Try to find the exact icon
     if (_markerIcons.containsKey(key)) {
       return _markerIcons[key]!;
     }
-
+    
     // 2. Tier 2: Fall back to the preloaded 'default-unknown' custom icon.
     final fallbackCustomIcon = _markerIcons['default-unknown'];
     if (fallbackCustomIcon != null) {
-      return fallbackCustomIcon;
+        return fallbackCustomIcon;
     }
-
-    // 3. Tier 3: Final fallback: Always return the visible system default pin if custom icons failed.
+    
+    // 3. Tier 3: Final fallback: Always return the visible system default pin.
     return _genericDefaultIcon;
   }
-
+  
   void _updateMarkersOnMap() {
-    // 1. Fetch the latest device position
-    final traccarProvider = Provider.of<TraccarProvider>(
-      context,
-      listen: false,
-    );
-
+    final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
+    
     final lastPosition = traccarProvider.positions.firstWhere(
       (pos) => pos.deviceId == widget.selectedDevice.id,
       orElse: () => Position(),
     );
 
-    // Only proceed to update the map if we have actual coordinates.
-    // If we don't, the map will be updated when the first piece of data arrives via didUpdateWidget.
+    // Call the existing _updateMap to redraw the markers with the correct icons
     if (lastPosition.latitude != null && lastPosition.longitude != null) {
-      _updateMap(lastPosition);
+      _updateMap(lastPosition); 
     } else if (mounted) {
-      // If position data is null, we still need a setState to rebuild the widget
-      // so the next provider update uses the now-loaded custom icons.
+       // Force a rebuild to ensure the next data pass uses the loaded icons
       setState(() {});
     }
   }
 
   void _updateMap(Position? currentPosition) {
-    if (currentPosition == null ||
-        currentPosition.latitude == null ||
-        currentPosition.longitude == null)
-      return;
+    if (currentPosition == null || currentPosition.latitude == null || currentPosition.longitude == null) return;
 
     final newPosition = LatLng(
       currentPosition.latitude!.toDouble(),
@@ -234,11 +180,10 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
 
     setState(() {
       _markers.clear();
-
+      
       // Add new position to polyline if different from the last point
-      if (_polylineCoordinates.isEmpty ||
-          _polylineCoordinates.last != newPosition) {
-        _polylineCoordinates.add(newPosition);
+      if (_polylineCoordinates.isEmpty || _polylineCoordinates.last != newPosition) {
+          _polylineCoordinates.add(newPosition);
       }
 
       _markers.add(
@@ -265,16 +210,16 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
 
     if (_isCameraLocked) {
       _controller.future.then((controller) {
-        controller.animateCamera(CameraUpdate.newLatLng(newPosition));
+        controller.animateCamera(
+          CameraUpdate.newLatLng(newPosition),
+        );
       });
     }
   }
 
   void _toggleMapType() {
     setState(() {
-      _mapType = _mapType == MapType.normal
-          ? MapType.satellite
-          : MapType.normal;
+      _mapType = _mapType == MapType.normal ? MapType.satellite : MapType.normal;
     });
   }
 
@@ -285,10 +230,7 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
   }
 
   Future<void> _recenter(Position? lastPosition) async {
-    if (lastPosition == null ||
-        lastPosition.latitude == null ||
-        lastPosition.longitude == null)
-      return;
+    if (lastPosition == null || lastPosition.latitude == null || lastPosition.longitude == null) return;
 
     final controller = await _controller.future;
     final position = LatLng(
@@ -300,24 +242,30 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
       _isCameraLocked = true;
     });
 
-    controller.animateCamera(CameraUpdate.newLatLngZoom(position, 17.0));
+    controller.animateCamera(
+      CameraUpdate.newLatLngZoom(position, 17.0),
+    );
   }
 
   Future<void> _zoomIn() async {
     final controller = await _controller.future;
-    controller.animateCamera(CameraUpdate.zoomIn());
+    controller.animateCamera(
+      CameraUpdate.zoomIn(),
+    );
   }
 
   Future<void> _zoomOut() async {
     final controller = await _controller.future;
-    controller.animateCamera(CameraUpdate.zoomOut());
+    controller.animateCamera(
+      CameraUpdate.zoomOut(),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.selectedDevice.name ?? 'Map'),
+        title: Text('mapLiveRoutes'.tr), //widget.selectedDevice.name ?? 'mapLiveRoutes'.tr
         actions: [
           IconButton(icon: const Icon(Icons.layers), onPressed: _toggleMapType),
           IconButton(
@@ -327,7 +275,7 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
           ),
         ],
       ),
-      body: Consumer<TraccarProvider>(
+      body: Consumer<TraccarProvider>( 
         builder: (context, traccarProvider, child) {
           final lastPosition = traccarProvider.positions.firstWhere(
             (pos) => pos.deviceId == widget.selectedDevice.id,
@@ -336,14 +284,14 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
 
           final initialCameraPosition =
               lastPosition.latitude != null && lastPosition.longitude != null
-              ? CameraPosition(
-                  target: LatLng(
-                    lastPosition.latitude!.toDouble(),
-                    lastPosition.longitude!.toDouble(),
-                  ),
-                  zoom: 14.0,
-                )
-              : _defaultCameraPosition;
+                  ? CameraPosition(
+                      target: LatLng(
+                        lastPosition.latitude!.toDouble(),
+                        lastPosition.longitude!.toDouble(),
+                      ),
+                      zoom: 14.0,
+                    )
+                  : _defaultCameraPosition;
 
           return Stack(
             children: [
@@ -355,7 +303,7 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
                 onMapCreated: (GoogleMapController controller) {
                   if (!_controller.isCompleted) {
                     _controller.complete(controller);
-                    _updateMap(lastPosition);
+                    _updateMap(lastPosition); 
                   }
                 },
                 trafficEnabled: _isTrafficEnabled,
@@ -396,7 +344,7 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
             ],
           );
         },
-      ),
+      ), 
       bottomSheet: _buildBottomSheet(context),
     );
   }
@@ -408,11 +356,8 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
           (pos) => pos.deviceId == widget.selectedDevice.id,
           orElse: () => Position(),
         );
-        final speedKmh = lastPosition.speed != null
-            ? (lastPosition.speed! * 1.852).toStringAsFixed(2)
-            : 'N/A';
-        final attributes =
-            lastPosition.attributes as Map<String, dynamic>? ?? {};
+        final speedKmh = lastPosition.speed != null ? (lastPosition.speed! * 1.852).toStringAsFixed(2) : 'N/A';
+        final attributes = lastPosition.attributes as Map<String, dynamic>? ?? {};
 
         return Container(
           decoration: const BoxDecoration(
@@ -436,27 +381,29 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
                 style: Theme.of(context).textTheme.headlineSmall,
               ),
               const SizedBox(height: 8.0),
-              Text('Status: ${widget.selectedDevice.status ?? 'N/A'}'),
+              Text('deviceStatus'.tr+': ${widget.selectedDevice.status ?? 'N/A'}'),
               const SizedBox(height: 4.0),
               Text(
-                'Last update: ${lastPosition.deviceTime?.toLocal() ?? 'N/A'}',
+                'deviceLastUpdate'.tr+': ${lastPosition.deviceTime?.toLocal() ?? 'N/A'}',
               ),
-              Text('Speed: $speedKmh km/h'),
+              Text(
+                'positionSpeed'.tr+': $speedKmh '+'sharedKmh'.tr,
+              ),
               const Divider(),
-              const Text(
-                'Detailed Information:',
-                style: TextStyle(fontWeight: FontWeight.bold),
+              Text(
+                'deviceSecondaryInfo'.tr+':',
+                style: const TextStyle(fontWeight: FontWeight.bold),
               ),
               if (attributes.containsKey('batteryLevel'))
                 ListTile(
                   leading: const Icon(Icons.battery_std),
-                  title: const Text('Battery Level'),
+                  title:  Text('positionBatteryLevel'.tr),
                   subtitle: Text('${attributes['batteryLevel']}%'),
                 ),
               if (attributes.containsKey('totalDistance'))
                 ListTile(
                   leading: const Icon(Icons.directions_car),
-                  title: const Text('Total Distance'),
+                  title: Text('deviceTotalDistance'.tr),
                   subtitle: Text(
                     '${(attributes['totalDistance'] / 1000).toStringAsFixed(2)} km',
                   ),
@@ -464,9 +411,9 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
               if (attributes.containsKey('engineHours'))
                 ListTile(
                   leading: const Icon(Icons.timer),
-                  title: const Text('Engine Hours'),
+                  title: Text('reportEngineHours'.tr),
                   subtitle: Text(
-                    '${(attributes['engineHours'] / 3600).toStringAsFixed(2)} h',
+                    '${(attributes['engineHours'] / 3600).toStringAsFixed(2)} '+'sharedHourAbbreviation'.tr,
                   ),
                 ),
             ],
