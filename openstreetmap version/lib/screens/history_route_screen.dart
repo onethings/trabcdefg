@@ -1,16 +1,10 @@
 // lib/screens/history_route_screen.dart
 
 import 'package:flutter/material.dart';
-// REMOVED: import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:latlong2/latlong.dart'; // Equivalent to LatLng in google_maps_flutter
-import 'package:flutter_map/flutter_map.dart'; // NEW: OpenStreetMap map widget
-// import 'package:flutter_map/flutter_map.dart' as fm; // Alias for clarity
-// REMOVED: The following two imports caused 'uri_does_not_exist' error and are not needed in public code:
-// import 'package:flutter_map/src/geo/crs/crs.dart';
-// import 'package:flutter_map/src/map/camera/camera_fit.dart';
-
+import 'package:latlong2/latlong.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'dart:async';
-import 'package:get/get.dart';
+import 'package:get/get.dart'; // NEW: Used for reactive programming
 import 'package:flutter/services.dart';
 import 'dart:ui' as ui;
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
@@ -24,11 +18,11 @@ import 'package:table_calendar/table_calendar.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:trabcdefg/models/report_summary_hive.dart';
 import 'package:intl/date_symbol_data_local.dart';
-import 'dart:typed_data'; // For Uint8List
-import 'package:http/http.dart' as http; // For fetching tiles
-import 'dart:io'; // For checking network status (optional, but good practice for caching)
+import 'dart:typed_data';
+import 'package:http/http.dart' as http;
+import 'dart:io';
 
-// NEW: Custom Tile Provider for Hive Caching
+// NEW: Custom Tile Provider for Hive Caching (Unchanged)
 class HiveTileProvider extends TileProvider {
   static const String boxName = 'mapTilesCache';
   late Box<Uint8List> _tileBox;
@@ -38,11 +32,9 @@ class HiveTileProvider extends TileProvider {
     : super(headers: {'User-Agent': userAgent});
 
   Future<void> init() async {
-    // Open the Hive box for storing map tiles.
     _tileBox = await Hive.openBox<Uint8List>(boxName);
   }
 
-  // Closes the Hive box to release resources
   Future<void> dispose() async {
     if (_tileBox.isOpen) {
       await _tileBox.close();
@@ -50,19 +42,12 @@ class HiveTileProvider extends TileProvider {
   }
 
   String _getTileKey(String url) {
-    // Generate a unique key from the tile URL
     return url.replaceAll(RegExp(r'[^\w]'), '_');
   }
 
   @override
-  ImageProvider getImage(
-    TileCoordinates coordinates, // Renamed from Coords<num> coords
-    TileLayer options, // Renamed from TileLayer options
-  ) {
-    final tileUrl = getTileUrl(
-      coordinates,
-      options,
-    ); // This function internally uses TileCoordinates
+  ImageProvider getImage(TileCoordinates coordinates, TileLayer options) {
+    final tileUrl = getTileUrl(coordinates, options);
     final hiveKey = _getTileKey(tileUrl);
 
     // 1. Check Hive Cache
@@ -77,21 +62,19 @@ class HiveTileProvider extends TileProvider {
     return NetworkImage(tileUrl, headers: headers);
   }
 
-  // This function performs the network fetch and cache write asynchronously.
   Future<void> _cacheTile(String tileUrl, String hiveKey) async {
     try {
       final response = await http.get(Uri.parse(tileUrl), headers: headers);
       if (response.statusCode == 200) {
-        // Cache the tile data (Uint8List)
         await _tileBox.put(hiveKey, response.bodyBytes);
       }
     } catch (e) {
-      // print('Failed to cache tile: $e'); // Debug
+      // print('Failed to cache tile: $e');
     }
   }
 }
 
-// NEW: Enum for Map Types
+// NEW: Enum for Map Types (Unchanged)
 enum OSMMapType { normal, satellite }
 
 class HistoryRouteScreen extends StatefulWidget {
@@ -102,22 +85,36 @@ class HistoryRouteScreen extends StatefulWidget {
 }
 
 class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
-  // REPLACED: GoogleMapController? mapController;
-  MapController? mapController = MapController(); // NEW: FlutterMap controller
-  // REPLACED: Set<Polyline> _polylines = {};
-  List<Polyline> _polylines = []; // NEW: List of FlutterMap Polylines
-  // REPLACED: Set<Marker> _markers = {};
-  List<Marker> _markers = []; // NEW: List of FlutterMap Markers
+  MapController? mapController = MapController();
+
+  // REPLACED: List<Polyline> _polylines = []; (for main state management)
+  // NEW: Reactive variables for isolated updates
+  final RxList<Polyline> _polylinesRx = <Polyline>[].obs;
+
+  // REPLACED: List<Marker> _markers = [];
+  final RxList<Marker> _staticMarkersRx = <Marker>[].obs;
+
   List<api.Position> _positions = [];
-  List<api.Position> _movingPositions = [];
-  double _playbackPosition = 0.0;
+  // MODIFIED: This is now a reactive list
+  final RxList<api.Position> _movingPositionsRx = <api.Position>[].obs; 
+
+  // REPLACED: double _playbackPosition = 0.0;
+  final RxDouble _playbackPositionRx = 0.0.obs;
+
   // REPLACED: Marker? _playbackMarker;
-  Marker? _playbackMarker; // NEW: FlutterMap Marker
+  final Rx<Marker?> _playbackMarkerRx = Rx<Marker?>(null);
+
+  void _resetRotation() {
+    if (mapController != null) {
+      // Animate the rotation reset for a smooth transition back to North (0 degrees)
+      mapController!.rotate(0.0);
+    }
+  }
+
   bool _isPlaying = false;
   Timer? _playbackTimer;
   bool _isTileProviderReady = false;
 
-  // FIX: Replaced BitmapDescriptor with Uint8List for marker icons
   Uint8List? _playbackMarkerIconBytes;
   Uint8List? _redDotMarkerIconBytes;
   Uint8List? _startMarkerIconBytes;
@@ -127,8 +124,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
   final double _customMarkerTargetSize = 24.0;
   final double _arrowMarkerTargetSize = 48.0;
 
-  // REPLACED: MapType _mapType = MapType.normal;
-  OSMMapType _mapType = OSMMapType.normal; // NEW: OSM Map Type
+  OSMMapType _mapType = OSMMapType.normal;
   double _currentZoomLevel = 15.0;
 
   // Device & Date State
@@ -154,28 +150,27 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
   @override
   void initState() {
     super.initState();
-    _initHiveTileProvider(); // NEW: Initialize the Hive Tile Provider
+    _initHiveTileProvider();
     _loadCustomMarkerIcons();
+    // Keep this for now, even though we remove dot markers from route,
+    // it's a good utility function.
     _createDotMarkerIcon(Colors.red).then((bytes) {
-      // FIX: Store bytes instead of BitmapDescriptor
       _redDotMarkerIconBytes = bytes;
     });
     _loadInitialParamsAndFetch();
   }
 
-  // NEW: Hive Tile Provider Initialization
   Future<void> _initHiveTileProvider() async {
     _hiveTileProvider = HiveTileProvider(userAgent: _userAgent);
-    await _hiveTileProvider.init(); // Wait for Hive box to open
+    await _hiveTileProvider.init();
     if (mounted) {
       setState(() {
-        _isTileProviderReady = true; // Set state to true once ready
+        _isTileProviderReady = true;
       });
     }
   }
 
   void _updateZoomLevel() async {
-    // FIX: MapController.ready is removed. Use MapController.camera.zoom
     if (mapController != null && mapController!.camera.zoom != null) {
       final zoom = mapController!.camera.zoom;
       if (mounted) {
@@ -187,13 +182,12 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
   }
 
   void _zoom(double amount) {
-    // FIX: Use mapController for zoom
     if (mapController != null) {
       final newZoom = mapController!.camera.zoom + amount;
       mapController!.move(
         mapController!.camera.center,
         newZoom.clamp(3.0, 18.0),
-      ); // Zoom limit 3-18
+      );
     }
   }
 
@@ -202,11 +196,10 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
       _playbackTimer?.cancel();
     }
 
-    _zoom(1.0); // Use 1.0 for a standard zoom level increment
+    _zoom(1.0);
     _updateZoomLevel();
 
     if (_isPlaying) {
-      // Restarting playback will automatically re-engage the camera movement
       _togglePlayback();
       _togglePlayback();
     }
@@ -217,7 +210,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
       _playbackTimer?.cancel();
     }
 
-    _zoom(-1.0); // Use -1.0 for a standard zoom level decrement
+    _zoom(-1.0);
     _updateZoomLevel();
 
     if (_isPlaying) {
@@ -241,7 +234,6 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
       final byteDataResized = await image.toByteData(
         format: ui.ImageByteFormat.png,
       );
-      // FIX: Return Uint8List bytes
       return byteDataResized!.buffer.asUint8List();
     } catch (e) {
       print('Error loading marker icon $assetPath: $e');
@@ -250,22 +242,18 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
   }
 
   Future<void> _loadCustomMarkerIcons() async {
-    // Playback arrow icon
     _playbackMarkerIconBytes = await _loadAssetIcon(
       'assets/images/arrow.png',
       _arrowMarkerTargetSize,
     );
-    // Start icon
     _startMarkerIconBytes = await _loadAssetIcon(
       'assets/images/start.png',
       _customMarkerTargetSize,
     );
-    // Parking/Stop icon
     _parkingMarkerIconBytes = await _loadAssetIcon(
       'assets/images/parking.png',
       _customMarkerTargetSize,
     );
-    // Destination/End icon
     _destinationMarkerIconBytes = await _loadAssetIcon(
       'assets/images/destination.png',
       _customMarkerTargetSize,
@@ -287,11 +275,9 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
       _selectedCalendarDay = defaultDate;
       _selectedDeviceName = deviceName;
 
-      // If history params exist, use them. Otherwise, default to today.
       if (fromString != null && toString != null) {
         _historyFrom = DateTime.tryParse(fromString)?.toLocal();
         _historyTo = DateTime.tryParse(toString)?.toLocal();
-        // If a date was loaded from prefs, make it the default selected calendar day
         if (_historyFrom != null) {
           _selectedCalendarDay = DateTime(
             _historyFrom!.year,
@@ -300,7 +286,6 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
           );
         }
       } else {
-        // Set today's date range
         _historyFrom = DateTime(
           defaultDate.year,
           defaultDate.month,
@@ -321,9 +306,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
     });
 
     if (_deviceId != null) {
-      // Fetch initial route (using local state _historyFrom, _historyTo)
       _fetchHistoryRoute();
-      // Fetch monthly data for the calendar
       await _fetchMonthlyData(_focusedDay);
     } else {
       print('Missing device ID for history route.');
@@ -332,7 +315,6 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
 
   Future<void> _fetchHistoryRoute({DateTime? selectedDay}) async {
     if (selectedDay != null) {
-      // Update local state if a new day was selected from the calendar
       _historyFrom = DateTime(
         selectedDay.year,
         selectedDay.month,
@@ -355,15 +337,19 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
 
     // Stop any existing playback and reset state
     _playbackTimer?.cancel();
+
+    // Use setState for simple UI/non-map state changes
     setState(() {
       _isPlaying = false;
-      _positions = [];
-      _polylines = []; // Reset Polylines
-      _markers.removeWhere(
-        (m) => (m.key as ValueKey<String>).value == 'playback_marker',
-      ); // Remove playback marker using key
-      _playbackPosition = 0.0;
+      _positions = []; // Non-reactive list cleared
+      _playbackPositionRx.value = 0.0;
     });
+
+    // Reset reactive map state
+    _polylinesRx.value = [];
+    _staticMarkersRx.value = [];
+    _playbackMarkerRx.value = null;
+    _movingPositionsRx.value = []; // Reactive list cleared
 
     final traccarProvider = Provider.of<TraccarProvider>(
       context,
@@ -371,38 +357,36 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
     );
     final positionsApi = api.PositionsApi(traccarProvider.apiClient);
 
-    // API call uses the updated _historyFrom and _historyTo
     final positions = await positionsApi.positionsGet(
       deviceId: _deviceId,
-      from: _historyFrom!.toUtc(), // Use UTC as Traccar typically expects it
+      from: _historyFrom!.toUtc(),
       to: _historyTo!.toUtc(),
     );
 
+    // Use setState for simple UI/non-map state changes
     setState(() {
       _positions = positions ?? [];
-
-      // NEW: Create the filtered list for smooth playback
-      _movingPositions = _positions
-          .where((p) => (p.speed ?? 0.0) > 2.0) //.where((p) => (p.speed ?? 0.0) > 0.0) are zero skipped
-          .toList();
-
-      _drawFullRoute();
-      if (_positions.isNotEmpty) {
-        _updatePlaybackMarker(animateCamera: true);
-      }
     });
+    
+    // UPDATE REACTIVE LIST DIRECTLY
+    _movingPositionsRx.value = _positions
+        .where((p) => (p.speed ?? 0.0) > 2.0)
+        .toList();
+
+    _drawFullRoute();
+    if (_positions.isNotEmpty) {
+      _updatePlaybackMarker(animateCamera: true);
+    }
   }
 
   Future<void> _fetchMonthlyData(DateTime month) async {
     if (_deviceId == null) return;
 
-    // Only proceed if the month has changed or if we are loading for the first time
     if (_dailySummaries.isNotEmpty &&
         month.month == _focusedDay.month &&
         month.year == _focusedDay.year)
       return;
 
-    // Set loading state and update focused day
     setState(() {
       _isCalendarLoading = true;
       _focusedDay = month;
@@ -413,10 +397,8 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
       listen: false,
     );
     final reportsApi = api.ReportsApi(traccarProvider.apiClient);
-    // OPEN HIVE BOX
     final dailyBox = await Hive.openBox<ReportSummaryHive>('daily_summaries');
 
-    // Step 1: Load from cache (Hive)
     _dailySummaries.clear();
     final firstDayOfMonth = DateTime(month.year, month.month, 1);
     final lastDayOfMonth = DateTime(month.year, month.month + 1, 0);
@@ -441,12 +423,10 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
       }
     }
 
-    // Initial setState to show cached data immediately
     setState(() {
       _isCalendarLoading = false;
     });
 
-    // Step 2: Fetch data from the network in the background and update cache
     for (
       var date = firstDayOfMonth;
       date.isBefore(lastDayOfMonth.add(const Duration(days: 1)));
@@ -454,7 +434,6 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
     ) {
       final dayUtc = DateTime.utc(date.year, date.month, date.day);
 
-      // Optimization: skip API call if data is already in the map
       if (_dailySummaries.containsKey(dayUtc)) continue;
 
       final from = DateTime(date.year, date.month, date.day, 0, 0, 0);
@@ -463,9 +442,8 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
           '$_deviceId-${DateFormat('yyyy-MM-dd').format(dayUtc)}';
 
       try {
-        // Fetching reports summary
         final summary = await reportsApi.reportsSummaryGet(
-          from.toUtc(), // Use UTC here
+          from.toUtc(),
           to.toUtc(),
           deviceId: [_deviceId!],
         );
@@ -473,14 +451,11 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
         if (summary != null && summary.isNotEmpty) {
           final dailySummary = summary.first;
 
-          // FIX: Use dayUtc (the date queried) as the key instead of summary.startTime
           _dailySummaries[dayUtc] = dailySummary;
 
-          // Step 3: Update Hive cache with fresh data
           final newSummaryHive = ReportSummaryHive.fromApi(dailySummary);
           await dailyBox.put(hiveKey, newSummaryHive);
 
-          // Update UI state for the calendar markers
           if (mounted) setState(() {});
         }
       } catch (e) {
@@ -495,12 +470,10 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
       _focusedDay = focusedDay;
     });
 
-    // Check if the date is today or in the past
     if (selectedDay.isBefore(DateTime.now().add(const Duration(days: 1))) &&
         _deviceId != null) {
-      // Directly fetch the route for the selected day
       _fetchHistoryRoute(selectedDay: selectedDay);
-      Navigator.pop(context); // Close the dialog
+      Navigator.pop(context);
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('No data or future date selected.')),
@@ -519,11 +492,8 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
     final currentLocale = Get.locale;
     if (currentLocale != null) {
       final localeString = currentLocale.toString();
-      // Await the initialization
       await initializeDateFormatting(localeString, null);
     }
-    // Ensure data for the current focused month is loaded before showing
-    // This call is now non-blocking as _fetchMonthlyData handles its own loading state.
     _fetchMonthlyData(_focusedDay);
 
     showDialog(
@@ -537,7 +507,6 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
                 modalSetState(() {
                   _focusedDay = focusedDay;
                 });
-                // Fetch data for the new month asynchronously
                 _fetchMonthlyData(focusedDay);
               }
 
@@ -547,7 +516,6 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: <Widget>[
-                      // Use local state _isCalendarLoading to show spinner in the dialog
                       _isCalendarLoading
                           ? const Center(
                               child: Padding(
@@ -569,7 +537,6 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
                                 return isSameDay(_selectedCalendarDay, day);
                               },
                               onDaySelected: (selectedDay, focusedDay) {
-                                // Call the main screen's function which handles navigation/route fetch
                                 _onDaySelected(selectedDay, focusedDay);
                               },
                               onPageChanged: onPageChanged,
@@ -633,7 +600,6 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
     );
   }
 
-  // FIX: Refactored to return Uint8List bytes instead of BitmapDescriptor
   Future<Uint8List> _createDotMarkerIcon(Color color) async {
     final ui.PictureRecorder pictureRecorder = ui.PictureRecorder();
     final Canvas canvas = Canvas(pictureRecorder);
@@ -652,10 +618,10 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
     final ByteData? byteData = await img.toByteData(
       format: ui.ImageByteFormat.png,
     );
-    // FIX: Return Uint8List bytes
     return byteData!.buffer.asUint8List();
   }
 
+  // Color check is no longer strictly needed for marker icons but kept as a utility
   Color _getSpeedColor(double speed) {
     if (speed <= 10) {
       return Colors.green;
@@ -666,13 +632,10 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
     }
   }
 
-  // NEW: Helper to create the marker widget from Uint8List bytes
   Widget _markerIconWidget(Uint8List bytes, double size, Offset anchor) {
-    // Anchor is relative to the size of the icon (e.g., 0.5, 0.9 is center x, 90% down y)
     final anchorX = anchor.dx * size;
     final anchorY = anchor.dy * size;
 
-    // FIX: Use Transform.translate to apply the anchor offset
     return Transform.translate(
       offset: Offset(-anchorX, -anchorY),
       child: Image.memory(
@@ -687,10 +650,9 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
   // MODIFIED: _drawFullRoute for FlutterMap
   void _drawFullRoute() async {
     if (_positions.isEmpty) {
-      setState(() {
-        _polylines = [];
-        _markers = [];
-      });
+      // Use reactive setters to clear map elements
+      _polylinesRx.value = [];
+      _staticMarkersRx.value = [];
       return;
     }
 
@@ -700,23 +662,19 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
         )
         .toList();
 
-    // FlutterMap Polyline
     final fullRoutePolyline = Polyline(
       points: points,
       color: Colors.grey.withOpacity(0.5),
       strokeWidth: 5,
     );
 
-    // FIX: 1. Preserve the existing playback marker before clearing.
-    // Use firstWhereOrNull to safely find the existing playback marker
-    final existingPlaybackMarker = _markers.firstWhereOrNull(
-      (m) => (m.key as ValueKey<String>).value == 'playback_marker',
-    );
+    // Get the existing playback marker if it exists (for speed change/redraw)
+    final existingPlaybackMarker = _playbackMarkerRx.value;
 
     List<Marker> customMarkers = [];
     final int totalPositions = _positions.length;
 
-    // 2. Build the list of static route markers (Start, End, Parking/Dots)
+    // 2. Build the list of STATIC route markers (Start, End, Parking)
     for (int i = 0; i < totalPositions; i++) {
       final pos = _positions[i];
       final LatLng position = LatLng(
@@ -725,8 +683,8 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
       );
 
       Uint8List? iconBytes;
-      String id = 'point_$i'; // Ensure unique ID for every position marker
-      Offset anchor = const Offset(0.5, 0.5); // Default center anchor
+      String id = 'point_$i';
+      Offset anchor = const Offset(0.5, 0.5);
       double size = _customMarkerTargetSize;
 
       if (i == 0 && _startMarkerIconBytes != null) {
@@ -734,70 +692,58 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
         iconBytes = _startMarkerIconBytes;
         id = 'start_point';
         anchor = const Offset(0.5, 0.9);
-        size = _customMarkerTargetSize;
       } else if (i == totalPositions - 1 &&
           _destinationMarkerIconBytes != null) {
         // End Marker
         iconBytes = _destinationMarkerIconBytes;
         id = 'end_point';
         anchor = const Offset(0.5, 0.9);
-        size = _customMarkerTargetSize;
       } else {
-        // Intermediate Markers
+        // Intermediate Markers - CHECK ONLY FOR STOP/PARKING
         final speed = pos.speed ?? 0.0;
-        if (speed <= 0.0 && _parkingMarkerIconBytes != null) {
-          // Parking/Stop Marker
+        if (speed <= 2.0 && _parkingMarkerIconBytes != null) {
+          // Parking/Stop Marker (Speed below a small threshold)
           iconBytes = _parkingMarkerIconBytes;
-          id = 'stop_point_$i'; // Ensure unique ID for stop markers
+          id = 'stop_point_$i';
           anchor = const Offset(0.5, 0.9);
-          size = _customMarkerTargetSize;
         } else {
-          // Moving (Use speed-colored dot)
-          final color = _getSpeedColor(speed.toDouble());
-          // FIX: Use the refactored dot icon creation (await is necessary)
-          iconBytes = await _createDotMarkerIcon(color);
-          id = 'move_dot_$i'; // Ensure unique ID for moving dots
-          size = 1.0; // Dot marker is smaller //10.0
-          anchor = const Offset(0.5, 0.5); // Dot is usually centered
+          // SKIP all moving positions (no dot markers)
+          continue;
         }
       }
 
       if (iconBytes != null) {
-        // FlutterMap Marker creation
         customMarkers.add(
           Marker(
             key: ValueKey<String>(id),
             point: position,
             width: size,
             height: size,
-            // FIX: Replaced 'builder' with 'child' and use the helper widget
             child: _markerIconWidget(iconBytes, size, anchor),
-            // The anchor property is removed as it's handled in the child widget
           ),
         );
       }
     }
 
-    // FIX: 2. Re-initialize _markers list by adding the preserved marker first, 
-    // then the newly built custom markers. This prevents key duplication
-    // by ensuring a fresh list.
-    List<Marker> newMarkers = [];
-    if (existingPlaybackMarker != null) {
-      newMarkers.add(existingPlaybackMarker);
-    }
-    newMarkers.addAll(customMarkers);
+    // NEW: Update reactive lists directly (NO setState)
+    _staticMarkersRx.value = customMarkers;
 
-    setState(() {
-      _polylines = [fullRoutePolyline]; // Start with the full route
-      _markers = newMarkers; // Assign the clean list
-    });
+    // Start with the full route (gray line)
+    _polylinesRx.value = [fullRoutePolyline];
+
+    // If a playback marker existed, ensure it is preserved/re-rendered
+    if (existingPlaybackMarker != null) {
+      _playbackMarkerRx.value = existingPlaybackMarker;
+    }
 
     _animateCameraToRoute();
   }
 
   void _togglePlayback() {
-    if (_movingPositions.isEmpty) return;
+    // MODIFIED: Use reactive list
+    if (_movingPositionsRx.isEmpty) return; 
 
+    // Use setState for simple UI state like _isPlaying
     setState(() {
       _isPlaying = !_isPlaying;
       if (_isPlaying) {
@@ -812,21 +758,27 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
             timer,
           ) {
             final stepIncrement = 0.5 * _playbackSpeed;
-            final maxIndex = _movingPositions.length - 1;
+            // MODIFIED: Use reactive list
+            final maxIndex = _movingPositionsRx.length - 1; 
 
-            if (_playbackPosition >= maxIndex) {
+            if (_playbackPositionRx.value >= maxIndex) {
               _playbackTimer?.cancel();
+              // Use setState for simple UI state change
               setState(() {
                 _isPlaying = false;
-                _playbackPosition = 0.0;
-                _updatePlaybackMarker(animateCamera: true);
               });
+
+              // Reset playback position and update marker reactively
+              _playbackPositionRx.value = 0.0;
+              _updatePlaybackMarker(animateCamera: true);
             } else {
-              setState(() {
-                _playbackPosition += stepIncrement;
-                _playbackPosition = min(_playbackPosition, maxIndex.toDouble());
-                _updatePlaybackMarker(animateCamera: true);
-              });
+              // Update reactive position (NO setState)
+              _playbackPositionRx.value += stepIncrement;
+              _playbackPositionRx.value = min(
+                _playbackPositionRx.value,
+                maxIndex.toDouble(),
+              );
+              _updatePlaybackMarker(animateCamera: true);
             }
           });
         });
@@ -842,28 +794,32 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
       _playbackSpeed = speed;
     });
     if (_isPlaying) {
-      _togglePlayback();
-      _togglePlayback();
+      _togglePlayback(); // Pause
+      _togglePlayback(); // Resume with new speed
     }
   }
 
-  // MODIFIED: _updatePlaybackMarker for FlutterMap
+  // MODIFIED: _updatePlaybackMarker for FlutterMap - NO setState
   void _updatePlaybackMarker({
     bool animateCamera = false,
     bool forceZoom = false,
   }) {
-    final listForPlayback = _movingPositions;
+    // MODIFIED: Use reactive list value
+    final listForPlayback = _movingPositionsRx.value; 
     if (listForPlayback.isEmpty || _playbackMarkerIconBytes == null) return;
 
-    final int index1 = _playbackPosition.floor().clamp(
+    // Use the reactive position value for interpolation
+    final double playbackPosition = _playbackPositionRx.value;
+
+    final int index1 = playbackPosition.floor().clamp(
       0,
       listForPlayback.length - 1,
     );
-    final int index2 = _playbackPosition.ceil().clamp(
+    final int index2 = playbackPosition.ceil().clamp(
       0,
       listForPlayback.length - 1,
     );
-    final double fraction = _playbackPosition - index1;
+    final double fraction = playbackPosition - index1;
 
     final pos1 = listForPlayback[index1];
     final pos2 = listForPlayback[index2];
@@ -888,22 +844,19 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
       if (y != 0 || x != 0) {
         bearing = atan2(y, x) * (180 / pi);
       }
-    } else if (_playbackMarker != null) {
-      // For simplicity, we just use the calculated bearing from interpolation.
+    } else if (_playbackMarkerRx.value != null) {
+      // Use existing bearing if at the last point
     }
 
-    // NEW: Playback marker widget
     Widget playbackMarkerWidget() {
-      // Anchor is center (0.5, 0.5) for the arrow icon
       final size = _arrowMarkerTargetSize;
       final anchorX = 0.5 * size;
       final anchorY = 0.5 * size;
 
-      // FIX: Use Transform.translate and Transform.rotate
       return Transform.translate(
         offset: Offset(-anchorX, -anchorY),
         child: Transform.rotate(
-          angle: bearing * (pi / 180), // Convert degrees to radians
+          angle: bearing * (pi / 180),
           child: Image.memory(
             _playbackMarkerIconBytes!,
             width: size,
@@ -915,14 +868,12 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
     }
 
     // FlutterMap Marker
-    _playbackMarker = Marker(
+    final newPlaybackMarker = Marker(
       key: const ValueKey<String>('playback_marker'),
       point: newLatLng,
       width: _arrowMarkerTargetSize,
       height: _arrowMarkerTargetSize,
-      // FIX: Replaced 'builder' with 'child'
       child: playbackMarkerWidget(),
-      // FIX: The 'anchor' parameter is REMOVED, as anchoring is handled via Transform.translate in the child widget.
     );
 
     final playedPoints = listForPlayback
@@ -943,39 +894,29 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
       strokeWidth: 5,
     );
 
-    // FIX: Check if mapController is available
     if (animateCamera && mapController != null) {
       if (forceZoom) {
-        // FIX: Used mapController.move
         mapController!.move(newLatLng, 15.7);
       } else {
-        // Subsequent movements just move the center, maintaining the current zoom.
-        // FIX: Used mapController.camera.zoom to access current zoom
         mapController!.move(newLatLng, mapController!.camera.zoom);
       }
     }
 
-    setState(() {
-      _markers.removeWhere(
-        (marker) => (marker.key as ValueKey<String>).value == 'playback_marker',
-      );
-      _markers.add(_playbackMarker!);
+    // UPDATE REACTIVE STATE (NO setState)
+    _playbackMarkerRx.value = newPlaybackMarker;
 
-      // Update polylines list
-      _polylines.removeWhere(
-        (polyline) => polyline.color == const Color(0xFF0F53FE),
-      ); // Remove old played route
-      _polylines.add(playedRoutePolyline);
-      if (_polylines.length < 2) {
-        // Re-add the full route if it was accidentally removed
-        _drawFullRoute();
-      }
-    });
+    // Update polylines list reactively
+    _polylinesRx.removeWhere(
+      (polyline) => polyline.color == const Color(0xFF0F53FE),
+    ); // Remove old played route
+    _polylinesRx.add(playedRoutePolyline);
+    if (_polylinesRx.length < 2) {
+      // Re-add the full route if it was accidentally removed
+      _drawFullRoute();
+    }
   }
 
-  // MODIFIED: _animateCameraToRoute for FlutterMap
   void _animateCameraToRoute() {
-    // FIX: Check if mapController is available
     if (mapController != null && _positions.isNotEmpty) {
       double minLat = _positions.first.latitude!.toDouble();
       double maxLat = _positions.first.latitude!.toDouble();
@@ -994,18 +935,12 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
         LatLng(maxLat, maxLon),
       );
 
-      // FIX: Use fitCamera with CameraFit.bounds
       mapController!.fitCamera(
-        CameraFit.bounds(
-          bounds: bounds,
-          // FIX: Use padding property on CameraFit.bounds
-          padding: const EdgeInsets.all(50),
-        ),
+        CameraFit.bounds(bounds: bounds, padding: const EdgeInsets.all(50)),
       );
     }
   }
 
-  // MODIFIED: _toggleMapType for OSM
   void _toggleMapType() {
     setState(() {
       _mapType = _mapType == OSMMapType.normal
@@ -1014,14 +949,11 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
     });
   }
 
-  // NEW: Helper to get the correct tile URL
   String _getTileUrl() {
     switch (_mapType) {
       case OSMMapType.normal:
-        // Standard OpenStreetMap tiles
         return 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
       case OSMMapType.satellite:
-        // Example of a free satellite tile provider (e.g., Esri World Imagery)
         return 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
       default:
         return 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
@@ -1031,7 +963,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
   @override
   void dispose() {
     _playbackTimer?.cancel();
-    _hiveTileProvider.dispose(); // Close Hive box on dispose
+    _hiveTileProvider.dispose();
     super.dispose();
   }
 
@@ -1039,32 +971,12 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
     return DateFormat('HH:mm:ss').format(time.toLocal());
   }
 
-  String get time {
-    if (_movingPositions.isEmpty) return 'N/A';
-    // Clamp the playback position index to the moving positions list
-    final index = _playbackPosition.toInt().clamp(
-      0,
-      _movingPositions.length - 1,
-    );
-    return _formatTime(_movingPositions[index].serverTime!);
-  }
-
-  String get speed {
-    if (_movingPositions.isEmpty) return 'N/A';
-    // Clamp the playback position index to the moving positions list
-    final index = _playbackPosition.toInt().clamp(
-      0,
-      _movingPositions.length - 1,
-    );
-    final speed = _movingPositions[index].speed ?? 0.0;
-    return '${speed.toStringAsFixed(2)} km/h';
-  }
+  // REMOVED: Old 'time' and 'speed' getters
 
   String get distanceText {
     if (_positions.isEmpty) return 'N/A';
     double totalDistance = 0.0;
     for (int i = 0; i < _positions.length - 1; i++) {
-      // NOTE: LatLng usage here is from latlong2 library now
       totalDistance += _calculateDistance(
         LatLng(
           _positions[i].latitude!.toDouble(),
@@ -1103,9 +1015,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final maxSliderValue = _movingPositions.isNotEmpty
-        ? (_movingPositions.length - 1).toDouble()
-        : 0.0;
+    // REMOVED: maxSliderValue calculation from outside Obx
 
     final speedOptions = [0.5, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0];
     String devicePart = _selectedDeviceName != null
@@ -1124,55 +1034,53 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
       ),
       body: Stack(
         children: [
-          // REPLACED: GoogleMap with FlutterMap
           _isTileProviderReady
-    ? FlutterMap(
-            mapController: mapController,
-            options: MapOptions(
-              initialCenter: const LatLng(0, 0), // Default center
-              initialZoom: 15,
-              onMapReady: () {
-                // Equivalent to onMapCreated
-                _animateCameraToRoute();
-                _updateZoomLevel();
-              },
-              onPositionChanged: (position, hasGesture) {
-                // Equivalent to onCameraMove
-                if (position.zoom != _currentZoomLevel) {
-                  _updateZoomLevel();
-                }
-              },
-              // FIX: Replaced rotation/initialRotate with initialRotation
-              initialRotation: 0,
-              minZoom: 3,
-              maxZoom: 18,
-            ),
-            children: [
-              // NEW: Tile Layer with Hive Caching Tile Provider
-              TileLayer(
-                urlTemplate: _getTileUrl(),
-                userAgentPackageName: _userAgent,
-                // Use the custom Hive Tile Provider
-                tileProvider: _hiveTileProvider,
-              ),
+              ? FlutterMap(
+                  mapController: mapController,
+                  options: MapOptions(
+                    initialCenter: const LatLng(0, 0),
+                    initialZoom: 15,
+                    onMapReady: () {
+                      _animateCameraToRoute();
+                      _updateZoomLevel();
+                    },
+                    onPositionChanged: (position, hasGesture) {
+                      if (position.zoom != _currentZoomLevel) {
+                        _updateZoomLevel();
+                      }
+                    },
+                    initialRotation: 0,
+                    minZoom: 3,
+                    maxZoom: 18,
+                  ),
+                  children: [
+                    TileLayer(
+                      urlTemplate: _getTileUrl(),
+                      userAgentPackageName: _userAgent,
+                      tileProvider: _hiveTileProvider,
+                    ),
 
-              // NEW: Polyline Layer
-              PolylineLayer(polylines: _polylines),
+                    // NEW: Reactive Polyline Layer (Only rebuilds on _polylinesRx changes)
+                    Obx(() => PolylineLayer(polylines: _polylinesRx.toList())),
 
-              // NEW: Marker Layer
-              MarkerLayer(markers: _markers),
-            ],
-          ): const Center(
-        child: CircularProgressIndicator(),
-      ),
+                    // NEW: Reactive Marker Layer (Only rebuilds on _staticMarkersRx or _playbackMarkerRx changes)
+                    Obx(() {
+                      final allMarkers = _staticMarkersRx.toList();
+                      if (_playbackMarkerRx.value != null) {
+                        allMarkers.add(_playbackMarkerRx.value!);
+                      }
+                      return MarkerLayer(markers: allMarkers);
+                    }),
+                  ],
+                )
+              : const Center(child: CircularProgressIndicator()),
 
-          // Map Type Toggle Button
+          // Map Type Toggle Button (Unchanged)
           Positioned(
             top: 10,
             right: 10,
             child: Column(
               children: [
-                // 1. Map Type Toggle Button
                 FloatingActionButton(
                   onPressed: _toggleMapType,
                   mini: true,
@@ -1184,7 +1092,17 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
 
                 const SizedBox(height: 10),
 
-                // 2. Zoom In Button
+                // NEW: Reset Rotation Button
+                FloatingActionButton(
+                  onPressed: _resetRotation,
+                  mini: true,
+                  heroTag: 'resetRotationButton',
+                  // Use an icon that clearly indicates rotation reset, like a compass
+                  child: const Icon(Icons.explore),
+                ),
+
+                const SizedBox(height: 10),
+
                 FloatingActionButton(
                   onPressed: _zoomIn,
                   mini: true,
@@ -1194,7 +1112,6 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
 
                 const SizedBox(height: 10),
 
-                // 3. Zoom Out Button
                 FloatingActionButton(
                   onPressed: _zoomOut,
                   mini: true,
@@ -1205,7 +1122,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
             ),
           ),
 
-          // Calendar/Date Selection Button
+          // Calendar/Date Selection Button (Unchanged)
           Positioned(
             top: 10,
             right: 70,
@@ -1238,11 +1155,10 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Playback and Speed Controls Row
+                  // Playback and Speed Controls Row (Unchanged)
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      // Play/Pause Button
                       IconButton(
                         icon: Icon(
                           _isPlaying ? Icons.pause : Icons.play_arrow,
@@ -1256,7 +1172,6 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
                             : null,
                       ),
 
-                      // Speed Controls (0.5x, 1x, 2x, 3x, 4x, 5x, 6x)
                       Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 8,
@@ -1298,7 +1213,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
 
                   const SizedBox(height: 8),
 
-                  // Slider
+                  // Slider - Reads _playbackPositionRx and _movingPositionsRx
                   SliderTheme(
                     data: SliderTheme.of(context).copyWith(
                       thumbColor: const Color(0xFF0F53FE),
@@ -1307,37 +1222,68 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
                       overlayColor: const Color(0xFF0F53FE).withOpacity(0.2),
                       trackHeight: 4.0,
                     ),
-                    child: Slider(
-                      value: _playbackPosition,
-                      min: 0,
-                      max: maxSliderValue,
-                      onChanged: (newValue) {
-                        setState(() {
-                          _playbackTimer?.cancel();
-                          _isPlaying = false;
-                          _playbackPosition = newValue;
-                          _updatePlaybackMarker();
-                        });
-                      },
-                      onChangeEnd: (newValue) {
-                        _updatePlaybackMarker(animateCamera: true);
+                    // Use Obx to read the reactive position for the slider's value
+                    child: Obx(
+                      () {
+                        // MODIFIED: Calculate maxSliderValue reactively inside Obx
+                        final maxSliderValue = _movingPositionsRx.isNotEmpty
+                            ? (_movingPositionsRx.length - 1).toDouble()
+                            : 0.0;
+
+                        return Slider(
+                          value: _playbackPositionRx.value,
+                          min: 0,
+                          max: maxSliderValue, // Use reactively calculated value
+                          onChanged: (newValue) {
+                            // Directly update the reactive position
+                            _playbackPositionRx.value = newValue;
+                            _playbackTimer?.cancel();
+                            _isPlaying = false;
+                            // Minimal update for smooth dragging
+                            _updatePlaybackMarker(animateCamera: false);
+                          },
+                          onChangeEnd: (newValue) {
+                            // Final update, animate camera to the new position
+                            _updatePlaybackMarker(animateCamera: true);
+                          },
+                        );
                       },
                     ),
                   ),
 
                   const SizedBox(height: 8),
 
-                  // Info Row
+                  // Info Row - Reads _playbackPositionRx and _movingPositionsRx
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 10),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
-                      children: [
-                        _buildInfoColumn('Time', time),
-                        _buildInfoColumn('Speed', speed),
-                        _buildInfoColumn('Distance', distanceText),
-                      ],
-                    ),
+                    child: Obx(() {
+                      // Calculate time and speed directly inside the reactive builder
+                      String currentTime = 'N/A';
+                      String currentSpeed = 'N/A';
+
+                      // MODIFIED: Use reactive list value and check
+                      if (_movingPositionsRx.isNotEmpty) {
+                        final index = _playbackPositionRx.value.toInt().clamp(
+                          0,
+                          _movingPositionsRx.length - 1,
+                        );
+                        currentTime = _formatTime(
+                          _movingPositionsRx[index].serverTime!,
+                        );
+                        final speedValue = _movingPositionsRx[index].speed ?? 0.0;
+                        currentSpeed = '${speedValue.toStringAsFixed(2)} km/h';
+                      }
+
+                      return Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceAround,
+                        children: [
+                          _buildInfoColumn('Time', currentTime),
+                          _buildInfoColumn('Speed', currentSpeed),
+                          // distanceText is safe as it doesn't access Rx variables
+                          _buildInfoColumn('Distance', distanceText),
+                        ],
+                      );
+                    }),
                   ),
                 ],
               ),
