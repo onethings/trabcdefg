@@ -1,5 +1,5 @@
 // lib/screens/monthly_mileage_screen.dart
-
+// A screen that displays the monthly mileage of a selected device.
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';

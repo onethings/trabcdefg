@@ -1,5 +1,5 @@
 // connections_screen.dart
-
+// A screen to manage connections between devices and other entities in the TracDefg app.
 import 'package:flutter/material.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
 import 'package:trabcdefg/providers/traccar_provider.dart';

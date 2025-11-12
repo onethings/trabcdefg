@@ -1,3 +1,5 @@
+// lib/models/report_summary_hive.dart
+// Model to store report summary data in Hive database.
 import 'package:hive/hive.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
 

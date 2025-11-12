@@ -1,5 +1,5 @@
 // lib/screens/main_screen.dart
-
+// The main screen with bottom navigation to different sections: Device List, Map, Reports, and Settings.
 import 'package:flutter/material.dart';
 import 'package:trabcdefg/screens/device_list_screen.dart';
 import 'package:trabcdefg/screens/map_screen.dart';

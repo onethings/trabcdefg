@@ -1,5 +1,5 @@
 // lib/screens/share_device_screen.dart
-
+//This screen provides a clean interface for generating a temporary, shareable access link for a specific GPS device tracked by a Traccar server.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;

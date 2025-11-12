@@ -1,5 +1,5 @@
 // lib/screens/reports/trips_report_screen.dart
-
+// A screen to display trips report in the TracDefg app.
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
@@ -9,10 +9,131 @@ import 'package:trabcdefg/providers/traccar_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
 import 'package:http/http.dart' as http;
-import 'package:google_maps_flutter/google_maps_flutter.dart';
+// import 'package:google_maps_flutter/google_maps_flutter.dart'; // REMOVED
+import 'package:flutter_map/flutter_map.dart'; // ADDED
+import 'package:latlong2/latlong.dart'; // FIXED: Un-aliased import
 import 'dart:ui' as ui;
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
+import 'package:hive/hive.dart'; // ADDED
+import 'dart:typed_data'; // ADDED
+import 'package:flutter/foundation.dart'; // ADDED for DiagnosticsProperty
+
+// --- Tile Caching Implementation using Hive (Copied from map_screen.dart) ---
+
+class _TileCacheService {
+  late Box<Uint8List> _tileBox;
+  static const String boxName = 'mapTilesCache';
+
+  Future<void> init() async {
+    _tileBox = await Hive.openBox<Uint8List>(boxName);
+  }
+
+  String _generateKey(String url) {
+    return url.hashCode.toString();
+  }
+
+  Future<Uint8List?> getTile(String url) async {
+    return _tileBox.get(_generateKey(url));
+  }
+
+  Future<void> saveTile(String url, Uint8List tileData) async {
+    await _tileBox.put(_generateKey(url), tileData);
+  }
+}
+
+class CachedNetworkImageProvider extends ImageProvider<CachedNetworkImageProvider> {
+  final String url;
+  final _TileCacheService cacheService;
+  final http.Client httpClient;
+
+  CachedNetworkImageProvider(
+    this.url, {
+    required this.cacheService,
+    required this.httpClient,
+  });
+
+  @override
+  ImageStreamCompleter loadImage(
+    CachedNetworkImageProvider key,
+    ImageDecoderCallback decode,
+  ) {
+    return MultiFrameImageStreamCompleter(
+      codec: _loadAsync(key, decode),
+      scale: 1.0,
+      informationCollector: () => <DiagnosticsNode>[
+        DiagnosticsProperty<ImageProvider>('Image provider', this),
+        DiagnosticsProperty<CachedNetworkImageProvider>('Original key', key),
+      ],
+    );
+  }
+
+  @override
+  Future<CachedNetworkImageProvider> obtainKey(
+    ImageConfiguration configuration, 
+  ) {
+    return Future<CachedNetworkImageProvider>.value(this);
+  }
+
+  Future<ui.Codec> _loadAsync(
+    CachedNetworkImageProvider key,
+    ImageDecoderCallback decode,
+  ) async {
+    assert(key == this);
+
+    final cachedData = await cacheService.getTile(url);
+
+    if (cachedData != null) {
+      return decode(await ui.ImmutableBuffer.fromUint8List(cachedData)); 
+    }
+
+    try {
+      final response = await httpClient.get(Uri.parse(url));
+
+      if (response.statusCode == 200) {
+        final Uint8List bytes = response.bodyBytes;
+        
+        await cacheService.saveTile(url, bytes);
+
+        return decode(await ui.ImmutableBuffer.fromUint8List(bytes)); 
+      } else {
+        throw Exception('Failed to load tile from network: ${response.statusCode}');
+      }
+    } catch (e) {
+      rethrow;
+    }
+  }
+}
+
+class _HiveTileProvider extends TileProvider {
+  final _TileCacheService cacheService;
+  final http.Client httpClient;
+
+  _HiveTileProvider({
+    required this.cacheService,
+    required this.httpClient,
+  });
+
+  @override
+  ImageProvider getImage(
+    TileCoordinates coordinates,
+    TileLayer options,
+  ) {
+    return CachedNetworkImageProvider(
+      getTileUrl(coordinates, options),
+      cacheService: cacheService,
+      httpClient: httpClient,
+    );
+  }
+}
+
+enum AppMapType {
+  openStreetMap,
+  satellite,
+}
+
+// --- End of Map Caching & FlutterMap Imports/Definitions ---
+
 
 class TripReport {
   final int deviceId;
@@ -99,39 +220,65 @@ class _TripsReportScreenState extends State<TripsReportScreen> {
   List<TripReport> _tripsReport = [];
   bool _isLoading = true;
   String? _deviceName;
-  final Completer<GoogleMapController> _controller = Completer();
-  final Set<Marker> _markers = {};
-  final Set<Polyline> _polylines = {};
-  late BitmapDescriptor _startIcon;
-  late BitmapDescriptor _endIcon;
-MapType _currentMapType = MapType.normal;
+  // final Completer<GoogleMapController> _controller = Completer(); // REMOVED
+  late MapController _mapController; // ADDED
+  final List<Marker> _markers = []; // Changed to FlutterMap Marker list
+  final List<Polyline> _polylines = []; // Changed to FlutterMap Polyline list
+  // late BitmapDescriptor _startIcon; // REMOVED
+  // late BitmapDescriptor _endIcon; // REMOVED
+  AppMapType _currentMapType = AppMapType.openStreetMap; // Changed to AppMapType
+
+  // Caching variables (ADDED)
+  final _TileCacheService _cacheService = _TileCacheService();
+  final http.Client _httpClient = http.Client();
+  late _HiveTileProvider _tileProvider;
+  bool _isCacheInitialized = false;
+  
+  // Tile URLs (ADDED)
+  static const String _osmUrlTemplate = 
+      'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+  static const String _satelliteUrlTemplate = 
+      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+  static const List<String> _osmSubdomains = ['a', 'b', 'c'];
+
 
   @override
   void initState() {
     super.initState();
-    _loadMarkerIcons();
+    // _loadMarkerIcons(); // Not needed for FlutterMap
+    _mapController = MapController(); // Initialized MapController
+    
+    // Initialize cache service and then the tile provider
+    _cacheService.init().then((_) {
+      _tileProvider = _HiveTileProvider(
+        cacheService: _cacheService,
+        httpClient: _httpClient,
+      );
+      if (mounted) {
+        setState(() {
+          _isCacheInitialized = true;
+        });
+      }
+    });
+
     _fetchTripsReport();
   }
 
-  Future<void> _loadMarkerIcons() async {
-    // Load the start icon from assets/images/start.png
-    final Uint8List startIconBytes = (await rootBundle.load('assets/images/start.png')).buffer.asUint8List();
-    final ui.Codec startCodec = await ui.instantiateImageCodec(startIconBytes, targetWidth: 80);
-    final ui.FrameInfo startFi = await startCodec.getNextFrame();
-    _startIcon = await BitmapDescriptor.fromBytes(
-      (await (await startCodec.getNextFrame()).image.toByteData(format: ui.ImageByteFormat.png))!.buffer.asUint8List(),
-    );
-
-    // Load the end icon from assets/images/destination.png
-    final Uint8List endIconBytes = (await rootBundle.load('assets/images/destination.png')).buffer.asUint8List();
-    final ui.Codec endCodec = await ui.instantiateImageCodec(endIconBytes, targetWidth: 80);
-    final ui.FrameInfo endFi = await endCodec.getNextFrame();
-    _endIcon = await BitmapDescriptor.fromBytes(
-      (await (await endCodec.getNextFrame()).image.toByteData(format: ui.ImageByteFormat.png))!.buffer.asUint8List(),
-    );
+  @override
+  void dispose() {
+    _httpClient.close(); // Dispose HTTP client
+    super.dispose();
   }
 
-  Future<void> _fetchTripsReport() async {
+
+  Future<void> _loadMarkerIcons() async {
+    // Replaced complex Google Maps BitmapDescriptor logic with a simple no-op 
+    // as FlutterMap Markers use Widgets directly.
+    await Future.value();
+  }
+
+  // ... (TripReport parsing and _fetchTripsReport logic remain mostly the same) ...
+Future<void> _fetchTripsReport() async {
     setState(() {
       _isLoading = true;
     });
@@ -224,61 +371,62 @@ MapType _currentMapType = MapType.normal;
     _polylines.clear();
     for (var i = 0; i < _tripsReport.length; i++) {
       final trip = _tripsReport[i];
+      // Changed to latlong2 LatLng (un-aliased)
       final LatLng startPoint = LatLng(trip.startLat, trip.startLon);
       final LatLng endPoint = LatLng(trip.endLat, trip.endLon);
 
+      // FlutterMap Marker for Start Point
       _markers.add(
         Marker(
-          markerId: MarkerId('start_$i'),
-          position: startPoint,
-          infoWindow: InfoWindow(
-            title: '${'reportTrips'.tr} ${i + 1} ${'reportStartDate'.tr}',
-            snippet: '${'positionDeviceTime'.tr}: ${DateFormat('yyyy-MM-dd HH:mm').format(trip.startTime.toLocal())}',
+          point: startPoint,
+          width: 30.0,
+          height: 30.0,
+          child: Image.asset(
+            'assets/images/start.png',
+            fit: BoxFit.contain,
           ),
-          icon: _startIcon,
         ),
       );
 
+      // FlutterMap Marker for End Point
       _markers.add(
         Marker(
-          markerId: MarkerId('end_$i'),
-          position: endPoint,
-          infoWindow: InfoWindow(
-            title: '${'reportTrips'.tr} ${i + 1} ${'reportEndTime'.tr}',
-            snippet: '${'positionDeviceTime'.tr}: ${DateFormat('yyyy-MM-dd HH:mm').format(trip.endTime.toLocal())}',
+          point: endPoint,
+          width: 30.0,
+          height: 30.0,
+          child: Image.asset(
+            'assets/images/destination.png',
+            fit: BoxFit.contain,
           ),
-          icon: _endIcon,
         ),
       );
 
+      // FlutterMap Polyline
       _polylines.add(
         Polyline(
-          polylineId: PolylineId('trip_route_$i'),
           points: [startPoint, endPoint],
           color: Colors.blue,
-          width: 5,
+          strokeWidth: 5.0,
         ),
       );
     }
   }
 
   Future<void> _animateToPosition(LatLng position) async {
-    final controller = await _controller.future;
-    controller.animateCamera(
-      CameraUpdate.newCameraPosition(
-        CameraPosition(
-          target: position,
-          zoom: 16,
-        ),
-      ),
+    // Uses FlutterMap's move method
+    _mapController.move(
+      position,
+      16,
     );
   }
 
-  void _showInfoWindowForMarker(MarkerId markerId) {
-    final controller = _controller.future.then((c) {
-      c.showMarkerInfoWindow(markerId);
-    });
-  }
+  // void _showInfoWindowForMarker(MarkerId markerId) { // REMOVED as it's a Google Maps API call
+  //   final controller = _controller.future.then((c) {
+  //     c.showMarkerInfoWindow(markerId);
+  //   });
+  // }
+  
+  // Helper functions (e.g., _formatDuration, _formatDistance) remain the same
 
   String _formatDuration(int milliseconds) {
     int seconds = (milliseconds / 1000).round();
@@ -295,10 +443,19 @@ MapType _currentMapType = MapType.normal;
     return '${meters.toStringAsFixed(2)} ${'sharedMeters'.tr}';
   }
 
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return Scaffold(body: Center(child: CircularProgressIndicator()));
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    
+    // Check for cache initialization
+    if (!_isCacheInitialized) { 
+       return Scaffold(
+        appBar: AppBar(title: Text('Loading Map...'.tr)),
+        body: const Center(child: Text('Initializing Map Assets...')),
+      );
     }
 
     if (_tripsReport.isEmpty) {
@@ -309,6 +466,11 @@ MapType _currentMapType = MapType.normal;
         ),
       );
     }
+    
+    // Determine the map's initial center (latlong2 LatLng)
+    final LatLng initialCenter = _tripsReport.isNotEmpty
+        ? LatLng(_tripsReport.first.startLat, _tripsReport.first.startLon)
+        : const LatLng(21.9162, 95.9560); // Mandalay, Myanmar
 
     return Scaffold(
       appBar: AppBar(title: Text('${'reportTrips'.tr}: ${_deviceName ?? ''}')),
@@ -318,37 +480,48 @@ MapType _currentMapType = MapType.normal;
             flex: 1,
             child: Stack(
               children: [
-                GoogleMap(
-              mapType: _currentMapType,
-              initialCameraPosition: _tripsReport.isNotEmpty
-                  ? CameraPosition(
-                      target: LatLng(_tripsReport.first.startLat, _tripsReport.first.startLon),
-                      zoom: 14,
-                    )
-                  : const CameraPosition(
-                      target: LatLng(21.9162, 95.9560), // Mandalay, Myanmar
-                      zoom: 14,
+                // REPLACED GoogleMap with FlutterMap
+                FlutterMap(
+                  mapController: _mapController,
+                  options: MapOptions(
+                    initialCenter: initialCenter,
+                    initialZoom: 14.0,
+                    interactionOptions: const InteractionOptions(
+                        flags: InteractiveFlag.all & ~InteractiveFlag.rotate),
+                  ),
+                  children: [
+                    // Tile Layer: Conditional based on map type (OSM/Satellite)
+                    TileLayer(
+                      urlTemplate: _currentMapType == AppMapType.openStreetMap
+                          ? _osmUrlTemplate
+                          : _satelliteUrlTemplate,
+                      subdomains: _currentMapType == AppMapType.openStreetMap
+                          ? _osmSubdomains
+                          : const [],
+                      userAgentPackageName: 'com.trabcdefg.app',
+                      tileProvider: _tileProvider, // Hive Caching
                     ),
-              onMapCreated: (GoogleMapController controller) {
-                _controller.complete(controller);
-              },
-              markers: _markers,
-              polylines: _polylines,
-            ),
-             Positioned(
+                    // Polyline Layer
+                    PolylineLayer(polylines: _polylines),
+                    // Marker Layer
+                    MarkerLayer(markers: _markers),
+                  ],
+                ),
+                // Map Type Toggle Button
+                Positioned(
                   top: 10,
                   right: 10,
                   child: FloatingActionButton(
                     mini: true,
                     onPressed: () {
                       setState(() {
-                        _currentMapType = _currentMapType == MapType.normal
-                            ? MapType.satellite
-                            : MapType.normal;
+                        _currentMapType = _currentMapType == AppMapType.openStreetMap
+                            ? AppMapType.satellite
+                            : AppMapType.openStreetMap;
                       });
                     },
                     child: Icon(
-                      _currentMapType == MapType.normal
+                      _currentMapType == AppMapType.openStreetMap
                           ? Icons.satellite_alt
                           : Icons.map,
                     ),
@@ -366,8 +539,9 @@ MapType _currentMapType = MapType.normal;
                 final trip = _tripsReport[index];
                 return GestureDetector(
                   onTap: () {
+                    // Animate to start position
                     _animateToPosition(LatLng(trip.startLat, trip.startLon));
-                    _showInfoWindowForMarker(MarkerId('start_$index'));
+                    // Removed Google Maps specific showInfoWindowForMarker
                   },
                   child: Card(
                     elevation: 4,
