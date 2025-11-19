@@ -19,11 +19,15 @@ class ReportSummaryHive extends HiveObject {
   @HiveField(3)
   final double? spentFuel;
 
+  @HiveField(4)
+  final int? engineHours;
+
   ReportSummaryHive({
     this.distance,
     this.averageSpeed,
     this.maxSpeed,
     this.spentFuel,
+    this.engineHours,
   });
 
   factory ReportSummaryHive.fromApi(api.ReportSummary apiSummary) {
@@ -32,6 +36,7 @@ class ReportSummaryHive extends HiveObject {
       averageSpeed: apiSummary.averageSpeed?.toDouble(),
       maxSpeed: apiSummary.maxSpeed?.toDouble(),
       spentFuel: apiSummary.spentFuel?.toDouble(),
+      engineHours: apiSummary.engineHours,
     );
   }
 }
