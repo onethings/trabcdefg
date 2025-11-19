@@ -1,15 +1,12 @@
 // lib/screens/map_screen.dart
-// A screen that displays the map with device locations using OpenStreetMap with tile caching.
 
 import 'package:flutter/material.dart';
-import 'package:flutter_map/flutter_map.dart'; // Primary map package for OpenStreetMap
-import 'package:latlong2/latlong.dart' as latlong; // LatLong for FlutterMap coordinates
-// ALIAS: Required for Satellite view, Marker, BitmapDescriptor - REMOVED: google_maps_flutter is gone
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:provider/provider.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
 import 'package:trabcdefg/src/generated_api/api.dart'
-    as api; 
-// import 'package:trabcdefg/src/generated_api/model/device_extensions.dart';
+    as api; // FIX: Added 'as api'
+import 'package:trabcdefg/src/generated_api/model/device_extensions.dart';
 import 'dart:async';
 import 'package:flutter/services.dart';
 import 'dart:ui' as ui;
@@ -25,151 +22,13 @@ import 'dart:convert';
 import 'settings/geofences_screen.dart';
 import 'package:trabcdefg/constants.dart';
 import 'dart:io';
-import 'share_device_screen.dart'; 
+import 'share_device_screen.dart'; // Import the new screen
 import 'command_screen.dart';
 import 'package:trabcdefg/screens/settings/devices_screen.dart';
-import 'package:trabcdefg/screens/settings/add_device_screen.dart'; 
-import 'dart:math'; // Required for math operations like pi/radians in marker rotation
-import 'package:hive/hive.dart'; 
-import 'dart:typed_data'; 
-import 'package:flutter_map/flutter_map.dart'; // Ensure this is imported for TileProvider
-import 'package:flutter/foundation.dart'; // Required for DiagnosticsProperty
-
-// --- Tile Caching Implementation using Hive ---
-
-class _TileCacheService {
-  late Box<Uint8List> _tileBox;
-  static const String boxName = 'mapTilesCache';
-
-  Future<void> init() async {
-    // Open the Hive box for storing map tiles.
-    _tileBox = await Hive.openBox<Uint8List>(boxName);
-  }
-
-  // Generate a unique key for the tile URL to use in Hive.
-  String _generateKey(String url) {
-    return url.hashCode.toString();
-  }
-
-  Future<Uint8List?> getTile(String url) async {
-    // Try to retrieve the tile from the local cache.
-    return _tileBox.get(_generateKey(url));
-  }
-
-  Future<void> saveTile(String url, Uint8List tileData) async {
-    // Save the tile data to the local cache.
-    await _tileBox.put(_generateKey(url), tileData);
-  }
-}
-
-// Custom TileProvider to integrate Hive caching with FlutterMap
-class _HiveTileProvider extends TileProvider {
-  final _TileCacheService cacheService;
-  final http.Client httpClient;
-
-  _HiveTileProvider({
-    required this.cacheService,
-    required this.httpClient,
-  });
-
-  @override
-  ImageProvider getImage(
-    TileCoordinates coordinates,
-    TileLayer options,
-  ) {
-    // This is the key method to load the image. We return a FutureProvider.
-    return CachedNetworkImageProvider(
-      getTileUrl(coordinates, options),
-      cacheService: cacheService,
-      httpClient: httpClient,
-    );
-  }
-}
-
-// Custom ImageProvider to handle the cache/network logic
-class CachedNetworkImageProvider extends ImageProvider<CachedNetworkImageProvider> {
-  final String url;
-  final _TileCacheService cacheService;
-  final http.Client httpClient;
-
-  CachedNetworkImageProvider(
-    this.url, {
-    required this.cacheService,
-    required this.httpClient,
-  });
-
-  @override
-  ImageStreamCompleter loadImage(
-    CachedNetworkImageProvider key,
-    ImageDecoderCallback decode,
-  ) {
-    return MultiFrameImageStreamCompleter(
-      codec: _loadAsync(key, decode),
-      scale: 1.0,
-      informationCollector: () => <DiagnosticsNode>[
-        DiagnosticsProperty<ImageProvider>('Image provider', this),
-        DiagnosticsProperty<CachedNetworkImageProvider>('Original key', key),
-      ],
-    );
-  }
-
-  // Corrected obtainKey signature
-  @override
-  Future<CachedNetworkImageProvider> obtainKey(
-    ImageConfiguration configuration, 
-  ) {
-    // FIXED: Corrected the type name from CachedNetworkProvider to CachedNetworkImageProvider
-    return Future<CachedNetworkImageProvider>.value(this);
-  }
-
-  Future<ui.Codec> _loadAsync(
-    CachedNetworkImageProvider key,
-    ImageDecoderCallback decode,
-  ) async {
-    assert(key == this);
-
-    // 1. Check Cache
-    final cachedData = await cacheService.getTile(url);
-
-    if (cachedData != null) {
-      // Load from cache
-      return decode(await ImmutableBuffer.fromUint8List(cachedData));
-    }
-
-    // 2. Fetch from Network
-    try {
-      final response = await httpClient.get(Uri.parse(url));
-
-      if (response.statusCode == 200) {
-        final Uint8List bytes = response.bodyBytes;
-        
-        // 3. Save to Cache
-        await cacheService.saveTile(url, bytes);
-
-        // Load from fetched bytes
-        return decode(await ImmutableBuffer.fromUint8List(bytes));
-      } else {
-        // Fallback or error handling for network failure
-        throw Exception('Failed to load tile from network: ${response.statusCode}');
-      }
-    } catch (e) {
-      // Fallback or error handling for any other failure
-      rethrow;
-    }
-  }
-}
-
-// --- End of Tile Caching Implementation ---
-
-
-// ADDED: Enum for managing map types
-enum AppMapType {
-  openStreetMap, // Will use standard OSM tiles
-  satellite,     // Will use an alternative satellite-like tile layer
-}
+import 'package:trabcdefg/screens/settings/add_device_screen.dart'; // Import AddDeviceScreen
 
 class MapScreen extends StatefulWidget {
-  final api.Device? selectedDevice; 
+  final api.Device? selectedDevice; // FIX: Use api.Device
 
   const MapScreen({super.key, this.selectedDevice});
 
@@ -178,63 +37,85 @@ class MapScreen extends StatefulWidget {
 }
 
 class _MapScreenState extends State<MapScreen> {
-  // REMOVED: final Map<String, gmap.BitmapDescriptor> _markerIcons = {}; 
+  final Map<String, BitmapDescriptor> _markerIcons = {};
   bool _markersLoaded = false;
-  AppMapType _mapType = AppMapType.openStreetMap; 
-  MapController flutterMapController = MapController(); 
+  bool _isSatelliteView = false;
+  GoogleMapController? mapController;
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
-  api.Device? _currentDevice; 
-  final _TileCacheService _cacheService = _TileCacheService(); 
-  final http.Client _httpClient = http.Client(); 
-
-  // --- Tile URLs for different map types ---
-  static const String _osmUrlTemplate = 
-      'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
-  static const String _satelliteUrlTemplate = 
-      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
-  static const List<String> _osmSubdomains = ['a', 'b', 'c'];
-
-  // Custom Tile Provider 
-  late _HiveTileProvider _tileProvider;
-  bool _isCacheInitialized = false; // State to track cache/provider initialization
-
+  api.Device? _currentDevice; // FIX: Use api.Device
 
   @override
   void initState() {
     super.initState();
-    // Initialize cache service and then the tile provider
-    _cacheService.init().then((_) {
-      _tileProvider = _HiveTileProvider(
-        cacheService: _cacheService,
-        httpClient: _httpClient,
-      );
-      if (mounted) {
-        setState(() {
-          _isCacheInitialized = true; // Set flag when initialization is complete
-        });
-      }
-    });
-
-    _loadMarkerIcons(); 
+    _loadMarkerIcons();
     _currentDevice = widget.selectedDevice;
-
     if (_currentDevice != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         // Your logic for initial state handling
       });
     }
   }
-  
-  @override
-  void dispose() {
-    _httpClient.close();
-    super.dispose();
-  }
 
-  // Simplified _loadMarkerIcons: now just sets _markersLoaded
   Future<void> _loadMarkerIcons() async {
-    await Future.delayed(Duration.zero); 
+    const List<String> categories = [
+      'animal',
+      'arrow',
+      'bicycle',
+      'boat',
+      'bus',
+      'car',
+      'crane',
+      'default',
+      'helicopter',
+      'motorcycle',
+      'null',
+      'offroad',
+      'person',
+      'pickup',
+      'plane',
+      'scooter',
+      'ship',
+      'tractor',
+      'train',
+      'tram',
+      'trolleybus',
+      'truck',
+      'van',
+    ];
+    const List<String> statuses = [
+      'online',
+      'offline',
+      'static',
+      'idle',
+      'unknown',
+    ];
 
+    for (var category in categories) {
+      for (var status in statuses) {
+        final iconPath = 'assets/images/marker_${category}_$status.png';
+        try {
+          final byteData = await rootBundle.load(iconPath);
+          final imageData = byteData.buffer.asUint8List();
+          final codec = await ui.instantiateImageCodec(
+            imageData,
+            targetHeight: 100,
+          );
+          final frameInfo = await codec.getNextFrame();
+          final image = frameInfo.image;
+          final byteDataResized = await image.toByteData(
+            format: ui.ImageByteFormat.png,
+          );
+          if (byteDataResized != null) {
+            final bitmap = BitmapDescriptor.fromBytes(
+              byteDataResized.buffer.asUint8List(),
+            );
+            _markerIcons['$category-$status'] = bitmap;
+          }
+        } catch (e) {
+          print('Could not load icon: $iconPath. Using fallback.'.tr);
+        }
+      }
+    }
     if (mounted) {
       setState(() {
         _markersLoaded = true;
@@ -242,13 +123,23 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
+  // PersistentBottomSheetController? _bottomSheetController;
+  // String _formatDate(DateTime? date) {
+  //   if (date == null) return 'N/A';
+  //   return DateFormat('MM/dd/yyyy, hh:mm:ss a').format(date.toLocal());
+  // }
   PersistentBottomSheetController? _bottomSheetController;
   String _formatDate(DateTime? date) {
     if (date == null) return 'N/A';
+    // Changed to use locale-aware formatting methods. 
+    // DateFormat.yMd().add_Hms() provides a standard format 
+    // that respects the locale's conventions for date and time order.
     return DateFormat.yMd().add_Hms().format(date.toLocal());
   }
 
+  // IMPLEMENTATION: Delete confirmation dialog
   Future<void> _showDeleteConfirmationDialog(api.Device device) async {
+    // FIX: Use api.Device
     final result = await showDialog<bool>(
       context: context,
       builder: (BuildContext context) {
@@ -283,6 +174,7 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
+  // IMPLEMENTATION: Perform the deletion
   Future<void> _deleteDevice(int deviceId) async {
     final traccarProvider = Provider.of<TraccarProvider>(
       context,
@@ -290,7 +182,7 @@ class _MapScreenState extends State<MapScreen> {
     );
     final devicesApi = api.DevicesApi(
       traccarProvider.apiClient,
-    ); 
+    ); // FIX: Use api.DevicesApi
 
     try {
       // API Call: DELETE /devices/{id}
@@ -308,6 +200,7 @@ class _MapScreenState extends State<MapScreen> {
         backgroundColor: Colors.green.shade100,
       );
     } on api.ApiException catch (e) {
+      // FIX: Use api.ApiException
       Get.snackbar(
         'Error'.tr,
         'Failed to delete device: ${e.message}'.tr,
@@ -323,15 +216,12 @@ class _MapScreenState extends State<MapScreen> {
       );
     }
   }
-  
-  latlong.LatLng _toFlutterLatLng(double latitude, double longitude) {
-    return latlong.LatLng(latitude, longitude);
-  }
 
   void _onDeviceSelected(
     api.Device device,
     List<api.Position> allPositions,
   ) async {
+    // FIX: Use api.Device and api.Position
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt('selectedDeviceId', device.id!);
     await prefs.setString('selectedDeviceName', device.name!);
@@ -339,31 +229,27 @@ class _MapScreenState extends State<MapScreen> {
     final position = allPositions.firstWhere(
       (p) => p.deviceId == device.id,
       orElse: () => api.Position(
+        // FIX: Use api.Position
         deviceId: device.id,
         latitude: 0.0,
         longitude: 0.0,
-      ), 
+      ), // Fallback
     );
 
     if (position.latitude != null &&
-        position.longitude != null) {
-      
-      // FIXED: Added .toDouble() to cast nullable num to non-nullable double.
-      final double lat = position.latitude!.toDouble(); 
-      final double lon = position.longitude!.toDouble();
-
-      final targetLatLng = latlong.LatLng(
-        lat, 
-        lon,
+        position.longitude != null &&
+        mapController != null) {
+      mapController!.animateCamera(
+        CameraUpdate.newLatLngZoom(
+          LatLng(position.latitude!.toDouble(), position.longitude!.toDouble()),
+          15, // A closer zoom level
+        ),
       );
-      
-      flutterMapController.move( 
-        targetLatLng, 
-        15.0, 
-      );
+      mapController!.showMarkerInfoWindow(MarkerId(device.id.toString()));
     }
 
-    _showDeviceDetailPanel(device, position); 
+    // Show the detail panel for the selected device
+    _showDeviceDetailPanel(device, position); // Pass position here
   }
 
   Color _getBatteryColor(double batteryLevel) {
@@ -386,6 +272,7 @@ class _MapScreenState extends State<MapScreen> {
     api.Device device,
     api.Position? currentPosition,
   ) {
+    // FIX: Use api.Device and api.Position
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -410,11 +297,11 @@ class _MapScreenState extends State<MapScreen> {
                   title: Text('linkGoogleMaps'.tr),
                   onTap: () {
                     Navigator.of(context).pop();
+                    // Assuming position variable needs to be currentPosition
                     if (currentPosition?.latitude != null &&
                         currentPosition?.longitude != null) {
-                      // FIXED: Added .toDouble() to cast nullable num to non-nullable double inside the string interpolation.
                       final url = Uri.parse(
-                        'https://maps.google.com/maps?q=${currentPosition!.latitude!.toDouble()},${currentPosition.longitude!.toDouble()}',
+                        'http://maps.google.com/?q=${currentPosition!.latitude},${currentPosition.longitude}',
                       );
                       _launchUrl(url);
                     }
@@ -424,11 +311,11 @@ class _MapScreenState extends State<MapScreen> {
                   title: Text('linkAppleMaps'.tr),
                   onTap: () {
                     Navigator.of(context).pop();
+                    // Assuming position variable needs to be currentPosition
                     if (currentPosition?.latitude != null &&
                         currentPosition?.longitude != null) {
-                      // FIXED: Added .toDouble()
                       final url = Uri.parse(
-                        'https://maps.apple.com/?q=${currentPosition!.latitude!.toDouble()},${currentPosition.longitude!.toDouble()}',
+                        'https://maps.apple.com/?q=${currentPosition!.latitude},${currentPosition.longitude}',
                       );
                       _launchUrl(url);
                     }
@@ -438,11 +325,11 @@ class _MapScreenState extends State<MapScreen> {
                   title: Text('linkStreetView'.tr),
                   onTap: () {
                     Navigator.of(context).pop();
+                    // Assuming position variable needs to be currentPosition
                     if (currentPosition?.latitude != null &&
                         currentPosition?.longitude != null) {
-                      // FIXED: Added .toDouble()
                       final url = Uri.parse(
-                        'google.streetview:cbll=${currentPosition!.latitude!.toDouble()},${currentPosition.longitude!.toDouble()}',
+                        'google.streetview:cbll=${currentPosition!.latitude},${currentPosition.longitude}',
                       );
                       _launchUrl(url);
                     }
@@ -475,8 +362,10 @@ class _MapScreenState extends State<MapScreen> {
     api.Device device,
     api.Position? currentPosition,
   ) {
+    // FIX: Use api.Device and api.Position
     _bottomSheetController?.close();
 
+    // Get the TraccarProvider instance for use outside the inner builder
     final traccarProvider = Provider.of<TraccarProvider>(
       context,
       listen: false,
@@ -485,13 +374,14 @@ class _MapScreenState extends State<MapScreen> {
     _bottomSheetController = _scaffoldKey.currentState!.showBottomSheet((
       context,
     ) {
+      // Find the current position for the device
       final currentPosition =
           Provider.of<TraccarProvider>(
             context,
             listen: false,
           ).positions.firstWhere(
             (p) => p.deviceId == device.id,
-            orElse: () => api.Position(),
+            orElse: () => api.Position(), // FIX: Use api.Position
           );
 
       return Padding(
@@ -547,6 +437,7 @@ class _MapScreenState extends State<MapScreen> {
                             color: Color(0xFF5B697B),
                           ),
                           onPressed: () async {
+                            // Handle info button tap
                             final prefs = await SharedPreferences.getInstance();
                             await prefs.setInt('selectedDeviceId', device.id!);
                             await prefs.setString(
@@ -571,7 +462,7 @@ class _MapScreenState extends State<MapScreen> {
                                     as double) >
                                 0.0)
                           Text(
-                            '${((currentPosition.attributes as Map<String, dynamic>)['distance'] as double).toStringAsFixed(0)} '+'sharedKm'.tr, //2
+                            '${((currentPosition.attributes as Map<String, dynamic>)['distance'] as double).toStringAsFixed(2)} '+'sharedKm'.tr,
                             style: const TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.bold,
@@ -668,8 +559,9 @@ class _MapScreenState extends State<MapScreen> {
                               as Map<String, dynamic>?)?['address'] ??
                           'N/A',
                       totalDistance:
-                          '${(currentPosition.attributes as Map<String, dynamic>?)?['totalDistance']?.toStringAsFixed(2) ?? 'N/A'} '+'sharedKm'.tr, //2
+                          '${(currentPosition.attributes as Map<String, dynamic>?)?['totalDistance']?.toStringAsFixed(2) ?? 'N/A'} '+'sharedKm'.tr,
                     ),
+                    // const SizedBox(height: 16),
                     _buildReportPanel(
                       onRefreshPressed: () {
                         _bottomSheetController?.close();
@@ -683,6 +575,7 @@ class _MapScreenState extends State<MapScreen> {
                       onMoreOptionsPressed: () =>
                           _showMoreOptionsDialog(device, currentPosition),
                       onUploadPressed: () async {
+                        // The device ID is already in SharedPreferences
                         Navigator.push(
                           context,
                           MaterialPageRoute(
@@ -691,21 +584,26 @@ class _MapScreenState extends State<MapScreen> {
                         );
                       },
                       onEditPressed: () async {
+                        // EDITED: Wires to Edit Screen
                         _bottomSheetController?.close();
 
                         final updatedDevice = await Navigator.push(
                           context,
                           MaterialPageRoute(
+                            // Assuming AddDeviceScreen handles edit by passing the device
                             builder: (context) =>
                                 AddDeviceScreen(device: device),
                           ),
                         );
 
+                        // If device was updated, refresh the map data
                         if (updatedDevice != null) {
                           await traccarProvider.fetchInitialData();
                         }
                       },
                       onDeletePressed: () {
+                        // EDITED: Wires to Delete Dialog
+                        // Close the detail panel before showing the dialog for better UX
                         _bottomSheetController?.close();
                         _showDeleteConfirmationDialog(device);
                       },
@@ -835,6 +733,9 @@ class _MapScreenState extends State<MapScreen> {
             title: Text('Settings'.tr),
             onTap: () {
               Navigator.of(context).pop(); // Close the drawer
+              // You should navigate to your Settings screen here
+              // Assuming you have a SettingsScreen, otherwise replace with the correct screen
+              // Navigator.push(context, MaterialPageRoute(builder: (context) => const SettingsScreen()));
               Get.snackbar('Coming Soon'.tr, 'Settings screen placeholder');
             },
           ),
@@ -844,6 +745,8 @@ class _MapScreenState extends State<MapScreen> {
             title: Text('Logout'.tr, style: const TextStyle(color: Colors.red)),
             onTap: () async {
               Navigator.of(context).pop(); // Close the drawer
+
+              // // FIX: Changed 'logout()' to the actual method name 'clearSession()'
               // await traccarProvider.clearSession();
             },
           ),
@@ -857,8 +760,8 @@ class _MapScreenState extends State<MapScreen> {
     required VoidCallback onRefreshPressed,
     required VoidCallback onMoreOptionsPressed,
     required VoidCallback onUploadPressed,
-    required VoidCallback onEditPressed, 
-    required VoidCallback onDeletePressed, 
+    required VoidCallback onEditPressed, // ADDED: Edit callback
+    required VoidCallback onDeletePressed, // ADDED: Delete callback
   }) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -889,13 +792,13 @@ class _MapScreenState extends State<MapScreen> {
         // Delete icon
         IconButton(
           icon: const Icon(Icons.delete_outline, color: Colors.red),
-          onPressed: onDeletePressed, 
+          onPressed: onDeletePressed, // Wires the delete logic
         ),
       ],
     );
   }
 
-  // Helper to safely find a position
+  // Helper to safely find a position (since GetX's .firstWhereOrNull is not guaranteed to be globally available)
   api.Position? _findPositionOrNull(
     List<api.Position> positions,
     int? deviceId,
@@ -908,7 +811,7 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
-  // Helper method to get status color
+  // Helper method to get status color (ensure this is defined)
   Color _getStatusColor(String? status) {
     switch (status) {
       case 'online':
@@ -1027,20 +930,9 @@ class _MapScreenState extends State<MapScreen> {
             body: Center(child: CircularProgressIndicator()),
           );
         }
-        
-        // 2. Wait for Tile Provider to initialize 
-        if (!_isCacheInitialized) { 
-          return const Scaffold(
-            body: Center(child: Text('Initializing Map Assets...')),
-          );
-        }
 
-        // 3. Prepare Markers 
-        final flutterMarkers = <Marker>{}; 
-        
-        // 4. Determine Initial Camera Position 
-        latlong.LatLng initialFlutterLatLng = latlong.LatLng(0, 0); 
-        double initialZoom = 2.0;
+        // 2. Prepare Markers (Logic preserved from previous fix)
+        final markers = <Marker>{};
 
         if (_markersLoaded) {
           for (final api.Device device in traccarProvider.devices) {
@@ -1052,42 +944,37 @@ class _MapScreenState extends State<MapScreen> {
             if (position != null &&
                 position.latitude != null &&
                 position.longitude != null) {
-              
-              // FIXED: Added .toDouble() to cast num to double
-              final latlong.LatLng flutterMarkerPosition = _toFlutterLatLng(
-                position.latitude!.toDouble(), 
-                position.longitude!.toDouble()
-              ); 
+              final LatLng markerPosition = LatLng(
+                position.latitude!.toDouble(),
+                position.longitude!.toDouble(),
+              );
+              final String markerId = device.id.toString();
 
               final String category = device.category ?? 'default';
               final String status = device.status ?? 'unknown';
+              final String iconKey = '$category-$status';
               final double course = position.course?.toDouble() ?? 0.0;
-              
-              // Flutter Map Marker (RETAINED/MODIFIED)
-              flutterMarkers.add(
-                Marker( 
-                  width: 50.0,
-                  height: 50.0,
-                  point: flutterMarkerPosition,
-                  child: Transform.rotate( 
-                    angle: course * (pi / 180), 
-                    child: GestureDetector(
-                      onTap: () {
-                        _onDeviceSelected(device, traccarProvider.positions); 
-                      },
-                      child: Image.asset( 
-                        'assets/images/marker_${category}_$status.png', 
-                        errorBuilder: (context, error, stackTrace) => const Icon(Icons.location_on),
-                      ),
-                    ),
-                  ),
+              markers.add(
+                Marker(
+                  markerId: MarkerId(markerId),
+                  position: markerPosition,
+                  icon:
+                      _markerIcons[iconKey] ?? _markerIcons['default-unknown']!,
+                  rotation: course,
+                  infoWindow: InfoWindow(title: device.name ?? 'Unknown'.tr),
+                  onTap: () {
+                    _onDeviceSelected(device, traccarProvider.positions);
+                  },
                 ),
               );
             }
           }
         }
-        
-        // 5. Determine Initial Camera Position (Updated for FlutterMap only)
+
+        // 3. Determine Initial Camera Position (Logic preserved from previous fix)
+        LatLng initialCameraPosition = const LatLng(0, 0);
+        double initialZoom = 2.0;
+
         if (_currentDevice != null) {
           final initialPosition = _findPositionOrNull(
             traccarProvider.positions,
@@ -1096,9 +983,8 @@ class _MapScreenState extends State<MapScreen> {
 
           if (initialPosition?.latitude != null &&
               initialPosition?.longitude != null) {
-            // FIXED: Added .toDouble() to cast num to double
-            initialFlutterLatLng = latlong.LatLng( 
-              initialPosition!.latitude!.toDouble(), 
+            initialCameraPosition = LatLng(
+              initialPosition!.latitude!.toDouble(),
               initialPosition.longitude!.toDouble(),
             );
             initialZoom = 15.0;
@@ -1107,73 +993,79 @@ class _MapScreenState extends State<MapScreen> {
           final api.Position firstPosition = traccarProvider.positions.first;
           if (firstPosition.latitude != null &&
               firstPosition.longitude != null) {
-            // FIXED: Added .toDouble() to cast num to double
-            initialFlutterLatLng = latlong.LatLng( 
-              firstPosition.latitude!.toDouble(), 
-              firstPosition.longitude!.toDouble(), 
+            initialCameraPosition = LatLng(
+              firstPosition.latitude!.toDouble(),
+              firstPosition.longitude!.toDouble(),
             );
             initialZoom = 5.0;
           }
         }
 
-        // 6. Build the Scaffold and Map
+        // 4. Build the Scaffold and Map
         return Scaffold(
           key: _scaffoldKey,
           appBar: AppBar(
             title: Text('mapTitle'.tr),
             actions: [
-              // Map type toggle logic
               IconButton(
-                // Show the icon of the map type we will switch TO
-                icon: Icon(
-                  _mapType == AppMapType.satellite ? Icons.map : Icons.satellite
-                ),
+                icon: Icon(_isSatelliteView ? Icons.satellite : Icons.map),
                 onPressed: () {
                   setState(() {
-                    _mapType = _mapType == AppMapType.satellite
-                        ? AppMapType.openStreetMap // Switch to OSM (normal)
-                        : AppMapType.satellite; // Switch to Satellite
+                    _isSatelliteView = !_isSatelliteView;
                   });
                 },
               ),
+              // List of devices button
+              // IconButton(
+              //   icon: const Icon(Icons.list),
+              //   onPressed: () {
+              //     Navigator.push(
+              //       context,
+              //       MaterialPageRoute(builder: (context) => const DeviceListScreen()),
+              //     );
+              //   },
+              // ),
             ],
           ),
-          // The Drawer
+          // ADDED: The Drawer
           drawer: _buildDeviceListDrawer(context, traccarProvider),
           body: Stack(
             children: [
-              // We now use FlutterMap for both map types
-              FlutterMap(
-                mapController: flutterMapController,
-                options: MapOptions(
-                  initialCenter: initialFlutterLatLng,
-                  initialZoom: initialZoom,
-                  interactionOptions: const InteractionOptions(
-                      flags: InteractiveFlag.all & ~InteractiveFlag.rotate), // Disable rotate by default
-                  onTap: (tapPosition, latLng) {
-                      _bottomSheetController?.close();
-                  },
+              GoogleMap(
+                // Satellite Switch logic
+                mapType: _isSatelliteView ? MapType.satellite : MapType.normal,
+                initialCameraPosition: CameraPosition(
+                  target: initialCameraPosition,
+                  zoom: initialZoom,
                 ),
-                children: [
-                  // Tile Layer: Conditional based on map type
-                  TileLayer(
-                    // Choose URL based on current map type
-                    urlTemplate: _mapType == AppMapType.openStreetMap
-                        ? _osmUrlTemplate
-                        : _satelliteUrlTemplate,
-                    // Only use subdomains for OSM. Satellite URL is static.
-                    subdomains: _mapType == AppMapType.openStreetMap
-                        ? _osmSubdomains
-                        : const [],
-                    userAgentPackageName: 'com.trabcdefg.app', // IMPORTANT for OpenStreetMap
-                    
-                    // --- THE IMPLEMENTATION: Use the Custom TileProvider ---
-                    tileProvider: _tileProvider, 
-                  ),
-                  // Marker Layer for FlutterMap
-                  MarkerLayer(markers: flutterMarkers.toList()), // Convert set to list
-                ],
+                onMapCreated: (GoogleMapController controller) {
+                  mapController = controller;
+                },
+                markers: markers,
+                onTap: (LatLng latLng) {
+                  _bottomSheetController?.close();
+                },
+                myLocationButtonEnabled: true,
+                myLocationEnabled: true,
               ),
+              // Floating action buttons for map type toggle (Satellite Switch)
+              // Positioned(
+              //   bottom: 80,
+              //   right: 16,
+              //   child: FloatingActionButton.small(
+              //     heroTag: 'mapType',
+              //     backgroundColor: Colors.white,
+              //     onPressed: () {
+              //       setState(() {
+              //         _isSatelliteView = !_isSatelliteView;
+              //       });
+              //     },
+              //     child: Icon(
+              //       _isSatelliteView ? Icons.layers : Icons.satellite,
+              //       color: Colors.blue,
+              //     ),
+              //   ),
+              // ),
             ],
           ),
         );

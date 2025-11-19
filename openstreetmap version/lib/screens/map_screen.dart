@@ -1,4 +1,5 @@
 // lib/screens/map_screen.dart
+// A screen that displays the map with device locations using OpenStreetMap with tile caching.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart'; // Primary map package for OpenStreetMap
@@ -8,7 +9,7 @@ import 'package:provider/provider.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
 import 'package:trabcdefg/src/generated_api/api.dart'
     as api; 
-import 'package:trabcdefg/src/generated_api/model/device_extensions.dart';
+// import 'package:trabcdefg/src/generated_api/model/device_extensions.dart';
 import 'dart:async';
 import 'package:flutter/services.dart';
 import 'dart:ui' as ui;
@@ -570,7 +571,7 @@ class _MapScreenState extends State<MapScreen> {
                                     as double) >
                                 0.0)
                           Text(
-                            '${((currentPosition.attributes as Map<String, dynamic>)['distance'] as double).toStringAsFixed(2)} '+'sharedKm'.tr,
+                            '${((currentPosition.attributes as Map<String, dynamic>)['distance'] as double).toStringAsFixed(0)} '+'sharedKm'.tr, //2
                             style: const TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.bold,
@@ -667,7 +668,7 @@ class _MapScreenState extends State<MapScreen> {
                               as Map<String, dynamic>?)?['address'] ??
                           'N/A',
                       totalDistance:
-                          '${(currentPosition.attributes as Map<String, dynamic>?)?['totalDistance']?.toStringAsFixed(2) ?? 'N/A'} '+'sharedKm'.tr,
+                          '${(currentPosition.attributes as Map<String, dynamic>?)?['totalDistance']?.toStringAsFixed(2) ?? 'N/A'} '+'sharedKm'.tr, //2
                     ),
                     _buildReportPanel(
                       onRefreshPressed: () {

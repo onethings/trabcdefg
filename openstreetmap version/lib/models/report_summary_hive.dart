@@ -1,3 +1,5 @@
+// lib/models/report_summary_hive.dart
+// Model to store report summary data in Hive database.
 import 'package:hive/hive.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
 
@@ -17,11 +19,15 @@ class ReportSummaryHive extends HiveObject {
   @HiveField(3)
   final double? spentFuel;
 
+  @HiveField(4)
+  final int? engineHours;
+
   ReportSummaryHive({
     this.distance,
     this.averageSpeed,
     this.maxSpeed,
     this.spentFuel,
+    this.engineHours,
   });
 
   factory ReportSummaryHive.fromApi(api.ReportSummary apiSummary) {
@@ -30,6 +36,7 @@ class ReportSummaryHive extends HiveObject {
       averageSpeed: apiSummary.averageSpeed?.toDouble(),
       maxSpeed: apiSummary.maxSpeed?.toDouble(),
       spentFuel: apiSummary.spentFuel?.toDouble(),
+      engineHours: apiSummary.engineHours,
     );
   }
 }

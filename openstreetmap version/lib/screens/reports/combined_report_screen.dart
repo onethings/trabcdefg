@@ -1,5 +1,5 @@
 // lib/screens/reports/combined_report_screen.dart
-
+// A screen to display a combined report of positions and events on a map in the TracDefg app.
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';

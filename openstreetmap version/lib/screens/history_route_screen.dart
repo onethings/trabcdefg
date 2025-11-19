@@ -1,4 +1,5 @@
 // lib/screens/history_route_screen.dart
+// HistoryRouteScreen with OpenStreetMap, Hive Tile Caching, and Reactive Playback Controls
 
 import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';

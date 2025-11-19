@@ -1,5 +1,5 @@
 // geofences_screen.dart (Refactored to use FlutterMap, Hive Caching, and simplified latlong2 import)
-
+// A screen to display and manage geofences in the TracDefg app.
 import 'package:flutter/material.dart';
 import 'dart:collection';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;

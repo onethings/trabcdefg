@@ -1,3 +1,5 @@
+// notification_page.dart
+// A page to create or edit notifications in the TracDefg app.
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';

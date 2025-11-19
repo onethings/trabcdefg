@@ -1,5 +1,3 @@
-// lib/screens/device_details_screen.dart
-// DeviceDetailsScreen displaying detailed device info and latest position
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';

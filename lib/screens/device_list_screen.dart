@@ -1,5 +1,4 @@
 // lib/screens/device_list_screen.dart
-// DeviceListScreen with Search, Status Filtering, and Enhanced Device Info
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';

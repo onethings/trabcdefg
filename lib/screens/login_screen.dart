@@ -1,5 +1,3 @@
-// lib/screens/login_screen.dart
-// This screen allows users to log in, select server URLs, and choose their preferred language.
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';

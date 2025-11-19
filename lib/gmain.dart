@@ -1,372 +1,425 @@
-// // lib/screens/monthly_mileage_screen.dart
-// // A screen that displays the monthly mileage of a selected device.
-// import 'package:flutter/material.dart';
-// import 'package:intl/intl.dart';
-// import 'package:provider/provider.dart';
-// import 'package:table_calendar/table_calendar.dart';
-// import 'package:trabcdefg/providers/traccar_provider.dart';
-// import 'package:trabcdefg/src/generated_api/api.dart' as api;
-// import 'history_route_screen.dart';
-// import 'package:shared_preferences/shared_preferences.dart';
-// import 'package:hive_flutter/hive_flutter.dart';
-// import 'package:trabcdefg/models/report_summary_hive.dart';
-// import 'package:get/get.dart';
-// import 'package:intl/date_symbol_data_local.dart'; // Import for locale data
+// lib/screens/livetracking_map_screen.dart
 
-// class MonthlyMileageScreen extends StatefulWidget {
-//   const MonthlyMileageScreen({super.key});
+import 'dart:async';
+import 'package:flutter/material.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:provider/provider.dart';
+import 'package:trabcdefg/providers/traccar_provider.dart';
+import 'package:trabcdefg/src/generated_api/api.dart';
+import 'package:flutter/services.dart';
+import 'dart:ui' as ui;
+import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
+import 'package:get/get.dart';
+import 'dart:typed_data'; 
 
-//   @override
-//   State<MonthlyMileageScreen> createState() => _MonthlyMileageScreenState();
-// }
+class LiveTrackingMapScreen extends StatefulWidget {
+  final Device selectedDevice;
+  const LiveTrackingMapScreen({super.key, required this.selectedDevice});
 
-// class _MonthlyMileageScreenState extends State<MonthlyMileageScreen> {
-//   DateTime _focusedDay = DateTime.now();
-//   DateTime? _selectedDay;
-//   final Map<DateTime, api.ReportSummary> _dailySummaries = {};
-//   api.ReportSummary? _selectedDaySummary;
-//   bool _isLoading = true;
-//   int? _selectedDeviceId;
-//   String? _selectedDeviceName;
-//   CalendarFormat _calendarFormat = CalendarFormat.month;
+  @override
+  State<LiveTrackingMapScreen> createState() => _LiveTrackingMapScreenState();
+}
 
-//   @override
-//   void initState() {
-//     super.initState();
-//     _loadDeviceIdAndFetchData();
-//   }
+class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
+  final Completer<GoogleMapController> _controller = Completer();
+  final Set<Marker> _markers = {};
+  final Set<Polyline> _polylines = {};
+  final List<LatLng> _polylineCoordinates = [];
+  MapType _mapType = MapType.normal;
+  bool _isTrafficEnabled = false;
+  final Map<String, BitmapDescriptor> _markerIcons = {};
+  bool _isCameraLocked = true;
+  
+  bool _customIconsLoaded = false; 
 
-//   Future<void> _loadDeviceIdAndFetchData() async {
-//     final prefs = await SharedPreferences.getInstance();
-//     setState(() {
-//       _selectedDeviceId = prefs.getInt('selectedDeviceId');
-//       _selectedDeviceName = prefs.getString('selectedDeviceName');
-//     });
+  // Fallback icon: The instantly available system default pin
+  final BitmapDescriptor _genericDefaultIcon = BitmapDescriptor.defaultMarker; 
+  
+  Position? _currentDevicePosition; 
 
-//     final currentLocale = Get.locale;
-//   if (currentLocale != null) {
-//     // Use the full locale code (e.g., 'en_US') for initialization
-//     final localeString = currentLocale.toString();
-//     // The initializeDateFormatting function is a Future and needs to be awaited
-//     try {
-//       await initializeDateFormatting(localeString, null);
-//     } catch (e) {
-//       // Fallback or ignore if initialization fails for some reason
-//       print('Failed to initialize date formatting for $localeString: $e');
-//     }
-//   }
+  static const CameraPosition _defaultCameraPosition = CameraPosition(
+    target: LatLng(0, 0),
+    zoom: 14.0,
+  );
 
+  @override
+  void initState() {
+    super.initState();
+    
+    // Start icon loading immediately in the background
+    _loadMarkerIcons().then((_) {
+      if (mounted) {
+        setState(() {
+          _customIconsLoaded = true; 
+          _updateMarkersOnMap(); // Explicitly redraw markers with new icons
+        }); 
+      }
+    });
+  }
 
-//     // Call the cleanup method before fetching new data
-//     await _deleteOldMileageData();
+  @override
+  void didUpdateWidget(covariant LiveTrackingMapScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    
+    final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
+    
+    final newPosition = traccarProvider.positions.firstWhere(
+        (pos) => pos.deviceId == widget.selectedDevice.id,
+        orElse: () => Position(),
+    );
 
-//     if (_selectedDeviceId != null) {
-//       await _fetchMonthlyData(_focusedDay);
-//     } else {
-//       setState(() {
-//         _isLoading = false;
-//       });
-//     }
-//   }
+    // Only update the map if the position data has actually changed
+    if (newPosition.id != _currentDevicePosition?.id) 
+    {
+        _currentDevicePosition = newPosition;
+        _updateMap(newPosition); 
+    }
+  }
 
-//   Future<void> _fetchMonthlyData(DateTime month) async {
-//     if (_selectedDeviceId == null) return;
+  @override
+  void dispose() {
+    _controller.future.then((controller) => controller.dispose());
+    super.dispose();
+  }
 
-//     setState(() {
-//       _isLoading = true;
-//     });
+  Future<void> _loadMarkerIcons() async {
+    const categories = [
+      'animal', 'arrow', 'bicycle', 'boat', 'bus', 'car', 'crane', 'default',
+      'helicopter', 'motorcycle', 'null', 'offroad', 'person', 'pickup', 'plane',
+      'scooter', 'ship', 'tractor', 'train', 'tram', 'trolleybus', 'truck', 'van',
+    ];
+    const statuses = ['online', 'offline', 'static', 'idle', 'unknown'];
 
-//     final traccarProvider = Provider.of<TraccarProvider>(
-//       context,
-//       listen: false,
-//     );
-//     final reportsApi = api.ReportsApi(traccarProvider.apiClient);
-//     final dailyBox = await Hive.openBox<ReportSummaryHive>('daily_summaries');
+    for (final category in categories) {
+      for (final status in statuses) {
+        final iconPath = 'assets/images/marker_${category}_$status.png';
+        try {
+          final byteData = await rootBundle.load(iconPath);
+          final imageData = byteData.buffer.asUint8List();
+          final codec = await ui.instantiateImageCodec(imageData, targetHeight: 100);
+          final frameInfo = await codec.getNextFrame();
+          final image = frameInfo.image;
+          final byteDataResized = await image.toByteData(format: ui.ImageByteFormat.png);
+          if (byteDataResized != null) {
+            final bitmap = BitmapDescriptor.fromBytes(byteDataResized.buffer.asUint8List());
+            _markerIcons['$category-$status'] = bitmap;
+          }
+        } catch (e) {
+          if (kDebugMode) {
+            // print('Could not load icon: $iconPath. Using fallback.');
+          }
+        }
+      }
+    }
+    // Load the specific 'default-unknown' icon for Tier 2 fallback
+    if (_markerIcons['default-unknown'] == null) {
+      _markerIcons['default-unknown'] = await _loadFallbackIcon();
+    }
+  }
 
-//     // Step 1: Load from cache (Hive)
-//     _dailySummaries.clear();
-//     final firstDayOfMonth = DateTime(month.year, month.month, 1);
-//     final lastDayOfMonth = DateTime(month.year, month.month + 1, 0);
+  Future<BitmapDescriptor> _loadFallbackIcon() async {
+    try {
+      final byteData = await rootBundle.load('assets/images/marker_default_unknown.png');
+      final imageData = byteData.buffer.asUint8List();
+      final codec = await ui.instantiateImageCodec(imageData, targetHeight: 100);
+      final frameInfo = await codec.getNextFrame();
+      final image = frameInfo.image;
+      final byteDataResized = await image.toByteData(format: ui.ImageByteFormat.png);
+      return BitmapDescriptor.fromBytes(byteDataResized!.buffer.asUint8List());
+    } catch (e) {
+      // If even the dedicated custom fallback icon fails to load, return the system default
+      return _genericDefaultIcon;
+    }
+  }
 
-//     for (
-//       var date = firstDayOfMonth;
-//       date.isBefore(lastDayOfMonth.add(const Duration(days: 1)));
-//       date = date.add(const Duration(days: 1))
-//     ) {
-//       final dayUtc = DateTime.utc(date.year, date.month, date.day);
-//       final String hiveKey =
-//           '$_selectedDeviceId-${DateFormat('yyyy-MM-dd').format(dayUtc)}';
-//       final cachedSummary = dailyBox.get(hiveKey);
+  BitmapDescriptor _getMarkerIcon(Device device) {
+    final status = device.status ?? 'unknown';
+    final category = device.category ?? 'default';
+    final key = '$category-$status';
+    
+    // 1. Tier 1: Try to find the exact icon
+    if (_markerIcons.containsKey(key)) {
+      return _markerIcons[key]!;
+    }
+    
+    // 2. Tier 2: Fall back to the preloaded 'default-unknown' custom icon.
+    final fallbackCustomIcon = _markerIcons['default-unknown'];
+    if (fallbackCustomIcon != null) {
+        return fallbackCustomIcon;
+    }
+    
+    // 3. Tier 3: Final fallback: Always return the visible system default pin.
+    return _genericDefaultIcon;
+  }
+  
+  void _updateMarkersOnMap() {
+    final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
+    
+    final lastPosition = traccarProvider.positions.firstWhere(
+      (pos) => pos.deviceId == widget.selectedDevice.id,
+      orElse: () => Position(),
+    );
 
-//       if (cachedSummary != null) {
-//         _dailySummaries[dayUtc] = api.ReportSummary(
-//           distance: cachedSummary.distance,
-//           averageSpeed: cachedSummary.averageSpeed,
-//           maxSpeed: cachedSummary.maxSpeed,
-//           spentFuel: cachedSummary.spentFuel,
-//         );
-//       }
-//     }
+    // Call the existing _updateMap to redraw the markers with the correct icons
+    if (lastPosition.latitude != null && lastPosition.longitude != null) {
+      _updateMap(lastPosition); 
+    } else if (mounted) {
+       // Force a rebuild to ensure the next data pass uses the loaded icons
+      setState(() {});
+    }
+  }
 
-//     // This initial setState will show any cached data immediately
-//     setState(() {
-//       _isLoading = false;
-//     });
+  void _updateMap(Position? currentPosition) {
+    if (currentPosition == null || currentPosition.latitude == null || currentPosition.longitude == null) return;
 
-//     // Step 2: Fetch data from the network in the background and update cache
-//     for (
-//       var date = firstDayOfMonth;
-//       date.isBefore(lastDayOfMonth.add(const Duration(days: 1)));
-//       date = date.add(const Duration(days: 1))
-//     ) {
-//       final dayUtc = DateTime.utc(date.year, date.month, date.day);
-//       final from = DateTime(date.year, date.month, date.day, 0, 0, 0);
-//       final to = DateTime(date.year, date.month, date.day, 23, 59, 59);
-//       final String hiveKey =
-//           '$_selectedDeviceId-${DateFormat('yyyy-MM-dd').format(dayUtc)}';
+    final newPosition = LatLng(
+      currentPosition.latitude!.toDouble(),
+      currentPosition.longitude!.toDouble(),
+    );
 
-//       try {
-//         final summary = await reportsApi.reportsSummaryGet(
-//           from,
-//           to,
-//           deviceId: [_selectedDeviceId!],
-//         );
-//         if (summary != null && summary.isNotEmpty) {
-//           final dailySummary = summary.first;
-//           _dailySummaries[dayUtc] = dailySummary;
+    setState(() {
+      _markers.clear();
+      
+      // Add new position to polyline if different from the last point
+      if (_polylineCoordinates.isEmpty || _polylineCoordinates.last != newPosition) {
+          _polylineCoordinates.add(newPosition);
+      }
 
-//           // Step 3: Update Hive cache with fresh data
-//           final newSummaryHive = ReportSummaryHive.fromApi(dailySummary);
-//           await dailyBox.put(hiveKey, newSummaryHive);
-//         }
-//       } catch (e) {
-//         print('Failed to fetch data for day $date: $e');
-//       }
-//     }
+      _markers.add(
+        Marker(
+          markerId: MarkerId(widget.selectedDevice.id!.toString()),
+          position: newPosition,
+          infoWindow: InfoWindow(
+            title: widget.selectedDevice.name ?? 'Device Location',
+          ),
+          icon: _getMarkerIcon(widget.selectedDevice),
+          rotation: currentPosition.course?.toDouble() ?? 0.0,
+        ),
+      );
 
-//     // Update the UI with any newly fetched data
-//     if (mounted) {
-//       setState(() {
-//         if (_selectedDay != null) {
-//           final selectedDayUtc = DateTime.utc(
-//             _selectedDay!.year,
-//             _selectedDay!.month,
-//             _selectedDay!.day,
-//           );
-//           _selectedDaySummary = _dailySummaries[selectedDayUtc];
-//         }
-//       });
-//     }
-//   }
+      _polylines.add(
+        Polyline(
+          polylineId: PolylineId(widget.selectedDevice.id!.toString()),
+          points: _polylineCoordinates,
+          color: Colors.blue,
+          width: 5,
+        ),
+      );
+    });
 
-//   void _onDaySelected(DateTime selectedDay, DateTime focusedDay) {
-//     setState(() {
-//       _selectedDay = selectedDay;
-//       _focusedDay = focusedDay;
-//       final selectedDayUtc = DateTime.utc(
-//         selectedDay.year,
-//         selectedDay.month,
-//         selectedDay.day,
-//       );
-//       _selectedDaySummary = _dailySummaries[selectedDayUtc];
-//     });
-//   }
+    if (_isCameraLocked) {
+      _controller.future.then((controller) {
+        controller.animateCamera(
+          CameraUpdate.newLatLng(newPosition),
+        );
+      });
+    }
+  }
 
-//   void _onPageChanged(DateTime focusedDay) {
-//     setState(() {
-//       _focusedDay = focusedDay;
-//     });
-//     _fetchMonthlyData(focusedDay);
-//   }
+  void _toggleMapType() {
+    setState(() {
+      _mapType = _mapType == MapType.normal ? MapType.satellite : MapType.normal;
+    });
+  }
 
-//   Future<void> _deleteOldMileageData() async {
-//     final dailyBox = await Hive.openBox<ReportSummaryHive>('daily_summaries');
-//     final sixMonthsAgo = DateTime.now().subtract(const Duration(days: 180));
+  void _toggleTraffic() {
+    setState(() {
+      _isTrafficEnabled = !_isTrafficEnabled;
+    });
+  }
 
-//     // Create a list of keys to delete
-//     final keysToDelete = <String>[];
-//     for (var key in dailyBox.keys) {
-//       if (key is String) {
-//         final parts = key.split('-');
-//         if (parts.length > 2) {
-//           final dateString = parts[1];
-//           try {
-//             final date = DateFormat('yyyy-MM-dd').parse(dateString);
-//             if (date.isBefore(sixMonthsAgo)) {
-//               keysToDelete.add(key);
-//             }
-//           } catch (e) {
-//             // Handle cases where the key format is not as expected
-//             print('Invalid key format: $key');
-//           }
-//         }
-//       }
-//     }
+  Future<void> _recenter(Position? lastPosition) async {
+    if (lastPosition == null || lastPosition.latitude == null || lastPosition.longitude == null) return;
 
-//     // Delete the old data
-//     await dailyBox.deleteAll(keysToDelete);
-//     print('Deleted ${keysToDelete.length} old entries from Hive.');
-//   }
+    final controller = await _controller.future;
+    final position = LatLng(
+      lastPosition.latitude!.toDouble(),
+      lastPosition.longitude!.toDouble(),
+    );
 
-//   void _onPlayTapped() async {
-//     if (_selectedDay == null || _selectedDeviceId == null) return;
+    setState(() {
+      _isCameraLocked = true;
+    });
 
-//     final prefs = await SharedPreferences.getInstance();
-//     final fromDate = DateTime(
-//       _selectedDay!.year,
-//       _selectedDay!.month,
-//       _selectedDay!.day,
-//       0,
-//       0,
-//       0,
-//     );
-//     final toDate = DateTime(
-//       _selectedDay!.year,
-//       _selectedDay!.month,
-//       _selectedDay!.day,
-//       23,
-//       59,
-//       59,
-//     );
+    controller.animateCamera(
+      CameraUpdate.newLatLngZoom(position, 17.0),
+    );
+  }
 
-//     await prefs.setString('historyFrom', fromDate.toUtc().toIso8601String());
-//     await prefs.setString('historyTo', toDate.toUtc().toIso8601String());
+  Future<void> _zoomIn() async {
+    final controller = await _controller.future;
+    controller.animateCamera(
+      CameraUpdate.zoomIn(),
+    );
+  }
 
-//     Navigator.push(
-//       context,
-//       MaterialPageRoute(builder: (context) => const HistoryRouteScreen()),
-//     );
-//   }
+  Future<void> _zoomOut() async {
+    final controller = await _controller.future;
+    controller.animateCamera(
+      CameraUpdate.zoomOut(),
+    );
+  }
 
-//   @override
-//   Widget build(BuildContext context) {
-//     return Scaffold(
-//       appBar: AppBar(
-//         title: Text(
-//           _selectedDeviceName != null
-//               ? '$_selectedDeviceName'
-//               : 'Monthly Mileage',
-//         ), // Display device ID or fallback title
-//       ),
-//       body: _isLoading
-//           ? const Center(child: CircularProgressIndicator())
-//           : _selectedDeviceId == null
-//           ? const Center(
-//               child: Text('Please select a device on the map screen first.'),
-//             )
-//           : Row(
-//               children: [
-//                 Expanded(
-//                   flex: 2,
-//                   child: Column(
-//                     children: [
-//                       TableCalendar(
-//                         locale: Get.locale?.languageCode,
-//                         firstDay: DateTime.utc(2020, 1, 1),
-//                         lastDay: DateTime.utc(2030, 12, 31),
-//                         focusedDay: _focusedDay,
-//                         calendarFormat: _calendarFormat,
-//                         onFormatChanged: (format) {
-//                           setState(() {
-//                             _calendarFormat = format;
-//                           });
-//                         },
-//                         selectedDayPredicate: (day) {
-//                           return isSameDay(_selectedDay, day);
-//                         },
-//                         onDaySelected: _onDaySelected,
-//                         onPageChanged: _onPageChanged,
-//                         eventLoader: (day) {
-//                           final dayUtc = DateTime.utc(
-//                             day.year,
-//                             day.month,
-//                             day.day,
-//                           );
-//                           if (_dailySummaries.containsKey(dayUtc)) {
-//                             return [true];
-//                           }
-//                           return [];
-//                         },
-//                         calendarBuilders: CalendarBuilders(
-//                           markerBuilder: (context, date, events) {
-//                             final dayUtc = DateTime.utc(
-//                               date.year,
-//                               date.month,
-//                               date.day,
-//                             );
-//                             if (_dailySummaries.containsKey(dayUtc)) {
-//                               final summary = _dailySummaries[dayUtc]!;
-//                               final distanceInKm =
-//                                   (summary.distance ?? 0.0) / 1000;
-//                               return Positioned(
-//                                 bottom: 1,
-//                                 child: Text(
-//                                   '${distanceInKm.toStringAsFixed(0)}km',
-//                                   style: const TextStyle(
-//                                     fontSize: 10,
-//                                     color: Colors.blue,
-//                                   ),
-//                                 ),
-//                               );
-//                             }
-//                             return null;
-//                           },
-//                         ),
-//                       ),
-//                       const Divider(),
-//                       if (_selectedDaySummary != null)
-//                         Expanded(
-//                           child: Padding(
-//                             padding: const EdgeInsets.all(16.0),
-//                             child: Column(
-//                               crossAxisAlignment: CrossAxisAlignment.start,
-//                               children: [
-//                                 Text(
-//                                   'Date: ${DateFormat('yyyy-MM-dd').format(_selectedDay!)}',
-//                                   style: const TextStyle(
-//                                     fontSize: 18,
-//                                     fontWeight: FontWeight.bold,
-//                                   ),
-//                                 ),
-//                                 const SizedBox(height: 8),
-//                                 Text(
-//                                   'sharedDistance'.tr +
-//                                       ': ${((_selectedDaySummary!.distance ?? 0.0) / 1000).toStringAsFixed(2)} km',
-//                                 ),
-//                                 Text(
-//                                   'reportAverageSpeed'.tr +
-//                                       ': ${(_selectedDaySummary!.averageSpeed ?? 0.0).toStringAsFixed(2)} km/h',
-//                                 ),
-//                                 Text(
-//                                   'reportMaximumSpeed'.tr +
-//                                       ': ${(_selectedDaySummary!.maxSpeed ?? 0.0).toStringAsFixed(2)} km/h',
-//                                 ),
-//                                 Text(
-//                                   'reportSpentFuel'.tr +
-//                                       ': ${(_selectedDaySummary!.spentFuel ?? 0.0).toStringAsFixed(2)} L',
-//                                 ),
-//                                 // const Spacer(),
-//                                 const SizedBox(height: 50),
-//                                 ElevatedButton.icon(
-//                                   onPressed: _onPlayTapped,
-//                                   icon: const Icon(Icons.play_arrow),
-//                                   label: Text('reportReplay'.tr),
-//                                 ),
-//                               ],
-//                             ),
-//                           ),
-//                         ),
-//                       if (_selectedDaySummary == null)
-//                          Expanded(
-//                           child: Center(
-//                             child: Text('sharedNoData'.tr),
-//                           ),
-//                         ),
-//                     ],
-//                   ),
-//                 ),
-//               ],
-//             ),
-//     );
-//   }
-// }
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('mapLiveRoutes'.tr), //widget.selectedDevice.name ?? 'mapLiveRoutes'.tr
+        actions: [
+          IconButton(icon: const Icon(Icons.layers), onPressed: _toggleMapType),
+          IconButton(
+            icon: const Icon(Icons.traffic),
+            color: _isTrafficEnabled ? Colors.blue : null,
+            onPressed: _toggleTraffic,
+          ),
+        ],
+      ),
+      body: Consumer<TraccarProvider>( 
+        builder: (context, traccarProvider, child) {
+          final lastPosition = traccarProvider.positions.firstWhere(
+            (pos) => pos.deviceId == widget.selectedDevice.id,
+            orElse: () => Position(),
+          );
+
+          final initialCameraPosition =
+              lastPosition.latitude != null && lastPosition.longitude != null
+                  ? CameraPosition(
+                      target: LatLng(
+                        lastPosition.latitude!.toDouble(),
+                        lastPosition.longitude!.toDouble(),
+                      ),
+                      zoom: 14.0,
+                    )
+                  : _defaultCameraPosition;
+
+          return Stack(
+            children: [
+              GoogleMap(
+                mapType: _mapType,
+                initialCameraPosition: initialCameraPosition,
+                markers: _markers,
+                polylines: _polylines,
+                onMapCreated: (GoogleMapController controller) {
+                  if (!_controller.isCompleted) {
+                    _controller.complete(controller);
+                    _updateMap(lastPosition); 
+                  }
+                },
+                trafficEnabled: _isTrafficEnabled,
+                onCameraMoveStarted: () {
+                  setState(() {
+                    _isCameraLocked = false;
+                  });
+                },
+              ),
+              Positioned(
+                bottom: 16,
+                right: 16,
+                child: Column(
+                  children: [
+                    FloatingActionButton(
+                      heroTag: "zoomIn",
+                      mini: true,
+                      onPressed: _zoomIn,
+                      child: const Icon(Icons.add),
+                    ),
+                    const SizedBox(height: 8),
+                    FloatingActionButton(
+                      heroTag: "zoomOut",
+                      mini: true,
+                      onPressed: _zoomOut,
+                      child: const Icon(Icons.remove),
+                    ),
+                    const SizedBox(height: 8),
+                    FloatingActionButton(
+                      heroTag: "recenter",
+                      mini: true,
+                      onPressed: () => _recenter(lastPosition),
+                      child: const Icon(Icons.my_location),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          );
+        },
+      ), 
+      bottomSheet: _buildBottomSheet(context),
+    );
+  }
+
+  Widget _buildBottomSheet(BuildContext context) {
+    return Consumer<TraccarProvider>(
+      builder: (context, provider, child) {
+        final lastPosition = provider.positions.firstWhere(
+          (pos) => pos.deviceId == widget.selectedDevice.id,
+          orElse: () => Position(),
+        );
+        final speedKmh = lastPosition.speed != null ? (lastPosition.speed! * 1.852).toStringAsFixed(2) : 'N/A';
+        final attributes = lastPosition.attributes as Map<String, dynamic>? ?? {};
+
+        return Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(16.0)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black26,
+                blurRadius: 10.0,
+                offset: Offset(0, -5),
+              ),
+            ],
+          ),
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                widget.selectedDevice.name ?? 'Unknown Device',
+                style: Theme.of(context).textTheme.headlineSmall,
+              ),
+              const SizedBox(height: 8.0),
+              Text('deviceStatus'.tr+': ${widget.selectedDevice.status ?? 'N/A'}'),
+              const SizedBox(height: 4.0),
+              Text(
+                'deviceLastUpdate'.tr+': ${lastPosition.deviceTime?.toLocal() ?? 'N/A'}',
+              ),
+              Text(
+                'positionSpeed'.tr+': $speedKmh '+'sharedKmh'.tr,
+              ),
+              const Divider(),
+              Text(
+                'deviceSecondaryInfo'.tr+':',
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+              if (attributes.containsKey('batteryLevel'))
+                ListTile(
+                  leading: const Icon(Icons.battery_std),
+                  title:  Text('positionBatteryLevel'.tr),
+                  subtitle: Text('${attributes['batteryLevel']}%'),
+                ),
+              if (attributes.containsKey('totalDistance'))
+                ListTile(
+                  leading: const Icon(Icons.directions_car),
+                  title: Text('deviceTotalDistance'.tr),
+                  subtitle: Text(
+                    '${(attributes['totalDistance'] / 1000).toStringAsFixed(2)} km',
+                  ),
+                ),
+              if (attributes.containsKey('engineHours'))
+                ListTile(
+                  leading: const Icon(Icons.timer),
+                  title: Text('reportEngineHours'.tr),
+                  subtitle: Text(
+                    '${(attributes['engineHours'] / 3600).toStringAsFixed(2)} '+'sharedHourAbbreviation'.tr,
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}

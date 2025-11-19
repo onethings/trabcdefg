@@ -1,5 +1,5 @@
 // lib/screens/edit_user_screen.dart
-// A screen to edit user information in the TracDefg app.
+
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';

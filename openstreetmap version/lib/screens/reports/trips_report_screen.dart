@@ -1,5 +1,5 @@
 // lib/screens/reports/trips_report_screen.dart
-
+// A screen to display trips report in the TracDefg app.
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';

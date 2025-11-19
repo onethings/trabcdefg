@@ -1,5 +1,5 @@
 // add_saved_command_screen.dart
-// A screen to add a new saved command in the TracDefg app.
+
 import 'package:flutter/material.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
 import 'package:trabcdefg/providers/traccar_provider.dart';

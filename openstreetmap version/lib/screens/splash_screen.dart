@@ -1,11 +1,11 @@
 // lib/screens/splash_screen.dart
-
+// This screen handles checking the stored session ID and routing the user to either the main app or the login screen. 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
-import 'package:trabcdefg/services/auth_service.dart';
-import 'package:get/get.dart';
+// import 'package:trabcdefg/services/auth_service.dart';
+// import 'package:get/get.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -55,6 +55,7 @@ class _SplashScreenState extends State<SplashScreen> {
   Widget build(BuildContext context) {
     return const Scaffold(
       body: Center(
+        // Show a loading indicator while the session status is being checked
         child: CircularProgressIndicator(),
       ),
     );

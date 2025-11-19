@@ -1,5 +1,5 @@
 // lib/providers/traccar_provider.dart
-
+// Provider to manage Traccar API interactions and WebSocket connections.
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;

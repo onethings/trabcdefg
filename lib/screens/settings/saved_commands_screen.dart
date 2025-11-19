@@ -1,5 +1,5 @@
 // saved_commands_screen.dart
-// A screen to display and manage saved commands in the TracDefg app.
+
 import 'package:flutter/material.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
 import 'package:trabcdefg/screens/settings/add_saved_command_screen.dart';

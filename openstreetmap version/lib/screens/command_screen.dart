@@ -1,5 +1,5 @@
 // lib/screens/command_screen.dart
-
+// CommandScreen for sending commands to selected device
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart'; // Import Provider
 import 'package:shared_preferences/shared_preferences.dart';

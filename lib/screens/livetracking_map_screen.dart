@@ -1,149 +1,17 @@
 // lib/screens/livetracking_map_screen.dart
-// LiveTrackingMapScreen with OpenStreetMap and Tile Caching
 
 import 'dart:async';
 import 'package:flutter/material.dart';
-// REMOVED: import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:flutter_map/flutter_map.dart'; // Primary map package for OpenStreetMap
-import 'package:latlong2/latlong.dart' as latlong; // LatLong for FlutterMap coordinates
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:provider/provider.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
 import 'package:trabcdefg/src/generated_api/api.dart';
 import 'package:flutter/services.dart';
 import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
-// REMOVED: import 'package:flutter/gestures.dart';
+import 'package:flutter/gestures.dart';
 import 'package:get/get.dart';
 import 'dart:typed_data';
-import 'package:hive/hive.dart'; // For Caching
-import 'package:http/http.dart' as http; // For Caching
-import 'dart:math'; // Required for math operations like pi/radians in marker rotation
-
-// ADDED: Enum for managing map types
-enum AppMapType {
-  openStreetMap,
-  satellite,
-}
-
-// --- Tile Caching Implementation using Hive ---
-
-class _TileCacheService {
-  late Box<Uint8List> _tileBox;
-  static const String boxName = 'mapTilesCache';
-
-  Future<void> init() async {
-    _tileBox = await Hive.openBox<Uint8List>(boxName);
-  }
-
-  String _generateKey(String url) {
-    return url.hashCode.toString();
-  }
-
-  Future<Uint8List?> getTile(String url) async {
-    return _tileBox.get(_generateKey(url));
-  }
-
-  Future<void> saveTile(String url, Uint8List tileData) async {
-    await _tileBox.put(_generateKey(url), tileData);
-  }
-}
-
-// Custom TileProvider to integrate Hive caching with FlutterMap
-class _HiveTileProvider extends TileProvider {
-  final _TileCacheService cacheService;
-  final http.Client httpClient;
-
-  _HiveTileProvider({
-    required this.cacheService,
-    required this.httpClient,
-  });
-
-  @override
-  ImageProvider getImage(
-    TileCoordinates coordinates,
-    TileLayer options,
-  ) {
-    return CachedNetworkImageProvider(
-      getTileUrl(coordinates, options),
-      cacheService: cacheService,
-      httpClient: httpClient,
-    );
-  }
-}
-
-// Custom ImageProvider to handle the cache/network logic
-class CachedNetworkImageProvider
-    extends ImageProvider<CachedNetworkImageProvider> {
-  final String url;
-  final _TileCacheService cacheService;
-  final http.Client httpClient;
-
-  CachedNetworkImageProvider(
-    this.url, {
-    required this.cacheService,
-    required this.httpClient,
-  });
-
-  @override
-  ImageStreamCompleter loadImage(
-    CachedNetworkImageProvider key,
-    ImageDecoderCallback decode,
-  ) {
-    return MultiFrameImageStreamCompleter(
-      codec: _loadAsync(key, decode),
-      scale: 1.0,
-      informationCollector: () => <DiagnosticsNode>[
-        DiagnosticsProperty<ImageProvider>('Image provider', this),
-        DiagnosticsProperty<CachedNetworkImageProvider>('Original key', key),
-      ],
-    );
-  }
-
-  @override
-  Future<CachedNetworkImageProvider> obtainKey(
-    ImageConfiguration configuration,
-  ) {
-    return Future<CachedNetworkImageProvider>.value(this);
-  }
-
-  Future<ui.Codec> _loadAsync(
-    CachedNetworkImageProvider key,
-    ImageDecoderCallback decode,
-  ) async {
-    assert(key == this);
-
-    // 1. Check Cache
-    final cachedData = await cacheService.getTile(url);
-
-    if (cachedData != null) {
-      // Load from cache
-      return decode(await ImmutableBuffer.fromUint8List(cachedData));
-    }
-
-    // 2. Fetch from Network
-    try {
-      final response = await httpClient.get(Uri.parse(url));
-
-      if (response.statusCode == 200) {
-        final Uint8List bytes = response.bodyBytes;
-
-        // 3. Save to Cache
-        await cacheService.saveTile(url, bytes);
-
-        // Load from fetched bytes
-        return decode(await ImmutableBuffer.fromUint8List(bytes));
-      } else {
-        throw Exception(
-            'Failed to load tile from network: ${response.statusCode}');
-      }
-    } catch (e) {
-      // If network fails, rethrow, or you could try a local fallback tile.
-      rethrow;
-    }
-  }
-}
-
-// --- End of Tile Caching Implementation ---
 
 class LiveTrackingMapScreen extends StatefulWidget {
   final Device selectedDevice;
@@ -154,63 +22,40 @@ class LiveTrackingMapScreen extends StatefulWidget {
 }
 
 class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
-  final MapController _flutterMapController = MapController();
+  final Completer<GoogleMapController> _controller = Completer();
   final Set<Marker> _markers = {};
   final Set<Polyline> _polylines = {};
-  final List<latlong.LatLng> _polylineCoordinates = [];
-  AppMapType _mapType = AppMapType.openStreetMap;
-
-  // FIXED: Declared missing member variable
-  Position? _currentDevicePosition; 
-  
+  final List<LatLng> _polylineCoordinates = [];
+  MapType _mapType = MapType.normal;
+  bool _isTrafficEnabled = false;
+  final Map<String, BitmapDescriptor> _markerIcons = {};
   bool _isCameraLocked = true;
 
-  // Placeholder for marker icon loading state
   bool _customIconsLoaded = false;
 
-  // Caching variables
-  final _TileCacheService _cacheService = _TileCacheService();
-  final http.Client _httpClient = http.Client();
-  late _HiveTileProvider _tileProvider;
-  bool _isCacheInitialized = false;
+  // Fallback icon: The instantly available system default pin
+  final BitmapDescriptor _genericDefaultIcon = BitmapDescriptor.defaultMarker;
 
-  // --- Tile URLs for different map types ---
-  static const String _osmUrlTemplate =
-      'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
-  static const String _satelliteUrlTemplate =
-      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
-  static const List<String> _osmSubdomains = ['a', 'b', 'c'];
+  Position? _currentDevicePosition;
 
+  static const CameraPosition _defaultCameraPosition = CameraPosition(
+    target: LatLng(0, 0),
+    zoom: 14.0,
+  );
 
   @override
   void initState() {
     super.initState();
 
-    // Initialize cache service and then the tile provider
-    _cacheService.init().then((_) {
-      _tileProvider = _HiveTileProvider(
-        cacheService: _cacheService,
-        httpClient: _httpClient,
-      );
+    // Start icon loading immediately in the background
+    _loadMarkerIcons().then((_) {
       if (mounted) {
         setState(() {
-          _isCacheInitialized = true;
+          _customIconsLoaded = true;
+          _updateMarkersOnMap(); // Explicitly redraw markers with new icons
         });
       }
     });
-
-    _loadMarkerIcons(); // Re-called to set the flag
-
-    // Initial position lookup
-    final traccarProvider = Provider.of<TraccarProvider>(
-      context,
-      listen: false,
-    );
-    // This line initializes the variable that was causing the error
-    _currentDevicePosition = traccarProvider.positions.firstWhere(
-      (pos) => pos.deviceId == widget.selectedDevice.id,
-      orElse: () => Position(),
-    );
   }
 
   @override
@@ -236,53 +81,164 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
 
   @override
   void dispose() {
-    _httpClient.close();
+    _controller.future.then((controller) => controller.dispose());
     super.dispose();
-  }
-
-  // REINTRODUCED/MODIFIED: Marker icon loading logic
-  Future<void> _loadMarkerIcons() async {
-    // In a FlutterMap context, this method usually ensures all asset paths
-    // are known or performs pre-caching if needed. Here, we just set the flag
-    // to signal the assets are ready for use via Image.asset.
-    await Future.delayed(Duration.zero); // Simulate an async load operation
-
-    if (mounted) {
-      setState(() {
-        _customIconsLoaded = true;
-      });
-    }
   }
 
   String _getTranslatedStatus(String? status) {
     if (status == null) return 'N/A';
 
+    // Map the status string to the appropriate translation key
     switch (status.toLowerCase()) {
       case 'online':
         return 'deviceStatusOnline'.tr;
       case 'offline':
         return 'deviceStatusOffline'.tr;
       case 'idle':
+        // Note: You provided "alarmIdle" but "idle" is the status string.
+        // We'll use the 'idle' status for the 'Idle' translation.
         return 'alarmIdle'.tr;
       case 'static':
+        // Note: You provided "alarmParking" for the 'static' status.
         return 'alarmParking'.tr;
       case 'unknown':
       default:
+        // Use the generic "Unknown" translation for both 'unknown' and any unmapped status.
         return 'deviceStatusUnknown'.tr;
     }
   }
 
-  void _updateMap(Position? currentPosition) {
-    // Ensure all prerequisites are met before attempting to update the map
-    if (!_isCacheInitialized ||
-        !_customIconsLoaded || // Check the icon loading flag
-        currentPosition == null ||
-        currentPosition.latitude == null ||
-        currentPosition.longitude == null) {
-      return;
+  Future<void> _loadMarkerIcons() async {
+    const categories = [
+      'animal',
+      'arrow',
+      'bicycle',
+      'boat',
+      'bus',
+      'car',
+      'crane',
+      'default',
+      'helicopter',
+      'motorcycle',
+      'null',
+      'offroad',
+      'person',
+      'pickup',
+      'plane',
+      'scooter',
+      'ship',
+      'tractor',
+      'train',
+      'tram',
+      'trolleybus',
+      'truck',
+      'van',
+    ];
+    const statuses = ['online', 'offline', 'static', 'idle', 'unknown'];
+
+    for (final category in categories) {
+      for (final status in statuses) {
+        final iconPath = 'assets/images/marker_${category}_$status.png';
+        try {
+          final byteData = await rootBundle.load(iconPath);
+          final imageData = byteData.buffer.asUint8List();
+          final codec = await ui.instantiateImageCodec(
+            imageData,
+            targetHeight: 100,
+          );
+          final frameInfo = await codec.getNextFrame();
+          final image = frameInfo.image;
+          final byteDataResized = await image.toByteData(
+            format: ui.ImageByteFormat.png,
+          );
+          if (byteDataResized != null) {
+            final bitmap = BitmapDescriptor.fromBytes(
+              byteDataResized.buffer.asUint8List(),
+            );
+            _markerIcons['$category-$status'] = bitmap;
+          }
+        } catch (e) {
+          if (kDebugMode) {
+            // print('Could not load icon: $iconPath. Using fallback.');
+          }
+        }
+      }
+    }
+    // Load the specific 'default-unknown' icon for Tier 2 fallback
+    if (_markerIcons['default-unknown'] == null) {
+      _markerIcons['default-unknown'] = await _loadFallbackIcon();
+    }
+  }
+
+  Future<BitmapDescriptor> _loadFallbackIcon() async {
+    try {
+      final byteData = await rootBundle.load(
+        'assets/images/marker_default_unknown.png',
+      );
+      final imageData = byteData.buffer.asUint8List();
+      final codec = await ui.instantiateImageCodec(
+        imageData,
+        targetHeight: 100,
+      );
+      final frameInfo = await codec.getNextFrame();
+      final image = frameInfo.image;
+      final byteDataResized = await image.toByteData(
+        format: ui.ImageByteFormat.png,
+      );
+      return BitmapDescriptor.fromBytes(byteDataResized!.buffer.asUint8List());
+    } catch (e) {
+      // If even the dedicated custom fallback icon fails to load, return the system default
+      return _genericDefaultIcon;
+    }
+  }
+
+  BitmapDescriptor _getMarkerIcon(Device device) {
+    final status = device.status ?? 'unknown';
+    final category = device.category ?? 'default';
+    final key = '$category-$status';
+
+    // 1. Tier 1: Try to find the exact icon
+    if (_markerIcons.containsKey(key)) {
+      return _markerIcons[key]!;
     }
 
-    final newPosition = latlong.LatLng(
+    // 2. Tier 2: Fall back to the preloaded 'default-unknown' custom icon.
+    final fallbackCustomIcon = _markerIcons['default-unknown'];
+    if (fallbackCustomIcon != null) {
+      return fallbackCustomIcon;
+    }
+
+    // 3. Tier 3: Final fallback: Always return the visible system default pin.
+    return _genericDefaultIcon;
+  }
+
+  void _updateMarkersOnMap() {
+    final traccarProvider = Provider.of<TraccarProvider>(
+      context,
+      listen: false,
+    );
+
+    final lastPosition = traccarProvider.positions.firstWhere(
+      (pos) => pos.deviceId == widget.selectedDevice.id,
+      orElse: () => Position(),
+    );
+
+    // Call the existing _updateMap to redraw the markers with the correct icons
+    if (lastPosition.latitude != null && lastPosition.longitude != null) {
+      _updateMap(lastPosition);
+    } else if (mounted) {
+      // Force a rebuild to ensure the next data pass uses the loaded icons
+      setState(() {});
+    }
+  }
+
+  void _updateMap(Position? currentPosition) {
+    if (currentPosition == null ||
+        currentPosition.latitude == null ||
+        currentPosition.longitude == null)
+      return;
+
+    final newPosition = LatLng(
       currentPosition.latitude!.toDouble(),
       currentPosition.longitude!.toDouble(),
     );
@@ -296,63 +252,57 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
         _polylineCoordinates.add(newPosition);
       }
 
-      final String category = widget.selectedDevice.category ?? 'default';
-      final String status = widget.selectedDevice.status ?? 'unknown';
-      final double course = currentPosition.course?.toDouble() ?? 0.0;
-
-      // Flutter Map Marker Implementation using Image.asset
       _markers.add(
         Marker(
-          width: 50.0,
-          height: 50.0,
-          point: newPosition,
-          // Marker rotation using Transform.rotate
-          child: Transform.rotate(
-            angle: course * (pi / 180),
-            child: Tooltip(
-              message: widget.selectedDevice.name ?? 'Device Location',
-              child: Image.asset(
-                'assets/images/marker_${category}_$status.png',
-                errorBuilder: (context, error, stackTrace) =>
-                    const Icon(Icons.location_on),
-              ),
-            ),
+          markerId: MarkerId(widget.selectedDevice.id!.toString()),
+          position: newPosition,
+          infoWindow: InfoWindow(
+            title: widget.selectedDevice.name ?? 'Device Location',
           ),
+          icon: _getMarkerIcon(widget.selectedDevice),
+          rotation: currentPosition.course?.toDouble() ?? 0.0,
         ),
       );
 
-      _polylines.clear(); // Clear old polyline set
       _polylines.add(
         Polyline(
+          polylineId: PolylineId(widget.selectedDevice.id!.toString()),
           points: _polylineCoordinates,
           color: Colors.blue,
-          strokeWidth: 5,
+          width: 5,
         ),
       );
     });
 
     if (_isCameraLocked) {
-      // Use MapController to move the map
-      _flutterMapController.move(newPosition, _flutterMapController.camera.zoom);
+      _controller.future.then((controller) {
+        controller.animateCamera(CameraUpdate.newLatLng(newPosition));
+      });
     }
   }
 
   void _toggleMapType() {
     setState(() {
-      _mapType = _mapType == AppMapType.openStreetMap
-          ? AppMapType.satellite
-          : AppMapType.openStreetMap;
+      _mapType = _mapType == MapType.normal
+          ? MapType.satellite
+          : MapType.normal;
+    });
+  }
+
+  void _toggleTraffic() {
+    setState(() {
+      _isTrafficEnabled = !_isTrafficEnabled;
     });
   }
 
   Future<void> _recenter(Position? lastPosition) async {
     if (lastPosition == null ||
         lastPosition.latitude == null ||
-        lastPosition.longitude == null) {
+        lastPosition.longitude == null)
       return;
-    }
 
-    final position = latlong.LatLng(
+    final controller = await _controller.future;
+    final position = LatLng(
       lastPosition.latitude!.toDouble(),
       lastPosition.longitude!.toDouble(),
     );
@@ -361,26 +311,17 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
       _isCameraLocked = true;
     });
 
-    // Use MapController to move
-    _flutterMapController.move(position, 17.0);
+    controller.animateCamera(CameraUpdate.newLatLngZoom(position, 17.0));
   }
 
-  void _zoomIn() {
-    // Use MapController to adjust zoom
-    final currentZoom = _flutterMapController.camera.zoom;
-    _flutterMapController.move(
-      _flutterMapController.camera.center,
-      currentZoom + 1.0,
-    );
+  Future<void> _zoomIn() async {
+    final controller = await _controller.future;
+    controller.animateCamera(CameraUpdate.zoomIn());
   }
 
-  void _zoomOut() {
-    // Use MapController to adjust zoom
-    final currentZoom = _flutterMapController.camera.zoom;
-    _flutterMapController.move(
-      _flutterMapController.camera.center,
-      currentZoom - 1.0,
-    );
+  Future<void> _zoomOut() async {
+    final controller = await _controller.future;
+    controller.animateCamera(CameraUpdate.zoomOut());
   }
 
   @override
@@ -388,14 +329,14 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          widget.selectedDevice.name ?? 'mapLiveRoutes'.tr,
-        ),
+          'mapLiveRoutes'.tr,
+        ), //widget.selectedDevice.name ?? 'mapLiveRoutes'.tr
         actions: [
+          IconButton(icon: const Icon(Icons.layers), onPressed: _toggleMapType),
           IconButton(
-            icon: Icon(
-              _mapType == AppMapType.satellite ? Icons.map : Icons.satellite,
-            ),
-            onPressed: _toggleMapType,
+            icon: const Icon(Icons.traffic),
+            color: _isTrafficEnabled ? Colors.blue : null,
+            onPressed: _toggleTraffic,
           ),
         ],
       ),
@@ -406,67 +347,36 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
             orElse: () => Position(),
           );
 
-          // Handle initial position
-          latlong.LatLng initialLatLng = const latlong.LatLng(0, 0);
-          if (lastPosition.latitude != null && lastPosition.longitude != null) {
-            initialLatLng = latlong.LatLng(
-              lastPosition.latitude!.toDouble(),
-              lastPosition.longitude!.toDouble(),
-            );
-          }
-
-          // Show loading spinner if cache, icons, or initial data is not ready
-          if (!_isCacheInitialized ||
-              !_customIconsLoaded ||
-              (traccarProvider.isLoading && _polylineCoordinates.isEmpty)) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          // Force an initial update call in case state was ready but build was called first
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            _updateMap(lastPosition);
-          });
-
+          final initialCameraPosition =
+              lastPosition.latitude != null && lastPosition.longitude != null
+              ? CameraPosition(
+                  target: LatLng(
+                    lastPosition.latitude!.toDouble(),
+                    lastPosition.longitude!.toDouble(),
+                  ),
+                  zoom: 14.0,
+                )
+              : _defaultCameraPosition;
 
           return Stack(
             children: [
-              // REPLACED: GoogleMap with FlutterMap
-              FlutterMap(
-                mapController: _flutterMapController,
-                options: MapOptions(
-                  initialCenter: initialLatLng,
-                  initialZoom: 14.0,
-                  interactionOptions: const InteractionOptions(
-                    flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
-                  ),
-                  onPositionChanged: (position, hasGesture) {
-                    if (hasGesture) {
-                      setState(() {
-                        _isCameraLocked = false;
-                      });
-                    }
-                  },
-                  onTap: (tapPosition, latLng) {
-                    // Optionally close a bottom sheet if one were present
-                  },
-                ),
-                children: [
-                  // Tile Layer with Caching
-                  TileLayer(
-                    urlTemplate: _mapType == AppMapType.openStreetMap
-                        ? _osmUrlTemplate
-                        : _satelliteUrlTemplate,
-                    subdomains: _mapType == AppMapType.openStreetMap
-                        ? _osmSubdomains
-                        : const [],
-                    userAgentPackageName: 'com.trabcdefg.app',
-                    tileProvider: _tileProvider, // Use the custom cached provider
-                  ),
-                  // Polyline Layer for routes
-                  PolylineLayer(polylines: _polylines.toList()),
-                  // Marker Layer for device position
-                  MarkerLayer(markers: _markers.toList()),
-                ],
+              GoogleMap(
+                mapType: _mapType,
+                initialCameraPosition: initialCameraPosition,
+                markers: _markers,
+                polylines: _polylines,
+                onMapCreated: (GoogleMapController controller) {
+                  if (!_controller.isCompleted) {
+                    _controller.complete(controller);
+                    _updateMap(lastPosition);
+                  }
+                },
+                trafficEnabled: _isTrafficEnabled,
+                onCameraMoveStarted: () {
+                  setState(() {
+                    _isCameraLocked = false;
+                  });
+                },
               ),
               Positioned(
                 bottom: 16,
@@ -511,9 +421,8 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
           (pos) => pos.deviceId == widget.selectedDevice.id,
           orElse: () => Position(),
         );
-        // Traccar speed is in knots (nautical miles per hour). 1 knot = 1.852 km/h
         final speedKmh = lastPosition.speed != null
-            ? (lastPosition.speed!.toDouble() * 1.852).toStringAsFixed(2)
+            ? (lastPosition.speed! * 1.852).toStringAsFixed(2)
             : 'N/A';
         final attributes =
             lastPosition.attributes as Map<String, dynamic>? ?? {};
@@ -566,9 +475,7 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
                   leading: const Icon(Icons.directions_car),
                   title: Text('deviceTotalDistance'.tr),
                   subtitle: Text(
-                    // Check for num type and safely convert
-                    '${((attributes['totalDistance'] is num ? attributes['totalDistance'] : 0.0) / 1000).toStringAsFixed(2)} ' +
-                        'sharedKm'.tr,
+                    '${(attributes['totalDistance'] / 1000).toStringAsFixed(2)} '+'sharedKm'.tr,
                   ),
                 ),
               if (attributes.containsKey('engineHours'))
@@ -576,8 +483,7 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
                   leading: const Icon(Icons.timer),
                   title: Text('reportEngineHours'.tr),
                   subtitle: Text(
-                    // Check for num type and safely convert
-                    '${((attributes['engineHours'] is num ? attributes['engineHours'] : 0.0) / 3600).toStringAsFixed(2)} ' +
+                    '${(attributes['engineHours'] / 3600).toStringAsFixed(2)} ' +
                         'sharedHourAbbreviation'.tr,
                   ),
                 ),

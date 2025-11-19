@@ -21,13 +21,14 @@ class ReportSummaryHiveAdapter extends TypeAdapter<ReportSummaryHive> {
       averageSpeed: fields[1] as double?,
       maxSpeed: fields[2] as double?,
       spentFuel: fields[3] as double?,
+      engineHours: fields[4] as int?,
     );
   }
 
   @override
   void write(BinaryWriter writer, ReportSummaryHive obj) {
     writer
-      ..writeByte(4)
+      ..writeByte(5)
       ..writeByte(0)
       ..write(obj.distance)
       ..writeByte(1)
@@ -35,7 +36,9 @@ class ReportSummaryHiveAdapter extends TypeAdapter<ReportSummaryHive> {
       ..writeByte(2)
       ..write(obj.maxSpeed)
       ..writeByte(3)
-      ..write(obj.spentFuel);
+      ..write(obj.spentFuel)
+      ..writeByte(4)
+      ..write(obj.engineHours);
   }
 
   @override

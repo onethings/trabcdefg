@@ -1,5 +1,5 @@
 // lib/screens/reports/stops_report_screen.dart
-
+// A screen to display stops report on a map in the TracDefg app.
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';

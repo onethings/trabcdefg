@@ -1,4 +1,5 @@
 // lib/screens/register_screen.dart
+// A screen that allows users to register a new account.
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';

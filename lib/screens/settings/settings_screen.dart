@@ -1,5 +1,5 @@
 // settings_screen.dart
-// A settings screen for the TracDefg app, allowing users to modify preferences and log out.
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';

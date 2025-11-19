@@ -1,5 +1,5 @@
 // lib/screens/reset_password_screen.dart
-// A screen that allows users to reset their password by entering their email address.
+
 import 'package:flutter/material.dart';
 import 'package:trabcdefg/constants.dart';
 import 'package:http/http.dart' as http;

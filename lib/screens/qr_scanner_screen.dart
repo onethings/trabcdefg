@@ -1,6 +1,3 @@
-// lib/screens/qr_scanner_screen.dart
-// A screen that allows users to scan a QR code to get the server URL.
-
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:get/get.dart';

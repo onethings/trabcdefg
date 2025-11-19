@@ -1,5 +1,5 @@
 // lib/main.dart
-// Main entry point for the TracDefg Flutter application.
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:provider/provider.dart';

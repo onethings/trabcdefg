@@ -1,136 +1,22 @@
 // lib/screens/reports/combined_report_screen.dart
-// A screen to display a combined report of positions and events on a map in the TracDefg app.
+
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
-// import 'package:google_maps_flutter/google_maps_flutter.dart'; // REMOVED
-import 'package:flutter_map/flutter_map.dart'; // ADDED
-import 'package:latlong2/latlong.dart'; // ADDED (No alias as requested)
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:provider/provider.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
 import 'package:trabcdefg/providers/traccar_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:ui' as ui;
 import 'package:get/get.dart';
-import 'package:http/http.dart' as http; // ADDED for caching
-import 'package:hive/hive.dart'; // ADDED for caching
-import 'dart:typed_data'; // ADDED for caching
-import 'package:flutter/foundation.dart'; // ADDED for caching
 
-// --- Tile Caching Implementation using Hive (Copied from map_screen.dart) ---
-
-class _TileCacheService {
-  late Box<Uint8List> _tileBox;
-  static const String boxName = 'mapTilesCache';
-
-  Future<void> init() async {
-    _tileBox = await Hive.openBox<Uint8List>(boxName);
-  }
-
-  String _generateKey(String url) {
-    return url.hashCode.toString();
-  }
-
-  Future<Uint8List?> getTile(String url) async {
-    return _tileBox.get(_generateKey(url));
-  }
-
-  Future<void> saveTile(String url, Uint8List tileData) async {
-    await _tileBox.put(_generateKey(url), tileData);
-  }
-}
-
-class CachedNetworkImageProvider extends ImageProvider<CachedNetworkImageProvider> {
-  final String url;
-  final _TileCacheService cacheService;
-  final http.Client httpClient;
-
-  CachedNetworkImageProvider(
-    this.url, {
-    required this.cacheService,
-    required this.httpClient,
-  });
+class CombinedReportScreen extends StatefulWidget {
+  const CombinedReportScreen({super.key});
 
   @override
-  ImageStreamCompleter loadImage(
-    CachedNetworkImageProvider key,
-    ImageDecoderCallback decode,
-  ) {
-    return MultiFrameImageStreamCompleter(
-      codec: _loadAsync(key, decode),
-      scale: 1.0,
-      informationCollector: () => <DiagnosticsNode>[
-        DiagnosticsProperty<ImageProvider>('Image provider', this),
-        DiagnosticsProperty<CachedNetworkImageProvider>('Original key', key),
-      ],
-    );
-  }
-
-  @override
-  Future<CachedNetworkImageProvider> obtainKey(
-    ImageConfiguration configuration, 
-  ) {
-    return Future<CachedNetworkImageProvider>.value(this);
-  }
-
-  Future<ui.Codec> _loadAsync(
-    CachedNetworkImageProvider key,
-    ImageDecoderCallback decode,
-  ) async {
-    assert(key == this);
-
-    final cachedData = await cacheService.getTile(url);
-
-    if (cachedData != null) {
-      return decode(await ui.ImmutableBuffer.fromUint8List(cachedData)); 
-    }
-
-    try {
-      final response = await httpClient.get(Uri.parse(url));
-
-      if (response.statusCode == 200) {
-        final Uint8List bytes = response.bodyBytes;
-        
-        await cacheService.saveTile(url, bytes);
-
-        return decode(await ui.ImmutableBuffer.fromUint8List(bytes)); 
-      } else {
-        throw Exception('Failed to load tile from network: ${response.statusCode}');
-      }
-    } catch (e) {
-      rethrow;
-    }
-  }
+  State<CombinedReportScreen> createState() => _CombinedReportScreenState();
 }
-
-class _HiveTileProvider extends TileProvider {
-  final _TileCacheService cacheService;
-  final http.Client httpClient;
-
-  _HiveTileProvider({
-    required this.cacheService,
-    required this.httpClient,
-  });
-
-  @override
-  ImageProvider getImage(
-    TileCoordinates coordinates,
-    TileLayer options,
-  ) {
-    return CachedNetworkImageProvider(
-      getTileUrl(coordinates, options),
-      cacheService: cacheService,
-      httpClient: httpClient,
-    );
-  }
-}
-
-enum AppMapType {
-  openStreetMap,
-  satellite,
-}
-
-// --- End of Map Caching & FlutterMap Definitions ---
 
 // A new model to combine positions and events from different API calls
 class CombinedReport {
@@ -141,79 +27,35 @@ class CombinedReport {
   CombinedReport({required this.positions, required this.events, this.route});
 }
 
-class CombinedReportScreen extends StatefulWidget {
-  const CombinedReportScreen({super.key});
-
-  @override
-  State<CombinedReportScreen> createState() => _CombinedReportScreenState();
-}
-
 class _CombinedReportScreenState extends State<CombinedReportScreen> {
-  // final Completer<GoogleMapController> _controller = Completer(); // REMOVED
-  late MapController _mapController; // ADDED
+  final Completer<GoogleMapController> _controller = Completer();
   CombinedReport? _combinedReport;
   bool _isLoading = true;
-  // Set to List for FlutterMap compatibility
-  final List<Polyline> _polylines = []; 
-  final List<Marker> _markers = []; 
+  final Set<Polyline> _polylines = {};
+  final Set<Marker> _markers = {};
   String? _deviceName;
 
-  // Icons are now asset paths/widgets, not BitmapDescriptors
-  // late BitmapDescriptor _ignitionOnIcon; // REMOVED
-  // late BitmapDescriptor _ignitionOffIcon; // REMOVED
-  static const String _ignitionOnIconPath = 'assets/images/accon.png'; // ADDED
-  static const String _ignitionOffIconPath = 'assets/images/accoff.png'; // ADDED
+  late BitmapDescriptor _ignitionOnIcon;
+  late BitmapDescriptor _ignitionOffIcon;
 
   Map<int, api.Position> _positionsMap = {};
-  // Replace MapType with AppMapType
-  AppMapType _currentMapType = AppMapType.openStreetMap; // CHANGED
-
-  // Caching variables
-  final _TileCacheService _cacheService = _TileCacheService(); // ADDED
-  final http.Client _httpClient = http.Client(); // ADDED
-  late _HiveTileProvider _tileProvider; // ADDED
-  bool _isCacheInitialized = false; // ADDED
-
-  // Tile URLs
-  static const String _osmUrlTemplate = 
-      'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
-  static const String _satelliteUrlTemplate = 
-      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
-  static const List<String> _osmSubdomains = ['a', 'b', 'c'];
-
+  MapType _currentMapType = MapType.normal;
 
   @override
   void initState() {
     super.initState();
-    _mapController = MapController(); // ADDED initialization
-
-    // Initialize cache service and then the tile provider
-    _cacheService.init().then((_) {
-      if (mounted) { 
-        _tileProvider = _HiveTileProvider(
-          cacheService: _cacheService,
-          httpClient: _httpClient,
-        );
-        setState(() {
-          _isCacheInitialized = true; // Set flag when initialization is complete
-        });
-      }
-    });
-
-    _loadMarkerIcons();
     _fetchCombinedReport();
-  }
-  
-  @override
-  void dispose() {
-    _httpClient.close(); // Dispose of http client
-    super.dispose();
   }
 
   Future<void> _loadMarkerIcons() async {
-    // Simplified: Icons are now loaded as part of the marker child in _updateMap
-    // No BitmapDescriptor loading is needed for FlutterMap.
-    await Future.delayed(Duration.zero);
+    _ignitionOnIcon = await BitmapDescriptor.fromAssetImage(
+      const ImageConfiguration(),
+      'assets/images/accon.png',
+    );
+    _ignitionOffIcon = await BitmapDescriptor.fromAssetImage(
+      const ImageConfiguration(),
+      'assets/images/accoff.png',
+    );
   }
 
   Future<void> _fetchCombinedReport() async {
@@ -343,42 +185,36 @@ class _CombinedReportScreenState extends State<CombinedReportScreen> {
     // Draw route polyline
     if (_combinedReport!.route != null && _combinedReport!.route!.isNotEmpty) {
       final List<LatLng> routePoints = _combinedReport!.route!
-          // Convert Traccar format [lon, lat] to LatLng(lat, lon)
           .map((coord) => LatLng(coord[1], coord[0]))
           .toList();
 
       if (routePoints.isNotEmpty) {
-        // Use FlutterMap Polyline
         _polylines.add(
           Polyline(
+            polylineId: const PolylineId('route_polyline'),
             points: routePoints,
             color: Colors.blue,
-            strokeWidth: 4,
+            width: 4,
           ),
         );
 
-        // Add start marker (uses Image.asset in child)
+        // Add start and end markers
         _markers.add(
           Marker(
-            point: routePoints.first,
-            width: 30.0,
-            height: 30.0,
-            child: Image.asset(
-              'assets/images/start.png',
-              fit: BoxFit.contain,
+            markerId: const MarkerId('start_marker'),
+            position: routePoints.first,
+            icon: BitmapDescriptor.defaultMarkerWithHue(
+              BitmapDescriptor.hueGreen,
             ),
           ),
         );
 
-        // Add end marker (uses Image.asset in child)
         _markers.add(
           Marker(
-            point: routePoints.last,
-            width: 30.0,
-            height: 30.0,
-            child: Image.asset(
-              'assets/images/destination.png',
-              fit: BoxFit.contain,
+            markerId: const MarkerId('end_marker'),
+            position: routePoints.last,
+            icon: BitmapDescriptor.defaultMarkerWithHue(
+              BitmapDescriptor.hueRed,
             ),
           ),
         );
@@ -394,35 +230,44 @@ class _CombinedReportScreenState extends State<CombinedReportScreen> {
           _positionsMap.containsKey(event.positionId)) {
         final position = _positionsMap[event.positionId]!;
         if (position.latitude != null && position.longitude != null) {
-          String iconPath;
+          BitmapDescriptor eventIcon;
           switch (event.type) {
             case 'ignitionOn':
-              iconPath = _ignitionOnIconPath; // Use string path
+              eventIcon = _ignitionOnIcon;
               break;
             case 'ignitionOff':
-              iconPath = _ignitionOffIconPath; // Use string path
+              eventIcon = _ignitionOffIcon;
               break;
             default:
-              iconPath = 'assets/images/event_default.png'; // Generic icon
+              eventIcon = BitmapDescriptor.defaultMarkerWithHue(
+                BitmapDescriptor.hueYellow,
+              );
               break;
           }
 
-          final String markerId = 'event_marker_${event.id}';
-          
-          // Use FlutterMap Marker
+          String translatedEventKey;
+          if (event.type != null && event.type!.isNotEmpty) {
+            translatedEventKey =
+                'event' +
+                event.type![0].toUpperCase() +
+                event.type!.substring(1);
+          } else {
+            translatedEventKey = 'eventUnknown';
+          }
+
           _markers.add(
             Marker(
-              point: LatLng(
+              markerId: MarkerId('event_marker_${event.id}'),
+              position: LatLng(
                 position.latitude!.toDouble(),
                 position.longitude!.toDouble(),
               ),
-              width: 30.0,
-              height: 30.0,
-              key: Key(markerId), 
-              child: Image.asset(
-                iconPath,
-                fit: BoxFit.contain,
-                errorBuilder: (context, error, stackTrace) => const Icon(Icons.warning, color: Colors.yellow),
+              icon: eventIcon,
+              infoWindow: InfoWindow(
+                title: 'reportEvents'.tr + ': ${translatedEventKey.tr}',
+                snippet:
+                    'reportTimeType'.tr +
+                    ': ${event.eventTime?.toLocal().toString().split('.')[0]}',
               ),
             ),
           );
@@ -433,42 +278,31 @@ class _CombinedReportScreenState extends State<CombinedReportScreen> {
     setState(() {});
   }
 
-  // Future<void> _showInfoWindowForMarker(MarkerId markerId) async { ... } // REMOVED
+  Future<void> _showInfoWindowForMarker(MarkerId markerId) async {
+    final controller = await _controller.future;
+    controller.showMarkerInfoWindow(markerId);
+  }
 
   Future<void> _animateToPosition(LatLng latLng) async {
-    _mapController.move(
-      latLng,
-      15,
+    final controller = await _controller.future;
+    controller.animateCamera(
+      CameraUpdate.newCameraPosition(CameraPosition(target: latLng, zoom: 15)),
     );
   }
 
-  @override
   Widget build(BuildContext context) {
     if (_isLoading) {
       return Scaffold(body: Center(child: Text('sharedLoading'.tr)));
     }
 
-    // Check for cache initialization
-    if (!_isCacheInitialized) { 
-      return Scaffold(
-        appBar: AppBar(title: Text('Loading Map...'.tr)),
-        body: const Center(child: Text('Initializing Map Assets...')),
-      );
-    }
-
     if (_combinedReport == null ||
         (_combinedReport!.positions.isEmpty &&
-            (_combinedReport!.route == null || _combinedReport!.route!.isEmpty))) {
+            _combinedReport!.route!.isEmpty)) {
       return Scaffold(
         appBar: AppBar(title: Text(_deviceName ?? 'reportCombinedReport'.tr)),
         body: Center(child: Text('sharedNoData'.tr)),
       );
     }
-    
-    // Determine initial center for FlutterMap
-    final LatLng initialCenter = (_combinedReport!.route != null && _combinedReport!.route!.isNotEmpty)
-        ? LatLng(_combinedReport!.route!.first[1], _combinedReport!.route!.first[0])
-        : const LatLng(0, 0);
 
     return Scaffold(
       appBar: AppBar(title: Text(_deviceName ?? 'reportCombinedReport'.tr)),
@@ -478,34 +312,20 @@ class _CombinedReportScreenState extends State<CombinedReportScreen> {
             flex: 2,
             child: Stack(
               children: [
-                // Replace GoogleMap with FlutterMap
-                FlutterMap(
-                  mapController: _mapController,
-                  options: MapOptions(
-                    initialCenter: initialCenter,
-                    initialZoom: 13,
-                    interactionOptions: const InteractionOptions(
-                        flags: InteractiveFlag.all & ~InteractiveFlag.rotate),
+                GoogleMap(
+                  mapType: _currentMapType,
+                  initialCameraPosition: CameraPosition(
+                    target: _polylines.isNotEmpty
+                        ? _polylines.first.points.first
+                        : const LatLng(0, 0),
+                    zoom: 13,
                   ),
-                  children: [
-                    // Tile Layer: Conditional based on map type (OSM/Satellite)
-                    TileLayer(
-                      urlTemplate: _currentMapType == AppMapType.openStreetMap
-                          ? _osmUrlTemplate
-                          : _satelliteUrlTemplate,
-                      subdomains: _currentMapType == AppMapType.openStreetMap
-                          ? _osmSubdomains
-                          : const [],
-                      userAgentPackageName: 'com.trabcdefg.app',
-                      tileProvider: _tileProvider, // Hive Caching
-                    ),
-                    // Polyline Layer
-                    PolylineLayer(polylines: _polylines),
-                    // Marker Layer
-                    MarkerLayer(markers: _markers),
-                  ],
+                  onMapCreated: (GoogleMapController controller) {
+                    _controller.complete(controller);
+                  },
+                  polylines: _polylines,
+                  markers: _markers,
                 ),
-                // Map Type Toggle Button (updated for AppMapType)
                 Positioned(
                   top: 10,
                   right: 10,
@@ -513,13 +333,13 @@ class _CombinedReportScreenState extends State<CombinedReportScreen> {
                     mini: true,
                     onPressed: () {
                       setState(() {
-                        _currentMapType = _currentMapType == AppMapType.openStreetMap
-                            ? AppMapType.satellite
-                            : AppMapType.openStreetMap;
+                        _currentMapType = _currentMapType == MapType.normal
+                            ? MapType.satellite
+                            : MapType.normal;
                       });
                     },
                     child: Icon(
-                      _currentMapType == AppMapType.openStreetMap
+                      _currentMapType == MapType.normal
                           ? Icons.satellite_alt
                           : Icons.map,
                     ),
@@ -562,7 +382,36 @@ class _CombinedReportScreenState extends State<CombinedReportScreen> {
                                 pos.longitude!.toDouble(),
                               ),
                             );
-                            // Removed temporary marker and info window logic
+
+                            // Add a temporary marker for the tapped position
+                            final tempMarkerId = MarkerId(
+                              'temp_marker_${pos.id}',
+                            );
+                            _markers.add(
+                              Marker(
+                                markerId: tempMarkerId,
+                                position: LatLng(
+                                  pos.latitude!.toDouble(),
+                                  pos.longitude!.toDouble(),
+                                ),
+                                infoWindow: InfoWindow(
+                                  title: 'reportPosition'.tr,
+                                  snippet:
+                                      'reportTimeType'.tr +
+                                      ': ${pos.deviceTime?.toLocal().toString().split('.')[0]}',
+                                ),
+                              ),
+                            );
+
+                            // Immediately show the info window and remove the temporary marker after a delay
+                            await _showInfoWindowForMarker(tempMarkerId);
+                            Future.delayed(const Duration(seconds: 3), () {
+                              setState(() {
+                                _markers.removeWhere(
+                                  (m) => m.markerId == tempMarkerId,
+                                );
+                              });
+                            });
                           }
                         },
                       ),
@@ -606,7 +455,9 @@ class _CombinedReportScreenState extends State<CombinedReportScreen> {
                               position.longitude!.toDouble(),
                             ),
                           );
-                          // Removed _showInfoWindowForMarker call
+                          _showInfoWindowForMarker(
+                            MarkerId('event_marker_${event.id}'),
+                          );
                         }
                       }
                     },

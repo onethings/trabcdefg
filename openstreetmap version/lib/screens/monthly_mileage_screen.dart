@@ -1,5 +1,5 @@
 // lib/screens/monthly_mileage_screen.dart
-
+// A screen that displays the monthly mileage of a selected device.
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -104,6 +104,9 @@ class _MonthlyMileageScreenState extends State<MonthlyMileageScreen> {
           averageSpeed: cachedSummary.averageSpeed,
           maxSpeed: cachedSummary.maxSpeed,
           spentFuel: cachedSummary.spentFuel,
+          // START OF CHANGE: Include engineHours from the cached ReportSummaryHive
+          engineHours: cachedSummary.engineHours,
+          // END OF CHANGE
         );
       }
     }
@@ -136,6 +139,8 @@ class _MonthlyMileageScreenState extends State<MonthlyMileageScreen> {
           _dailySummaries[dayUtc] = dailySummary;
 
           // Step 3: Update Hive cache with fresh data
+          // This line now correctly includes engineHours because ReportSummaryHive.fromApi
+          // has been updated.
           final newSummaryHive = ReportSummaryHive.fromApi(dailySummary);
           await dailyBox.put(hiveKey, newSummaryHive);
         }
@@ -238,6 +243,20 @@ class _MonthlyMileageScreenState extends State<MonthlyMileageScreen> {
     );
   }
 
+  // Helper method to format milliseconds into "Hh Mm" string
+  String _formatDuration(int? milliseconds) {
+    if (milliseconds == null || milliseconds <= 0) {
+      return '0h 0m';
+    }
+
+    final duration = Duration(milliseconds: milliseconds);
+    final hours = duration.inHours;
+    // Calculate remaining minutes after whole hours have been accounted for
+    final minutes = duration.inMinutes.remainder(60);
+
+    return '${hours}h ${minutes}m';
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -298,14 +317,33 @@ class _MonthlyMileageScreenState extends State<MonthlyMileageScreen> {
                               final summary = _dailySummaries[dayUtc]!;
                               final distanceInKm =
                                   (summary.distance ?? 0.0) / 1000;
+                              // Convert engineHours (in milliseconds) to hours for calendar marker display
+                              final engineHoursInHours =
+                                  (summary.engineHours ?? 0) / 3600000;
+
                               return Positioned(
-                                bottom: 1,
-                                child: Text(
-                                  '${distanceInKm.toStringAsFixed(0)}km',
-                                  style: const TextStyle(
-                                    fontSize: 10,
-                                    color: Colors.blue,
-                                  ),
+                                bottom: -5, // Adjust position as needed
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  crossAxisAlignment: CrossAxisAlignment.center,
+                                  children: [
+                                    // Distance in blue
+                                    Text(
+                                      '${distanceInKm.toStringAsFixed(0)}'+'km'.tr,
+                                      style: const TextStyle(
+                                        fontSize: 10,
+                                        color: Colors.blue,
+                                      ),
+                                    ),
+                                    // Engine Hours in red
+                                    Text(
+                                      '${engineHoursInHours.toStringAsFixed(1)}'+'h'.tr,
+                                      style: const TextStyle(
+                                        fontSize: 10,
+                                        color: Colors.red,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               );
                             }
@@ -322,7 +360,7 @@ class _MonthlyMileageScreenState extends State<MonthlyMileageScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  'Date: ${DateFormat('yyyy-MM-dd').format(_selectedDay!)}',
+                                  'Date'.tr+': ${DateFormat('yyyy-MM-dd').format(_selectedDay!)}',
                                   style: const TextStyle(
                                     fontSize: 18,
                                     fontWeight: FontWeight.bold,
@@ -331,19 +369,24 @@ class _MonthlyMileageScreenState extends State<MonthlyMileageScreen> {
                                 const SizedBox(height: 8),
                                 Text(
                                   'sharedDistance'.tr +
-                                      ': ${((_selectedDaySummary!.distance ?? 0.0) / 1000).toStringAsFixed(2)} km',
+                                      ': ${((_selectedDaySummary!.distance ?? 0.0) / 1000).toStringAsFixed(2)}'+' '+ 'km'.tr,
+                                ),
+                                // Display Engine Hours in Hh Mm format
+                                Text(
+                                  'reportEngineHours'.tr +
+                                      ': ${_formatDuration(_selectedDaySummary!.engineHours)}',
                                 ),
                                 Text(
                                   'reportAverageSpeed'.tr +
-                                      ': ${(_selectedDaySummary!.averageSpeed ?? 0.0).toStringAsFixed(2)} km/h',
+                                      ': ${(_selectedDaySummary!.averageSpeed ?? 0.0).toStringAsFixed(2)}'+' '+ 'km/h'.tr,
                                 ),
                                 Text(
                                   'reportMaximumSpeed'.tr +
-                                      ': ${(_selectedDaySummary!.maxSpeed ?? 0.0).toStringAsFixed(2)} km/h',
+                                      ': ${(_selectedDaySummary!.maxSpeed ?? 0.0).toStringAsFixed(2)}'+' '+ 'km/h'.tr,
                                 ),
                                 Text(
                                   'reportSpentFuel'.tr +
-                                      ': ${(_selectedDaySummary!.spentFuel ?? 0.0).toStringAsFixed(2)} L',
+                                      ': ${(_selectedDaySummary!.spentFuel ?? 0.0).toStringAsFixed(2)}'+' '+ 'L'.tr,
                                 ),
                                 // const Spacer(),
                                 const SizedBox(height: 50),
