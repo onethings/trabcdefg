@@ -537,7 +537,7 @@ class _MapScreenState extends State<MapScreen> {
                         Text(
                           device.name ?? 'Unknown Device'.tr,
                           style: const TextStyle(
-                            fontSize: 17,
+                            fontSize: 15,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
@@ -589,7 +589,7 @@ class _MapScreenState extends State<MapScreen> {
                               horizontal: 4.0,
                             ),
                             child: Text(
-                              '${currentPosition.speed} km/h',
+                              '${currentPosition.speed?.toStringAsFixed(0)}'+' '+ 'km/h',
                               style: const TextStyle(
                                 fontSize: 15,
                                 fontWeight: FontWeight.bold,

@@ -246,7 +246,7 @@ class _MonthlyMileageScreenState extends State<MonthlyMileageScreen> {
   // Helper method to format milliseconds into "Hh Mm" string
   String _formatDuration(int? milliseconds) {
     if (milliseconds == null || milliseconds <= 0) {
-      return '0h 0m';
+      return '0'+'sharedHourAbbreviation'.tr+' '+'0'+'sharedMinuteAbbreviation'.tr;
     }
 
     final duration = Duration(milliseconds: milliseconds);
@@ -254,7 +254,7 @@ class _MonthlyMileageScreenState extends State<MonthlyMileageScreen> {
     // Calculate remaining minutes after whole hours have been accounted for
     final minutes = duration.inMinutes.remainder(60);
 
-    return '${hours}h ${minutes}m';
+    return '${hours}'+'sharedHourAbbreviation'.tr+' '+'${minutes}'+'sharedMinuteAbbreviation'.tr;
   }
 
   @override
@@ -329,7 +329,7 @@ class _MonthlyMileageScreenState extends State<MonthlyMileageScreen> {
                                   children: [
                                     // Distance in blue
                                     Text(
-                                      '${distanceInKm.toStringAsFixed(0)}'+'km'.tr,
+                                      '${distanceInKm.toStringAsFixed(0)}'+'sharedKm'.tr,
                                       style: const TextStyle(
                                         fontSize: 10,
                                         color: Colors.blue,
@@ -337,7 +337,7 @@ class _MonthlyMileageScreenState extends State<MonthlyMileageScreen> {
                                     ),
                                     // Engine Hours in red
                                     Text(
-                                      '${engineHoursInHours.toStringAsFixed(1)}'+'h'.tr,
+                                      '${engineHoursInHours.toStringAsFixed(1)}'+'sharedHourAbbreviation'.tr,
                                       style: const TextStyle(
                                         fontSize: 10,
                                         color: Colors.red,
@@ -369,7 +369,7 @@ class _MonthlyMileageScreenState extends State<MonthlyMileageScreen> {
                                 const SizedBox(height: 8),
                                 Text(
                                   'sharedDistance'.tr +
-                                      ': ${((_selectedDaySummary!.distance ?? 0.0) / 1000).toStringAsFixed(2)}'+' '+ 'km'.tr,
+                                      ': ${((_selectedDaySummary!.distance ?? 0.0) / 1000).toStringAsFixed(2)}'+' '+ 'sharedKm'.tr,
                                 ),
                                 // Display Engine Hours in Hh Mm format
                                 Text(
@@ -378,15 +378,15 @@ class _MonthlyMileageScreenState extends State<MonthlyMileageScreen> {
                                 ),
                                 Text(
                                   'reportAverageSpeed'.tr +
-                                      ': ${(_selectedDaySummary!.averageSpeed ?? 0.0).toStringAsFixed(2)}'+' '+ 'km/h'.tr,
+                                      ': ${(_selectedDaySummary!.averageSpeed ?? 0.0).toStringAsFixed(2)}'+' '+ 'sharedKmh'.tr,
                                 ),
                                 Text(
                                   'reportMaximumSpeed'.tr +
-                                      ': ${(_selectedDaySummary!.maxSpeed ?? 0.0).toStringAsFixed(2)}'+' '+ 'km/h'.tr,
+                                      ': ${(_selectedDaySummary!.maxSpeed ?? 0.0).toStringAsFixed(2)}'+' '+ 'sharedKmh'.tr,
                                 ),
                                 Text(
                                   'reportSpentFuel'.tr +
-                                      ': ${(_selectedDaySummary!.spentFuel ?? 0.0).toStringAsFixed(2)}'+' '+ 'L'.tr,
+                                      ': ${(_selectedDaySummary!.spentFuel ?? 0.0).toStringAsFixed(2)}'+' '+ 'sharedLiter'.tr,
                                 ),
                                 // const Spacer(),
                                 const SizedBox(height: 50),
