@@ -19,7 +19,6 @@ class Position {
     this.deviceTime,
     this.fixTime,
     this.serverTime,
-    this.outdated,
     this.valid,
     this.latitude,
     this.longitude,
@@ -83,14 +82,6 @@ class Position {
   /// Consider adding a "default:" property in the specification file to hide this note.
   ///
   DateTime? serverTime;
-
-  ///
-  /// Please note: This property should have been non-nullable! Since the specification file
-  /// does not include a default value (using the "default:" property), however, the generated
-  /// source code must fall back to having a nullable type.
-  /// Consider adding a "default:" property in the specification file to hide this note.
-  ///
-  bool? outdated;
 
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
@@ -185,7 +176,6 @@ class Position {
           other.deviceTime == deviceTime &&
           other.fixTime == fixTime &&
           other.serverTime == serverTime &&
-          other.outdated == outdated &&
           other.valid == valid &&
           other.latitude == latitude &&
           other.longitude == longitude &&
@@ -207,7 +197,6 @@ class Position {
       (deviceTime == null ? 0 : deviceTime!.hashCode) +
       (fixTime == null ? 0 : fixTime!.hashCode) +
       (serverTime == null ? 0 : serverTime!.hashCode) +
-      (outdated == null ? 0 : outdated!.hashCode) +
       (valid == null ? 0 : valid!.hashCode) +
       (latitude == null ? 0 : latitude!.hashCode) +
       (longitude == null ? 0 : longitude!.hashCode) +
@@ -222,7 +211,7 @@ class Position {
 
   @override
   String toString() =>
-      'Position[id=$id, deviceId=$deviceId, protocol=$protocol, deviceTime=$deviceTime, fixTime=$fixTime, serverTime=$serverTime, outdated=$outdated, valid=$valid, latitude=$latitude, longitude=$longitude, altitude=$altitude, speed=$speed, course=$course, address=$address, accuracy=$accuracy, network=$network, geofenceIds=$geofenceIds, attributes=$attributes]';
+      'Position[id=$id, deviceId=$deviceId, protocol=$protocol, deviceTime=$deviceTime, fixTime=$fixTime, serverTime=$serverTime, valid=$valid, latitude=$latitude, longitude=$longitude, altitude=$altitude, speed=$speed, course=$course, address=$address, accuracy=$accuracy, network=$network, geofenceIds=$geofenceIds, attributes=$attributes]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -255,11 +244,6 @@ class Position {
       json[r'serverTime'] = this.serverTime!.toUtc().toIso8601String();
     } else {
       json[r'serverTime'] = null;
-    }
-    if (this.outdated != null) {
-      json[r'outdated'] = this.outdated;
-    } else {
-      json[r'outdated'] = null;
     }
     if (this.valid != null) {
       json[r'valid'] = this.valid;
@@ -342,7 +326,6 @@ class Position {
         deviceTime: mapDateTime(json, r'deviceTime', r''),
         fixTime: mapDateTime(json, r'fixTime', r''),
         serverTime: mapDateTime(json, r'serverTime', r''),
-        outdated: mapValueOfType<bool>(json, r'outdated'),
         valid: mapValueOfType<bool>(json, r'valid'),
         latitude: num.parse('${json[r'latitude']}'),
         longitude: num.parse('${json[r'longitude']}'),

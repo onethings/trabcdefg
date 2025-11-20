@@ -1,4 +1,4 @@
-// Openapi Generator last run: : 2025-11-19T11:34:26.458843
+// Openapi Generator last run: : 2025-11-20T15:37:43.336135
 // lib/api_generator.dart
 // API generator configuration for the TracDefg app.
 import 'package:openapi_generator_annotations/openapi_generator_annotations.dart';

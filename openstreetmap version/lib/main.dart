@@ -23,7 +23,7 @@ import 'package:trabcdefg/screens/reset_password_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:trabcdefg/services/localization_service.dart';
 import 'package:intl/date_symbol_data_local.dart';
-
+import 'package:trabcdefg/models/route_positions_hive.dart';
 
 void main() async {
   // Ensure that Flutter is initialized before running the app.
@@ -32,6 +32,8 @@ void main() async {
   // Initialize Hive for local data storage.
   await Hive.initFlutter();
   Hive.registerAdapter(ReportSummaryHiveAdapter());
+
+  Hive.registerAdapter(RoutePositionsHiveAdapter());
   
   // Load the saved Traccar server URL and the language code from shared preferences.
   final prefs = await SharedPreferences.getInstance();

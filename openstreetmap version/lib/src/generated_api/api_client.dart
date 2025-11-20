@@ -12,12 +12,11 @@ part of openapi.api;
 
 class ApiClient {
   ApiClient({
-    this.basePath = 'https://demo4.traccar.org/api', //'https://demo.traccar.org/api',
+    this.basePath = 'https://demo.traccar.org/api',
     this.authentication,
   });
 
-  // final String basePath;
-  String basePath;
+  final String basePath;
   final Authentication? authentication;
 
   var _client = Client();

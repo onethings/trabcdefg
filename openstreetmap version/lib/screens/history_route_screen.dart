@@ -22,6 +22,9 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'dart:io';
+import 'package:trabcdefg/models/route_positions_hive.dart'; // Assuming you put the model here
+import 'package:intl/intl.dart'; 
+import 'package:hive_flutter/hive_flutter.dart';
 
 // NEW: Custom Tile Provider for Hive Caching (Unchanged)
 class HiveTileProvider extends TileProvider {
@@ -75,6 +78,35 @@ class HiveTileProvider extends TileProvider {
   }
 }
 
+
+// Utility function to be called once on app startup or screen load
+Future<void> cleanExpiredRouteHistory() async {
+  final routeBox = await Hive.openBox<RoutePositionsHive>('route_positions');
+  const cacheDuration = Duration(days: 60);
+  final DateTime expiryThreshold = DateTime.now().subtract(cacheDuration);
+
+  final List<dynamic> expiredKeys = [];
+
+  // Iterate over all keys in the box
+  for (final key in routeBox.keys) {
+    // Retrieve the entry directly using the key
+    final entry = routeBox.get(key); 
+    
+    // Check if the cache date is older than 60 days
+    if (entry != null && entry.cachedAt.isBefore(expiryThreshold)) {
+      expiredKeys.add(key);
+    }
+  }
+
+  if (expiredKeys.isNotEmpty) {
+    print('Deleting ${expiredKeys.length} expired route entries.');
+    // Delete all expired entries in one batch operation
+    await routeBox.deleteAll(expiredKeys);
+  }
+}
+
+
+
 // NEW: Enum for Map Types (Unchanged)
 enum OSMMapType { normal, satellite }
 
@@ -88,8 +120,9 @@ class HistoryRouteScreen extends StatefulWidget {
 class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
   MapController? mapController = MapController();
 
+final MapController _mapController = MapController();
 
-bool _isLatLngVisible(LatLng latLng, [double marginFraction = 0.1]) {
+  bool _isLatLngVisible(LatLng latLng, [double marginFraction = 0.1]) {
   // Check if mapController and its camera are available
   if (mapController == null || mapController!.camera.center == null) return false;
   
@@ -185,13 +218,24 @@ final List<Uint8List?> _parkingMarkerIconBytesList = [];
   void initState() {
     super.initState();
     _initHiveTileProvider();
-    _loadCustomMarkerIcons();
+
+Future.microtask(() async {
+      await _loadCustomMarkerIcons(); // NOW AWAITED!
+      
+      // Also await the red dot creation if needed, though not essential for this bug
+      _redDotMarkerIconBytes = await _createDotMarkerIcon(Colors.red);
+      
+      _loadInitialParamsAndFetch(); // This will now run AFTER icons are loaded
+    });
+    
+ //   _loadCustomMarkerIcons();
+    cleanExpiredRouteHistory();
     // Keep this for now, even though we remove dot markers from route,
     // it's a good utility function.
-    _createDotMarkerIcon(Colors.red).then((bytes) {
-      _redDotMarkerIconBytes = bytes;
-    });
-    _loadInitialParamsAndFetch();
+    // _createDotMarkerIcon(Colors.red).then((bytes) {
+    //   _redDotMarkerIconBytes = bytes;
+    // });
+    // _loadInitialParamsAndFetch();
   }
 
   Future<void> _initHiveTileProvider() async {
@@ -377,6 +421,7 @@ final List<Uint8List?> _parkingMarkerIconBytesList = [];
     // Stop any existing playback and reset state
     _playbackTimer?.cancel();
 
+
     // Use setState for simple UI/non-map state changes
     setState(() {
       _isPlaying = false;
@@ -390,33 +435,95 @@ final List<Uint8List?> _parkingMarkerIconBytesList = [];
     _playbackMarkerRx.value = null;
     _movingPositionsRx.value = []; // Reactive list cleared
 
-    final traccarProvider = Provider.of<TraccarProvider>(
-      context,
-      listen: false,
-    );
+
+      List<api.Position> fetchedPositions = [];
+       final todayKey = DateFormat('yyyy-MM-dd').format(_historyFrom!);
+      final hiveKey = '$_deviceId-$todayKey';
+  
+  // 1. Open Hive Box and Check Cache
+      final routeBox = await Hive.openBox<RoutePositionsHive>('route_positions');
+      final cachedRoute = routeBox.get(hiveKey);
+  
+    const cacheDuration = Duration(days: 60);
+      final isCacheValid = cachedRoute != null &&
+      DateTime.now().difference(cachedRoute.cachedAt) < cacheDuration;
+
+  if (isCacheValid) {
+    // 1A. CACHE HIT: Load from Hive
+    print('Loading route from Hive cache: $hiveKey');
+    fetchedPositions = RoutePositionsHive.fromJsonList(cachedRoute!.positionsJson);
+  } else {
+    // 1B. CACHE MISS / EXPIRED: Fetch from Network
+    print('Fetching route from network: $hiveKey');
+    final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
     final positionsApi = api.PositionsApi(traccarProvider.apiClient);
 
-    final positions = await positionsApi.positionsGet(
-      deviceId: _deviceId,
-      from: _historyFrom!.toUtc(),
-      to: _historyTo!.toUtc(),
-    );
+    try {
+      fetchedPositions = await positionsApi.positionsGet(
+        deviceId: _deviceId,
+        from: _historyFrom!.toUtc(),
+        to: _historyTo!.toUtc(),
+      ) ?? [];
+      
+      // 2. Cache the new data
+      if (fetchedPositions.isNotEmpty) {
+        final newCache = RoutePositionsHive(
+          dateKey: hiveKey,
+          positionsJson: RoutePositionsHive.toJsonList(fetchedPositions),
+          cachedAt: DateTime.now(),
+        );
+        await routeBox.put(hiveKey, newCache);
+        print('Route cached successfully.');
+      }
+    } catch (e) {
+      print('Network fetch failed: $e');
+      // Optionally show error to user
+    }
+  }
 
-    // Use setState for simple UI/non-map state changes
+  // 3. Update state with fetched/cached data
+  if (mounted) {
     setState(() {
-      _positions = positions ?? [];
+      _positions = fetchedPositions;
     });
-    
-    // UPDATE REACTIVE LIST DIRECTLY
+
     _movingPositionsRx.value = _positions
         .where((p) => (p.speed ?? 0.0) > 2.0)
         .toList();
 
+// *** NEW: Deterministic check for MapController readiness ***
+   
+      print("Awaiting map controller readiness to animate camera...");
+      // This line will pause until the FlutterMap widget has rendered its first frame.
+   
+  
+    // *** END NEW ***
+
     _drawFullRoute();
+
     if (_positions.isNotEmpty) {
-      _updatePlaybackMarker(animateCamera: true);
+      Future.delayed(const Duration(milliseconds: 500), () { 
+        if (mounted) {
+          // This calls the map controller only after the delay
+          _animateCameraToRoute(); 
+        }
+      });
+    }
+
+    if (_positions.isNotEmpty) {
+      _updatePlaybackMarker(animateCamera: false);
     }
   }
+}
+
+
+
+
+
+
+    
+
+  
 
   Future<void> _fetchMonthlyData(DateTime month) async {
     if (_deviceId == null) return;
@@ -687,7 +794,7 @@ final List<Uint8List?> _parkingMarkerIconBytesList = [];
   }
 
   // MODIFIED: _drawFullRoute for FlutterMap
-  void _drawFullRoute() async {
+  void _drawFullRoute() { 
     if (_positions.isEmpty) {
       // Use reactive setters to clear map elements
       _polylinesRx.value = [];
@@ -745,6 +852,7 @@ final List<Uint8List?> _parkingMarkerIconBytesList = [];
         if (speed <= 2.0 && _parkingMarkerIconBytesList.isNotEmpty) { 
           // Parking/Stop Marker (Speed below a small threshold)
           // NEW: Select icon cyclically using modulo operator
+          print('Found STOP/PARKING at index $i with speed: $speed');
           iconBytes = _parkingMarkerIconBytesList[
             parkingIconIndex % _parkingMarkerIconBytesList.length
           ];
@@ -758,17 +866,22 @@ final List<Uint8List?> _parkingMarkerIconBytesList = [];
         }
       }
 
+      // *** FIX STARTS HERE ***
       if (iconBytes != null) {
+        // The size for the Marker widget must match the size used in _markerIconWidget
+        // The anchor logic is handled by the _markerIconWidget's Transform.translate
         customMarkers.add(
           Marker(
             key: ValueKey<String>(id),
             point: position,
             width: size,
             height: size,
-            child: _markerIconWidget(iconBytes, size, anchor),
+            // FIX: This ensures the parking marker icon (iconBytes) is rendered.
+            child: _markerIconWidget(iconBytes, size, anchor), 
           ),
         );
       }
+      // *** FIX ENDS HERE ***
     }
 
     // NEW: Update reactive lists directly (NO setState)
@@ -782,8 +895,9 @@ final List<Uint8List?> _parkingMarkerIconBytesList = [];
       _playbackMarkerRx.value = existingPlaybackMarker;
     }
 
-    _animateCameraToRoute();
-  }
+
+    // _animateCameraToRoute();
+}
 
   void _togglePlayback() {
     // MODIFIED: Use reactive list
