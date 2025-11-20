@@ -88,6 +88,39 @@ class HistoryRouteScreen extends StatefulWidget {
 class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
   MapController? mapController = MapController();
 
+
+bool _isLatLngVisible(LatLng latLng, [double marginFraction = 0.1]) {
+  // Check if mapController and its camera are available
+  if (mapController == null || mapController!.camera.center == null) return false;
+  
+  // CORRECTED TYPE: MapCamera holds the current view state
+  final MapCamera mapCamera = mapController!.camera; 
+  
+  // visibleBounds is a property of MapCamera
+  final LatLngBounds currentBounds = mapCamera.visibleBounds;
+  
+  final double minLat = currentBounds.south;
+  final double maxLat = currentBounds.north;
+  final double minLon = currentBounds.west;
+  final double maxLon = currentBounds.east;
+
+  final double latSpan = maxLat - minLat;
+  final double lonSpan = maxLon - minLon;
+
+  // Define the margin based on the span
+  final double marginLat = latSpan * marginFraction;
+  final double marginLon = lonSpan * marginFraction;
+  
+  // Check if the LatLng is within the bounds, MINUS the margin
+  // If latLng is outside the margin area, the function returns false, triggering a pan.
+  final bool isVisible = latLng.latitude >= minLat + marginLat &&
+      latLng.latitude <= maxLat - marginLat &&
+      latLng.longitude >= minLon + marginLon &&
+      latLng.longitude <= maxLon - marginLon;
+      
+  return isVisible;
+}
+
   // REPLACED: List<Polyline> _polylines = []; (for main state management)
   // NEW: Reactive variables for isolated updates
   final RxList<Polyline> _polylinesRx = <Polyline>[].obs;
@@ -121,7 +154,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
   Uint8List? _startMarkerIconBytes;
   Uint8List? _parkingMarkerIconBytes;
   Uint8List? _destinationMarkerIconBytes;
-
+final List<Uint8List?> _parkingMarkerIconBytesList = [];
   final double _customMarkerTargetSize = 24.0;
   final double _arrowMarkerTargetSize = 48.0;
 
@@ -251,10 +284,15 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
       'assets/images/start.png',
       _customMarkerTargetSize,
     );
-    _parkingMarkerIconBytes = await _loadAssetIcon(
-      'assets/images/parking.png',
-      _customMarkerTargetSize,
-    );
+    // _parkingMarkerIconBytes = await _loadAssetIcon(
+    //   'assets/images/parking.png',
+    //   _customMarkerTargetSize,
+    // );
+    for (int i = 1; i <= 50; i++) {
+      final assetPath = 'assets/images/p_$i.png';
+      final bytes = await _loadAssetIcon(assetPath, _customMarkerTargetSize);
+      _parkingMarkerIconBytesList.add(bytes);
+    }
     _destinationMarkerIconBytes = await _loadAssetIcon(
       'assets/images/destination.png',
       _customMarkerTargetSize,
@@ -674,6 +712,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
 
     List<Marker> customMarkers = [];
     final int totalPositions = _positions.length;
+    int parkingIconIndex = 0;
 
     // 2. Build the list of STATIC route markers (Start, End, Parking)
     for (int i = 0; i < totalPositions; i++) {
@@ -702,9 +741,15 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
       } else {
         // Intermediate Markers - CHECK ONLY FOR STOP/PARKING
         final speed = pos.speed ?? 0.0;
-        if (speed <= 2.0 && _parkingMarkerIconBytes != null) {
+        // MODIFIED: Check the new list instead of the single icon variable
+        if (speed <= 2.0 && _parkingMarkerIconBytesList.isNotEmpty) { 
           // Parking/Stop Marker (Speed below a small threshold)
-          iconBytes = _parkingMarkerIconBytes;
+          // NEW: Select icon cyclically using modulo operator
+          iconBytes = _parkingMarkerIconBytesList[
+            parkingIconIndex % _parkingMarkerIconBytesList.length
+          ];
+          parkingIconIndex++; // Increment the counter for the next stop marker
+          
           id = 'stop_point_$i';
           anchor = const Offset(0.5, 0.9);
         } else {
@@ -751,7 +796,9 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
         _playbackTimer?.cancel();
 
         final int intervalMs = (1000 / (10 * _playbackSpeed)).round();
-        _updatePlaybackMarker(animateCamera: true, forceZoom: true);
+        // MODIFIED: Remove forceZoom parameter. It will now only pan if necessary.
+        _updatePlaybackMarker(animateCamera: true); 
+        
         Future.delayed(const Duration(milliseconds: 300), () {
           if (!_isPlaying || !mounted) return;
 
@@ -896,11 +943,14 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
     );
 
     if (animateCamera && mapController != null) {
-      if (forceZoom) {
-        mapController!.move(newLatLng, 15.7);
-      } else {
+      // NEW LOGIC: Only pan if the new position is NOT visible or near the edge.
+      // Use a margin of 0.2 (20%) of the map view size
+      if (!_isLatLngVisible(newLatLng, 0.2)) {
+        // Use the current zoom level for a natural pan
         mapController!.move(newLatLng, mapController!.camera.zoom);
       }
+      
+      // We removed the forceZoom parameter and logic to ensure a more natural zoom experience.
     }
 
     // UPDATE REACTIVE STATE (NO setState)
@@ -1076,12 +1126,22 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
                 )
               : const Center(child: CircularProgressIndicator()),
 
-          // Map Type Toggle Button (Unchanged)
-          Positioned(
+    
+  Positioned(
             top: 10,
             right: 10,
             child: Column(
               children: [
+                // Calendar/Date Selection Button
+                FloatingActionButton(
+                  onPressed: _showCalendarDialog,
+                  mini: true,
+                  heroTag: 'calendarButton',
+                  child: const Icon(Icons.calendar_month),
+                ),
+                const SizedBox(height: 10),
+                
+                // Map Type Toggle Button
                 FloatingActionButton(
                   onPressed: _toggleMapType,
                   mini: true,
@@ -1090,60 +1150,49 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
                     _mapType == OSMMapType.normal ? Icons.satellite : Icons.map,
                   ),
                 ),
-
                 const SizedBox(height: 10),
 
-                // NEW: Reset Rotation Button
+                // Reset Rotation Button
                 FloatingActionButton(
                   onPressed: _resetRotation,
                   mini: true,
                   heroTag: 'resetRotationButton',
-                  // Use an icon that clearly indicates rotation reset, like a compass
                   child: const Icon(Icons.explore),
                 ),
-
                 const SizedBox(height: 10),
-
-                FloatingActionButton(
-                  onPressed: _zoomIn,
-                  mini: true,
-                  heroTag: 'zoomInButton',
-                  child: const Icon(Icons.add),
-                ),
-
-                const SizedBox(height: 10),
-
-                FloatingActionButton(
-                  onPressed: _zoomOut,
-                  mini: true,
-                  heroTag: 'zoomOutButton',
-                  child: const Icon(Icons.remove),
+                
+                // Zoom In/Out are now grouped
+                Column(
+                  children: [
+                    FloatingActionButton(
+                      onPressed: _zoomIn,
+                      mini: true,
+                      heroTag: 'zoomInButton',
+                      child: const Icon(Icons.add),
+                    ),
+                    const SizedBox(height: 10),
+                    FloatingActionButton(
+                      onPressed: _zoomOut,
+                      mini: true,
+                      heroTag: 'zoomOutButton',
+                      child: const Icon(Icons.remove),
+                    ),
+                  ],
                 ),
               ],
             ),
           ),
 
-          // Calendar/Date Selection Button (Unchanged)
-          Positioned(
-            top: 10,
-            right: 70,
-            child: FloatingActionButton(
-              onPressed: _showCalendarDialog,
-              mini: true,
-              heroTag: 'calendarButton',
-              child: const Icon(Icons.calendar_month),
-            ),
-          ),
 
-          // Playback Control Panel
+          // Playback Control Panel (MODERN REDESIGN)
           Positioned(
             bottom: 20,
             left: 10,
             right: 10,
             child: Container(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.95),
+                color: Theme.of(context).cardColor, // Use theme color for better contrast
                 borderRadius: BorderRadius.circular(15),
                 boxShadow: [
                   BoxShadow(
@@ -1156,113 +1205,15 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Playback and Speed Controls Row (Unchanged)
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      IconButton(
-                        icon: Icon(
-                          _isPlaying ? Icons.pause : Icons.play_arrow,
-                          size: 30,
-                          color: _positions.isNotEmpty
-                              ? Colors.black
-                              : Colors.grey,
-                        ),
-                        onPressed: _positions.isNotEmpty
-                            ? _togglePlayback
-                            : null,
-                      ),
-
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade200,
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Row(
-                          children: speedOptions.map((speed) {
-                            final isSelected = _playbackSpeed == speed;
-                            return GestureDetector(
-                              onTap: _positions.isNotEmpty
-                                  ? () => _onSpeedSelected(speed)
-                                  : null,
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 4,
-                                ),
-                                child: Text(
-                                  speed == 0.5 ? '0.5x' : '${speed.toInt()}x',
-                                  style: TextStyle(
-                                    fontWeight: isSelected
-                                        ? FontWeight.bold
-                                        : FontWeight.normal,
-                                    color: isSelected
-                                        ? const Color(0xFF0F53FE)
-                                        : Colors.black87,
-                                  ),
-                                ),
-                              ),
-                            );
-                          }).toList(),
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 8),
-
-                  // Slider - Reads _playbackPositionRx and _movingPositionsRx
-                  SliderTheme(
-                    data: SliderTheme.of(context).copyWith(
-                      thumbColor: const Color(0xFF0F53FE),
-                      activeTrackColor: const Color(0xFF0F53FE),
-                      inactiveTrackColor: Colors.grey.withOpacity(0.5),
-                      overlayColor: const Color(0xFF0F53FE).withOpacity(0.2),
-                      trackHeight: 4.0,
-                    ),
-                    // Use Obx to read the reactive position for the slider's value
-                    child: Obx(
-                      () {
-                        // MODIFIED: Calculate maxSliderValue reactively inside Obx
-                        final maxSliderValue = _movingPositionsRx.isNotEmpty
-                            ? (_movingPositionsRx.length - 1).toDouble()
-                            : 0.0;
-
-                        return Slider(
-                          value: _playbackPositionRx.value,
-                          min: 0,
-                          max: maxSliderValue, // Use reactively calculated value
-                          onChanged: (newValue) {
-                            // Directly update the reactive position
-                            _playbackPositionRx.value = newValue;
-                            _playbackTimer?.cancel();
-                            _isPlaying = false;
-                            // Minimal update for smooth dragging
-                            _updatePlaybackMarker(animateCamera: false);
-                          },
-                          onChangeEnd: (newValue) {
-                            // Final update, animate camera to the new position
-                            _updatePlaybackMarker(animateCamera: true);
-                          },
-                        );
-                      },
-                    ),
-                  ),
-
-                  const SizedBox(height: 8),
-
-                  // Info Row - Reads _playbackPositionRx and _movingPositionsRx
+                  // 1. Info Row (Time, Speed, Distance) - Reactive
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    padding: const EdgeInsets.symmetric(horizontal: 0),
                     child: Obx(() {
                       // Calculate time and speed directly inside the reactive builder
                       String currentTime = 'N/A';
                       String currentSpeed = 'N/A';
 
-                      // MODIFIED: Use reactive list value and check
+                      // Use reactive list value and check
                       if (_movingPositionsRx.isNotEmpty) {
                         final index = _playbackPositionRx.value.toInt().clamp(
                           0,
@@ -1281,10 +1232,131 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
                           _buildInfoColumn('Time', currentTime),
                           _buildInfoColumn('Speed', currentSpeed),
                           // distanceText is safe as it doesn't access Rx variables
-                          _buildInfoColumn('Distance', distanceText),
+                          _buildInfoColumn('Total Distance', distanceText),
                         ],
                       );
                     }),
+                  ),
+                  
+                  const SizedBox(height: 10),
+                  
+                  // 2. Slider - Reads _playbackPositionRx and _movingPositionsRx
+                  SliderTheme(
+                    data: SliderTheme.of(context).copyWith(
+                      thumbColor: const Color(0xFF0F53FE),
+                      activeTrackColor: const Color(0xFF0F53FE),
+                      inactiveTrackColor: Colors.grey.withOpacity(0.5),
+                      overlayColor: const Color(0xFF0F53FE).withOpacity(0.2),
+                      trackHeight: 4.0,
+                    ),
+                    child: Obx(
+                      () {
+                        final maxSliderValue = _movingPositionsRx.isNotEmpty
+                            ? (_movingPositionsRx.length - 1).toDouble()
+                            : 0.0;
+
+                        return Slider(
+                          value: _playbackPositionRx.value,
+                          min: 0,
+                          max: maxSliderValue,
+                          onChanged: (newValue) {
+                            _playbackPositionRx.value = newValue;
+                            _playbackTimer?.cancel();
+                            _isPlaying = false;
+                            // Minimal update for smooth dragging
+                            _updatePlaybackMarker(animateCamera: false);
+                          },
+                          onChangeEnd: (newValue) {
+                            // Final update, animate camera to the new position
+                            _updatePlaybackMarker(animateCamera: true);
+                          },
+                        );
+                      },
+                    ),
+                  ),
+
+                  // 3. Playback and Speed Controls Row (Redesigned)
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      // Play/Pause Button - Larger and more prominent
+                      SizedBox(
+                        height: 48,
+                        child: FloatingActionButton(
+                          heroTag: 'playPauseButton',
+                          backgroundColor: const Color(0xFF0F53FE),
+                          onPressed: _positions.isNotEmpty ? _togglePlayback : null,
+                          child: Icon(
+                            _isPlaying ? Icons.pause : Icons.play_arrow,
+                            size: 30,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                      
+                      // Speed Selector - Segmented Control for clear options
+                      // NEW: Wrapped in Flexible to prevent overflow
+                      Flexible( 
+                        child: Container(
+                          height: 40,
+                          padding: const EdgeInsets.all(4.0),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade200,
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: Colors.grey.shade300)
+                          ),
+                          // FIX: Wrap the inner Row in SingleChildScrollView to handle overflow
+                          child: SingleChildScrollView( 
+                            scrollDirection: Axis.horizontal,
+                            // Use reverse to prioritize showing lower speeds (1x, 2x) first
+                            reverse: true, 
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min, // Keep minimal size for compactness
+                              children: speedOptions.map((speed) {
+                                final isSelected = _playbackSpeed == speed;
+                                return GestureDetector(
+                                  onTap: _positions.isNotEmpty
+                                      ? () => _onSpeedSelected(speed)
+                                      : null,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 4,
+                                    ),
+                                    margin: const EdgeInsets.symmetric(horizontal: 2),
+                                    decoration: BoxDecoration(
+                                      color: isSelected
+                                          ? Colors.white
+                                          : Colors.transparent,
+                                      borderRadius: BorderRadius.circular(16),
+                                      boxShadow: isSelected ? [
+                                        BoxShadow(
+                                          color: Colors.black.withOpacity(0.1),
+                                          blurRadius: 2,
+                                        ),
+                                      ] : null,
+                                    ),
+                                    child: Center(
+                                      child: Text(
+                                        speed == 0.5 ? '0.5x' : '${speed.toInt()}x',
+                                        style: TextStyle(
+                                          fontWeight: isSelected
+                                              ? FontWeight.bold
+                                              : FontWeight.normal,
+                                          color: isSelected
+                                              ? const Color(0xFF0F53FE)
+                                              : Colors.black87,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              }).toList(),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),

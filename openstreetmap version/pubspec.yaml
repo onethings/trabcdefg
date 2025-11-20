@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.0.0+1
+version: 1.0.3+1
 
 environment:
   sdk: ^3.8.1
@@ -65,6 +65,8 @@ dependencies:
   http_cache_hive_store: ^5.0.1
   url_launcher: ^6.3.2
   flutter_map_tile_caching: ^10.1.1 # Or the latest compatible version
+  excel: ^4.0.6
+  share_plus: ^12.0.1
 
 
 dev_dependencies:
@@ -219,6 +221,106 @@ flutter:
     - assets/images/marker_van_static.png
     - assets/images/marker_van_unknown.png
     - assets/images/route.png
+    - assets/images/p_1.png
+    - assets/images/p_2.png
+    - assets/images/p_3.png
+    - assets/images/p_4.png
+    - assets/images/p_5.png
+    - assets/images/p_6.png
+    - assets/images/p_7.png
+    - assets/images/p_8.png
+    - assets/images/p_9.png
+    - assets/images/p_10.png
+    - assets/images/p_11.png
+    - assets/images/p_12.png
+    - assets/images/p_13.png
+    - assets/images/p_14.png
+    - assets/images/p_15.png
+    - assets/images/p_16.png
+    - assets/images/p_17.png
+    - assets/images/p_18.png
+    - assets/images/p_19.png
+    - assets/images/p_20.png
+    - assets/images/p_21.png  
+    - assets/images/p_22.png
+    - assets/images/p_23.png
+    - assets/images/p_24.png
+    - assets/images/p_25.png
+    - assets/images/p_26.png
+    - assets/images/p_27.png
+    - assets/images/p_28.png
+    - assets/images/p_29.png
+    - assets/images/p_30.png
+    - assets/images/p_31.png
+    - assets/images/p_32.png
+    - assets/images/p_33.png
+    - assets/images/p_34.png
+    - assets/images/p_35.png
+    - assets/images/p_36.png
+    - assets/images/p_37.png
+    - assets/images/p_38.png
+    - assets/images/p_39.png
+    - assets/images/p_40.png
+    - assets/images/p_41.png
+    - assets/images/p_42.png
+    - assets/images/p_43.png
+    - assets/images/p_44.png
+    - assets/images/p_45.png
+    - assets/images/p_46.png
+    - assets/images/p_47.png
+    - assets/images/p_48.png
+    - assets/images/p_49.png
+    - assets/images/p_50.png
+    - assets/images/pg_1.png
+    - assets/images/pg_2.png
+    - assets/images/pg_3.png
+    - assets/images/pg_4.png
+    - assets/images/pg_5.png
+    - assets/images/pg_6.png
+    - assets/images/pg_7.png
+    - assets/images/pg_8.png
+    - assets/images/pg_9.png
+    - assets/images/pg_10.png
+    - assets/images/pg_11.png
+    - assets/images/pg_12.png
+    - assets/images/pg_13.png
+    - assets/images/pg_14.png
+    - assets/images/pg_15.png
+    - assets/images/pg_16.png
+    - assets/images/pg_17.png
+    - assets/images/pg_18.png
+    - assets/images/pg_19.png
+    - assets/images/pg_20.png
+    - assets/images/pg_21.png  
+    - assets/images/pg_22.png
+    - assets/images/pg_23.png
+    - assets/images/pg_24.png
+    - assets/images/pg_25.png
+    - assets/images/pg_26.png
+    - assets/images/pg_27.png
+    - assets/images/pg_28.png
+    - assets/images/pg_29.png
+    - assets/images/pg_30.png
+    - assets/images/pg_31.png
+    - assets/images/pg_32.png
+    - assets/images/pg_33.png
+    - assets/images/pg_34.png
+    - assets/images/pg_35.png
+    - assets/images/pg_36.png
+    - assets/images/pg_37.png
+    - assets/images/pg_38.png
+    - assets/images/pg_39.png
+    - assets/images/pg_40.png
+    - assets/images/pg_41.png
+    - assets/images/pg_42.png
+    - assets/images/pg_43.png
+    - assets/images/pg_44.png
+    - assets/images/pg_45.png
+    - assets/images/pg_46.png
+    - assets/images/pg_47.png
+    - assets/images/pg_48.png
+    - assets/images/pg_49.png
+    - assets/images/pg_50.png
   #   - images/a_dot_burr.jpeg
   #   - images/a_dot_ham.jpeg
 

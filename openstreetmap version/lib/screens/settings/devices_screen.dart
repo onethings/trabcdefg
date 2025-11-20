@@ -11,6 +11,8 @@ import 'package:trabcdefg/providers/traccar_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:get/get.dart';
 import 'package:trabcdefg/screens/settings/connections_screen.dart';
+import 'package:excel/excel.dart' as ExcelLib; // <-- New import for Excel
+import 'package:share_plus/share_plus.dart'; // <-- REQUIRED IMPORT
 
 class DevicesScreen extends StatefulWidget {
   const DevicesScreen({super.key});
@@ -137,12 +139,14 @@ class _DevicesScreenState extends State<DevicesScreen> {
       }
     }
   }
+  
+  // --- Export Functions ---
 
   void _exportDevicesToCsv() async {
     if (_allDevices.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('sharedNoData'.tr)));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('sharedNoData'.tr))
+      );
       return;
     }
 
@@ -154,13 +158,100 @@ class _DevicesScreenState extends State<DevicesScreen> {
     }
 
     String csv = const ListToCsvConverter().convert(rows);
-    final directory = await getApplicationDocumentsDirectory();
+    
+    // 1. Save file to temporary directory
+    final directory = await getTemporaryDirectory();
     final path = '${directory.path}/devices.csv';
     final file = File(path);
     await file.writeAsString(csv);
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('sharedSaved'.trParams({'path': path}))),
+    // 2. Share the file instead of just showing 'saved' toast
+    final xFile = XFile(path, mimeType: 'text/csv');
+    await Share.shareXFiles([xFile], text: 'Device list export'); 
+  }
+
+  void _exportDevicesToXlsx() async {
+    if (_allDevices.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('sharedNoData'.tr))
+      );
+      return;
+    }
+
+    // FIX: Helper function now correctly uses TextCellValue and ExcelLib prefix
+    ExcelLib.CellValue? cellFromDynamic(dynamic value) {
+      if (value == null) {
+        return null; 
+      }
+      return ExcelLib.TextCellValue(value.toString()); 
+    }
+
+    // FIX: Use ExcelLib.Excel
+    final excel = ExcelLib.Excel.createExcel();
+    final sheet = excel[excel.getDefaultSheet()!];
+    
+    // Set up the header row
+    final header = ['ID', 'sharedName'.tr, 'deviceIdentifier'.tr];
+    sheet.appendRow(header.map((e) => cellFromDynamic(e)).toList());
+
+    // Add device data rows
+    for (var device in _allDevices) {
+      final row = [device.id, device.name, device.uniqueId];
+      sheet.appendRow(row.map((e) => cellFromDynamic(e)).toList());
+    }
+
+    // 1. Save file to temporary directory
+    final directory = await getTemporaryDirectory();
+    final path = '${directory.path}/devices.xlsx';
+    final file = File(path);
+    
+    // Save the Excel file
+    final bytes = excel.encode();
+    if (bytes == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('errorGeneral'.trParams({'error': 'Failed to encode Excel file'}))),
+      );
+      return;
+    }
+    
+    await file.writeAsBytes(bytes);
+
+    // 2. Share the file instead of just showing 'saved' toast
+    final xFile = XFile(path, mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    await Share.shareXFiles([xFile], text: 'Device list export');
+  }
+
+  void _showExportFormatSelectionDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Export Format'.tr), 
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              ListTile(
+                leading: const Icon(Icons.description),
+                // UPDATE: Changed text to reflect 'Share/Save' action
+                title: const Text('CSV (.csv) - Share/Save'), 
+                onTap: () {
+                  Navigator.pop(context);
+                  _exportDevicesToCsv();
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.table_chart),
+                // UPDATE: Changed text to reflect 'Share/Save' action
+                title: const Text('Excel (.xlsx) - Share/Save'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _exportDevicesToXlsx();
+                },
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -192,7 +283,7 @@ class _DevicesScreenState extends State<DevicesScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.download),
-            onPressed: _exportDevicesToCsv,
+            onPressed: _showExportFormatSelectionDialog, // <-- Updated action
           ),
         ],
       ),
