@@ -7,7 +7,8 @@ import 'package:trabcdefg/services/websocket_service.dart';
 import 'package:trabcdefg/services/auth_service.dart';
 
 class TraccarProvider with ChangeNotifier {
-  final api.ApiClient apiClient;
+  // FIX: Removed 'final' to allow the client to be updated
+  api.ApiClient apiClient;
   final WebSocketService webSocketService;
   final AuthService authService;
   String? _sessionId;
@@ -27,6 +28,11 @@ class TraccarProvider with ChangeNotifier {
     required this.authService,
   }) {
     _listenToWebSocket();
+  }
+  
+  // FIX: Method to replace the entire ApiClient instance
+  void updateApiClient(api.ApiClient newClient) {
+    apiClient = newClient;
   }
 
   void _listenToWebSocket() {

@@ -196,7 +196,7 @@ void _updatePermission(String category, int itemId, bool isSelected) async {
         }
       } else {
         // Handle DELETE request (Delete permission)
-        final uri = Uri.parse('https://demo4.traccar.org/api/permissions');
+        final uri = Uri.parse('https://demo3.traccar.org/api/permissions');
         final response = await http.delete(
           uri,
           headers: {

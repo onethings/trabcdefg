@@ -43,15 +43,34 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     try {
+      final serverUrl = _serverUrlController.text;
+
+      // FIX: ApiClient.basePath is final. Create a NEW ApiClient instance 
+      // with the correct base path for the current login attempt.
+      final newApiClient = api.ApiClient(
+        basePath: '$serverUrl/api',
+      );
+      
+      // Save the current URL to SharedPreferences for persistence/next launch.
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('traccarServerUrl', serverUrl);
+
       final authService = context.read<AuthService>();
       final traccarProvider = context.read<TraccarProvider>();
+
+      // IMPORTANT: Update services with the new API client instance.
+      // You must ensure that the 'apiClient' field in AuthService and TraccarProvider
+      // is non-final (e.g., public field or using a setter/update method).
+      authService.apiClient = newApiClient;
+      traccarProvider.apiClient = newApiClient;
+
 
       await authService.login(
         _emailController.text,
         _passwordController.text,
       );
 
-      final prefs = await SharedPreferences.getInstance();
+     
       final jSessionId = prefs.getString('jSessionId');
       if (jSessionId != null) {
         traccarProvider.setSessionId(jSessionId);
@@ -92,7 +111,7 @@ class _LoginScreenState extends State<LoginScreen> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: Text('SelectServer'.tr),
+          title: Text('ServerUrl'.tr),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -100,8 +119,10 @@ class _LoginScreenState extends State<LoginScreen> {
                 ...AppConstants.officialServers.map((url) {
                   return ListTile(
                     title: Text(url),
-                    onTap: () {
+                    onTap: () async {
                       _serverUrlController.text = url;
+                      final prefs = await SharedPreferences.getInstance();
+                      await prefs.setString('traccarServerUrl', url);
                       Navigator.of(context).pop();
                     },
                   );
@@ -119,6 +140,8 @@ class _LoginScreenState extends State<LoginScreen> {
                         );
                         if (scannedUrl != null) {
                           _serverUrlController.text = scannedUrl;
+                          final prefs = await SharedPreferences.getInstance();
+                          await prefs.setString('traccarServerUrl', scannedUrl);
                           if (mounted) {
                             Navigator.of(context).pop();
                           }

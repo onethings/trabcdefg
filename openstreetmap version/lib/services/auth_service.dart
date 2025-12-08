@@ -4,9 +4,15 @@ import 'package:trabcdefg/src/generated_api/api.dart';
 import 'package:get/get.dart';
 
 class AuthService {
-  final ApiClient apiClient;
+  // FIX: Removed 'final' to allow the client to be updated
+  ApiClient apiClient;
 
   AuthService({required this.apiClient});
+  
+  // FIX: Method to replace the entire ApiClient instance
+  void updateApiClient(ApiClient newClient) {
+    apiClient = newClient;
+  }
 
   Future<void> login(String email, String password) async {
     try {

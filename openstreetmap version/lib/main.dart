@@ -66,7 +66,7 @@ class TraccarApp extends StatelessWidget {
         // Provide the API client with the initial server URL.
         Provider<api.ApiClient>(
           create: (_) => api.ApiClient(
-            basePath: initialUrl != null ? '$initialUrl/api' : 'https://demo4.traccar.org/api',
+            basePath: initialUrl != null ? '$initialUrl/api' : 'https://demo3.traccar.org/api',
           ),
         ),
         // Provide the authentication service.

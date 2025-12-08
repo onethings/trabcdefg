@@ -9,6 +9,7 @@ import 'package:trabcdefg/screens/livetracking_map_screen.dart'; // Import the n
 import 'package:get/get.dart';
 import 'package:timeago/timeago.dart' as timeago;
 
+
 class DeviceListScreen extends StatefulWidget {
   const DeviceListScreen({super.key});
 
