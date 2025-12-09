@@ -163,6 +163,10 @@ class TraccarProvider with ChangeNotifier {
 
     apiClient.addDefaultHeader('Cookie', 'JSESSIONID=$_sessionId');
 
+    // 🔥 FIX: Ensure the Accept header is set here, before fetching initial data.
+    // This resolves the cold-start PK error.
+    apiClient.addDefaultHeader('Accept', 'application/json');
+
     try {
       final sessionApi = api.SessionApi(apiClient);
       final fetchedUser = await sessionApi.sessionGet();
