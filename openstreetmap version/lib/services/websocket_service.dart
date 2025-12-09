@@ -26,7 +26,10 @@ class WebSocketService {
 
       _channel!.stream.listen(
         (message) {
-          _controller.add(json.decode(message));
+          // APPLY FIX: Prevent adding events after the stream controller is closed
+          if (!_controller.isClosed) {
+            _controller.add(json.decode(message));
+          }
         },
         onError: (error) {
           print('WebSocket error: $error');

@@ -258,4 +258,121 @@ class SessionApi {
     }
     return null;
   }
+
+  /// Generate Session Token
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [DateTime] expiration:
+  Future<Response> sessionTokenPostWithHttpInfo({
+    DateTime? expiration,
+  }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/session/token';
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>['application/x-www-form-urlencoded'];
+
+    if (expiration != null) {
+      formParams[r'expiration'] = parameterToString(expiration);
+    }
+
+    return apiClient.invokeAPI(
+      path,
+      'POST',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+    );
+  }
+
+  /// Generate Session Token
+  ///
+  /// Parameters:
+  ///
+  /// * [DateTime] expiration:
+  Future<String?> sessionTokenPost({
+    DateTime? expiration,
+  }) async {
+    final response = await sessionTokenPostWithHttpInfo(
+      expiration: expiration,
+    );
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty &&
+        response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(
+        await _decodeBodyBytes(response),
+        'String',
+      ) as String;
+    }
+    return null;
+  }
+
+  /// Revoke Session Token
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [String] token (required):
+  Future<Response> sessionTokenRevokePostWithHttpInfo(
+    String token,
+  ) async {
+    // ignore: prefer_const_declarations
+    final path = r'/session/token/revoke';
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>['application/x-www-form-urlencoded'];
+
+    if (token != null) {
+      formParams[r'token'] = parameterToString(token);
+    }
+
+    return apiClient.invokeAPI(
+      path,
+      'POST',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+    );
+  }
+
+  /// Revoke Session Token
+  ///
+  /// Parameters:
+  ///
+  /// * [String] token (required):
+  Future<void> sessionTokenRevokePost(
+    String token,
+  ) async {
+    final response = await sessionTokenRevokePostWithHttpInfo(
+      token,
+    );
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+  }
 }

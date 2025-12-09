@@ -123,10 +123,10 @@ class _MonthlyMileageScreenState extends State<MonthlyMileageScreen> {
       date = date.add(const Duration(days: 1))
     ) {
       final dayUtc = DateTime.utc(date.year, date.month, date.day);
-      final from = DateTime(date.year, date.month, date.day, 0, 0, 0);
-      final to = DateTime(date.year, date.month, date.day, 23, 59, 59);
+      final from = DateTime(date.year, date.month, date.day, 0, 0, 0).toUtc();
+      final to = DateTime(date.year, date.month, date.day, 23, 59, 59).toUtc();
       final String hiveKey =
-          '$_selectedDeviceId-${DateFormat('yyyy-MM-dd').format(dayUtc)}';
+          '$_selectedDeviceId\_${DateFormat('yyyy-MM-dd').format(dayUtc)}';
 
       try {
         final summary = await reportsApi.reportsSummaryGet(

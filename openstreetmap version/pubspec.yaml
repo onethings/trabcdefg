@@ -4,6 +4,30 @@ description: "A new Flutter project."
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 
+#Traccar api (6.11.1) 9/Dec/2025
+
+
+
+# You must manually modify the code for reportsSummaryGetWithHttpInfo in this file to add the type=json query parameter.
+
+# Important: Because this is an AUTO-GENERATED FILE, this change will be overwritten every time you run dart pub run build_runner build. You must remember to re-apply this fix after every code generation.
+
+# Here is the precise modification for reports_api.dart and a reminder of the other critical fixes needed across your codebase.
+
+
+# Change in lib/src/generated_api/api/reports_api.dart
+# Locate the reportsSummaryGetWithHttpInfo method and add the line queryParams.add(QueryParam('type', 'json')); after the from and to parameters are added.
+
+# queryParams.addAll(_queryParams('', 'from', from));
+#     queryParams.addAll(_queryParams('', 'to', to));
+
+#     // 🔥 CRITICAL FIX: Add the 'type=json' query parameter to force JSON response
+#     // This should finally resolve the 'PK' FormatException.
+#     queryParams.add(QueryParam('type', 'json')); 
+
+#     const contentTypes = <String>[];
+
+
 # The following defines the version and build number for your application.
 # A version number is three numbers separated by dots, like 1.2.43
 # followed by an optional build number separated by a +.
@@ -16,7 +40,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.0.3+1
+version: 1.0.6+4
 
 environment:
   sdk: ^3.8.1

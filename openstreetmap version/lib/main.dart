@@ -9,6 +9,7 @@ import 'package:trabcdefg/services/auth_service.dart';
 import 'package:trabcdefg/services/websocket_service.dart';
 import 'package:trabcdefg/screens/login_screen.dart';
 import 'package:trabcdefg/screens/main_screen.dart';
+import 'package:trabcdefg/constants.dart';
 import 'package:trabcdefg/screens/splash_screen.dart';
 import 'package:trabcdefg/screens/reports/combined_report_screen.dart';
 import 'package:trabcdefg/screens/reports/summary_report_screen.dart';
@@ -65,10 +66,20 @@ class TraccarApp extends StatelessWidget {
       providers: [
         // Provide the API client with the initial server URL.
         Provider<api.ApiClient>(
-          create: (_) => api.ApiClient(
-            basePath: initialUrl != null ? '$initialUrl/api' : 'https://demo3.traccar.org/api',
-          ),
-        ),
+  create: (_) {
+    final client = api.ApiClient(
+      basePath: initialUrl != null
+          ? '$initialUrl/api'
+          : AppConstants.traccarApiUrl, // Use constant default
+    );
+    
+    // CRITICAL FIX: Add the Accept header here to force JSON response from the server.
+    // This resolves the 'PK' (ZIP file) error.
+    client.addDefaultHeader('Accept', 'application/json'); 
+    
+    return client;
+  },
+),
         // Provide the authentication service.
         Provider<AuthService>(
           create: (context) => AuthService(

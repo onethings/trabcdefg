@@ -367,6 +367,10 @@ class ReportsApi {
     queryParams.addAll(_queryParams('', 'from', from));
     queryParams.addAll(_queryParams('', 'to', to));
 
+// 🔥 CRITICAL FIX: Add the 'type=json' query parameter to force JSON response
+    // This should finally resolve the 'PK' FormatException.
+    queryParams.add(QueryParam('type', 'json'));
+
     const contentTypes = <String>[];
 
     return apiClient.invokeAPI(
