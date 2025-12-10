@@ -18,6 +18,9 @@ import 'dart:typed_data';
 import 'package:hive/hive.dart'; // For Caching
 import 'package:http/http.dart' as http; // For Caching
 import 'dart:math'; // Required for math operations like pi/radians in marker rotation
+import 'dart:convert'; // ADDED for JSON decoding
+import 'package:timeago/timeago.dart' as timeago; // ADDED: Timeago import
+// REMOVED: import 'package:shared_preferences/shared_preferences.dart'; // Removed: Email now from API
 
 // ADDED: Enum for managing map types
 enum AppMapType {
@@ -145,6 +148,94 @@ class CachedNetworkImageProvider
 
 // --- End of Tile Caching Implementation ---
 
+
+// --- Reverse Geocoding Service Implementation using Hive and Nominatim ---
+class NominatimService {
+  late Box<String> _geocodeBox;
+  final http.Client _httpClient;
+  static const String boxName = 'geocodeCache';
+  static const String _nominatimBaseUrl =
+      'https://nominatim.openstreetmap.org/reverse';
+
+  NominatimService({required http.Client httpClient})
+      : _httpClient = httpClient;
+
+  Future<void> init() async {
+    _geocodeBox = await Hive.openBox<String>(boxName);
+  }
+
+  // Key is the rounded lat,lon string (e.g., '40.758,-73.985')
+  String _generateKey(double lat, double lon) {
+    // Rounding to 3 decimal places for ~100m precision
+    final roundedLat = lat.toStringAsFixed(3);
+    final roundedLon = lon.toStringAsFixed(3);
+    return '$roundedLat,$roundedLon';
+  }
+
+  // MODIFIED: Added appName and userEmail parameters
+  Future<String> fetchStreetName({
+    required double lat,
+    required double lon,
+    required String defaultValue,
+    required String langCode,
+    required String appName, // NEW: Device name (or app name)
+    required String userEmail, // NEW: User's email
+  }) async {
+    final key = _generateKey(lat, lon);
+
+    // 1. Check Hive Cache (always)
+    String? cachedAddress = _geocodeBox.get(key);
+    if (cachedAddress != null) {
+      return cachedAddress;
+    }
+
+    // 2. Fetch from Nominatim Network
+    // IMPORTANT: Note the use of the full lat/lon in the request, but the rounded key for caching.
+    final url = Uri.parse(
+        '$_nominatimBaseUrl?lat=$lat&lon=$lon&format=json&zoom=18&addressdetails=1');
+
+    try {
+      final response = await _httpClient.get(
+        url,
+        headers: {
+          // MODIFIED: Use dynamic appName and userEmail as requested
+          'User-Agent': '$appName/1.0 ($userEmail)', 
+          // NEW: Accept-Language header to request names in the user's language
+          'Accept-Language': langCode,
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> result =
+            json.decode(response.body) as Map<String, dynamic>;
+        
+        // Try to extract a specific street-level name (road, footway, cycleway)
+        final address = result['address'] as Map<String, dynamic>?;
+        final streetName = address?['road'] as String? ??
+            address?['footway'] as String? ??
+            address?['cycleway'] as String? ??
+            result['display_name'] as String? ?? // Fallback to full display name
+            defaultValue;
+
+        // 3. Save to Cache (Hive)
+        await _geocodeBox.put(key, streetName);
+        return streetName;
+      } else {
+        throw Exception(
+            'Failed to load address from Nominatim: ${response.statusCode}');
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Nominatim Service Error: $e');
+      }
+      return 'Geocoding Failed'.tr;
+    }
+  }
+}
+
+// --- End of Reverse Geocoding Service Implementation ---
+
+
 class LiveTrackingMapScreen extends StatefulWidget {
   final Device selectedDevice;
   const LiveTrackingMapScreen({super.key, required this.selectedDevice});
@@ -160,7 +251,6 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
   final List<latlong.LatLng> _polylineCoordinates = [];
   AppMapType _mapType = AppMapType.openStreetMap;
 
-  // FIXED: Declared missing member variable
   Position? _currentDevicePosition; 
   
   bool _isCameraLocked = true;
@@ -174,6 +264,17 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
   late _HiveTileProvider _tileProvider;
   bool _isCacheInitialized = false;
 
+  // ADDED: Geocoding Service variables
+  late NominatimService _nominatimService;
+  String _currentStreetName = 'Fetching Address...'.tr;
+  bool _isGeocodeServiceInitialized = false;
+
+  // NEW: Rate limiting for Nominatim network calls. Initialized to epoch to allow the first fetch.
+  DateTime _lastNominatimNetworkFetch = DateTime.fromMillisecondsSinceEpoch(0);
+
+  // NEW: Cached user email for the User-Agent header (fetched once from API)
+  String _cachedUserEmail = 'kevin16iwin@gmail.com';
+
   // --- Tile URLs for different map types ---
   static const String _osmUrlTemplate =
       'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
@@ -181,12 +282,144 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
       'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
   static const List<String> _osmSubdomains = ['a', 'b', 'c'];
 
+  // NEW: Function to register the timeago locale messages
+  void _setupTimeagoLocales() {
+    // The 'en' (English) and 'es' (Spanish) messages are loaded by default.
+    // Register other languages your app supports here by calling the class directly 
+    // from the timeago alias.
+    
+   // Afrikaans
+    // timeago.setLocaleMessages('af', timeago.AfMessages());
+    // Arabic
+    // 'ar' and 'ar_SA' often use the same message class if not distinguished
+    timeago.setLocaleMessages('ar', timeago.ArMessages());
+    // Azerbaijani
+    timeago.setLocaleMessages('az', timeago.AzMessages());
+    // Bulgarian
+    // timeago.setLocaleMessages('bg', timeago.BgMessages());
+    // Bengali
+    timeago.setLocaleMessages('bn', timeago.BnMessages());
+    // Catalan
+    timeago.setLocaleMessages('ca', timeago.CaMessages());
+    // Czech
+    timeago.setLocaleMessages('cs', timeago.CsMessages());
+    // Danish
+    timeago.setLocaleMessages('da', timeago.DaMessages());
+    // German (de)
+    timeago.setLocaleMessages('de', timeago.DeMessages());
+    // Greek
+    // timeago.setLocaleMessages('el', timeago.ElMessages());
+    // English Short (en_short is used for 'en_US' if en_USMessages is not available)
+    timeago.setLocaleMessages('en_short', timeago.EnShortMessages());
+    // Estonian
+    timeago.setLocaleMessages('et', timeago.EtMessages());
+    // Farsi / Persian
+    timeago.setLocaleMessages('fa', timeago.FaMessages());
+    // Finnish
+    timeago.setLocaleMessages('fi', timeago.FiMessages());
+    // French
+    timeago.setLocaleMessages('fr', timeago.FrMessages());
+    // Galician
+    // timeago.setLocaleMessages('gl', timeago.GlMessages());
+    // Hebrew
+    timeago.setLocaleMessages('he', timeago.HeMessages());
+    // Hindi
+    timeago.setLocaleMessages('hi', timeago.HiMessages());
+    // Croatian
+    timeago.setLocaleMessages('hr', timeago.HrMessages());
+    // Hungarian
+    timeago.setLocaleMessages('hu', timeago.HuMessages());
+    // Armenian
+    // timeago.setLocaleMessages('hy', timeago.HyMessages());
+    // Indonesian
+    timeago.setLocaleMessages('id', timeago.IdMessages());
+    // Italian
+    timeago.setLocaleMessages('it', timeago.ItMessages());
+    // Japanese
+    timeago.setLocaleMessages('ja', timeago.JaMessages());
+    // Georgian
+    // timeago.setLocaleMessages('ka', timeago.KaMessages());
+    // Kazakh
+    // timeago.setLocaleMessages('kk', timeago.KkMessages());
+    // Khmer
+    timeago.setLocaleMessages('km', timeago.KmMessages());
+    // Korean
+    timeago.setLocaleMessages('ko', timeago.KoMessages());
+    // Lao
+    // timeago.setLocaleMessages('lo', timeago.LoMessages());
+    // Lithuanian
+    // timeago.setLocaleMessages('lt', timeago.LtMessages());
+    // Latvian
+    timeago.setLocaleMessages('lv', timeago.LvMessages());
+    // Macedonian
+    // timeago.setLocaleMessages('mk', timeago.MkMessages());
+    // Malayalam
+    // timeago.setLocaleMessages('ml', timeago.MlMessages());
+    // Mongolian
+    timeago.setLocaleMessages('mn', timeago.MnMessages());
+    // Malay (ms)
+    // timeago.setLocaleMessages('ms', timeago.MsMessages());
+    // Norwegian Bokmål
+    // timeago.setLocaleMessages('nb', timeago.NbMessages());
+    // Nepali
+    // timeago.setLocaleMessages('ne', timeago.NeMessages());
+    // Dutch
+    timeago.setLocaleMessages('nl', timeago.NlMessages());
+    // Norwegian Nynorsk
+    // timeago.setLocaleMessages('nn', timeago.NnMessages());
+    // Polish
+    timeago.setLocaleMessages('pl', timeago.PlMessages());
+    // Portuguese (Brazil)
+    timeago.setLocaleMessages('pt_BR', timeago.PtBrMessages());
+    // Portuguese (Portugal/General)
+    // timeago.setLocaleMessages('pt', timeago.PtMessages());
+    // Romanian
+    timeago.setLocaleMessages('ro', timeago.RoMessages());
+    // Russian
+    timeago.setLocaleMessages('ru', timeago.RuMessages());
+    // Sinhala
+    // timeago.setLocaleMessages('si', timeago.SiMessages());
+    // Slovak
+    // timeago.setLocaleMessages('sk', timeago.SkMessages());
+    // Slovenian
+    // timeago.setLocaleMessages('sl', timeago.SlMessages());
+    // Albanian
+    // timeago.setLocaleMessages('sq', timeago.SqMessages());
+    // Serbian
+    timeago.setLocaleMessages('sr', timeago.SrMessages());
+    // Swedish
+    timeago.setLocaleMessages('sv', timeago.SvMessages());
+    // Swahili
+    // timeago.setLocaleMessages('sw', timeago.SwMessages());
+    // Tamil
+    timeago.setLocaleMessages('ta', timeago.TaMessages());
+    // Thai
+    timeago.setLocaleMessages('th', timeago.ThMessages());
+    // Turkmen
+    timeago.setLocaleMessages('tk', timeago.TkMessages());
+    // Turkish
+    timeago.setLocaleMessages('tr', timeago.TrMessages());
+    // Ukrainian
+    timeago.setLocaleMessages('uk', timeago.UkMessages());
+    // Uzbek
+    // timeago.setLocaleMessages('uz', timeago.UzMessages());
+    // Vietnamese
+    timeago.setLocaleMessages('vi', timeago.ViMessages());
+    // Simplified Chinese
+    timeago.setLocaleMessages('zh', timeago.ZhMessages());
+    // Traditional Chinese
+    // timeago.setLocaleMessages('zh_TW', timeago.ZhTwMessages());
+  }
+
 
   @override
   void initState() {
     super.initState();
 
-    // Initialize cache service and then the tile provider
+        // NEW: Register locales once when the state is initialized
+    _setupTimeagoLocales(); 
+
+    // Initialize Tile Cache Service
     _cacheService.init().then((_) {
       _tileProvider = _HiveTileProvider(
         cacheService: _cacheService,
@@ -198,15 +431,34 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
         });
       }
     });
+    
+    // ADDED: Initialize Geocoding Service
+    _nominatimService = NominatimService(httpClient: _httpClient);
+    _nominatimService.init().then((_) {
+      if (mounted) {
+        setState(() {
+          _isGeocodeServiceInitialized = true;
+        });
+        
+        // **FIX: Trigger initial fetch only when service is ready**
+        if (_currentDevicePosition?.latitude != null &&
+            _currentDevicePosition?.longitude != null) {
+          _fetchStreetName(
+            _currentDevicePosition!.latitude!.toDouble(),
+            _currentDevicePosition!.longitude!.toDouble(),
+          );
+        }
+      }
+    });
 
     _loadMarkerIcons(); // Re-called to set the flag
+    _fetchUserEmailFromApi(); // NEW: Fetch email right away
 
-    // Initial position lookup
+    // Initial position lookup (only sets the variable, no fetch)
     final traccarProvider = Provider.of<TraccarProvider>(
       context,
       listen: false,
     );
-    // This line initializes the variable that was causing the error
     _currentDevicePosition = traccarProvider.positions.firstWhere(
       (pos) => pos.deviceId == widget.selectedDevice.id,
       orElse: () => Position(),
@@ -231,6 +483,13 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
     if (newPosition.id != _currentDevicePosition?.id) {
       _currentDevicePosition = newPosition;
       _updateMap(newPosition);
+      // ADDED: Fetch street name when position changes
+      if (newPosition.latitude != null && newPosition.longitude != null) {
+        _fetchStreetName(
+          newPosition.latitude!.toDouble(), // Ensure double
+          newPosition.longitude!.toDouble(), // Ensure double
+        );
+      }
     }
   }
 
@@ -238,6 +497,36 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
   void dispose() {
     _httpClient.close();
     super.dispose();
+  }
+  
+  // NEW: Dedicated method to fetch user email using the API client
+  Future<void> _fetchUserEmailFromApi() async {
+    try {
+      final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
+      // Use the public apiClient field from the provider
+      final sessionApi = SessionApi(traccarProvider.apiClient); 
+      
+      final user = await sessionApi.sessionGet();
+      
+      // FIX: Corrected the null access issue on 'user' and 'user.email'
+      if (mounted) {
+        // Use null-aware operator to safely access email, keeping the old email if the new one is null
+        _cachedUserEmail = user?.email ?? _cachedUserEmail; 
+        
+        if (kDebugMode && user?.email != null) {
+          print('Successfully fetched user email: $_cachedUserEmail');
+        }
+      }
+    } on ApiException catch (e) {
+      if (kDebugMode) {
+        print('Failed to fetch user email from API: ${e.message}');
+      }
+      // Keep the fallback 'anonymous@example.com'
+    } catch (e) {
+       if (kDebugMode) {
+        print('Unexpected error fetching user email: $e');
+      }
+    }
   }
 
   // REINTRODUCED/MODIFIED: Marker icon loading logic
@@ -254,6 +543,66 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
     }
   }
 
+  // MODIFIED: Logic now retrieves user email from the cached variable
+  Future<void> _fetchStreetName(double lat, double lon) async {
+    if (!_isGeocodeServiceInitialized) return;
+
+    final now = DateTime.now();
+    const Duration minimumInterval = Duration(seconds: 30);
+    
+    // 1. Check Rate Limit
+    if (now.difference(_lastNominatimNetworkFetch) < minimumInterval) {
+      // Rate-limited: check cache for immediate update before skipping network call
+      final key = _nominatimService._generateKey(lat, lon);
+      // Accessing private member _geocodeBox is necessary here as it is internal to the package/file
+      final cachedAddress = await _nominatimService._geocodeBox.get(key);
+      
+      if (cachedAddress != null && mounted && cachedAddress != _currentStreetName) {
+          setState(() {
+            _currentStreetName = cachedAddress;
+          });
+      }
+      // Skip network request
+      return;
+    }
+
+    // 2. Rate limit passed: Update timestamp *before* making the network call
+    _lastNominatimNetworkFetch = now;
+    
+    // Get the current locale code from GetX (e.g., 'en', 'es_419')
+    final String langCode = Get.locale?.toLanguageTag() ?? 'en'; 
+
+    // Use the cached email fetched from the Traccar API
+    final userEmail = _cachedUserEmail; 
+    final deviceName = widget.selectedDevice.name ?? 'TraccarApp'; 
+    
+    // Use a static, application-wide identifier for Nominatim requests
+    const String applicationIdentifier = 'TrabcdefgMobileApp'; 
+
+    final String userAgentString = '$applicationIdentifier/1.0 ($userEmail)';
+    
+    if (kDebugMode) {
+      print('Nominatim Request User-Agent: $userAgentString');
+    }
+
+    // 3. Call service
+    final resultAddress = await _nominatimService.fetchStreetName(
+      lat: lat,
+      lon: lon,
+      defaultValue: 'Address not found'.tr,
+      langCode: langCode,
+      appName: applicationIdentifier, // Pass the static identifier
+      userEmail: userEmail,           // Pass dynamic user email
+    );
+
+    // 4. Update state with result
+    if (mounted && resultAddress != _currentStreetName) {
+      setState(() {
+        _currentStreetName = resultAddress;
+      });
+    }
+  }
+
   String _getTranslatedStatus(String? status) {
     if (status == null) return 'N/A';
 
@@ -261,7 +610,6 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
       case 'online':
         return 'deviceStatusOnline'.tr;
       case 'offline':
-        return 'deviceStatusOffline'.tr;
       case 'idle':
         return 'alarmIdle'.tr;
       case 'static':
@@ -283,8 +631,8 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
     }
 
     final newPosition = latlong.LatLng(
-      currentPosition.latitude!.toDouble(),
-      currentPosition.longitude!.toDouble(),
+      currentPosition.latitude!.toDouble(), // Ensure double
+      currentPosition.longitude!.toDouble(), // Ensure double
     );
 
     setState(() {
@@ -353,8 +701,8 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
     }
 
     final position = latlong.LatLng(
-      lastPosition.latitude!.toDouble(),
-      lastPosition.longitude!.toDouble(),
+      lastPosition.latitude!.toDouble(), // Ensure double
+      lastPosition.longitude!.toDouble(), // Ensure double
     );
 
     setState(() {
@@ -410,21 +758,29 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
           latlong.LatLng initialLatLng = const latlong.LatLng(0, 0);
           if (lastPosition.latitude != null && lastPosition.longitude != null) {
             initialLatLng = latlong.LatLng(
-              lastPosition.latitude!.toDouble(),
-              lastPosition.longitude!.toDouble(),
+              lastPosition.latitude!.toDouble(), // Ensure double
+              lastPosition.longitude!.toDouble(), // Ensure double
             );
           }
 
           // Show loading spinner if cache, icons, or initial data is not ready
           if (!_isCacheInitialized ||
               !_customIconsLoaded ||
+              !_isGeocodeServiceInitialized || // ADDED: Check geocode service initialization
               (traccarProvider.isLoading && _polylineCoordinates.isEmpty)) {
             return const Center(child: CircularProgressIndicator());
           }
 
-          // Force an initial update call in case state was ready but build was called first
+          // Force an update call after build, safe since the initial fetch is linked to init
           WidgetsBinding.instance.addPostFrameCallback((_) {
             _updateMap(lastPosition);
+            // Re-call fetch on subsequent builds if position exists, but it's now guarded by the 30-second limit
+            if (lastPosition.latitude != null && lastPosition.longitude != null) {
+              _fetchStreetName(
+                lastPosition.latitude!.toDouble(), 
+                lastPosition.longitude!.toDouble(),
+              );
+            }
           });
 
 
@@ -521,6 +877,16 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
           widget.selectedDevice.status,
         );
 
+        // START OF USER UPDATE
+        // Get time ago string, checking for null lastUpdate
+        final timeAgoString = widget.selectedDevice.lastUpdate != null
+            ? ' • ${timeago.format(widget.selectedDevice.lastUpdate!,
+                        // Use Get.locale?.languageCode to get the active language code
+                        // Default to 'en' if Get.locale is null
+                        locale: Get.locale?.languageCode ?? 'en',)}'
+            : '';
+        // END OF USER UPDATE
+
         return Container(
           decoration: const BoxDecoration(
             color: Colors.white,
@@ -543,13 +909,39 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
                 style: Theme.of(context).textTheme.headlineSmall,
               ),
               const SizedBox(height: 8.0),
-              Text('deviceStatus'.tr + ': $translatedStatus'),
+              // MODIFIED LINE: Added timeAgoString
+              Text('deviceStatus'.tr + ': $translatedStatus$timeAgoString'),
               const SizedBox(height: 4.0),
               Text(
                 'deviceLastUpdate'.tr +
-                    ': ${lastPosition.deviceTime?.toLocal() ?? 'N/A'}',
+                    ': ${lastPosition.deviceTime?.toLocal().toString().split('.').first ?? 'N/A'}',
               ),
               Text('positionSpeed'.tr + ': $speedKmh ' + 'sharedKmh'.tr),
+              // ADDED: Street Name below speed with precision note
+              Row( 
+                crossAxisAlignment: CrossAxisAlignment.start, // Align items to the top
+                children: [
+                  // FIX: Wrap the Text widget in Expanded to force it to use available space and wrap.
+                  Expanded( 
+                    child: Text(
+                      'positionAddress'.tr + ': $_currentStreetName',
+                      // Optional: Set maxLines to 2 for a cleaner look, or leave it off to wrap infinitely.
+                      maxLines: 2, 
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  // The Tooltip/Icon remains outside the Expanded to preserve its size.
+                  Tooltip(
+                    message: 'addressPrecisionNote'.tr, 
+                    child: Icon(
+                      Icons.info_outline,
+                      size: 14.0,
+                      color: Theme.of(context).textTheme.bodySmall?.color?.withOpacity(0.6),
+                    ),
+                  ),
+                ],
+              ),
               const Divider(),
               Text(
                 'deviceSecondaryInfo'.tr + ':',

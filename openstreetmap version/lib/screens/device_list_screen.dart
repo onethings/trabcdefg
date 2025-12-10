@@ -8,6 +8,9 @@ import 'package:trabcdefg/src/generated_api/api.dart';
 import 'package:trabcdefg/screens/livetracking_map_screen.dart'; // Import the new screen name
 import 'package:get/get.dart';
 import 'package:timeago/timeago.dart' as timeago;
+// REMOVED: All problematic 'package:timeago/src/messages/...' imports.
+// The message classes (FrMessages, ZhMessages, etc.) are available 
+// directly via the 'timeago' import.
 
 
 class DeviceListScreen extends StatefulWidget {
@@ -22,9 +25,142 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
   String _searchQuery = '';
   int _selectedStatus = 0; // 0: All, 1: Online, 2: Offline, 3: Unknown
 
+  // NEW: Function to register the timeago locale messages
+  void _setupTimeagoLocales() {
+    // The 'en' (English) and 'es' (Spanish) messages are loaded by default.
+    // Register other languages your app supports here by calling the class directly 
+    // from the timeago alias.
+    
+   // Afrikaans
+    // timeago.setLocaleMessages('af', timeago.AfMessages());
+    // Arabic
+    // 'ar' and 'ar_SA' often use the same message class if not distinguished
+    timeago.setLocaleMessages('ar', timeago.ArMessages());
+    // Azerbaijani
+    timeago.setLocaleMessages('az', timeago.AzMessages());
+    // Bulgarian
+    // timeago.setLocaleMessages('bg', timeago.BgMessages());
+    // Bengali
+    timeago.setLocaleMessages('bn', timeago.BnMessages());
+    // Catalan
+    timeago.setLocaleMessages('ca', timeago.CaMessages());
+    // Czech
+    timeago.setLocaleMessages('cs', timeago.CsMessages());
+    // Danish
+    timeago.setLocaleMessages('da', timeago.DaMessages());
+    // German (de)
+    timeago.setLocaleMessages('de', timeago.DeMessages());
+    // Greek
+    // timeago.setLocaleMessages('el', timeago.ElMessages());
+    // English Short (en_short is used for 'en_US' if en_USMessages is not available)
+    timeago.setLocaleMessages('en_short', timeago.EnShortMessages());
+    // Estonian
+    timeago.setLocaleMessages('et', timeago.EtMessages());
+    // Farsi / Persian
+    timeago.setLocaleMessages('fa', timeago.FaMessages());
+    // Finnish
+    timeago.setLocaleMessages('fi', timeago.FiMessages());
+    // French
+    timeago.setLocaleMessages('fr', timeago.FrMessages());
+    // Galician
+    // timeago.setLocaleMessages('gl', timeago.GlMessages());
+    // Hebrew
+    timeago.setLocaleMessages('he', timeago.HeMessages());
+    // Hindi
+    timeago.setLocaleMessages('hi', timeago.HiMessages());
+    // Croatian
+    timeago.setLocaleMessages('hr', timeago.HrMessages());
+    // Hungarian
+    timeago.setLocaleMessages('hu', timeago.HuMessages());
+    // Armenian
+    // timeago.setLocaleMessages('hy', timeago.HyMessages());
+    // Indonesian
+    timeago.setLocaleMessages('id', timeago.IdMessages());
+    // Italian
+    timeago.setLocaleMessages('it', timeago.ItMessages());
+    // Japanese
+    timeago.setLocaleMessages('ja', timeago.JaMessages());
+    // Georgian
+    // timeago.setLocaleMessages('ka', timeago.KaMessages());
+    // Kazakh
+    // timeago.setLocaleMessages('kk', timeago.KkMessages());
+    // Khmer
+    timeago.setLocaleMessages('km', timeago.KmMessages());
+    // Korean
+    timeago.setLocaleMessages('ko', timeago.KoMessages());
+    // Lao
+    // timeago.setLocaleMessages('lo', timeago.LoMessages());
+    // Lithuanian
+    // timeago.setLocaleMessages('lt', timeago.LtMessages());
+    // Latvian
+    timeago.setLocaleMessages('lv', timeago.LvMessages());
+    // Macedonian
+    // timeago.setLocaleMessages('mk', timeago.MkMessages());
+    // Malayalam
+    // timeago.setLocaleMessages('ml', timeago.MlMessages());
+    // Mongolian
+    timeago.setLocaleMessages('mn', timeago.MnMessages());
+    // Malay (ms)
+    // timeago.setLocaleMessages('ms', timeago.MsMessages());
+    // Norwegian Bokmål
+    // timeago.setLocaleMessages('nb', timeago.NbMessages());
+    // Nepali
+    // timeago.setLocaleMessages('ne', timeago.NeMessages());
+    // Dutch
+    timeago.setLocaleMessages('nl', timeago.NlMessages());
+    // Norwegian Nynorsk
+    // timeago.setLocaleMessages('nn', timeago.NnMessages());
+    // Polish
+    timeago.setLocaleMessages('pl', timeago.PlMessages());
+    // Portuguese (Brazil)
+    timeago.setLocaleMessages('pt_BR', timeago.PtBrMessages());
+    // Portuguese (Portugal/General)
+    // timeago.setLocaleMessages('pt', timeago.PtMessages());
+    // Romanian
+    timeago.setLocaleMessages('ro', timeago.RoMessages());
+    // Russian
+    timeago.setLocaleMessages('ru', timeago.RuMessages());
+    // Sinhala
+    // timeago.setLocaleMessages('si', timeago.SiMessages());
+    // Slovak
+    // timeago.setLocaleMessages('sk', timeago.SkMessages());
+    // Slovenian
+    // timeago.setLocaleMessages('sl', timeago.SlMessages());
+    // Albanian
+    // timeago.setLocaleMessages('sq', timeago.SqMessages());
+    // Serbian
+    timeago.setLocaleMessages('sr', timeago.SrMessages());
+    // Swedish
+    timeago.setLocaleMessages('sv', timeago.SvMessages());
+    // Swahili
+    // timeago.setLocaleMessages('sw', timeago.SwMessages());
+    // Tamil
+    timeago.setLocaleMessages('ta', timeago.TaMessages());
+    // Thai
+    timeago.setLocaleMessages('th', timeago.ThMessages());
+    // Turkmen
+    timeago.setLocaleMessages('tk', timeago.TkMessages());
+    // Turkish
+    timeago.setLocaleMessages('tr', timeago.TrMessages());
+    // Ukrainian
+    timeago.setLocaleMessages('uk', timeago.UkMessages());
+    // Uzbek
+    // timeago.setLocaleMessages('uz', timeago.UzMessages());
+    // Vietnamese
+    timeago.setLocaleMessages('vi', timeago.ViMessages());
+    // Simplified Chinese
+    timeago.setLocaleMessages('zh', timeago.ZhMessages());
+    // Traditional Chinese
+    // timeago.setLocaleMessages('zh_TW', timeago.ZhTwMessages());
+  }
+  
   @override
   void initState() {
     super.initState();
+    
+    // NEW: Register locales once when the state is initialized
+    _setupTimeagoLocales(); 
+    
     _searchController.addListener(() {
       setState(() {
         _searchQuery = _searchController.text;
@@ -149,7 +285,13 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
                 title: Text(device.name ?? 'sharedUnknown'.tr),
                 subtitle: Text(
                   '${_getStatusTextForDisplay(device.status)}'
-                  '${device.lastUpdate != null ? ' • ${timeago.format(device.lastUpdate!)}' : ''}',
+                  // MODIFIED: Pass the current locale from GetX to timeago.format()
+                  '${device.lastUpdate != null ? ' • ${timeago.format(
+                        device.lastUpdate!,
+                        // Use Get.locale?.languageCode to get the active language code
+                        // Default to 'en' if Get.locale is null
+                        locale: Get.locale?.languageCode ?? 'en',
+                      )}' : ''}',
                 ),
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,

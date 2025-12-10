@@ -1,122 +1,291 @@
-// lib/main.dart
-// Main entry point for the TracDefg Flutter application.
+// lib/screens/device_list_screen.dart
+// DeviceListScreen with Search, Status Filtering, and Enhanced Device Info
+
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
 import 'package:provider/provider.dart';
-import 'package:trabcdefg/src/generated_api/api.dart' as api;
 import 'package:trabcdefg/providers/traccar_provider.dart';
-import 'package:trabcdefg/services/auth_service.dart';
-import 'package:trabcdefg/services/websocket_service.dart';
-import 'package:trabcdefg/screens/login_screen.dart';
-import 'package:trabcdefg/screens/main_screen.dart';
-import 'package:trabcdefg/screens/splash_screen.dart';
-import 'package:trabcdefg/screens/reports/combined_report_screen.dart';
-import 'package:trabcdefg/screens/reports/summary_report_screen.dart';
-import 'package:trabcdefg/screens/reports/stops_report_screen.dart';
-import 'package:trabcdefg/screens/reports/route_report_screen.dart';
-import 'package:trabcdefg/screens/reports/trips_report_screen.dart';
-import 'package:trabcdefg/screens/reports/events_report_screen.dart';
-import 'package:hive_flutter/hive_flutter.dart';
-import 'package:trabcdefg/models/report_summary_hive.dart';
-import 'package:trabcdefg/screens/register_screen.dart';
-import 'package:trabcdefg/screens/reset_password_screen.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:trabcdefg/services/localization_service.dart';
-import 'package:intl/date_symbol_data_local.dart';
-import 'package:trabcdefg/models/route_positions_hive.dart';
+import 'package:trabcdefg/src/generated_api/api.dart';
+import 'package:trabcdefg/screens/livetracking_map_screen.dart'; // Import the new screen name
+import 'package:get/get.dart';
+import 'package:timeago/timeago.dart' as timeago;
 
-void main() async {
-  // Ensure that Flutter is initialized before running the app.
-  WidgetsFlutterBinding.ensureInitialized();
-  
-  // Initialize Hive for local data storage.
-  await Hive.initFlutter();
-  Hive.registerAdapter(ReportSummaryHiveAdapter());
 
-  Hive.registerAdapter(RoutePositionsHiveAdapter());
-  
-  // Load the saved Traccar server URL and the language code from shared preferences.
-  final prefs = await SharedPreferences.getInstance();
-  final savedUrl = prefs.getString('traccarServerUrl');
-  final savedLanguageCode = prefs.getString('saved_language_code');
+class DeviceListScreen extends StatefulWidget {
+  const DeviceListScreen({super.key});
 
-  await initializeDateFormatting();
-  
-  runApp(TraccarApp(
-    initialUrl: savedUrl,
-    initialLanguageCode: savedLanguageCode,
-  ));
+  @override
+  State<DeviceListScreen> createState() => _DeviceListScreenState();
 }
 
-class TraccarApp extends StatelessWidget {
-  final String? initialUrl;
-  final String? initialLanguageCode;
+class _DeviceListScreenState extends State<DeviceListScreen> {
+  final _searchController = TextEditingController();
+  String _searchQuery = '';
+  int _selectedStatus = 0; // 0: All, 1: Online, 2: Offline, 3: Unknown
 
-  const TraccarApp({
-    super.key,
-    this.initialUrl,
-    this.initialLanguageCode,
-  });
+  @override
+  void initState() {
+    super.initState();
+    _searchController.addListener(() {
+      setState(() {
+        _searchQuery = _searchController.text;
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    // Use MultiProvider to provide multiple services to the widget tree.
-    return MultiProvider(
-      providers: [
-        // Provide the API client with the initial server URL.
-        Provider<api.ApiClient>(
-          create: (_) => api.ApiClient(
-            basePath: initialUrl != null ? '$initialUrl/api' : 'https://demo3.traccar.org/api',
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('deviceTitle'.tr),
+        automaticallyImplyLeading: false,
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(100.0),
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: TextField(
+                  controller: _searchController,
+                  decoration: InputDecoration(
+                    hintText: 'sharedSearchDevices'.tr,
+                    prefixIcon: const Icon(Icons.search),
+                    border: const OutlineInputBorder(
+                      borderRadius: BorderRadius.all(Radius.circular(25.0)),
+                    ),
+                  ),
+                ),
+              ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  _buildStatusTab('deviceStatusAll'.tr, 0),
+                  _buildStatusTab('deviceStatusOnline'.tr, 1),
+                  _buildStatusTab('deviceStatusOffline'.tr, 2),
+                  _buildStatusTab('deviceStatusUnknown'.tr, 3),
+                ],
+              ),
+            ],
           ),
         ),
-        // Provide the authentication service.
-        Provider<AuthService>(
-          create: (context) => AuthService(
-            apiClient: context.read<api.ApiClient>(),
-          ),
-        ),
-        // Provide the WebSocket service.
-        Provider<WebSocketService>(
-          create: (_) => WebSocketService(),
-        ),
-        // Provide the main TraccarProvider for state management.
-        ChangeNotifierProvider<TraccarProvider>(
-          create: (context) => TraccarProvider(
-            apiClient: context.read<api.ApiClient>(),
-            webSocketService: context.read<WebSocketService>(),
-            authService: context.read<AuthService>(),
-          ),
-        ),
-      ],
-      // Changed MaterialApp to GetMaterialApp to correctly handle GetX localization.
-      child: GetMaterialApp(
-        title: 'Trabcdefg',
-        theme: ThemeData(
-          primarySwatch: Colors.blue,
-        ),
-        // Configure localization for the app using GetX properties.
-        translations: LocalizationService(),
-        locale: initialLanguageCode != null
-            ? LocalizationService.getLocaleFromLang(initialLanguageCode!)
-            : Get.deviceLocale ?? LocalizationService.fallbackLocale,
-        fallbackLocale: LocalizationService.fallbackLocale,
-        
-        // Define all the application routes.
-        initialRoute: '/',
-        routes: {
-          '/': (context) => const SplashScreen(),
-          '/login': (context) => const LoginScreen(),
-          '/main': (context) => const MainScreen(),
-          '/register': (context) => const RegisterScreen(),
-          '/reset-password': (context) => const ResetPasswordScreen(),
-          '/reports/combined': (context) => const CombinedReportScreen(),
-          '/reports/summary': (context) => const SummaryReportScreen(),
-          '/reports/stops': (context) => const StopsReportScreen(),
-          '/reports/route': (context) => const RouteReportScreen(),
-          '/reports/trips': (context) => const TripsReportScreen(),
-          '/reports/events': (context) => const EventsReportScreen(),
+      ),
+      body: Consumer<TraccarProvider>(
+        builder: (context, traccarProvider, child) {
+          final allDevices = traccarProvider.devices;
+          final filteredDevices = allDevices.where((device) {
+            final matchesQuery = (device.name ?? 'unknown')
+                .toLowerCase()
+                .contains(_searchQuery.toLowerCase());
+            final matchesStatus =
+                _selectedStatus == 0 ||
+                _getStatusText(_selectedStatus) == (device.status ?? 'unknown');
+            return matchesQuery && matchesStatus;
+          }).toList();
+
+          if (traccarProvider.isLoading) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          if (filteredDevices.isEmpty) {
+            return Center(child: Text('sharedNoData'.tr));
+          }
+
+          return ListView.builder(
+            itemCount: filteredDevices.length,
+            itemBuilder: (context, index) {
+              final device = filteredDevices[index];
+              return ListTile(
+                onTap: () {
+                  // Navigate to the LiveTrackingMapScreen
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) =>
+                          LiveTrackingMapScreen(selectedDevice: device),
+                    ),
+                  );
+                },
+                leading: Consumer<TraccarProvider>(
+                  builder: (context, traccarProvider, child) {
+                    final position = traccarProvider.positions.firstWhereOrNull(
+                      (p) => p.id == device.positionId,
+                    );
+
+                    // Check if a valid position and speed exist
+                    if (position != null && position.speed != null) {
+                      // Convert speed from knots to km/h for display
+                      final speedKmh = (position.speed! * 1.852)
+                          .toStringAsFixed(0);
+
+                      return Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          CircleAvatar(
+                            backgroundColor: _getStatusColor(device.status),
+                            radius: 20, // Adjust size as needed
+                          ),
+                          Text(
+                            speedKmh,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      );
+                    } else {
+                      // Fallback to a simple CircleAvatar if no speed is available
+                      return CircleAvatar(
+                        backgroundColor: _getStatusColor(device.status),
+                      );
+                    }
+                  },
+                ),
+                title: Text(device.name ?? 'sharedUnknown'.tr),
+                subtitle: Text(
+                  '${_getStatusTextForDisplay(device.status)}'
+                  '${device.lastUpdate != null ? ' • ${timeago.format(device.lastUpdate!)}' : ''}',
+                ),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (device.positionId != null)
+                      Consumer<TraccarProvider>(
+                        builder: (context, traccarProvider, child) {
+                          final position = traccarProvider.positions
+                              .firstWhereOrNull(
+                                (p) => p.id == device.positionId,
+                              );
+
+                          if (position?.attributes != null) {
+                            final attributes = position!.attributes as Map;
+
+                            return Row(
+                              children: [
+                                // Ignition Icon
+                                if (attributes['ignition'] != null)
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 4.0,
+                                    ),
+                                    child: Icon(
+                                      Icons.key,
+                                      color: attributes['ignition']
+                                          ? Colors.green
+                                          : Colors.red,
+                                    ),
+                                  ),
+
+                                // Battery Icon with Percentage
+                                if (attributes['batteryLevel'] != null)
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 4.0,
+                                    ),
+                                    child: Stack(
+                                      alignment: Alignment.center,
+                                      children: [
+                                        Icon(
+                                          Icons.battery_full,
+                                          color: _getBatteryColor(
+                                            (attributes['batteryLevel'] as int)
+                                                .toDouble(), // Cast to double
+                                          ),
+                                        ),
+                                        Text(
+                                          '${attributes['batteryLevel']}',
+                                          style: const TextStyle(
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                              ],
+                            );
+                          }
+                          return const SizedBox.shrink();
+                        },
+                      ),
+                  ],
+                ),
+              );
+            },
+          );
         },
       ),
     );
+  }
+
+  Widget _buildStatusTab(String label, int index) {
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _selectedStatus = index;
+        });
+      },
+      child: Chip(
+        label: Text(label),
+        backgroundColor: _selectedStatus == index
+            ? Colors.blue[100]
+            : Colors.grey[200],
+      ),
+    );
+  }
+
+  String? _getStatusText(int index) {
+    switch (index) {
+      case 1:
+        return 'online';
+      case 2:
+        return 'offline';
+      case 3:
+        return 'unknown';
+      default:
+        return null;
+    }
+  }
+
+  Color _getStatusColor(String? status) {
+    switch (status) {
+      case 'online':
+        return Colors.green;
+      case 'offline':
+        return Colors.red;
+      case 'unknown':
+        return Colors.grey;
+      default:
+        return Colors.black;
+    }
+  }
+
+  String _getStatusTextForDisplay(String? status) {
+    switch (status) {
+      case 'online':
+        return 'deviceStatusOnline'.tr;
+      case 'offline':
+        return 'deviceStatusOffline'.tr;
+      case 'unknown':
+        return 'deviceStatusUnknown'.tr;
+      default:
+        return status ?? 'N/A';
+    }
+  }
+
+  Color _getBatteryColor(double batteryLevel) {
+    if (batteryLevel > 75) {
+      return Colors.green;
+    } else if (batteryLevel > 25) {
+      return Colors.orange;
+    } else {
+      return Colors.red;
+    }
   }
 }
