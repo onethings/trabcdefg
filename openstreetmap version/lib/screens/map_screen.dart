@@ -2,13 +2,15 @@
 // A screen that displays the map with device locations using OpenStreetMap with tile caching.
 
 import 'package:flutter/material.dart';
-import 'package:flutter_map/flutter_map.dart'; // Primary map package for OpenStreetMap
-import 'package:latlong2/latlong.dart' as latlong; // LatLong for FlutterMap coordinates
+// import 'package:flutter_map/flutter_map.dart'; // Primary map package for OpenStreetMap
+import 'package:maplibre_gl/maplibre_gl.dart' as maplibre;
+import 'package:flutter_map/flutter_map.dart' hide LatLng, LatLngBounds;
+import 'package:latlong2/latlong.dart'
+    as latlong; // LatLong for FlutterMap coordinates
 // ALIAS: Required for Satellite view, Marker, BitmapDescriptor - REMOVED: google_maps_flutter is gone
 import 'package:provider/provider.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
-import 'package:trabcdefg/src/generated_api/api.dart'
-    as api; 
+import 'package:trabcdefg/src/generated_api/api.dart' as api;
 // import 'package:trabcdefg/src/generated_api/model/device_extensions.dart';
 import 'dart:async';
 import 'package:flutter/services.dart';
@@ -25,13 +27,13 @@ import 'dart:convert';
 import 'settings/geofences_screen.dart';
 import 'package:trabcdefg/constants.dart';
 import 'dart:io';
-import 'share_device_screen.dart'; 
+import 'share_device_screen.dart';
 import 'command_screen.dart';
 import 'package:trabcdefg/screens/settings/devices_screen.dart';
-import 'package:trabcdefg/screens/settings/add_device_screen.dart'; 
+import 'package:trabcdefg/screens/settings/add_device_screen.dart';
 import 'dart:math'; // Required for math operations like pi/radians in marker rotation
-import 'package:hive/hive.dart'; 
-import 'dart:typed_data'; 
+import 'package:hive/hive.dart';
+import 'dart:typed_data';
 import 'package:flutter_map/flutter_map.dart'; // Ensure this is imported for TileProvider
 import 'package:flutter/foundation.dart'; // Required for DiagnosticsProperty
 
@@ -67,16 +69,10 @@ class _HiveTileProvider extends TileProvider {
   final _TileCacheService cacheService;
   final http.Client httpClient;
 
-  _HiveTileProvider({
-    required this.cacheService,
-    required this.httpClient,
-  });
+  _HiveTileProvider({required this.cacheService, required this.httpClient});
 
   @override
-  ImageProvider getImage(
-    TileCoordinates coordinates,
-    TileLayer options,
-  ) {
+  ImageProvider getImage(TileCoordinates coordinates, TileLayer options) {
     // This is the key method to load the image. We return a FutureProvider.
     return CachedNetworkImageProvider(
       getTileUrl(coordinates, options),
@@ -87,7 +83,8 @@ class _HiveTileProvider extends TileProvider {
 }
 
 // Custom ImageProvider to handle the cache/network logic
-class CachedNetworkImageProvider extends ImageProvider<CachedNetworkImageProvider> {
+class CachedNetworkImageProvider
+    extends ImageProvider<CachedNetworkImageProvider> {
   final String url;
   final _TileCacheService cacheService;
   final http.Client httpClient;
@@ -116,7 +113,7 @@ class CachedNetworkImageProvider extends ImageProvider<CachedNetworkImageProvide
   // Corrected obtainKey signature
   @override
   Future<CachedNetworkImageProvider> obtainKey(
-    ImageConfiguration configuration, 
+    ImageConfiguration configuration,
   ) {
     // FIXED: Corrected the type name from CachedNetworkProvider to CachedNetworkImageProvider
     return Future<CachedNetworkImageProvider>.value(this);
@@ -142,7 +139,7 @@ class CachedNetworkImageProvider extends ImageProvider<CachedNetworkImageProvide
 
       if (response.statusCode == 200) {
         final Uint8List bytes = response.bodyBytes;
-        
+
         // 3. Save to Cache
         await cacheService.saveTile(url, bytes);
 
@@ -150,7 +147,9 @@ class CachedNetworkImageProvider extends ImageProvider<CachedNetworkImageProvide
         return decode(await ImmutableBuffer.fromUint8List(bytes));
       } else {
         // Fallback or error handling for network failure
-        throw Exception('Failed to load tile from network: ${response.statusCode}');
+        throw Exception(
+          'Failed to load tile from network: ${response.statusCode}',
+        );
       }
     } catch (e) {
       // Fallback or error handling for any other failure
@@ -161,15 +160,14 @@ class CachedNetworkImageProvider extends ImageProvider<CachedNetworkImageProvide
 
 // --- End of Tile Caching Implementation ---
 
-
 // ADDED: Enum for managing map types
 enum AppMapType {
   openStreetMap, // Will use standard OSM tiles
-  satellite,     // Will use an alternative satellite-like tile layer
+  satellite, // Will use an alternative satellite-like tile layer
 }
 
 class MapScreen extends StatefulWidget {
-  final api.Device? selectedDevice; 
+  final api.Device? selectedDevice;
 
   const MapScreen({super.key, this.selectedDevice});
 
@@ -178,26 +176,51 @@ class MapScreen extends StatefulWidget {
 }
 
 class _MapScreenState extends State<MapScreen> {
-  // REMOVED: final Map<String, gmap.BitmapDescriptor> _markerIcons = {}; 
-  bool _markersLoaded = false;
-  AppMapType _mapType = AppMapType.openStreetMap; 
-  MapController flutterMapController = MapController(); 
-  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
-  api.Device? _currentDevice; 
-  final _TileCacheService _cacheService = _TileCacheService(); 
-  final http.Client _httpClient = http.Client(); 
+  bool _isSatelliteMode = false;
+  // 街道模式：直接使用 URL (確保伺服器有提供 glyphs 屬性)
+  // 街道模式：手動組合 JSON，確保包含字體路徑
+  // 街道模式：直接使用 URL。Liberty 樣式通常已經內嵌了 glyphs 設定
+  static const String _streetStyle =
+      "https://tiles.openfreemap.org/styles/liberty";
 
+  static const String _satelliteStyle = '''
+{
+  "version": 8,
+  "glyphs": "https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf", 
+  "sources": {
+    "raster-tiles": {
+      "type": "raster",
+      "tiles": ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"],
+      "tileSize": 256
+    }
+  },
+  "layers": [{"id": "simple-tiles", "type": "raster", "source": "raster-tiles"}]
+}
+''';
+  maplibre.MapLibreMapController? _mapController;
+  bool _isStyleLoaded = false;
+  final Set<String> _loadedIcons = {};
+  // REMOVED: final Map<String, gmap.BitmapDescriptor> _markerIcons = {};
+  bool _markersLoaded = false;
+  AppMapType _mapType = AppMapType.openStreetMap;
+  MapController flutterMapController = MapController();
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  api.Device? _currentDevice;
+  final _TileCacheService _cacheService = _TileCacheService();
+  final http.Client _httpClient = http.Client();
+  // Adjust 0.005 based on how tall your bottom sheet is
+  double _mapCenterOffset = 0.005;
   // --- Tile URLs for different map types ---
-  static const String _osmUrlTemplate = 
+  static const String _osmUrlTemplate =
       'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
-  static const String _satelliteUrlTemplate = 
+  static const String _satelliteUrlTemplate =
       'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
   static const List<String> _osmSubdomains = ['a', 'b', 'c'];
 
-  // Custom Tile Provider 
+  // Custom Tile Provider
   late _HiveTileProvider _tileProvider;
-  bool _isCacheInitialized = false; // State to track cache/provider initialization
-
+  bool _isCacheInitialized =
+      false; // State to track cache/provider initialization
 
   @override
   void initState() {
@@ -210,12 +233,13 @@ class _MapScreenState extends State<MapScreen> {
       );
       if (mounted) {
         setState(() {
-          _isCacheInitialized = true; // Set flag when initialization is complete
+          _isCacheInitialized =
+              true; // Set flag when initialization is complete
         });
       }
     });
 
-    _loadMarkerIcons(); 
+    _loadMarkerIcons();
     _currentDevice = widget.selectedDevice;
 
     if (_currentDevice != null) {
@@ -224,16 +248,224 @@ class _MapScreenState extends State<MapScreen> {
       });
     }
   }
-  
+
   @override
   void dispose() {
     _httpClient.close();
     super.dispose();
   }
 
+  void _zoomToFitAll(TraccarProvider provider) {
+    if (provider.positions.isEmpty || _mapController == null) return;
+
+    double? minLat, maxLat, minLng, maxLng;
+
+    for (var pos in provider.positions) {
+      if (pos.latitude == null || pos.longitude == null) continue;
+      double lat = pos.latitude!.toDouble();
+      double lng = pos.longitude!.toDouble();
+
+      if (minLat == null || lat < minLat) minLat = lat;
+      if (maxLat == null || lat > maxLat) maxLat = lat;
+      if (minLng == null || lng < minLng) minLng = lng;
+      if (maxLng == null || lng > maxLng) maxLng = lng;
+    }
+
+    // 在 _zoomToFitAll 方法中修正
+    if (minLat != null && maxLat != null && minLng != null && maxLng != null) {
+      _mapController!.animateCamera(
+        maplibre.CameraUpdate.newLatLngBounds(
+          // 修正：明確指定使用 MapLibre 的定義
+          maplibre.LatLngBounds(
+            southwest: maplibre.LatLng(minLat, minLng),
+            northeast: maplibre.LatLng(maxLat, maxLng),
+          ),
+          left: 50,
+          right: 50,
+          top: 100,
+          bottom: 100,
+        ),
+      );
+    }
+  }
+
+  // Add this inside _MapScreenState
+  Future<void> _ensureIconLoaded(String iconKey) async {
+    if (_mapController == null || _loadedIcons.contains(iconKey)) return;
+
+    try {
+      final String assetPath = 'assets/images/$iconKey.png';
+      final ByteData bytes = await rootBundle.load(assetPath);
+      final Uint8List list = bytes.buffer.asUint8List();
+
+      await _mapController!.addImage(iconKey, list);
+      _loadedIcons.add(iconKey);
+
+      // Small delay to ensure the engine registers the new sprite
+      await Future.delayed(const Duration(milliseconds: 50));
+    } catch (e) {
+      debugPrint("❌ Failed to load icon '$iconKey': $e");
+      if (iconKey != 'marker_default_unknown') {
+        await _ensureIconLoaded('marker_default_unknown');
+      }
+    }
+  }
+
+  // void _updateAllMarkers(TraccarProvider provider) async {
+  //   if (_mapController == null || !_isStyleLoaded) return;
+
+  //   await _mapController!.clearSymbols();
+
+  //   for (final device in provider.devices) {
+  //     final pos = _findPositionOrNull(provider.positions, device.id);
+  //     if (pos == null || pos.latitude == null) continue;
+
+  //     final String category = device.category ?? 'default';
+  //     final String status = device.status ?? 'unknown';
+  //     final String iconKey =
+  //         'marker_${category.toLowerCase()}_${status.toLowerCase()}';
+
+  //     await _ensureIconLoaded(iconKey);
+  //     await _mapController!.addSymbol(
+  //       SymbolOptions(
+  //         geometry: LatLng(pos.latitude!.toDouble(), pos.longitude!.toDouble()),
+  //         iconImage: _loadedIcons.contains(iconKey)
+  //             ? iconKey
+  //             : 'marker_default_unknown',
+  //         iconRotate: pos.course?.toDouble() ?? 0.0,
+  //         iconSize: 3.0,
+  //         iconAnchor: iconKey.endsWith('_online')
+  //             ? 'bottom'
+  //             : 'center', // Different anchor for online vs offline
+  //         // --- 顯示車牌 ---
+  //         fontNames: ['Noto Sans Regular', 'Arial Unicode MS Regular'],
+  //         // 顯示車牌
+  //         textField: device.name ?? '',
+  //         textOffset: const Offset(0, 2.5),
+  //         textSize: 12.0,
+  //         textColor: '#000000',
+  //         textHaloColor: '#FFFFFF',
+  //         textHaloWidth: 2.0,
+  //       ),
+  //       // DATA goes here (Outside SymbolOptions)
+  //       {'deviceId': device.id.toString()},
+  //     );
+  //   }
+  // }
+  void _updateAllMarkers(TraccarProvider provider) async {
+    if (_mapController == null || !_isStyleLoaded) return;
+
+    for (final device in provider.devices) {
+      final pos = _findPositionOrNull(provider.positions, device.id);
+      if (pos == null || pos.latitude == null) continue;
+
+      final String category = device.category ?? 'default';
+      final String status = device.status ?? 'unknown';
+      final String baseIconKey =
+          'marker_${category.toLowerCase()}_${status.toLowerCase()}';
+
+      // 唯一的圖標 ID，例如：marker_car_online_ABC-1234
+      final String plate = device.name ?? '';
+      final String customIconId = "${baseIconKey}_$plate";
+
+      // 使用自定義方法合成並加載圖標
+      await _ensureCustomIconLoaded(baseIconKey, plate, customIconId);
+
+      await _mapController!.addSymbol(
+        maplibre.SymbolOptions(
+          geometry: maplibre.LatLng(
+            pos.latitude!.toDouble(),
+            pos.longitude!.toDouble(),
+          ),
+          iconImage: customIconId, // 使用合成後的圖片
+          iconRotate: pos.course?.toDouble() ?? 0.0,
+          iconSize: 3.0, // 因為合成圖較大，size 可以設為 1.0
+        ),
+        {'deviceId': device.id.toString()},
+      );
+    }
+  }
+
+  Future<void> _ensureCustomIconLoaded(
+    String baseIconKey,
+    String plate,
+    String customIconId,
+  ) async {
+    if (_loadedIcons.contains(customIconId)) return;
+
+    try {
+      // 1. 加載原始圖標
+      final ByteData data = await rootBundle.load(
+        'assets/images/$baseIconKey.png',
+      );
+      final ui.Codec codec = await ui.instantiateImageCodec(
+        data.buffer.asUint8List(),
+      );
+      final ui.FrameInfo fi = await codec.getNextFrame();
+      final ui.Image markerImage = fi.image;
+
+      // 2. 準備文字繪製器 (TextPainter)
+      final textPainter = TextPainter(
+        text: TextSpan(
+          text: plate,
+          style: TextStyle(
+            color: Colors.black,
+            fontSize: 8.0,
+            fontWeight: FontWeight.bold,
+            backgroundColor: Colors.white.withOpacity(0.0), // 文字背景 //0.85
+          ),
+        ),
+        // 修正點：使用 ui.TextDirection.ltr 確保編譯通過
+        textDirection: ui.TextDirection.ltr,
+      );
+      textPainter.layout();
+
+      // 3. 建立畫布並繪製
+      final recorder = ui.PictureRecorder();
+      final canvas = Canvas(recorder);
+      final paint = Paint();
+
+      // 計算畫布總尺寸：寬度取圖標或文字的最大值，高度為圖標+文字+間距
+      final double canvasWidth = markerImage.width > textPainter.width
+          ? markerImage.width.toDouble()
+          : textPainter.width;
+      final double canvasHeight = markerImage.height + textPainter.height + 10;
+
+      // A. 畫車輛圖標 (置中)
+      final double markerX = (canvasWidth - markerImage.width) / 2;
+      canvas.drawImage(markerImage, Offset(markerX, 0), paint);
+
+      // B. 畫車牌文字 (置中，放在車圖下方 5 像素處)
+      final double textX = (canvasWidth - textPainter.width) / 2;
+      textPainter.paint(
+        canvas,
+        Offset(textX, markerImage.height.toDouble() + 5),
+      );
+
+      // 4. 轉換為圖片格式
+      final picture = recorder.endRecording();
+      final img = await picture.toImage(
+        canvasWidth.toInt(),
+        canvasHeight.toInt(),
+      );
+      final pngBytes = await img.toByteData(format: ui.ImageByteFormat.png);
+
+      if (pngBytes != null) {
+        // 5. 註冊到 MapLibre 引擎
+        await _mapController!.addImage(
+          customIconId,
+          pngBytes.buffer.asUint8List(),
+        );
+        _loadedIcons.add(customIconId);
+      }
+    } catch (e) {
+      debugPrint("❌ 合成圖標錯誤 ($customIconId): $e");
+    }
+  }
+
   // Simplified _loadMarkerIcons: now just sets _markersLoaded
   Future<void> _loadMarkerIcons() async {
-    await Future.delayed(Duration.zero); 
+    await Future.delayed(Duration.zero);
 
     if (mounted) {
       setState(() {
@@ -288,9 +520,7 @@ class _MapScreenState extends State<MapScreen> {
       context,
       listen: false,
     );
-    final devicesApi = api.DevicesApi(
-      traccarProvider.apiClient,
-    ); 
+    final devicesApi = api.DevicesApi(traccarProvider.apiClient);
 
     try {
       // API Call: DELETE /devices/{id}
@@ -323,9 +553,33 @@ class _MapScreenState extends State<MapScreen> {
       );
     }
   }
-  
+
   latlong.LatLng _toFlutterLatLng(double latitude, double longitude) {
     return latlong.LatLng(latitude, longitude);
+  }
+
+  void _navigateToDevice(
+    int direction,
+    List<api.Device> devices,
+    List<api.Position> positions,
+  ) {
+    if (devices.isEmpty) return;
+
+    // 1. 找到當前選中設備的索引
+    int currentIndex = devices.indexWhere((d) => d.id == _currentDevice?.id);
+
+    // 2. 計算下一個索引（循環切換）
+    int nextIndex = (currentIndex + direction) % devices.length;
+    if (nextIndex < 0) nextIndex = devices.length - 1;
+
+    final nextDevice = devices[nextIndex];
+
+    // 3. 更新當前狀態並導航
+    setState(() {
+      _currentDevice = nextDevice;
+    });
+
+    _onDeviceSelected(nextDevice, positions);
   }
 
   void _onDeviceSelected(
@@ -338,32 +592,25 @@ class _MapScreenState extends State<MapScreen> {
 
     final position = allPositions.firstWhere(
       (p) => p.deviceId == device.id,
-      orElse: () => api.Position(
-        deviceId: device.id,
-        latitude: 0.0,
-        longitude: 0.0,
-      ), 
+      orElse: () =>
+          api.Position(deviceId: device.id, latitude: 0.0, longitude: 0.0),
     );
 
-    if (position.latitude != null &&
-        position.longitude != null) {
-      
-      // FIXED: Added .toDouble() to cast nullable num to non-nullable double.
-      final double lat = position.latitude!.toDouble(); 
-      final double lon = position.longitude!.toDouble();
-
-      final targetLatLng = latlong.LatLng(
-        lat, 
-        lon,
-      );
-      
-      flutterMapController.move( 
-        targetLatLng, 
-        15.0, 
+    if (position.latitude != null && position.longitude != null) {
+      _mapController!.animateCamera(
+        maplibre.CameraUpdate.newCameraPosition(
+          maplibre.CameraPosition(
+            target: maplibre.LatLng(
+              position.latitude!.toDouble() - _mapCenterOffset,
+              position.longitude!.toDouble(),
+            ),
+            zoom: 14.0,
+          ),
+        ),
       );
     }
 
-    _showDeviceDetailPanel(device, position); 
+    _showDeviceDetailPanel(device, position);
   }
 
   Color _getBatteryColor(double batteryLevel) {
@@ -390,7 +637,7 @@ class _MapScreenState extends State<MapScreen> {
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title:  Text(device.name ?? 'More Options'.tr),
+          title: Text(device.name ?? 'More Options'.tr),
           content: SingleChildScrollView(
             child: ListBody(
               children: <Widget>[
@@ -571,7 +818,8 @@ class _MapScreenState extends State<MapScreen> {
                                     as double) >
                                 0.0)
                           Text(
-                            '${((currentPosition.attributes as Map<String, dynamic>)['distance'] as double).toStringAsFixed(0)} '+'sharedKm'.tr, //2
+                            '${((currentPosition.attributes as Map<String, dynamic>)['distance'] as double).toStringAsFixed(0)} ' +
+                                'sharedKm'.tr, //2
                             style: const TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.bold,
@@ -589,7 +837,9 @@ class _MapScreenState extends State<MapScreen> {
                               horizontal: 4.0,
                             ),
                             child: Text(
-                              '${currentPosition.speed?.toStringAsFixed(0)}'+' '+ 'km/h',
+                              '${currentPosition.speed?.toStringAsFixed(0)}' +
+                                  ' ' +
+                                  'km/h',
                               style: const TextStyle(
                                 fontSize: 15,
                                 fontWeight: FontWeight.bold,
@@ -668,10 +918,17 @@ class _MapScreenState extends State<MapScreen> {
                               as Map<String, dynamic>?)?['address'] ??
                           'N/A',
                       totalDistance:
-                          '${(currentPosition.attributes as Map<String, dynamic>?)?['totalDistance']?.toStringAsFixed(2) ?? 'N/A'} '+'sharedKm'.tr, //2
+                          '${(currentPosition.attributes as Map<String, dynamic>?)?['totalDistance']?.toStringAsFixed(2) ?? 'N/A'} ' +
+                          'sharedKm'.tr, //2
                     ),
                     _buildReportPanel(
-                      onRefreshPressed: () {
+                      onRefreshPressed: () async {
+                        final prefs = await SharedPreferences.getInstance();
+                        await prefs.setInt('selectedDeviceId', device.id!);
+                        await prefs.setString(
+                          'selectedDeviceName',
+                          device.name!,
+                        );
                         _bottomSheetController?.close();
                         Navigator.push(
                           context,
@@ -857,8 +1114,8 @@ class _MapScreenState extends State<MapScreen> {
     required VoidCallback onRefreshPressed,
     required VoidCallback onMoreOptionsPressed,
     required VoidCallback onUploadPressed,
-    required VoidCallback onEditPressed, 
-    required VoidCallback onDeletePressed, 
+    required VoidCallback onEditPressed,
+    required VoidCallback onDeletePressed,
   }) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -889,7 +1146,7 @@ class _MapScreenState extends State<MapScreen> {
         // Delete icon
         IconButton(
           icon: const Icon(Icons.delete_outline, color: Colors.red),
-          onPressed: onDeletePressed, 
+          onPressed: onDeletePressed,
         ),
       ],
     );
@@ -1027,19 +1284,19 @@ class _MapScreenState extends State<MapScreen> {
             body: Center(child: CircularProgressIndicator()),
           );
         }
-        
-        // 2. Wait for Tile Provider to initialize 
-        if (!_isCacheInitialized) { 
+
+        // 2. Wait for Tile Provider to initialize
+        if (!_isCacheInitialized) {
           return const Scaffold(
             body: Center(child: Text('Initializing Map Assets...')),
           );
         }
 
-        // 3. Prepare Markers 
-        final flutterMarkers = <Marker>{}; 
-        
-        // 4. Determine Initial Camera Position 
-        latlong.LatLng initialFlutterLatLng = latlong.LatLng(0, 0); 
+        // 3. Prepare Markers
+        final flutterMarkers = <Marker>{};
+
+        // 4. Determine Initial Camera Position
+        latlong.LatLng initialFlutterLatLng = latlong.LatLng(0, 0);
         double initialZoom = 2.0;
 
         if (_markersLoaded) {
@@ -1052,32 +1309,32 @@ class _MapScreenState extends State<MapScreen> {
             if (position != null &&
                 position.latitude != null &&
                 position.longitude != null) {
-              
               // FIXED: Added .toDouble() to cast num to double
               final latlong.LatLng flutterMarkerPosition = _toFlutterLatLng(
-                position.latitude!.toDouble(), 
-                position.longitude!.toDouble()
-              ); 
+                position.latitude!.toDouble(),
+                position.longitude!.toDouble(),
+              );
 
               final String category = device.category ?? 'default';
               final String status = device.status ?? 'unknown';
               final double course = position.course?.toDouble() ?? 0.0;
-              
+
               // Flutter Map Marker (RETAINED/MODIFIED)
               flutterMarkers.add(
-                Marker( 
+                Marker(
                   width: 50.0,
                   height: 50.0,
                   point: flutterMarkerPosition,
-                  child: Transform.rotate( 
-                    angle: course * (pi / 180), 
+                  child: Transform.rotate(
+                    angle: course * (pi / 180),
                     child: GestureDetector(
                       onTap: () {
-                        _onDeviceSelected(device, traccarProvider.positions); 
+                        _onDeviceSelected(device, traccarProvider.positions);
                       },
-                      child: Image.asset( 
-                        'assets/images/marker_${category}_$status.png', 
-                        errorBuilder: (context, error, stackTrace) => const Icon(Icons.location_on),
+                      child: Image.asset(
+                        'assets/images/marker_${category}_$status.png',
+                        errorBuilder: (context, error, stackTrace) =>
+                            const Icon(Icons.location_on),
                       ),
                     ),
                   ),
@@ -1086,7 +1343,7 @@ class _MapScreenState extends State<MapScreen> {
             }
           }
         }
-        
+
         // 5. Determine Initial Camera Position (Updated for FlutterMap only)
         if (_currentDevice != null) {
           final initialPosition = _findPositionOrNull(
@@ -1097,8 +1354,8 @@ class _MapScreenState extends State<MapScreen> {
           if (initialPosition?.latitude != null &&
               initialPosition?.longitude != null) {
             // FIXED: Added .toDouble() to cast num to double
-            initialFlutterLatLng = latlong.LatLng( 
-              initialPosition!.latitude!.toDouble(), 
+            initialFlutterLatLng = latlong.LatLng(
+              initialPosition!.latitude!.toDouble(),
               initialPosition.longitude!.toDouble(),
             );
             initialZoom = 15.0;
@@ -1108,9 +1365,9 @@ class _MapScreenState extends State<MapScreen> {
           if (firstPosition.latitude != null &&
               firstPosition.longitude != null) {
             // FIXED: Added .toDouble() to cast num to double
-            initialFlutterLatLng = latlong.LatLng( 
-              firstPosition.latitude!.toDouble(), 
-              firstPosition.longitude!.toDouble(), 
+            initialFlutterLatLng = latlong.LatLng(
+              firstPosition.latitude!.toDouble(),
+              firstPosition.longitude!.toDouble(),
             );
             initialZoom = 5.0;
           }
@@ -1122,17 +1379,12 @@ class _MapScreenState extends State<MapScreen> {
           appBar: AppBar(
             title: Text('mapTitle'.tr),
             actions: [
-              // Map type toggle logic
               IconButton(
-                // Show the icon of the map type we will switch TO
-                icon: Icon(
-                  _mapType == AppMapType.satellite ? Icons.map : Icons.satellite
-                ),
+                icon: Icon(_isSatelliteMode ? Icons.map : Icons.satellite_alt),
                 onPressed: () {
                   setState(() {
-                    _mapType = _mapType == AppMapType.satellite
-                        ? AppMapType.openStreetMap // Switch to OSM (normal)
-                        : AppMapType.satellite; // Switch to Satellite
+                    _isSatelliteMode = !_isSatelliteMode;
+                    _isStyleLoaded = false;
                   });
                 },
               ),
@@ -1142,37 +1394,127 @@ class _MapScreenState extends State<MapScreen> {
           drawer: _buildDeviceListDrawer(context, traccarProvider),
           body: Stack(
             children: [
-              // We now use FlutterMap for both map types
-              FlutterMap(
-                mapController: flutterMapController,
-                options: MapOptions(
-                  initialCenter: initialFlutterLatLng,
-                  initialZoom: initialZoom,
-                  interactionOptions: const InteractionOptions(
-                      flags: InteractiveFlag.all & ~InteractiveFlag.rotate), // Disable rotate by default
-                  onTap: (tapPosition, latLng) {
-                      _bottomSheetController?.close();
-                  },
-                ),
-                children: [
-                  // Tile Layer: Conditional based on map type
-                  TileLayer(
-                    // Choose URL based on current map type
-                    urlTemplate: _mapType == AppMapType.openStreetMap
-                        ? _osmUrlTemplate
-                        : _satelliteUrlTemplate,
-                    // Only use subdomains for OSM. Satellite URL is static.
-                    subdomains: _mapType == AppMapType.openStreetMap
-                        ? _osmSubdomains
-                        : const [],
-                    userAgentPackageName: 'com.trabcdefg.app', // IMPORTANT for OpenStreetMap
-                    
-                    // --- THE IMPLEMENTATION: Use the Custom TileProvider ---
-                    tileProvider: _tileProvider, 
+              maplibre.MapLibreMap(
+                key: ValueKey(_isSatelliteMode),
+                initialCameraPosition: maplibre.CameraPosition(
+                  target: maplibre.LatLng(
+                    initialFlutterLatLng.latitude,
+                    initialFlutterLatLng.longitude,
                   ),
-                  // Marker Layer for FlutterMap
-                  MarkerLayer(markers: flutterMarkers.toList()), // Convert set to list
-                ],
+                  zoom: initialZoom,
+                ),
+                styleString: _isSatelliteMode ? _satelliteStyle : _streetStyle,
+                onMapCreated: (controller) {
+                  _mapController = controller;
+
+                  // This listener acts as your "InfoWindow"
+                  _mapController!.onSymbolTapped.add((symbol) {
+                    final deviceIdString = symbol.data?['deviceId'];
+                    final deviceId = int.tryParse(deviceIdString ?? '');
+
+                    if (deviceId != null) {
+                      final traccarProvider = Provider.of<TraccarProvider>(
+                        context,
+                        listen: false,
+                      );
+
+                      // Find the specific device and its last position
+                      final device = traccarProvider.devices.firstWhere(
+                        (d) => d.id == deviceId,
+                      );
+                      final pos = traccarProvider.positions.firstWhere(
+                        (p) => p.deviceId == deviceId,
+                      );
+
+                      // 1. Show your detail panel (This is your InfoWindow)
+                      _showDeviceDetailPanel(device, pos);
+
+                      // 2. Center the camera on the device with the offset
+                      _mapController!.animateCamera(
+                        // CameraUpdate.newLatLng(
+                        //   LatLng(
+                        //     pos.latitude!.toDouble() - _mapCenterOffset,
+                        //     pos.longitude!.toDouble(),
+                        //   ),
+                        // ),
+                        maplibre.CameraUpdate.newCameraPosition(
+                          maplibre.CameraPosition(
+                            target: maplibre.LatLng(
+                              pos.latitude!.toDouble() -
+                                  _mapCenterOffset, // 您的垂直偏移量
+                              pos.longitude!.toDouble(),
+                            ),
+                            zoom: 14.0, // 在這裡設定縮放等級
+                          ),
+                        ),
+                      );
+                    }
+                  });
+                },
+                onStyleLoadedCallback: () {
+                  setState(() => _isStyleLoaded = true);
+                  _loadedIcons.clear();
+                  _updateAllMarkers(traccarProvider);
+
+                  // --- 新增：如果是初次進入且沒有選定特定設備，則顯示全部 ---
+                  if (widget.selectedDevice == null) {
+                    // 延遲一點點確保標記都已計算完成
+                    Future.delayed(const Duration(milliseconds: 500), () {
+                      _zoomToFitAll(traccarProvider);
+                    });
+                  }
+                },
+              ),
+              // 在 Stack 的 children 中
+              Positioned(
+                top: 10,
+                right: 10,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // 1. 顯示全部按鈕
+                    FloatingActionButton.small(
+                      heroTag: "zoom_all",
+                      backgroundColor: Colors.white,
+                      onPressed: () => _zoomToFitAll(traccarProvider),
+                      child: const Icon(Icons.zoom_out_map, color: Colors.blue),
+                    ),
+                    const SizedBox(height: 8),
+
+                    // 只有在多台車時才顯示切換按鈕
+                    if (traccarProvider.devices.length > 1) ...[
+                      // 2. 上一台按鈕
+                      FloatingActionButton.small(
+                        heroTag: "prev_car",
+                        backgroundColor: Colors.white,
+                        onPressed: () => _navigateToDevice(
+                          -1,
+                          traccarProvider.devices,
+                          traccarProvider.positions,
+                        ),
+                        child: const Icon(
+                          Icons.arrow_upward,
+                          color: Colors.black54,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      // 3. 下一台按鈕
+                      FloatingActionButton.small(
+                        heroTag: "next_car",
+                        backgroundColor: Colors.white,
+                        onPressed: () => _navigateToDevice(
+                          1,
+                          traccarProvider.devices,
+                          traccarProvider.positions,
+                        ),
+                        child: const Icon(
+                          Icons.arrow_downward,
+                          color: Colors.black54,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
               ),
             ],
           ),
