@@ -162,8 +162,12 @@ class CachedNetworkImageProvider
 
 // ADDED: Enum for managing map types
 enum AppMapType {
-  openStreetMap, // Will use standard OSM tiles
-  satellite, // Will use an alternative satellite-like tile layer
+  openStreetMap,
+  bright, // Added
+  satellite,
+  dark,
+  terrain,
+  hybrid,
 }
 
 class MapScreen extends StatefulWidget {
@@ -182,7 +186,8 @@ class _MapScreenState extends State<MapScreen> {
   // 街道模式：直接使用 URL。Liberty 樣式通常已經內嵌了 glyphs 設定
   static const String _streetStyle =
       "https://tiles.openfreemap.org/styles/liberty";
-
+  static const String _brightStyle =
+      "https://tiles.openfreemap.org/styles/bright";
   static const String _satelliteStyle = '''
 {
   "version": 8,
@@ -197,6 +202,25 @@ class _MapScreenState extends State<MapScreen> {
   "layers": [{"id": "simple-tiles", "type": "raster", "source": "raster-tiles"}]
 }
 ''';
+  // 1. Positron (簡潔淺色模式) - 非常適合用來凸顯彩色車輛圖標
+  static const String _positronStyle =
+      "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json";
+
+  // 2. Dark Matter (酷炫深色模式) - 適合夜間使用
+  static const String _darkStyle =
+      "https://tiles.openfreemap.org/styles/dark";
+
+  // 3. OpenStreetMap Bright (明亮強化版)
+  static const String _osmBrightStyle =
+      "https://tiles.openfreemap.org/styles/bright";
+
+  // 4. Terrain (地形等高線模式) - 使用 OpenFreeMap 提供的地形樣式
+  static const String _terrainStyle =
+      "https://tiles.openfreemap.org/styles/fiord";
+
+  // 5. Google Maps 混合風格 (混合衛星與路網) - 透過自定義 JSON 實作
+  static const String _hybridStyle = 
+  "https://tiles.openfreemap.org/styles/positron";
   maplibre.MapLibreMapController? _mapController;
   bool _isStyleLoaded = false;
   final Set<String> _loadedIcons = {};
@@ -210,6 +234,24 @@ class _MapScreenState extends State<MapScreen> {
   final http.Client _httpClient = http.Client();
   // Adjust 0.005 based on how tall your bottom sheet is
   double _mapCenterOffset = 0.005;
+
+  String _getStyleString(AppMapType type) {
+    switch (type) {
+      case AppMapType.openStreetMap:
+        return _streetStyle;
+      case AppMapType.bright:
+        return _brightStyle;
+      case AppMapType.dark:
+        return _darkStyle;
+      case AppMapType.terrain:
+        return _terrainStyle; // Matches AppMapType.terrain
+      case AppMapType.satellite:
+        return _satelliteStyle;
+      case AppMapType.hybrid:
+        return _hybridStyle;
+    }
+  }
+
   // --- Tile URLs for different map types ---
   static const String _osmUrlTemplate =
       'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
@@ -225,6 +267,7 @@ class _MapScreenState extends State<MapScreen> {
   @override
   void initState() {
     super.initState();
+    _loadMapPreference();
     // Initialize cache service and then the tile provider
     _cacheService.init().then((_) {
       _tileProvider = _HiveTileProvider(
@@ -253,6 +296,44 @@ class _MapScreenState extends State<MapScreen> {
   void dispose() {
     _httpClient.close();
     super.dispose();
+  }
+
+  Future<void> _loadMapPreference() async {
+    final prefs = await SharedPreferences.getInstance();
+    final int? savedIndex = prefs.getInt('preferred_map_type');
+
+    if (savedIndex != null && savedIndex < AppMapType.values.length) {
+      setState(() {
+        _mapType = AppMapType.values[savedIndex];
+        _isSatelliteMode =
+            (_mapType == AppMapType.satellite || _mapType == AppMapType.hybrid);
+      });
+    }
+  }
+
+  void _updateMapStyle(AppMapType type) async {
+    final style = _getStyleString(type);
+    final prefs = await SharedPreferences.getInstance();
+
+    // Save preference for next launch
+    await prefs.setInt('preferred_map_type', type.index);
+
+    setState(() {
+      _mapType = type;
+      _isStyleLoaded = false;
+      _isSatelliteMode =
+          (type == AppMapType.satellite || type == AppMapType.hybrid);
+    });
+
+    // FIX: Try setStyleString first; if it still errors, use setMapStyle
+    try {
+      // _mapController?.setStyleString(style);
+      // _mapController?.setMapStyle(style);
+      _mapController?.setStyle( style);
+    } catch (e) {
+      // Fallback for different maplibre/mapbox versions
+      debugPrint("setStyleString failed, check your package version: $e");
+    }
   }
 
   void _zoomToFitAll(TraccarProvider provider) {
@@ -1379,14 +1460,35 @@ class _MapScreenState extends State<MapScreen> {
           appBar: AppBar(
             title: Text('mapTitle'.tr),
             actions: [
-              IconButton(
-                icon: Icon(_isSatelliteMode ? Icons.map : Icons.satellite_alt),
-                onPressed: () {
-                  setState(() {
-                    _isSatelliteMode = !_isSatelliteMode;
-                    _isStyleLoaded = false;
-                  });
-                },
+              PopupMenuButton<AppMapType>(
+                icon: const Icon(Icons.layers_outlined),
+                onSelected: _updateMapStyle,
+                itemBuilder: (context) => [
+                  // const PopupMenuItem(
+                  //   value: AppMapType.openStreetMap,
+                  //   child: Text('Standard'),
+                  // ),
+                  const PopupMenuItem(
+                    value: AppMapType.bright,
+                    child: Text('Bright'),
+                  ),
+                  const PopupMenuItem(
+                    value: AppMapType.dark,
+                    child: Text('Dark Mode'),
+                  ),
+                  const PopupMenuItem(
+                    value: AppMapType.terrain,
+                    child: Text('Fiord'),
+                  ),
+                  const PopupMenuItem(
+                    value: AppMapType.satellite,
+                    child: Text('Satellite'),
+                  ),
+                  const PopupMenuItem(
+                    value: AppMapType.hybrid,
+                    child: Text('Positron'),
+                  ),
+                ],
               ),
             ],
           ),
@@ -1395,7 +1497,8 @@ class _MapScreenState extends State<MapScreen> {
           body: Stack(
             children: [
               maplibre.MapLibreMap(
-                key: ValueKey(_isSatelliteMode),
+                // key: ValueKey(_isSatelliteMode),
+                key: ValueKey(_mapType),
                 initialCameraPosition: maplibre.CameraPosition(
                   target: maplibre.LatLng(
                     initialFlutterLatLng.latitude,
@@ -1403,7 +1506,8 @@ class _MapScreenState extends State<MapScreen> {
                   ),
                   zoom: initialZoom,
                 ),
-                styleString: _isSatelliteMode ? _satelliteStyle : _streetStyle,
+                // styleString: _isSatelliteMode ? _satelliteStyle : _streetStyle,
+                styleString: _getStyleString(_mapType),
                 onMapCreated: (controller) {
                   _mapController = controller;
 

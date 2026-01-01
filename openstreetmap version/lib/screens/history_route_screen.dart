@@ -13,6 +13,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:trabcdefg/models/report_summary_hive.dart';
+import 'package:trabcdefg/models/route_positions_hive.dart'; // Assuming you put the model here
+import 'package:intl/date_symbol_data_local.dart';
 
 enum OSMMapType { normal, satellite }
 
@@ -26,6 +28,7 @@ class HistoryRouteScreen extends StatefulWidget {
 class _HistoryRouteScreenState extends State<HistoryRouteScreen>
     with TickerProviderStateMixin {
   MapLibreMapController? _mapController;
+  List<double> _distancePrefixSum = [];
 
   // Style Constants
   static const String _streetStyle =
@@ -76,6 +79,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen>
   @override
   void initState() {
     super.initState();
+    cleanExpiredRouteHistory();
     _loadInitialParamsAndFetch();
   }
 
@@ -107,39 +111,201 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen>
     await _mapController?.addImage(id, list);
   }
 
+  // 2. 建立計算方法
+  void _calculateDistancePrefixSum() {
+    _distancePrefixSum = [0.0];
+    double total = 0;
+    for (int i = 0; i < _movingPositionsRx.length - 1; i++) {
+      total += _distanceBetween(
+        _movingPositionsRx[i].latitude!.toDouble(),
+        _movingPositionsRx[i].longitude!.toDouble(),
+        _movingPositionsRx[i + 1].latitude!.toDouble(),
+        _movingPositionsRx[i + 1].longitude!.toDouble(),
+      );
+      _distancePrefixSum.add(total);
+    }
+  }
+
   // --- Data Fetching ---
 
+  // Future<void> _loadInitialParamsAndFetch() async {
+  //   final prefs = await SharedPreferences.getInstance();
+  //   final deviceName = prefs.getString('selectedDeviceName');
+  //   _deviceId = prefs.getInt('selectedDeviceId');
+  //   _historyFrom = DateTime(
+  //     _focusedDay.year,
+  //     _focusedDay.month,
+  //     _focusedDay.day,
+  //     0,
+  //     0,
+  //     0,
+  //   );
+  //   _historyTo = DateTime(
+  //     _focusedDay.year,
+  //     _focusedDay.month,
+  //     _focusedDay.day,
+  //     23,
+  //     59,
+  //     59,
+  //   );
+
+  //   setState(() {
+  //     _selectedDeviceName = deviceName;
+  //   });
+  //   if (_deviceId != null) {
+  //     _fetchHistoryRoute();
+  //     _fetchMonthlyData(_focusedDay);
+  //   }
+  // }
   Future<void> _loadInitialParamsAndFetch() async {
     final prefs = await SharedPreferences.getInstance();
     final deviceName = prefs.getString('selectedDeviceName');
-    _deviceId = prefs.getInt('selectedDeviceId');
-    _historyFrom = DateTime(
-      _focusedDay.year,
-      _focusedDay.month,
-      _focusedDay.day,
-      0,
-      0,
-      0,
-    );
-    _historyTo = DateTime(
-      _focusedDay.year,
-      _focusedDay.month,
-      _focusedDay.day,
-      23,
-      59,
-      59,
-    );
+    final deviceId = prefs.getInt('selectedDeviceId');
+    final fromString = prefs.getString('historyFrom');
+    final toString = prefs.getString('historyTo');
+
+    DateTime defaultDate = DateTime.now();
 
     setState(() {
+      _deviceId = deviceId;
+      _focusedDay = defaultDate;
+      _selectedCalendarDay = defaultDate;
       _selectedDeviceName = deviceName;
+
+      if (fromString != null && toString != null) {
+        _historyFrom = DateTime.tryParse(fromString)?.toLocal();
+        _historyTo = DateTime.tryParse(toString)?.toLocal();
+        if (_historyFrom != null) {
+          _selectedCalendarDay = DateTime(
+            _historyFrom!.year,
+            _historyFrom!.month,
+            _historyFrom!.day,
+          );
+        }
+      } else {
+        _historyFrom = DateTime(
+          defaultDate.year,
+          defaultDate.month,
+          defaultDate.day,
+          0,
+          0,
+          0,
+        );
+        _historyTo = DateTime(
+          defaultDate.year,
+          defaultDate.month,
+          defaultDate.day,
+          23,
+          59,
+          59,
+        );
+      }
     });
+
     if (_deviceId != null) {
       _fetchHistoryRoute();
-      _fetchMonthlyData(_focusedDay);
+      await _fetchMonthlyData(_focusedDay);
+    } else {
+      print('Missing device ID for history route.');
+    }
+  }
+
+  // Future<void> _fetchHistoryRoute({DateTime? selectedDay}) async {
+  //   if (selectedDay != null) {
+  //     _historyFrom = DateTime(
+  //       selectedDay.year,
+  //       selectedDay.month,
+  //       selectedDay.day,
+  //       0,
+  //       0,
+  //       0,
+  //     );
+  //     _historyTo = DateTime(
+  //       selectedDay.year,
+  //       selectedDay.month,
+  //       selectedDay.day,
+  //       23,
+  //       59,
+  //       59,
+  //     );
+  //   }
+  //   if (_deviceId == null) return;
+
+  //   setState(() => _isLoading = true);
+  //   _playbackTimer?.cancel();
+  //   _isPlaying = false;
+  //   _playbackPositionRx.value = 0.0;
+
+  //   final traccarProvider = Provider.of<TraccarProvider>(
+  //     context,
+  //     listen: false,
+  //   );
+  //   try {
+  //     final fetched =
+  //         await api.PositionsApi(traccarProvider.apiClient).positionsGet(
+  //           deviceId: _deviceId,
+  //           from: _historyFrom!.toUtc(),
+  //           to: _historyTo!.toUtc(),
+  //         ) ??
+  //         [];
+
+  //     setState(() {
+  //       _positions = fetched;
+  //       _movingPositionsRx.assignAll(
+  //         fetched.where((p) => (p.speed ?? 0.0) > 0.5).toList(),
+  //       );
+  //       _isLoading = false;
+  //     });
+
+  //     if (_mapController != null) _drawFullRoute();
+  //   } catch (e) {
+  //     setState(() => _isLoading = false);
+  //     Get.snackbar("Error", "Failed to fetch route data");
+  //   }
+  // }
+  // Utility function to be called once on app startup or screen load
+  Future<void> cleanExpiredRouteHistory() async {
+    final routeBox = await Hive.openBox<RoutePositionsHive>('route_positions');
+    const cacheDuration = Duration(days: 60);
+    final DateTime expiryThreshold = DateTime.now().subtract(cacheDuration);
+
+    final List<dynamic> expiredKeys = [];
+
+    // Iterate over all keys in the box
+    for (final key in routeBox.keys) {
+      // Retrieve the entry directly using the key
+      final entry = routeBox.get(key);
+
+      // Check if the cache date is older than 60 days
+      if (entry != null && entry.cachedAt.isBefore(expiryThreshold)) {
+        expiredKeys.add(key);
+      }
+    }
+
+    if (expiredKeys.isNotEmpty) {
+      print('Deleting ${expiredKeys.length} expired route entries.');
+      // Delete all expired entries in one batch operation
+      await routeBox.deleteAll(expiredKeys);
+    }
+  }
+
+  // 在 _fetchHistoryRoute 取得數據後
+  void _calculatePrefixSum() {
+    _distancePrefixSum = [0.0];
+    double total = 0;
+    for (int i = 0; i < _movingPositionsRx.length - 1; i++) {
+      total += _distanceBetween(
+        _movingPositionsRx[i].latitude!.toDouble(),
+        _movingPositionsRx[i].longitude!.toDouble(),
+        _movingPositionsRx[i + 1].latitude!.toDouble(),
+        _movingPositionsRx[i + 1].longitude!.toDouble(),
+      );
+      _distancePrefixSum.add(total);
     }
   }
 
   Future<void> _fetchHistoryRoute({DateTime? selectedDay}) async {
+    // 1. 初始化時間參數
     if (selectedDay != null) {
       _historyFrom = DateTime(
         selectedDay.year,
@@ -158,37 +324,96 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen>
         59,
       );
     }
-    if (_deviceId == null) return;
 
-    setState(() => _isLoading = true);
+    if (_deviceId == null || _historyFrom == null || _historyTo == null) return;
+
+    // 2. 停止當前播放並重置 UI 狀態
     _playbackTimer?.cancel();
-    _isPlaying = false;
-    _playbackPositionRx.value = 0.0;
+    setState(() {
+      _isLoading = true; // 顯示載入動畫
+      _isPlaying = false;
+      _positions = [];
+      _playbackPositionRx.value = 0.0;
+    });
+    _movingPositionsRx.clear();
 
-    final traccarProvider = Provider.of<TraccarProvider>(
-      context,
-      listen: false,
-    );
+    List<api.Position> fetchedPositions = [];
+    final hiveKey =
+        '$_deviceId-${DateFormat('yyyy-MM-dd').format(_historyFrom!)}';
+
     try {
-      final fetched =
-          await api.PositionsApi(traccarProvider.apiClient).positionsGet(
-            deviceId: _deviceId,
-            from: _historyFrom!.toUtc(),
-            to: _historyTo!.toUtc(),
-          ) ??
-          [];
+      // 3. 檢查 Hive 快取
+      final routeBox = await Hive.openBox<RoutePositionsHive>(
+        'route_positions',
+      );
+      final cachedRoute = routeBox.get(hiveKey);
 
-      setState(() {
-        _positions = fetched;
-        _movingPositionsRx.assignAll(
-          fetched.where((p) => (p.speed ?? 0.0) > 0.5).toList(),
+      bool isCacheValid = false;
+      if (cachedRoute != null) {
+        final bool isToday = isSameDay(_historyFrom, DateTime.now());
+        // 關鍵修正：今日數據 10 分鐘過期，歷史數據 60 天過期
+        final diff = DateTime.now().difference(cachedRoute.cachedAt);
+        final bool isExpired = isToday
+            ? diff > const Duration(minutes: 10)
+            : diff > const Duration(days: 60);
+        isCacheValid = !isExpired;
+      }
+
+      if (isCacheValid) {
+        debugPrint('從快取載入: $hiveKey');
+        fetchedPositions = RoutePositionsHive.fromJsonList(
+          cachedRoute!.positionsJson,
         );
-        _isLoading = false;
-      });
+      } else {
+        // 4. 網路抓取
+        debugPrint('從網路抓取: $hiveKey');
+        final traccarProvider = Provider.of<TraccarProvider>(
+          context,
+          listen: false,
+        );
+        fetchedPositions =
+            await api.PositionsApi(traccarProvider.apiClient).positionsGet(
+              deviceId: _deviceId,
+              from: _historyFrom!.toUtc(),
+              to: _historyTo!.toUtc(),
+            ) ??
+            [];
 
-      if (_mapController != null) _drawFullRoute();
+        // 存入快取
+        if (fetchedPositions.isNotEmpty) {
+          await routeBox.put(
+            hiveKey,
+            RoutePositionsHive(
+              dateKey: hiveKey,
+              positionsJson: RoutePositionsHive.toJsonList(fetchedPositions),
+              cachedAt: DateTime.now(),
+            ),
+          );
+        }
+      }
+
+      // 5. 更新數據與過濾低速點
+      if (mounted) {
+        setState(() {
+          _positions = fetchedPositions;
+          // 過濾：時速 > 2 km/h 才回放 (Traccar speed * 1.852 = km/h)
+          _movingPositionsRx.assignAll(
+            _positions.where((p) => ((p.speed ?? 0.0) * 1.852) > 2.0).toList(),
+          );
+          _isLoading = false;
+        });
+
+        // 6. 效能優化：計算里程前綴和
+        _calculateDistancePrefixSum();
+
+        // 7. 繪製地圖
+        if (_mapController != null) {
+          _drawFullRoute();
+        }
+      }
     } catch (e) {
-      setState(() => _isLoading = false);
+      debugPrint('獲取軌跡失敗: $e');
+      if (mounted) setState(() => _isLoading = false);
       Get.snackbar("Error", "Failed to fetch route data");
     }
   }
@@ -259,35 +484,50 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen>
 
   void _togglePlayback() {
     if (_movingPositionsRx.isEmpty) return;
+
     setState(() {
       _isPlaying = !_isPlaying;
-      if (_isPlaying) {
-        _playbackTimer = Timer.periodic(const Duration(milliseconds: 32), (
-          timer,
-        ) {
-          // ~30fps
-          final double maxLimit = max(
-            0,
-            _movingPositionsRx.length - 1,
-          ).toDouble();
-          if (_playbackPositionRx.value >= maxLimit) {
-            _playbackPositionRx.value = maxLimit;
-            timer.cancel();
-            setState(() => _isPlaying = false);
-          } else {
-            // Speed adjusted increment
-            _playbackPositionRx.value =
-                (_playbackPositionRx.value + 0.05 * _playbackSpeed).clamp(
-                  0.0,
-                  maxLimit,
-                );
-            _updatePlaybackUI();
-          }
-        });
-      } else {
-        _playbackTimer?.cancel();
-      }
     });
+
+    if (_isPlaying) {
+      // 確保不會重複建立 Timer
+      _playbackTimer?.cancel();
+
+      _playbackTimer = Timer.periodic(const Duration(milliseconds: 32), (
+        timer,
+      ) {
+        // 1. 核心安全檢查：如果 Widget 已經不存在，立即停止並退出
+        if (!mounted) {
+          timer.cancel();
+          return;
+        }
+
+        final double maxLimit = max(
+          0,
+          _movingPositionsRx.length - 1,
+        ).toDouble();
+
+        if (_playbackPositionRx.value >= maxLimit) {
+          // 播放結束
+          _playbackPositionRx.value = maxLimit;
+          timer.cancel();
+          if (mounted) {
+            setState(() => _isPlaying = false);
+          }
+        } else {
+          // 2. 更新進度：使用 Rx 變數，不需要 setState
+          // 這裡 0.05 是基礎增量，配合 _playbackSpeed 實現倍速
+          double increment = 0.05 * _playbackSpeed;
+          _playbackPositionRx.value = (_playbackPositionRx.value + increment)
+              .clamp(0.0, maxLimit);
+
+          // 3. 更新地圖與 UI 標誌物
+          _updatePlaybackUI();
+        }
+      });
+    } else {
+      _playbackTimer?.cancel();
+    }
   }
 
   void _updatePlaybackUI() async {
@@ -554,9 +794,21 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen>
               return Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
-                  _buildStatItem("Time", time, Icons.access_time_rounded),
-                  _buildStatItem("Speed", "$speed km/h", Icons.speed_rounded),
-                  _buildStatItem("里程", distance, Icons.straighten),
+                  _buildStatItem(
+                    "positionDrivingTime".tr,
+                    time,
+                    Icons.access_time_rounded,
+                  ),
+                  _buildStatItem(
+                    "positionSpeed".tr,
+                    "$speed km/h",
+                    Icons.speed_rounded,
+                  ),
+                  _buildStatItem(
+                    "sharedDistance".tr,
+                    distance,
+                    Icons.straighten,
+                  ),
                 ],
               );
             }),
@@ -643,18 +895,24 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen>
     );
   }
 
+  // String _getDistanceFormatted(int currentIndex) {
+  //   if (_movingPositionsRx.isEmpty) return "0.00 km";
+  //   double total = 0;
+  //   for (int i = 0; i < currentIndex; i++) {
+  //     total += _distanceBetween(
+  //       _movingPositionsRx[i].latitude!.toDouble(),
+  //       _movingPositionsRx[i].longitude!.toDouble(),
+  //       _movingPositionsRx[i + 1].latitude!.toDouble(),
+  //       _movingPositionsRx[i + 1].longitude!.toDouble(),
+  //     );
+  //   }
+  //   return "${total.toStringAsFixed(2)} km";
+  // }
+  // 修改 _getDistanceFormatted
   String _getDistanceFormatted(int currentIndex) {
-    if (_movingPositionsRx.isEmpty) return "0.00 km";
-    double total = 0;
-    for (int i = 0; i < currentIndex; i++) {
-      total += _distanceBetween(
-        _movingPositionsRx[i].latitude!.toDouble(),
-        _movingPositionsRx[i].longitude!.toDouble(),
-        _movingPositionsRx[i + 1].latitude!.toDouble(),
-        _movingPositionsRx[i + 1].longitude!.toDouble(),
-      );
-    }
-    return "${total.toStringAsFixed(2)} km";
+    if (_distancePrefixSum.isEmpty || currentIndex >= _distancePrefixSum.length)
+      return "0.00 km";
+    return "${_distancePrefixSum[currentIndex].toStringAsFixed(2)} km";
   }
 
   Widget _buildSpeedSelector() {
@@ -702,62 +960,226 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen>
 
   // --- Calendar Logic ---
 
+  // Future<void> _fetchMonthlyData(DateTime month) async {
+  //   if (_deviceId == null) return;
+  //   setState(() => _isCalendarLoading = true);
+  //   final dailyBox = Hive.box<ReportSummaryHive>('dailySummaries');
+  //   final reportsApi = api.ReportsApi(
+  //     Provider.of<TraccarProvider>(context, listen: false).apiClient,
+  //   );
+
+  //   // logic simplified for brevity, keeping your existing Hive cache logic
+  //   // ...
+  //   setState(() => _isCalendarLoading = false);
+  // }
   Future<void> _fetchMonthlyData(DateTime month) async {
     if (_deviceId == null) return;
-    setState(() => _isCalendarLoading = true);
-    final dailyBox = Hive.box<ReportSummaryHive>('dailySummaries');
-    final reportsApi = api.ReportsApi(
-      Provider.of<TraccarProvider>(context, listen: false).apiClient,
-    );
 
-    // logic simplified for brevity, keeping your existing Hive cache logic
-    // ...
-    setState(() => _isCalendarLoading = false);
+    // 如果該月份數據已存在且不是切換月份，則不重複執行
+    if (_dailySummaries.isNotEmpty &&
+        month.month == _focusedDay.month &&
+        month.year == _focusedDay.year)
+      return;
+
+    setState(() {
+      _isCalendarLoading = true;
+      _focusedDay = month;
+    });
+
+    final traccarProvider = Provider.of<TraccarProvider>(
+      context,
+      listen: false,
+    );
+    final reportsApi = api.ReportsApi(traccarProvider.apiClient);
+    final dailyBox = await Hive.openBox<ReportSummaryHive>('daily_summaries');
+
+    _dailySummaries.clear();
+    final firstDayOfMonth = DateTime(month.year, month.month, 1);
+    final lastDayOfMonth = DateTime(month.year, month.month + 1, 0);
+
+    // --- 關鍵步驟：先從 Hive 撈取整個月的既有數據 ---
+    for (
+      var date = firstDayOfMonth;
+      date.isBefore(lastDayOfMonth.add(const Duration(days: 1)));
+      date = date.add(const Duration(days: 1))
+    ) {
+      final dayUtc = DateTime.utc(date.year, date.month, date.day);
+      // 確保這裡的 Key 與 MonthlyMileageScreen 儲存時完全一致
+      // final String hiveKey =  '$_deviceId-${DateFormat('yyyy-MM-dd').format(dayUtc)}';
+      final String hiveKey =
+          '$_deviceId\_${DateFormat('yyyy-MM-dd').format(dayUtc)}';
+      final cachedSummary = dailyBox.get(hiveKey);
+
+      if (cachedSummary != null) {
+        _dailySummaries[dayUtc] = api.ReportSummary(
+          distance: cachedSummary.distance,
+          averageSpeed: cachedSummary.averageSpeed,
+          maxSpeed: cachedSummary.maxSpeed,
+          spentFuel: cachedSummary.spentFuel,
+          engineHours: cachedSummary.engineHours,
+        );
+      }
+    }
+
+    // 立即更新一次 UI，讓使用者在日曆上看到從 MonthlyMileageScreen 緩存過來的數據
+    setState(() {
+      _isCalendarLoading = false;
+    });
+
+    // --- 背景補充抓取缺失的數據 ---
+    for (
+      var date = firstDayOfMonth;
+      date.isBefore(lastDayOfMonth.add(const Duration(days: 1)));
+      date = date.add(const Duration(days: 1))
+    ) {
+      final dayUtc = DateTime.utc(date.year, date.month, date.day);
+      if (_dailySummaries.containsKey(dayUtc)) continue; // 已有快取的就跳過
+
+      final from = DateTime(date.year, date.month, date.day, 0, 0, 0).toUtc();
+      final to = DateTime(date.year, date.month, date.day, 23, 59, 59).toUtc();
+      final String hiveKey =
+          '$_deviceId\_${DateFormat('yyyy-MM-dd').format(dayUtc)}';
+
+      try {
+        final summary = await reportsApi.reportsSummaryGet(
+          from,
+          to,
+          deviceId: [_deviceId!],
+        );
+        if (summary != null && summary.isNotEmpty) {
+          final dailySummary = summary.first;
+          _dailySummaries[dayUtc] = dailySummary;
+
+          // 存入 Hive 供下次或其他頁面使用
+          await dailyBox.put(hiveKey, ReportSummaryHive.fromApi(dailySummary));
+          if (mounted) setState(() {}); // 抓到一筆更新一筆
+        }
+      } catch (e) {
+        debugPrint('背景抓取數據失敗: $e');
+      }
+    }
   }
 
-  void _showCalendarDialog() {
+  void _showCalendarDialog() async {
+    if (_deviceId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select a device first.')),
+      );
+      return;
+    }
+
+    final currentLocale = Get.locale;
+    if (currentLocale != null) {
+      final localeString = currentLocale.toString();
+      await initializeDateFormatting(localeString, null);
+    }
+
+    // 先執行資料抓取（會先讀取 Hive 緩存）
+    _fetchMonthlyData(_focusedDay);
+
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        contentPadding: EdgeInsets.zero,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        content: SizedBox(
-          width: 340,
-          height: 420,
-          child: Column(
-            children: [
-              const SizedBox(height: 16),
-              if (_isCalendarLoading) const LinearProgressIndicator(),
-              Expanded(
-                child: TableCalendar(
-                  firstDay: DateTime.utc(2020),
-                  lastDay: DateTime.now(),
-                  focusedDay: _focusedDay,
-                  selectedDayPredicate: (d) =>
-                      isSameDay(_selectedCalendarDay, d),
-                  onDaySelected: (sel, foc) {
-                    _onDaySelected(sel, foc);
-                    Navigator.pop(context);
-                  },
-                  headerStyle: const HeaderStyle(
-                    formatButtonVisible: false,
-                    titleCentered: true,
-                  ),
-                  calendarStyle: const CalendarStyle(
-                    todayDecoration: BoxDecoration(
-                      color: Colors.blueAccent,
-                      shape: BoxShape.circle,
+      builder: (context) => StatefulBuilder(
+        // 使用 StatefulBuilder 確保日曆切換月份時 UI 會更新
+        builder: (context, modalSetState) {
+          return AlertDialog(
+            contentPadding: EdgeInsets.zero,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(24),
+            ),
+            content: SizedBox(
+              width: 340,
+              height: 460, // 稍微增加高度以容納里程文字
+              child: Column(
+                children: [
+                  const SizedBox(height: 16),
+                  // 載入進度條
+                  if (_isCalendarLoading) const LinearProgressIndicator(),
+                  Expanded(
+                    child: TableCalendar(
+                      locale: Get.locale?.languageCode,
+                      firstDay: DateTime.utc(2020),
+                      lastDay: DateTime.now(),
+                      focusedDay: _focusedDay,
+                      selectedDayPredicate: (d) =>
+                          isSameDay(_selectedCalendarDay, d),
+
+                      // 這裡很重要：切換月份時要觸發抓取新月份數據
+                      onPageChanged: (focusedDay) {
+                        modalSetState(() {
+                          _focusedDay = focusedDay;
+                        });
+                        _fetchMonthlyData(focusedDay).then((_) {
+                          if (mounted) modalSetState(() {}); // 抓完後更新 Dialog UI
+                        });
+                      },
+
+                      onDaySelected: (sel, foc) {
+                        _onDaySelected(sel, foc);
+                        Navigator.pop(context);
+                      },
+
+                      headerStyle: const HeaderStyle(
+                        formatButtonVisible: false,
+                        titleCentered: true,
+                      ),
+
+                      // --- 關鍵部分：添加 MarkerBuilder 來顯示里程 ---
+                      calendarBuilders: CalendarBuilders(
+                        markerBuilder: (context, date, events) {
+                          final dayUtc = DateTime.utc(
+                            date.year,
+                            date.month,
+                            date.day,
+                          );
+
+                          // 檢查是否有該日期的數據
+                          if (_dailySummaries.containsKey(dayUtc)) {
+                            final summary = _dailySummaries[dayUtc]!;
+                            final distanceInKm =
+                                (summary.distance ?? 0.0) / 1000;
+
+                            // 如果里程為 0，可以選擇不顯示
+                            if (distanceInKm <= 0) return null;
+
+                            return Positioned(
+                              bottom: 4, // 調整文字距離底部的距離
+                              child: Text(
+                                '${distanceInKm.toStringAsFixed(1)}km', // 顯示到小數點第一位
+                                style: TextStyle(
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.bold,
+                                  color: isSameDay(_selectedCalendarDay, date)
+                                      ? Colors
+                                            .white // 被選中時字體變白
+                                      : Colors.blue[700],
+                                ),
+                              ),
+                            );
+                          }
+                          return null;
+                        },
+                      ),
+
+                      calendarStyle: const CalendarStyle(
+                        todayDecoration: BoxDecoration(
+                          color: Colors.blueAccent,
+                          shape: BoxShape.circle,
+                        ),
+                        selectedDecoration: BoxDecoration(
+                          color: Color(0xFF0F53FE),
+                          shape: BoxShape.circle,
+                        ),
+                        // 為了不讓里程文字跟日期重疊，稍微調整邊距
+                        cellMargin: EdgeInsets.all(6),
+                      ),
                     ),
-                    selectedDecoration: BoxDecoration(
-                      color: Color(0xFF0F53FE),
-                      shape: BoxShape.circle,
-                    ),
                   ),
-                ),
+                ],
               ),
-            ],
-          ),
-        ),
+            ),
+          );
+        },
       ),
     );
   }

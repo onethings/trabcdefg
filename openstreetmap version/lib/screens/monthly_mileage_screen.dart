@@ -94,8 +94,7 @@ class _MonthlyMileageScreenState extends State<MonthlyMileageScreen> {
       date = date.add(const Duration(days: 1))
     ) {
       final dayUtc = DateTime.utc(date.year, date.month, date.day);
-      final String hiveKey =
-          '$_selectedDeviceId-${DateFormat('yyyy-MM-dd').format(dayUtc)}';
+      final String hiveKey = '$_selectedDeviceId\_${DateFormat('yyyy-MM-dd').format(dayUtc)}';
       final cachedSummary = dailyBox.get(hiveKey);
 
       if (cachedSummary != null) {
