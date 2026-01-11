@@ -1,17 +1,15 @@
 // lib/screens/device_list_screen.dart
-// DeviceListScreen with Search, Status Filtering, and Enhanced Device Info
-
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
-import 'package:trabcdefg/src/generated_api/api.dart';
-import 'package:trabcdefg/screens/livetracking_map_screen.dart'; // Import the new screen name
+import 'package:trabcdefg/src/generated_api/api.dart' as api;
+import 'package:trabcdefg/screens/livetracking_map_screen.dart';
 import 'package:get/get.dart';
 import 'package:timeago/timeago.dart' as timeago;
-// REMOVED: All problematic 'package:timeago/src/messages/...' imports.
-// The message classes (FrMessages, ZhMessages, etc.) are available 
-// directly via the 'timeago' import.
-
+import 'package:trabcdefg/services/offline_geocoder.dart';
+import 'package:collection/collection.dart';
+import 'package:shared_preferences/shared_preferences.dart'; //
 
 class DeviceListScreen extends StatefulWidget {
   const DeviceListScreen({super.key});
@@ -23,411 +21,312 @@ class DeviceListScreen extends StatefulWidget {
 class _DeviceListScreenState extends State<DeviceListScreen> {
   final _searchController = TextEditingController();
   String _searchQuery = '';
-  int _selectedStatus = 0; // 0: All, 1: Online, 2: Offline, 3: Unknown
+  int _selectedStatus = 0;
+  bool _isCompactView = false; // 控制樣式切換的變數
+  final OfflineGeocoder _geocoder = OfflineGeocoder();
 
-  // NEW: Function to register the timeago locale messages
-  void _setupTimeagoLocales() {
-    // The 'en' (English) and 'es' (Spanish) messages are loaded by default.
-    // Register other languages your app supports here by calling the class directly 
-    // from the timeago alias.
-    
-   // Afrikaans
-    // timeago.setLocaleMessages('af', timeago.AfMessages());
-    // Arabic
-    // 'ar' and 'ar_SA' often use the same message class if not distinguished
-    timeago.setLocaleMessages('ar', timeago.ArMessages());
-    // Azerbaijani
-    timeago.setLocaleMessages('az', timeago.AzMessages());
-    // Bulgarian
-    // timeago.setLocaleMessages('bg', timeago.BgMessages());
-    // Bengali
-    timeago.setLocaleMessages('bn', timeago.BnMessages());
-    // Catalan
-    timeago.setLocaleMessages('ca', timeago.CaMessages());
-    // Czech
-    timeago.setLocaleMessages('cs', timeago.CsMessages());
-    // Danish
-    timeago.setLocaleMessages('da', timeago.DaMessages());
-    // German (de)
-    timeago.setLocaleMessages('de', timeago.DeMessages());
-    // Greek
-    // timeago.setLocaleMessages('el', timeago.ElMessages());
-    // English Short (en_short is used for 'en_US' if en_USMessages is not available)
-    timeago.setLocaleMessages('en_short', timeago.EnShortMessages());
-    // Estonian
-    timeago.setLocaleMessages('et', timeago.EtMessages());
-    // Farsi / Persian
-    timeago.setLocaleMessages('fa', timeago.FaMessages());
-    // Finnish
-    timeago.setLocaleMessages('fi', timeago.FiMessages());
-    // French
-    timeago.setLocaleMessages('fr', timeago.FrMessages());
-    // Galician
-    // timeago.setLocaleMessages('gl', timeago.GlMessages());
-    // Hebrew
-    timeago.setLocaleMessages('he', timeago.HeMessages());
-    // Hindi
-    timeago.setLocaleMessages('hi', timeago.HiMessages());
-    // Croatian
-    timeago.setLocaleMessages('hr', timeago.HrMessages());
-    // Hungarian
-    timeago.setLocaleMessages('hu', timeago.HuMessages());
-    // Armenian
-    // timeago.setLocaleMessages('hy', timeago.HyMessages());
-    // Indonesian
-    timeago.setLocaleMessages('id', timeago.IdMessages());
-    // Italian
-    timeago.setLocaleMessages('it', timeago.ItMessages());
-    // Japanese
-    timeago.setLocaleMessages('ja', timeago.JaMessages());
-    // Georgian
-    // timeago.setLocaleMessages('ka', timeago.KaMessages());
-    // Kazakh
-    // timeago.setLocaleMessages('kk', timeago.KkMessages());
-    // Khmer
-    timeago.setLocaleMessages('km', timeago.KmMessages());
-    // Korean
-    timeago.setLocaleMessages('ko', timeago.KoMessages());
-    // Lao
-    // timeago.setLocaleMessages('lo', timeago.LoMessages());
-    // Lithuanian
-    // timeago.setLocaleMessages('lt', timeago.LtMessages());
-    // Latvian
-    timeago.setLocaleMessages('lv', timeago.LvMessages());
-    // Macedonian
-    // timeago.setLocaleMessages('mk', timeago.MkMessages());
-    // Malayalam
-    // timeago.setLocaleMessages('ml', timeago.MlMessages());
-    // Mongolian
-    timeago.setLocaleMessages('mn', timeago.MnMessages());
-    // Malay (ms)
-    // timeago.setLocaleMessages('ms', timeago.MsMessages());
-    // Norwegian Bokmål
-    // timeago.setLocaleMessages('nb', timeago.NbMessages());
-    // Nepali
-    // timeago.setLocaleMessages('ne', timeago.NeMessages());
-    // Dutch
-    timeago.setLocaleMessages('nl', timeago.NlMessages());
-    // Norwegian Nynorsk
-    // timeago.setLocaleMessages('nn', timeago.NnMessages());
-    // Polish
-    timeago.setLocaleMessages('pl', timeago.PlMessages());
-    // Portuguese (Brazil)
-    timeago.setLocaleMessages('pt_BR', timeago.PtBrMessages());
-    // Portuguese (Portugal/General)
-    // timeago.setLocaleMessages('pt', timeago.PtMessages());
-    // Romanian
-    timeago.setLocaleMessages('ro', timeago.RoMessages());
-    // Russian
-    timeago.setLocaleMessages('ru', timeago.RuMessages());
-    // Sinhala
-    // timeago.setLocaleMessages('si', timeago.SiMessages());
-    // Slovak
-    // timeago.setLocaleMessages('sk', timeago.SkMessages());
-    // Slovenian
-    // timeago.setLocaleMessages('sl', timeago.SlMessages());
-    // Albanian
-    // timeago.setLocaleMessages('sq', timeago.SqMessages());
-    // Serbian
-    timeago.setLocaleMessages('sr', timeago.SrMessages());
-    // Swedish
-    timeago.setLocaleMessages('sv', timeago.SvMessages());
-    // Swahili
-    // timeago.setLocaleMessages('sw', timeago.SwMessages());
-    // Tamil
-    timeago.setLocaleMessages('ta', timeago.TaMessages());
-    // Thai
-    timeago.setLocaleMessages('th', timeago.ThMessages());
-    // Turkmen
-    timeago.setLocaleMessages('tk', timeago.TkMessages());
-    // Turkish
-    timeago.setLocaleMessages('tr', timeago.TrMessages());
-    // Ukrainian
-    timeago.setLocaleMessages('uk', timeago.UkMessages());
-    // Uzbek
-    // timeago.setLocaleMessages('uz', timeago.UzMessages());
-    // Vietnamese
-    timeago.setLocaleMessages('vi', timeago.ViMessages());
-    // Simplified Chinese
-    timeago.setLocaleMessages('zh', timeago.ZhMessages());
-    // Traditional Chinese
-    // timeago.setLocaleMessages('zh_TW', timeago.ZhTwMessages());
-  }
-  
+  // 演算法優化：快取地址減少重複計算
+  final Map<String, String> _addressCache = {};
+  late Timer _refreshTimer;
+
   @override
   void initState() {
     super.initState();
-    
-    // NEW: Register locales once when the state is initialized
-    _setupTimeagoLocales(); 
-    
+    _loadViewPreference(); // 初始化時讀取樣式設定
+    _setupTimeagoLocales();
     _searchController.addListener(() {
-      setState(() {
-        _searchQuery = _searchController.text;
-      });
+      setState(() => _searchQuery = _searchController.text);
+    });
+
+    // 定時器：每秒刷新以確保 ACC ON 秒數準確
+    _refreshTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  // 讀取 Shared Preferences
+  Future<void> _loadViewPreference() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _isCompactView = prefs.getBool('isCompactView') ?? false;
+    });
+  }
+
+  // 儲存並切換樣式
+  Future<void> _toggleViewMode() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _isCompactView = !_isCompactView;
+      prefs.setBool('isCompactView', _isCompactView);
     });
   }
 
   @override
   void dispose() {
+    _refreshTimer.cancel();
     _searchController.dispose();
     super.dispose();
   }
 
+  void _setupTimeagoLocales() {
+    timeago.setLocaleMessages('zh', timeago.ZhMessages());
+    timeago.setLocaleMessages('en', timeago.EnMessages());
+  }
+
+  Future<String> _getAddress(num? lat, num? lon) async {
+    if (lat == null || lon == null) return 'sharedNoData'.tr;
+    final cacheKey = "${lat.toStringAsFixed(5)}_${lon.toStringAsFixed(5)}";
+    if (_addressCache.containsKey(cacheKey)) return _addressCache[cacheKey]!;
+    final address = await _geocoder.getAddress(lat.toDouble(), lon.toDouble());
+    _addressCache[cacheKey] = address;
+    return address;
+  }
+
   @override
   Widget build(BuildContext context) {
+    final traccarProvider = Provider.of<TraccarProvider>(context);
+
     return Scaffold(
+      backgroundColor: const Color(0xFFF1F5F9),
       appBar: AppBar(
-        title: Text('deviceTitle'.tr),
         automaticallyImplyLeading: false,
+        backgroundColor: Colors.white,
+        elevation: 0,
+        toolbarHeight: 0,
         bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(100.0),
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: TextField(
-                  controller: _searchController,
-                  decoration: InputDecoration(
-                    hintText: 'sharedSearchDevices'.tr,
-                    prefixIcon: const Icon(Icons.search),
-                    border: const OutlineInputBorder(
-                      borderRadius: BorderRadius.all(Radius.circular(25.0)),
-                    ),
-                  ),
-                ),
-              ),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  _buildStatusTab('deviceStatusAll'.tr, 0),
-                  _buildStatusTab('deviceStatusOnline'.tr, 1),
-                  _buildStatusTab('deviceStatusOffline'.tr, 2),
-                  _buildStatusTab('deviceStatusUnknown'.tr, 3),
-                ],
-              ),
-            ],
-          ),
+          preferredSize: const Size.fromHeight(115.0),
+          child: Column(children: [_buildSearchBar(), _buildFilterAndToggle()]),
         ),
       ),
-      body: Consumer<TraccarProvider>(
-        builder: (context, traccarProvider, child) {
-          final allDevices = traccarProvider.devices;
-          final filteredDevices = allDevices.where((device) {
-            final matchesQuery = (device.name ?? 'unknown')
-                .toLowerCase()
-                .contains(_searchQuery.toLowerCase());
-            final matchesStatus =
-                _selectedStatus == 0 ||
-                _getStatusText(_selectedStatus) == (device.status ?? 'unknown');
-            return matchesQuery && matchesStatus;
-          }).toList();
+      body: _buildBody(traccarProvider),
+    );
+  }
 
-          if (traccarProvider.isLoading) {
-            return const Center(child: CircularProgressIndicator());
-          }
+  Widget _buildBody(TraccarProvider provider) {
+    if (provider.isLoading && provider.devices.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
 
-          if (filteredDevices.isEmpty) {
-            return Center(child: Text('sharedNoData'.tr));
-          }
+    final now = DateTime.now().toUtc();
 
-          return ListView.builder(
-            itemCount: filteredDevices.length,
-            itemBuilder: (context, index) {
-              final device = filteredDevices[index];
-              return ListTile(
-                onTap: () {
-                  // Navigate to the LiveTrackingMapScreen
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (context) =>
-                          LiveTrackingMapScreen(selectedDevice: device),
-                    ),
-                  );
-                },
-                leading: Consumer<TraccarProvider>(
-                  builder: (context, traccarProvider, child) {
-                    final position = traccarProvider.positions.firstWhereOrNull(
-                      (p) => p.id == device.positionId,
-                    );
+    final filteredDevices = provider.devices.where((device) {
+      final matchesQuery = (device.name ?? '').toLowerCase().contains(_searchQuery.toLowerCase());
+      final position = provider.positions.firstWhereOrNull((p) => p.deviceId == device.id);
+      final DateTime? lastUpdate = position?.fixTime?.toUtc() ?? device.lastUpdate?.toUtc();
+      
+      // 10 分鐘離線演算法機制
+      final bool isStale = lastUpdate == null || now.difference(lastUpdate).inMinutes >= 10;
+      String effectiveStatus = isStale ? 'offline' : (device.status ?? 'unknown');
 
-                    // Check if a valid position and speed exist
-                    if (position != null && position.speed != null) {
-                      // Convert speed from knots to km/h for display
-                      final speedKmh = (position.speed! * 1.852)
-                          .toStringAsFixed(0);
+      final String? filterStatus = _getStatusText(_selectedStatus);
+      return matchesQuery && (_selectedStatus == 0 || filterStatus == effectiveStatus);
+    }).toList();
 
-                      return Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          CircleAvatar(
-                            backgroundColor: _getStatusColor(device.status),
-                            radius: 20, // Adjust size as needed
-                          ),
-                          Text(
-                            speedKmh,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
-                      );
-                    } else {
-                      // Fallback to a simple CircleAvatar if no speed is available
-                      return CircleAvatar(
-                        backgroundColor: _getStatusColor(device.status),
-                      );
-                    }
-                  },
-                ),
-                title: Text(device.name ?? 'sharedUnknown'.tr),
-                subtitle: Text(
-                  '${_getStatusTextForDisplay(device.status)}'
-                  // MODIFIED: Pass the current locale from GetX to timeago.format()
-                  '${device.lastUpdate != null ? ' • ${timeago.format(
-                        device.lastUpdate!,
-                        // Use Get.locale?.languageCode to get the active language code
-                        // Default to 'en' if Get.locale is null
-                        locale: Get.locale?.languageCode ?? 'en',
-                      )}' : ''}',
-                ),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (device.positionId != null)
-                      Consumer<TraccarProvider>(
-                        builder: (context, traccarProvider, child) {
-                          final position = traccarProvider.positions
-                              .firstWhereOrNull(
-                                (p) => p.id == device.positionId,
-                              );
+    if (filteredDevices.isEmpty) return Center(child: Text('sharedNoData'.tr));
 
-                          if (position?.attributes != null) {
-                            final attributes = position!.attributes as Map;
-
-                            return Row(
-                              children: [
-                                // Ignition Icon
-                                if (attributes['ignition'] != null)
-                                  Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 4.0,
-                                    ),
-                                    child: Icon(
-                                      Icons.key,
-                                      color: attributes['ignition']
-                                          ? Colors.green
-                                          : Colors.red,
-                                    ),
-                                  ),
-
-                                // Battery Icon with Percentage
-                                if (attributes['batteryLevel'] != null)
-                                  Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 4.0,
-                                    ),
-                                    child: Stack(
-                                      alignment: Alignment.center,
-                                      children: [
-                                        Icon(
-                                          Icons.battery_full,
-                                          color: _getBatteryColor(
-                                            (attributes['batteryLevel'] as int)
-                                                .toDouble(), // Cast to double
-                                          ),
-                                        ),
-                                        Text(
-                                          '${attributes['batteryLevel']}',
-                                          style: const TextStyle(
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.bold,
-                                            color: Colors.white,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                              ],
-                            );
-                          }
-                          return const SizedBox.shrink();
-                        },
-                      ),
-                  ],
-                ),
-              );
-            },
-          );
+    return RefreshIndicator(
+      onRefresh: () async => await provider.fetchInitialData(),
+      child: ListView.builder(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        itemCount: filteredDevices.length,
+        itemBuilder: (context, index) {
+          final device = filteredDevices[index];
+          final position = provider.positions.firstWhereOrNull((p) => p.deviceId == device.id);
+          
+          // 根據切換狀態決定顯示哪種卡片
+          return _isCompactView 
+              ? _buildCompactListItem(device, position) 
+              : _buildStandardCard(device, position);
         },
       ),
     );
   }
 
-  Widget _buildStatusTab(String label, int index) {
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          _selectedStatus = index;
-        });
-      },
-      child: Chip(
-        label: Text(label),
-        backgroundColor: _selectedStatus == index
-            ? Colors.blue[100]
-            : Colors.grey[200],
+  // --- 樣式 A: 標準大卡片 ---
+  Widget _buildStandardCard(api.Device device, api.Position? position) {
+    final Map<String, dynamic> attributes = (position?.attributes as Map<String, dynamic>?) ?? {};
+    final bool isIgnitionOn = attributes['ignition'] == true;
+    final double speedKmH = (position?.speed ?? 0.0) * 1.852;
+    final DateTime now = DateTime.now().toUtc();
+    final DateTime? lastUpdate = position?.fixTime?.toUtc() ?? device.lastUpdate?.toUtc();
+    final bool isStale = lastUpdate == null || now.difference(lastUpdate).inMinutes >= 10;
+
+    Color statusColor = isStale ? Colors.blueGrey.shade300 : (isIgnitionOn ? const Color(0xFF10B981) : Colors.amber.shade700);
+    
+    // ACC ON Timer 邏輯
+    String accTimer = "";
+    if (!isStale && isIgnitionOn && lastUpdate != null) {
+      final d = now.difference(lastUpdate);
+      accTimer = " ${d.inMinutes} m ${d.inSeconds % 60}s";
+    }
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
+      child: InkWell(
+        onTap: () => Get.to(() => LiveTrackingMapScreen(selectedDevice: device)),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.directions_car, color: statusColor),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(device.name ?? '...', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                        Text(lastUpdate != null ? timeago.format(lastUpdate, locale: 'zh') : '--', style: TextStyle(color: Colors.grey[400], fontSize: 11)),
+                      ],
+                    ),
+                  ),
+                  _buildBadge(speedKmH, isStale, isIgnitionOn, accTimer, statusColor),
+                ],
+              ),
+              const Divider(height: 20),
+              FutureBuilder<String>(
+                future: _getAddress(position?.latitude, position?.longitude),
+                builder: (context, snapshot) => Row(
+                  children: [
+                    const Icon(Icons.location_on, size: 14, color: Colors.grey),
+                    const SizedBox(width: 6),
+                    Expanded(child: Text(snapshot.data ?? '...', style: TextStyle(color: Colors.grey[600], fontSize: 12), overflow: TextOverflow.ellipsis)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
 
-  String? _getStatusText(int index) {
-    switch (index) {
-      case 1:
-        return 'online';
-      case 2:
-        return 'offline';
-      case 3:
-        return 'unknown';
-      default:
-        return null;
-    }
+  // --- 樣式 B: 緊湊列表 (一頁 9 台) ---
+  Widget _buildCompactListItem(api.Device device, api.Position? position) {
+    final Map<String, dynamic> attributes = (position?.attributes as Map<String, dynamic>?) ?? {};
+    final bool isIgnitionOn = attributes['ignition'] == true;
+    final double speedKmH = (position?.speed ?? 0.0) * 1.852;
+    final DateTime now = DateTime.now().toUtc();
+    final DateTime? lastUpdate = position?.fixTime?.toUtc() ?? device.lastUpdate?.toUtc();
+    final bool isStale = lastUpdate == null || now.difference(lastUpdate).inMinutes >= 10;
+
+    Color statusColor = isStale ? Colors.grey : (isIgnitionOn ? const Color(0xFF10B981) : Colors.orange);
+
+    return Container(
+      height: 72,
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8)),
+      child: InkWell(
+        onTap: () => Get.to(() => LiveTrackingMapScreen(selectedDevice: device)),
+        child: Row(
+          children: [
+            Container(width: 5, decoration: BoxDecoration(color: statusColor, borderRadius: const BorderRadius.horizontal(left: Radius.circular(8)))),
+            const SizedBox(width: 10),
+            Expanded(
+              flex: 3,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(device.name ?? '...', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13), overflow: TextOverflow.ellipsis),
+                  Text(lastUpdate != null ? timeago.format(lastUpdate, locale: 'zh') : '--', style: const TextStyle(fontSize: 9, color: Colors.grey)),
+                ],
+              ),
+            ),
+            Expanded(
+              flex: 4,
+              child: FutureBuilder<String>(
+                future: _getAddress(position?.latitude, position?.longitude),
+                builder: (context, snapshot) => Text(snapshot.data ?? '...', style: const TextStyle(fontSize: 10, color: Colors.blueGrey), maxLines: 2, overflow: TextOverflow.ellipsis),
+              ),
+            ),
+            _buildCompactBadge(speedKmH, isStale, isIgnitionOn, lastUpdate, now, statusColor),
+          ],
+        ),
+      ),
+    );
   }
 
-  Color _getStatusColor(String? status) {
-    switch (status) {
-      case 'online':
-        return Colors.green;
-      case 'offline':
-        return Colors.red;
-      case 'unknown':
-        return Colors.grey;
-      default:
-        return Colors.black;
-    }
+  // --- 輔助 Widget: 標籤與按鈕 ---
+  Widget _buildBadge(double speed, bool isStale, bool isOn, String timer, Color color) {
+    bool isMoving = !isStale && speed > 2;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(color: (isMoving ? Colors.green : color).withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+      child: Text(isMoving ? "${speed.toStringAsFixed(0)} km/h" : (isStale ? "OFFLINE" : "ACC ON$timer"), 
+        style: TextStyle(color: isMoving ? Colors.green : color, fontWeight: FontWeight.bold, fontSize: 11)),
+    );
   }
 
-  String _getStatusTextForDisplay(String? status) {
-    switch (status) {
-      case 'online':
-        return 'deviceStatusOnline'.tr;
-      case 'offline':
-        return 'deviceStatusOffline'.tr;
-      case 'unknown':
-        return 'deviceStatusUnknown'.tr;
-      default:
-        return status ?? 'N/A';
+  Widget _buildCompactBadge(double speed, bool isStale, bool isOn, DateTime? last, DateTime now, Color color) {
+    if (isStale) return const Padding(padding: EdgeInsets.only(right: 8), child: Text("OFFLINE", style: TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.bold)));
+    if (speed > 2) return Padding(padding: const EdgeInsets.only(right: 8), child: Text("${speed.toStringAsFixed(0)} km/h", style: const TextStyle(fontSize: 10, color: Colors.green, fontWeight: FontWeight.bold)));
+    
+    String timeStr = "";
+    if (isOn && last != null) {
+      final d = now.difference(last);
+      timeStr = "\n${d.inMinutes}m ${d.inSeconds % 60}s";
     }
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: Text("ACC ON$timeStr", textAlign: TextAlign.center, style: TextStyle(fontSize: 9, color: color, fontWeight: FontWeight.bold)),
+    );
   }
 
-  Color _getBatteryColor(double batteryLevel) {
-    if (batteryLevel > 75) {
-      return Colors.green;
-    } else if (batteryLevel > 25) {
-      return Colors.orange;
-    } else {
-      return Colors.red;
-    }
+  Widget _buildFilterAndToggle() {
+    final labels = ['deviceStatusAll'.tr, 'deviceStatusOnline'.tr, 'deviceStatusOffline'.tr, 'deviceStatusUnknown'.tr];
+    return Row(
+      children: [
+        Expanded(
+          child: SizedBox(
+            height: 50,
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              itemCount: labels.length,
+              itemBuilder: (context, i) => Padding(
+                padding: const EdgeInsets.only(right: 6),
+                child: ChoiceChip(
+                  label: Text(labels[i], style: TextStyle(fontSize: 11, color: _selectedStatus == i ? Colors.white : Colors.black87)),
+                  selected: _selectedStatus == i,
+                  onSelected: (_) => setState(() => _selectedStatus = i),
+                  selectedColor: Colors.blueAccent,
+                ),
+              ),
+            ),
+          ),
+        ),
+        // 切換樣式按鈕
+        IconButton(
+          icon: Icon(_isCompactView ? Icons.view_agenda_outlined : Icons.view_headline_rounded, color: Colors.blueAccent),
+          onPressed: _toggleViewMode,
+          tooltip: "切換顯示樣式",
+        ),
+        const SizedBox(width: 8),
+      ],
+    );
   }
+
+  Widget _buildSearchBar() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+      child: SizedBox(
+        height: 40,
+        child: TextField(
+          controller: _searchController,
+          decoration: InputDecoration(
+            hintText: 'sharedSearchDevices'.tr,
+            prefixIcon: const Icon(Icons.search, size: 20),
+            filled: true,
+            fillColor: const Color(0xFFF1F5F9),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+          ),
+        ),
+      ),
+    );
+  }
+
+  String? _getStatusText(int index) => [null, 'online', 'offline', 'unknown'][index];
 }

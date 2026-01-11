@@ -15,6 +15,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:trabcdefg/models/report_summary_hive.dart';
 import 'package:trabcdefg/models/route_positions_hive.dart'; // Assuming you put the model here
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:trabcdefg/services/offline_geocoder.dart';
 
 enum OSMMapType { normal, satellite }
 
@@ -29,6 +30,8 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen>
     with TickerProviderStateMixin {
   MapLibreMapController? _mapController;
   List<double> _distancePrefixSum = [];
+  final OfflineGeocoder _geocoder = OfflineGeocoder(); //
+  final RxString _currentAddressRx = "".obs;
 
   // Style Constants
   static const String _streetStyle =
@@ -79,6 +82,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen>
   @override
   void initState() {
     super.initState();
+    _geocoder.initDB();
     cleanExpiredRouteHistory();
     _loadInitialParamsAndFetch();
   }
@@ -210,59 +214,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen>
     }
   }
 
-  // Future<void> _fetchHistoryRoute({DateTime? selectedDay}) async {
-  //   if (selectedDay != null) {
-  //     _historyFrom = DateTime(
-  //       selectedDay.year,
-  //       selectedDay.month,
-  //       selectedDay.day,
-  //       0,
-  //       0,
-  //       0,
-  //     );
-  //     _historyTo = DateTime(
-  //       selectedDay.year,
-  //       selectedDay.month,
-  //       selectedDay.day,
-  //       23,
-  //       59,
-  //       59,
-  //     );
-  //   }
-  //   if (_deviceId == null) return;
-
-  //   setState(() => _isLoading = true);
-  //   _playbackTimer?.cancel();
-  //   _isPlaying = false;
-  //   _playbackPositionRx.value = 0.0;
-
-  //   final traccarProvider = Provider.of<TraccarProvider>(
-  //     context,
-  //     listen: false,
-  //   );
-  //   try {
-  //     final fetched =
-  //         await api.PositionsApi(traccarProvider.apiClient).positionsGet(
-  //           deviceId: _deviceId,
-  //           from: _historyFrom!.toUtc(),
-  //           to: _historyTo!.toUtc(),
-  //         ) ??
-  //         [];
-
-  //     setState(() {
-  //       _positions = fetched;
-  //       _movingPositionsRx.assignAll(
-  //         fetched.where((p) => (p.speed ?? 0.0) > 0.5).toList(),
-  //       );
-  //       _isLoading = false;
-  //     });
-
-  //     if (_mapController != null) _drawFullRoute();
-  //   } catch (e) {
-  //     setState(() => _isLoading = false);
-  //     Get.snackbar("Error", "Failed to fetch route data");
-  //   }
-  // }
+ 
   // Utility function to be called once on app startup or screen load
   Future<void> cleanExpiredRouteHistory() async {
     final routeBox = await Hive.openBox<RoutePositionsHive>('route_positions');
@@ -562,6 +514,16 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen>
       );
     }
 
+    // --- New: Update Address ---
+  // To avoid redundant DB calls, only update if the position index changed
+  if (_currentAddressRx.value == "" || idx % 5 == 0) { // Update every few points or at start
+     String addr = await _geocoder.getAddress(
+       _movingPositionsRx[idx].latitude!.toDouble(),
+       _movingPositionsRx[idx].longitude!.toDouble(),
+     );
+     _currentAddressRx.value = addr; //
+  }
+
     // 更新圖標位置與旋轉
     _mapController!.updateSymbol(
       _playbackSymbol!,
@@ -776,6 +738,17 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            // Inside your build method or playback panel widget:
+Obx(() => Text(
+  _currentAddressRx.value.isEmpty ? "Locating..." : _currentAddressRx.value,
+  style: const TextStyle(
+    fontSize: 14,
+    fontWeight: FontWeight.bold,
+    color: Colors.black87,
+  ),
+  maxLines: 1,
+  overflow: TextOverflow.ellipsis,
+)),
             Obx(() {
               final int idx = _playbackPositionRx.value.floor().clamp(
                 0,

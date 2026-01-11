@@ -1,6 +1,3 @@
-// lib/screens/map_screen.dart
-// A screen that displays the map with device locations using OpenStreetMap with tile caching.
-
 import 'package:flutter/material.dart';
 // import 'package:flutter_map/flutter_map.dart'; // Primary map package for OpenStreetMap
 import 'package:maplibre_gl/maplibre_gl.dart' as maplibre;
@@ -36,6 +33,7 @@ import 'package:hive/hive.dart';
 import 'dart:typed_data';
 import 'package:flutter_map/flutter_map.dart'; // Ensure this is imported for TileProvider
 import 'package:flutter/foundation.dart'; // Required for DiagnosticsProperty
+import 'package:trabcdefg/services/offline_geocoder.dart';
 
 // --- Tile Caching Implementation using Hive ---
 
@@ -207,8 +205,7 @@ class _MapScreenState extends State<MapScreen> {
       "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json";
 
   // 2. Dark Matter (酷炫深色模式) - 適合夜間使用
-  static const String _darkStyle =
-      "https://tiles.openfreemap.org/styles/dark";
+  static const String _darkStyle = "https://tiles.openfreemap.org/styles/dark";
 
   // 3. OpenStreetMap Bright (明亮強化版)
   static const String _osmBrightStyle =
@@ -219,8 +216,8 @@ class _MapScreenState extends State<MapScreen> {
       "https://tiles.openfreemap.org/styles/fiord";
 
   // 5. Google Maps 混合風格 (混合衛星與路網) - 透過自定義 JSON 實作
-  static const String _hybridStyle = 
-  "https://tiles.openfreemap.org/styles/positron";
+  static const String _hybridStyle =
+      "https://tiles.openfreemap.org/styles/positron";
   maplibre.MapLibreMapController? _mapController;
   bool _isStyleLoaded = false;
   final Set<String> _loadedIcons = {};
@@ -234,6 +231,8 @@ class _MapScreenState extends State<MapScreen> {
   final http.Client _httpClient = http.Client();
   // Adjust 0.005 based on how tall your bottom sheet is
   double _mapCenterOffset = 0.005;
+  final OfflineGeocoder _geocoder = OfflineGeocoder();
+  String _currentAddress = "";
 
   String _getStyleString(AppMapType type) {
     switch (type) {
@@ -298,6 +297,34 @@ class _MapScreenState extends State<MapScreen> {
     super.dispose();
   }
 
+  void _applyAutoTheme() {
+    final hour = DateTime.now().hour;
+    if (hour >= 18 || hour <= 6) {
+      _updateMapStyle(AppMapType.dark);
+    } else {
+      _updateMapStyle(AppMapType.bright);
+    }
+  }
+
+  Widget _buildStatusBadge(String status) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: _getStatusColor(status).withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _getStatusColor(status).withOpacity(0.5)),
+      ),
+      child: Text(
+        status.toUpperCase(),
+        style: TextStyle(
+          color: _getStatusColor(status),
+          fontSize: 10,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
+  }
+
   Future<void> _loadMapPreference() async {
     final prefs = await SharedPreferences.getInstance();
     final int? savedIndex = prefs.getInt('preferred_map_type');
@@ -329,7 +356,7 @@ class _MapScreenState extends State<MapScreen> {
     try {
       // _mapController?.setStyleString(style);
       // _mapController?.setMapStyle(style);
-      _mapController?.setStyle( style);
+      _mapController?.setStyle(style);
     } catch (e) {
       // Fallback for different maplibre/mapbox versions
       debugPrint("setStyleString failed, check your package version: $e");
@@ -667,6 +694,11 @@ class _MapScreenState extends State<MapScreen> {
     api.Device device,
     List<api.Position> allPositions,
   ) async {
+    // --- START DEBUG CODE ---
+    int count = await _geocoder.getItemsCount();
+    print("Total records in Geocoder: $count");
+    // This will print to your debug console every time you select a car
+    // --- END DEBUG CODE ---
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt('selectedDeviceId', device.id!);
     await prefs.setString('selectedDeviceName', device.name!);
@@ -677,7 +709,27 @@ class _MapScreenState extends State<MapScreen> {
           api.Position(deviceId: device.id, latitude: 0.0, longitude: 0.0),
     );
 
-    if (position.latitude != null && position.longitude != null) {
+    // --- 新增離線地址查詢邏輯 ---
+    setState(() {
+      _currentAddress = "Loading..."; // 切換車輛時先重置地址
+    });
+
+    if (position.latitude != null &&
+        position.longitude != null &&
+        position.latitude != 0.0) {
+      // 異步獲取地址
+      String addr = await _geocoder.getAddress(
+        position.latitude!.toDouble(),
+        position.longitude!.toDouble(),
+      );
+
+      if (mounted) {
+        setState(() {
+          _currentAddress = addr;
+        });
+      }
+
+      // 地圖相機移動邏輯保持不變
       _mapController!.animateCamera(
         maplibre.CameraUpdate.newCameraPosition(
           maplibre.CameraPosition(
@@ -689,7 +741,12 @@ class _MapScreenState extends State<MapScreen> {
           ),
         ),
       );
+    } else {
+      setState(() {
+        _currentAddress = "No GPS Signal";
+      });
     }
+    // -----------------------
 
     _showDeviceDetailPanel(device, position);
   }
@@ -827,11 +884,11 @@ class _MapScreenState extends State<MapScreen> {
         child: Container(
           width: double.infinity,
           decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(24.0),
+            color: Colors.white.withOpacity(0.95), // 增加一點透明感
+            borderRadius: BorderRadius.circular(28.0), // 更圓潤的角，視覺更柔和
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.05),
+                color: Colors.black.withOpacity(0.08),
                 blurRadius: 20,
                 spreadRadius: 5,
               ),
@@ -988,6 +1045,31 @@ class _MapScreenState extends State<MapScreen> {
                   ],
                 ),
               ),
+              //Road Name Start
+              Row(
+                children: [
+                  Icon(Icons.location_on, size: 14, color: Colors.red[400]),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      // 如果查到的是 Myanmar Road，顯示為 "Myanmar (Road info unavailable)" 比較專業
+                      _currentAddress == "Myanmar Road"
+                          ? "Myanmar (Street name unlisted)"
+                          : _currentAddress,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.blueGrey[800],
+                        fontStyle: _currentAddress == "Myanmar Road"
+                            ? FontStyle.italic
+                            : FontStyle.normal,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+
+              //Road Name End
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16.0),
                 child: Column(
@@ -999,8 +1081,11 @@ class _MapScreenState extends State<MapScreen> {
                               as Map<String, dynamic>?)?['address'] ??
                           'N/A',
                       totalDistance:
-                          '${(currentPosition.attributes as Map<String, dynamic>?)?['totalDistance']?.toStringAsFixed(2) ?? 'N/A'} ' +
-                          'sharedKm'.tr, //2
+                          (currentPosition.attributes
+                                  as Map<String, dynamic>?)?['totalDistance'] !=
+                              null
+                          ? '${((currentPosition.attributes as Map<String, dynamic>)['totalDistance'] / 1000).toStringAsFixed(0)} ${'sharedKm'.tr}'
+                          : 'N/A',
                     ),
                     _buildReportPanel(
                       onRefreshPressed: () async {
@@ -1071,7 +1156,7 @@ class _MapScreenState extends State<MapScreen> {
         // Fix Time Row
         Row(
           children: [
-            const Icon(Icons.access_time, size: 16, color: Colors.grey),
+            // const Icon(Icons.access_time, size: 16, color: Colors.grey),
             const SizedBox(width: 8),
             Text(
               'deviceLastUpdate'.tr + ':',
@@ -1081,24 +1166,24 @@ class _MapScreenState extends State<MapScreen> {
             Text(fixTime),
           ],
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 1),
 
         // Address Row
         if (address != 'N/A')
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(Icons.location_on, size: 16, color: Colors.grey),
+              // const Icon(Icons.location_on, size: 16, color: Colors.grey),
               const SizedBox(width: 8),
               Expanded(child: Text(address)),
             ],
           ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 1),
 
         // Total Distance Row
         Row(
           children: [
-            const Icon(Icons.directions_car, size: 16, color: Colors.grey),
+            // const Icon(Icons.directions_car, size: 16, color: Colors.grey),
             const SizedBox(width: 8),
             Text(
               'deviceTotalDistance'.tr + ':',
@@ -1108,7 +1193,7 @@ class _MapScreenState extends State<MapScreen> {
             Text(totalDistance),
           ],
         ),
-        const SizedBox(height: 16), // Separator before the report panel
+        const SizedBox(height: 1), // Separator before the report panel
       ],
     );
   }
@@ -1206,9 +1291,9 @@ class _MapScreenState extends State<MapScreen> {
           icon: const Icon(Icons.more_horiz, color: Color(0xFF5B697B)),
           onPressed: onMoreOptionsPressed,
         ),
-        // Refresh icon
+        // Route icon
         IconButton(
-          icon: const Icon(Icons.refresh, color: Color(0xFF5B697B)),
+          icon: const Icon(Icons.route, color: Color(0xFF5B697B)),
           onPressed: onRefreshPressed,
         ),
         // Upload icon
@@ -1455,172 +1540,211 @@ class _MapScreenState extends State<MapScreen> {
         }
 
         // 6. Build the Scaffold and Map
-        return Scaffold(
-          key: _scaffoldKey,
-          appBar: AppBar(
-            title: Text('mapTitle'.tr),
-            actions: [
-              PopupMenuButton<AppMapType>(
-                icon: const Icon(Icons.layers_outlined),
-                onSelected: _updateMapStyle,
-                itemBuilder: (context) => [
-                  // const PopupMenuItem(
-                  //   value: AppMapType.openStreetMap,
-                  //   child: Text('Standard'),
-                  // ),
-                  const PopupMenuItem(
-                    value: AppMapType.bright,
-                    child: Text('Bright'),
-                  ),
-                  const PopupMenuItem(
-                    value: AppMapType.dark,
-                    child: Text('Dark Mode'),
-                  ),
-                  const PopupMenuItem(
-                    value: AppMapType.terrain,
-                    child: Text('Fiord'),
-                  ),
-                  const PopupMenuItem(
-                    value: AppMapType.satellite,
-                    child: Text('Satellite'),
-                  ),
-                  const PopupMenuItem(
-                    value: AppMapType.hybrid,
-                    child: Text('Positron'),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          // The Drawer
-          drawer: _buildDeviceListDrawer(context, traccarProvider),
-          body: Stack(
-            children: [
-              maplibre.MapLibreMap(
-                // key: ValueKey(_isSatelliteMode),
-                key: ValueKey(_mapType),
-                initialCameraPosition: maplibre.CameraPosition(
-                  target: maplibre.LatLng(
-                    initialFlutterLatLng.latitude,
-                    initialFlutterLatLng.longitude,
-                  ),
-                  zoom: initialZoom,
-                ),
-                // styleString: _isSatelliteMode ? _satelliteStyle : _streetStyle,
-                styleString: _getStyleString(_mapType),
-                onMapCreated: (controller) {
-                  _mapController = controller;
-
-                  // This listener acts as your "InfoWindow"
-                  _mapController!.onSymbolTapped.add((symbol) {
-                    final deviceIdString = symbol.data?['deviceId'];
-                    final deviceId = int.tryParse(deviceIdString ?? '');
-
-                    if (deviceId != null) {
-                      final traccarProvider = Provider.of<TraccarProvider>(
-                        context,
-                        listen: false,
-                      );
-
-                      // Find the specific device and its last position
-                      final device = traccarProvider.devices.firstWhere(
-                        (d) => d.id == deviceId,
-                      );
-                      final pos = traccarProvider.positions.firstWhere(
-                        (p) => p.deviceId == deviceId,
-                      );
-
-                      // 1. Show your detail panel (This is your InfoWindow)
-                      _showDeviceDetailPanel(device, pos);
-
-                      // 2. Center the camera on the device with the offset
-                      _mapController!.animateCamera(
-                        // CameraUpdate.newLatLng(
-                        //   LatLng(
-                        //     pos.latitude!.toDouble() - _mapCenterOffset,
-                        //     pos.longitude!.toDouble(),
-                        //   ),
-                        // ),
-                        maplibre.CameraUpdate.newCameraPosition(
-                          maplibre.CameraPosition(
-                            target: maplibre.LatLng(
-                              pos.latitude!.toDouble() -
-                                  _mapCenterOffset, // 您的垂直偏移量
-                              pos.longitude!.toDouble(),
-                            ),
-                            zoom: 14.0, // 在這裡設定縮放等級
-                          ),
-                        ),
-                      );
-                    }
-                  });
-                },
-                onStyleLoadedCallback: () {
-                  setState(() => _isStyleLoaded = true);
-                  _loadedIcons.clear();
-                  _updateAllMarkers(traccarProvider);
-
-                  // --- 新增：如果是初次進入且沒有選定特定設備，則顯示全部 ---
-                  if (widget.selectedDevice == null) {
-                    // 延遲一點點確保標記都已計算完成
-                    Future.delayed(const Duration(milliseconds: 500), () {
-                      _zoomToFitAll(traccarProvider);
-                    });
-                  }
-                },
-              ),
-              // 在 Stack 的 children 中
-              Positioned(
-                top: 10,
-                right: 10,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // 1. 顯示全部按鈕
-                    FloatingActionButton.small(
-                      heroTag: "zoom_all",
-                      backgroundColor: Colors.white,
-                      onPressed: () => _zoomToFitAll(traccarProvider),
-                      child: const Icon(Icons.zoom_out_map, color: Colors.blue),
+        return SafeArea(
+          top:
+              false, // Set to false if you want the map to bleed into the status bar area
+          child: Scaffold(
+            extendBodyBehindAppBar: true,
+            key: _scaffoldKey,
+            appBar: AppBar(
+              //    title: Text('mapTitle'.tr),
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              surfaceTintColor: Colors.transparent,
+            ),
+            // The Drawer
+            drawer: _buildDeviceListDrawer(context, traccarProvider),
+            body: Stack(
+              children: [
+                maplibre.MapLibreMap(
+                  // key: ValueKey(_isSatelliteMode),
+                  key: ValueKey(_mapType),
+                  initialCameraPosition: maplibre.CameraPosition(
+                    target: maplibre.LatLng(
+                      initialFlutterLatLng.latitude,
+                      initialFlutterLatLng.longitude,
                     ),
-                    const SizedBox(height: 8),
+                    zoom: initialZoom,
+                  ),
+                  // styleString: _isSatelliteMode ? _satelliteStyle : _streetStyle,
+                  styleString: _getStyleString(_mapType),
+                  onMapCreated: (controller) {
+                    _mapController = controller;
 
-                    // 只有在多台車時才顯示切換按鈕
-                    if (traccarProvider.devices.length > 1) ...[
-                      // 2. 上一台按鈕
+                    // This listener acts as your "InfoWindow"
+                    _mapController!.onSymbolTapped.add((symbol) {
+                      final deviceIdString = symbol.data?['deviceId'];
+                      final deviceId = int.tryParse(deviceIdString ?? '');
+
+                      if (deviceId != null) {
+                        final traccarProvider = Provider.of<TraccarProvider>(
+                          context,
+                          listen: false,
+                        );
+
+                        // Find the specific device and its last position
+                        final device = traccarProvider.devices.firstWhere(
+                          (d) => d.id == deviceId,
+                        );
+                        final pos = traccarProvider.positions.firstWhere(
+                          (p) => p.deviceId == deviceId,
+                        );
+
+                        // 1. Show your detail panel (This is your InfoWindow)
+                        _showDeviceDetailPanel(device, pos);
+
+                        // 2. Center the camera on the device with the offset
+                        _mapController!.animateCamera(
+                          // CameraUpdate.newLatLng(
+                          //   LatLng(
+                          //     pos.latitude!.toDouble() - _mapCenterOffset,
+                          //     pos.longitude!.toDouble(),
+                          //   ),
+                          // ),
+                          maplibre.CameraUpdate.newCameraPosition(
+                            maplibre.CameraPosition(
+                              target: maplibre.LatLng(
+                                pos.latitude!.toDouble() -
+                                    _mapCenterOffset, // 您的垂直偏移量
+                                pos.longitude!.toDouble(),
+                              ),
+                              zoom: 14.0, // 在這裡設定縮放等級
+                            ),
+                          ),
+                        );
+                      }
+                    });
+                  },
+                  onStyleLoadedCallback: () {
+                    setState(() => _isStyleLoaded = true);
+                    _loadedIcons.clear();
+                    _updateAllMarkers(traccarProvider);
+
+                    // --- 新增：如果是初次進入且沒有選定特定設備，則顯示全部 ---
+                    if (widget.selectedDevice == null) {
+                      // 延遲一點點確保標記都已計算完成
+                      Future.delayed(const Duration(milliseconds: 500), () {
+                        _zoomToFitAll(traccarProvider);
+                      });
+                    }
+                  },
+                ),
+                // 在 Stack 的 children 中
+                Positioned(
+                  top: 60,
+                  right: 10,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // 1. Map Style Selection (Floating Action Button)
                       FloatingActionButton.small(
-                        heroTag: "prev_car",
+                        heroTag: "map_layers",
                         backgroundColor: Colors.white,
-                        onPressed: () => _navigateToDevice(
-                          -1,
-                          traccarProvider.devices,
-                          traccarProvider.positions,
-                        ),
                         child: const Icon(
-                          Icons.arrow_upward,
-                          color: Colors.black54,
+                          Icons.layers_outlined,
+                          color: Colors.blueGrey,
+                        ),
+                        onPressed: () {
+                          // We show the menu manually since it's a FAB
+                          final RenderBox button =
+                              context.findRenderObject() as RenderBox;
+                          final RenderBox overlay =
+                              Overlay.of(context).context.findRenderObject()
+                                  as RenderBox;
+                          final RelativeRect position = RelativeRect.fromRect(
+                            Rect.fromPoints(
+                              button.localToGlobal(
+                                Offset.zero,
+                                ancestor: overlay,
+                              ),
+                              button.localToGlobal(
+                                button.size.bottomRight(Offset.zero),
+                                ancestor: overlay,
+                              ),
+                            ),
+                            Offset.zero & overlay.size,
+                          );
+
+                          showMenu<AppMapType>(
+                            context: context,
+                            position: position,
+                            items: [
+                              const PopupMenuItem(
+                                value: AppMapType.bright,
+                                child: Text('Bright'),
+                              ),
+                              const PopupMenuItem(
+                                value: AppMapType.dark,
+                                child: Text('Dark Mode'),
+                              ),
+                              const PopupMenuItem(
+                                value: AppMapType.terrain,
+                                child: Text('Fiord'),
+                              ),
+                              const PopupMenuItem(
+                                value: AppMapType.satellite,
+                                child: Text('Satellite'),
+                              ),
+                              const PopupMenuItem(
+                                value: AppMapType.hybrid,
+                                child: Text('Positron'),
+                              ),
+                            ],
+                          ).then((AppMapType? newValue) {
+                            if (newValue != null) _updateMapStyle(newValue);
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 8),
+                      // 1. 顯示全部按鈕
+                      FloatingActionButton.small(
+                        heroTag: "zoom_all",
+                        backgroundColor: Colors.white,
+                        onPressed: () => _zoomToFitAll(traccarProvider),
+                        child: const Icon(
+                          Icons.zoom_out_map,
+                          color: Colors.blue,
                         ),
                       ),
                       const SizedBox(height: 8),
-                      // 3. 下一台按鈕
-                      FloatingActionButton.small(
-                        heroTag: "next_car",
-                        backgroundColor: Colors.white,
-                        onPressed: () => _navigateToDevice(
-                          1,
-                          traccarProvider.devices,
-                          traccarProvider.positions,
+
+                      // 只有在多台車時才顯示切換按鈕
+                      if (traccarProvider.devices.length > 1) ...[
+                        // 2. 上一台按鈕
+                        FloatingActionButton.small(
+                          heroTag: "prev_car",
+                          backgroundColor: Colors.white,
+                          onPressed: () => _navigateToDevice(
+                            -1,
+                            traccarProvider.devices,
+                            traccarProvider.positions,
+                          ),
+                          child: const Icon(
+                            Icons.arrow_upward,
+                            color: Colors.black54,
+                          ),
                         ),
-                        child: const Icon(
-                          Icons.arrow_downward,
-                          color: Colors.black54,
+                        const SizedBox(height: 8),
+                        // 3. 下一台按鈕
+                        FloatingActionButton.small(
+                          heroTag: "next_car",
+                          backgroundColor: Colors.white,
+                          onPressed: () => _navigateToDevice(
+                            1,
+                            traccarProvider.devices,
+                            traccarProvider.positions,
+                          ),
+                          child: const Icon(
+                            Icons.arrow_downward,
+                            color: Colors.black54,
+                          ),
                         ),
-                      ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         );
       },

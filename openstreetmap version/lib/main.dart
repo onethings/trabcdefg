@@ -26,6 +26,7 @@ import 'package:trabcdefg/services/localization_service.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:trabcdefg/models/route_positions_hive.dart';
 
+
 void main() async {
   // Ensure that Flutter is initialized before running the app.
   WidgetsFlutterBinding.ensureInitialized();
@@ -40,7 +41,6 @@ void main() async {
   final prefs = await SharedPreferences.getInstance();
   final savedUrl = prefs.getString('traccarServerUrl');
   final savedLanguageCode = prefs.getString('saved_language_code');
-
   await initializeDateFormatting();
   
   runApp(TraccarApp(
