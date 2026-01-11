@@ -1591,7 +1591,8 @@ class _MapScreenState extends State<MapScreen> {
                         );
 
                         // 1. Show your detail panel (This is your InfoWindow)
-                        _showDeviceDetailPanel(device, pos);
+                        // _showDeviceDetailPanel(device, pos);
+                        _onDeviceSelected(device, traccarProvider.positions);
 
                         // 2. Center the camera on the device with the offset
                         _mapController!.animateCamera(
