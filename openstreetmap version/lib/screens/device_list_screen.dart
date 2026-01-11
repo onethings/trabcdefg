@@ -69,8 +69,43 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
   }
 
   void _setupTimeagoLocales() {
+    timeago.setLocaleMessages('ar', timeago.ArMessages());
+    timeago.setLocaleMessages('az', timeago.AzMessages());
+    timeago.setLocaleMessages('bn', timeago.BnMessages());
+    timeago.setLocaleMessages('ca', timeago.CaMessages());
+    timeago.setLocaleMessages('cs', timeago.CsMessages());
+    timeago.setLocaleMessages('da', timeago.DaMessages());
+    timeago.setLocaleMessages('de', timeago.DeMessages());
+    timeago.setLocaleMessages('en_short', timeago.EnShortMessages());
+    timeago.setLocaleMessages('et', timeago.EtMessages());
+    timeago.setLocaleMessages('fa', timeago.FaMessages());
+    timeago.setLocaleMessages('fi', timeago.FiMessages());
+    timeago.setLocaleMessages('fr', timeago.FrMessages());
+    timeago.setLocaleMessages('he', timeago.HeMessages());
+    timeago.setLocaleMessages('hi', timeago.HiMessages());
+    timeago.setLocaleMessages('hr', timeago.HrMessages());
+    timeago.setLocaleMessages('hu', timeago.HuMessages());
+    timeago.setLocaleMessages('id', timeago.IdMessages());
+    timeago.setLocaleMessages('it', timeago.ItMessages());
+    timeago.setLocaleMessages('ja', timeago.JaMessages());
+    timeago.setLocaleMessages('km', timeago.KmMessages());
+    timeago.setLocaleMessages('ko', timeago.KoMessages());
+    timeago.setLocaleMessages('lv', timeago.LvMessages());
+    timeago.setLocaleMessages('mn', timeago.MnMessages());
+    timeago.setLocaleMessages('nl', timeago.NlMessages());
+    timeago.setLocaleMessages('pl', timeago.PlMessages());
+    timeago.setLocaleMessages('pt_BR', timeago.PtBrMessages());
+    timeago.setLocaleMessages('ro', timeago.RoMessages());
+    timeago.setLocaleMessages('ru', timeago.RuMessages());
+    timeago.setLocaleMessages('sr', timeago.SrMessages());
+    timeago.setLocaleMessages('sv', timeago.SvMessages());
+    timeago.setLocaleMessages('ta', timeago.TaMessages());
+    timeago.setLocaleMessages('th', timeago.ThMessages());
+    timeago.setLocaleMessages('tk', timeago.TkMessages());
+    timeago.setLocaleMessages('tr', timeago.TrMessages());
+    timeago.setLocaleMessages('uk', timeago.UkMessages());
+    timeago.setLocaleMessages('vi', timeago.ViMessages());
     timeago.setLocaleMessages('zh', timeago.ZhMessages());
-    timeago.setLocaleMessages('en', timeago.EnMessages());
   }
 
   Future<String> _getAddress(num? lat, num? lon) async {
@@ -110,16 +145,25 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
     final now = DateTime.now().toUtc();
 
     final filteredDevices = provider.devices.where((device) {
-      final matchesQuery = (device.name ?? '').toLowerCase().contains(_searchQuery.toLowerCase());
-      final position = provider.positions.firstWhereOrNull((p) => p.deviceId == device.id);
-      final DateTime? lastUpdate = position?.fixTime?.toUtc() ?? device.lastUpdate?.toUtc();
-      
+      final matchesQuery = (device.name ?? '').toLowerCase().contains(
+        _searchQuery.toLowerCase(),
+      );
+      final position = provider.positions.firstWhereOrNull(
+        (p) => p.deviceId == device.id,
+      );
+      final DateTime? lastUpdate =
+          position?.fixTime?.toUtc() ?? device.lastUpdate?.toUtc();
+
       // 10 分鐘離線演算法機制
-      final bool isStale = lastUpdate == null || now.difference(lastUpdate).inMinutes >= 10;
-      String effectiveStatus = isStale ? 'offline' : (device.status ?? 'unknown');
+      final bool isStale =
+          lastUpdate == null || now.difference(lastUpdate).inMinutes >= 10;
+      String effectiveStatus = isStale
+          ? 'offline'
+          : (device.status ?? 'unknown');
 
       final String? filterStatus = _getStatusText(_selectedStatus);
-      return matchesQuery && (_selectedStatus == 0 || filterStatus == effectiveStatus);
+      return matchesQuery &&
+          (_selectedStatus == 0 || filterStatus == effectiveStatus);
     }).toList();
 
     if (filteredDevices.isEmpty) return Center(child: Text('sharedNoData'.tr));
@@ -131,11 +175,13 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
         itemCount: filteredDevices.length,
         itemBuilder: (context, index) {
           final device = filteredDevices[index];
-          final position = provider.positions.firstWhereOrNull((p) => p.deviceId == device.id);
-          
+          final position = provider.positions.firstWhereOrNull(
+            (p) => p.deviceId == device.id,
+          );
+
           // 根據切換狀態決定顯示哪種卡片
-          return _isCompactView 
-              ? _buildCompactListItem(device, position) 
+          return _isCompactView
+              ? _buildCompactListItem(device, position)
               : _buildStandardCard(device, position);
         },
       ),
@@ -144,15 +190,20 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
 
   // --- 樣式 A: 標準大卡片 ---
   Widget _buildStandardCard(api.Device device, api.Position? position) {
-    final Map<String, dynamic> attributes = (position?.attributes as Map<String, dynamic>?) ?? {};
+    final Map<String, dynamic> attributes =
+        (position?.attributes as Map<String, dynamic>?) ?? {};
     final bool isIgnitionOn = attributes['ignition'] == true;
     final double speedKmH = (position?.speed ?? 0.0) * 1.852;
     final DateTime now = DateTime.now().toUtc();
-    final DateTime? lastUpdate = position?.fixTime?.toUtc() ?? device.lastUpdate?.toUtc();
-    final bool isStale = lastUpdate == null || now.difference(lastUpdate).inMinutes >= 10;
+    final DateTime? lastUpdate =
+        position?.fixTime?.toUtc() ?? device.lastUpdate?.toUtc();
+    final bool isStale =
+        lastUpdate == null || now.difference(lastUpdate).inMinutes >= 10;
 
-    Color statusColor = isStale ? Colors.blueGrey.shade300 : (isIgnitionOn ? const Color(0xFF10B981) : Colors.amber.shade700);
-    
+    Color statusColor = isStale
+        ? Colors.blueGrey.shade300
+        : (isIgnitionOn ? const Color(0xFF10B981) : Colors.amber.shade700);
+
     // ACC ON Timer 邏輯
     String accTimer = "";
     if (!isStale && isIgnitionOn && lastUpdate != null) {
@@ -162,9 +213,13 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+      ),
       child: InkWell(
-        onTap: () => Get.to(() => LiveTrackingMapScreen(selectedDevice: device)),
+        onTap: () =>
+            Get.to(() => LiveTrackingMapScreen(selectedDevice: device)),
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
@@ -177,12 +232,37 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(device.name ?? '...', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                        Text(lastUpdate != null ? timeago.format(lastUpdate, locale: 'zh') : '--', style: TextStyle(color: Colors.grey[400], fontSize: 11)),
+                        Text(
+                          device.name ?? '...',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
+                        Text(
+                          lastUpdate != null
+                              ? timeago.format(
+                                  lastUpdate,
+                                  locale:
+                                      Get.locale?.languageCode ??
+                                      'zh', // 改為讀取 GetX 當前語系
+                                )
+                              : '--',
+                          style: const TextStyle(
+                            fontSize: 9,
+                            color: Colors.grey,
+                          ),
+                        ),
                       ],
                     ),
                   ),
-                  _buildBadge(speedKmH, isStale, isIgnitionOn, accTimer, statusColor),
+                  _buildBadge(
+                    speedKmH,
+                    isStale,
+                    isIgnitionOn,
+                    accTimer,
+                    statusColor,
+                  ),
                 ],
               ),
               const Divider(height: 20),
@@ -192,7 +272,13 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
                   children: [
                     const Icon(Icons.location_on, size: 14, color: Colors.grey),
                     const SizedBox(width: 6),
-                    Expanded(child: Text(snapshot.data ?? '...', style: TextStyle(color: Colors.grey[600], fontSize: 12), overflow: TextOverflow.ellipsis)),
+                    Expanded(
+                      child: Text(
+                        snapshot.data ?? '...',
+                        style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -205,24 +291,41 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
 
   // --- 樣式 B: 緊湊列表 (一頁 9 台) ---
   Widget _buildCompactListItem(api.Device device, api.Position? position) {
-    final Map<String, dynamic> attributes = (position?.attributes as Map<String, dynamic>?) ?? {};
+    final Map<String, dynamic> attributes =
+        (position?.attributes as Map<String, dynamic>?) ?? {};
     final bool isIgnitionOn = attributes['ignition'] == true;
     final double speedKmH = (position?.speed ?? 0.0) * 1.852;
     final DateTime now = DateTime.now().toUtc();
-    final DateTime? lastUpdate = position?.fixTime?.toUtc() ?? device.lastUpdate?.toUtc();
-    final bool isStale = lastUpdate == null || now.difference(lastUpdate).inMinutes >= 10;
+    final DateTime? lastUpdate =
+        position?.fixTime?.toUtc() ?? device.lastUpdate?.toUtc();
+    final bool isStale =
+        lastUpdate == null || now.difference(lastUpdate).inMinutes >= 10;
 
-    Color statusColor = isStale ? Colors.grey : (isIgnitionOn ? const Color(0xFF10B981) : Colors.orange);
+    Color statusColor = isStale
+        ? Colors.grey
+        : (isIgnitionOn ? const Color(0xFF10B981) : Colors.orange);
 
     return Container(
       height: 72,
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8)),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+      ),
       child: InkWell(
-        onTap: () => Get.to(() => LiveTrackingMapScreen(selectedDevice: device)),
+        onTap: () =>
+            Get.to(() => LiveTrackingMapScreen(selectedDevice: device)),
         child: Row(
           children: [
-            Container(width: 5, decoration: BoxDecoration(color: statusColor, borderRadius: const BorderRadius.horizontal(left: Radius.circular(8)))),
+            Container(
+              width: 5,
+              decoration: BoxDecoration(
+                color: statusColor,
+                borderRadius: const BorderRadius.horizontal(
+                  left: Radius.circular(8),
+                ),
+              ),
+            ),
             const SizedBox(width: 10),
             Expanded(
               flex: 3,
@@ -230,8 +333,25 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(device.name ?? '...', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13), overflow: TextOverflow.ellipsis),
-                  Text(lastUpdate != null ? timeago.format(lastUpdate, locale: 'zh') : '--', style: const TextStyle(fontSize: 9, color: Colors.grey)),
+                  Text(
+                    device.name ?? '...',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Text(
+                    lastUpdate != null
+                        ? timeago.format(
+                            lastUpdate,
+                            locale:
+                                Get.locale?.languageCode ??
+                                'zh', // 改為讀取 GetX 當前語系
+                          )
+                        : '--',
+                    style: const TextStyle(fontSize: 9, color: Colors.grey),
+                  ),
                 ],
               ),
             ),
@@ -239,10 +359,22 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
               flex: 4,
               child: FutureBuilder<String>(
                 future: _getAddress(position?.latitude, position?.longitude),
-                builder: (context, snapshot) => Text(snapshot.data ?? '...', style: const TextStyle(fontSize: 10, color: Colors.blueGrey), maxLines: 2, overflow: TextOverflow.ellipsis),
+                builder: (context, snapshot) => Text(
+                  snapshot.data ?? '...',
+                  style: const TextStyle(fontSize: 10, color: Colors.blueGrey),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
             ),
-            _buildCompactBadge(speedKmH, isStale, isIgnitionOn, lastUpdate, now, statusColor),
+            _buildCompactBadge(
+              speedKmH,
+              isStale,
+              isIgnitionOn,
+              lastUpdate,
+              now,
+              statusColor,
+            ),
           ],
         ),
       ),
@@ -250,20 +382,66 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
   }
 
   // --- 輔助 Widget: 標籤與按鈕 ---
-  Widget _buildBadge(double speed, bool isStale, bool isOn, String timer, Color color) {
+  Widget _buildBadge(
+    double speed,
+    bool isStale,
+    bool isOn,
+    String timer,
+    Color color,
+  ) {
     bool isMoving = !isStale && speed > 2;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(color: (isMoving ? Colors.green : color).withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
-      child: Text(isMoving ? "${speed.toStringAsFixed(0)} km/h" : (isStale ? "OFFLINE" : "ACC ON$timer"), 
-        style: TextStyle(color: isMoving ? Colors.green : color, fontWeight: FontWeight.bold, fontSize: 11)),
+      decoration: BoxDecoration(
+        color: (isMoving ? Colors.green : color).withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        isMoving
+            ? "${speed.toStringAsFixed(0)} km/h"
+            : (isStale ? "OFFLINE" : "ACC ON$timer"),
+        style: TextStyle(
+          color: isMoving ? Colors.green : color,
+          fontWeight: FontWeight.bold,
+          fontSize: 11,
+        ),
+      ),
     );
   }
 
-  Widget _buildCompactBadge(double speed, bool isStale, bool isOn, DateTime? last, DateTime now, Color color) {
-    if (isStale) return const Padding(padding: EdgeInsets.only(right: 8), child: Text("OFFLINE", style: TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.bold)));
-    if (speed > 2) return Padding(padding: const EdgeInsets.only(right: 8), child: Text("${speed.toStringAsFixed(0)} km/h", style: const TextStyle(fontSize: 10, color: Colors.green, fontWeight: FontWeight.bold)));
-    
+  Widget _buildCompactBadge(
+    double speed,
+    bool isStale,
+    bool isOn,
+    DateTime? last,
+    DateTime now,
+    Color color,
+  ) {
+    if (isStale)
+      return const Padding(
+        padding: EdgeInsets.only(right: 8),
+        child: Text(
+          "OFFLINE",
+          style: TextStyle(
+            fontSize: 10,
+            color: Colors.grey,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      );
+    if (speed > 2)
+      return Padding(
+        padding: const EdgeInsets.only(right: 8),
+        child: Text(
+          "${speed.toStringAsFixed(0)} km/h",
+          style: const TextStyle(
+            fontSize: 10,
+            color: Colors.green,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      );
+
     String timeStr = "";
     if (isOn && last != null) {
       final d = now.difference(last);
@@ -271,12 +449,25 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
     }
     return Padding(
       padding: const EdgeInsets.only(right: 8),
-      child: Text("ACC ON$timeStr", textAlign: TextAlign.center, style: TextStyle(fontSize: 9, color: color, fontWeight: FontWeight.bold)),
+      child: Text(
+        "ACC ON$timeStr",
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          fontSize: 9,
+          color: color,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
     );
   }
 
   Widget _buildFilterAndToggle() {
-    final labels = ['deviceStatusAll'.tr, 'deviceStatusOnline'.tr, 'deviceStatusOffline'.tr, 'deviceStatusUnknown'.tr];
+    final labels = [
+      'deviceStatusAll'.tr,
+      'deviceStatusOnline'.tr,
+      'deviceStatusOffline'.tr,
+      'deviceStatusUnknown'.tr,
+    ];
     return Row(
       children: [
         Expanded(
@@ -289,7 +480,15 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
               itemBuilder: (context, i) => Padding(
                 padding: const EdgeInsets.only(right: 6),
                 child: ChoiceChip(
-                  label: Text(labels[i], style: TextStyle(fontSize: 11, color: _selectedStatus == i ? Colors.white : Colors.black87)),
+                  label: Text(
+                    labels[i],
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: _selectedStatus == i
+                          ? Colors.white
+                          : Colors.black87,
+                    ),
+                  ),
                   selected: _selectedStatus == i,
                   onSelected: (_) => setState(() => _selectedStatus = i),
                   selectedColor: Colors.blueAccent,
@@ -300,7 +499,12 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
         ),
         // 切換樣式按鈕
         IconButton(
-          icon: Icon(_isCompactView ? Icons.view_agenda_outlined : Icons.view_headline_rounded, color: Colors.blueAccent),
+          icon: Icon(
+            _isCompactView
+                ? Icons.view_agenda_outlined
+                : Icons.view_headline_rounded,
+            color: Colors.blueAccent,
+          ),
           onPressed: _toggleViewMode,
           tooltip: "切換顯示樣式",
         ),
@@ -321,12 +525,16 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
             prefixIcon: const Icon(Icons.search, size: 20),
             filled: true,
             fillColor: const Color(0xFFF1F5F9),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide.none,
+            ),
           ),
         ),
       ),
     );
   }
 
-  String? _getStatusText(int index) => [null, 'online', 'offline', 'unknown'][index];
+  String? _getStatusText(int index) =>
+      [null, 'online', 'offline', 'unknown'][index];
 }

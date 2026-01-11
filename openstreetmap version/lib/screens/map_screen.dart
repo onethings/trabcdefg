@@ -230,7 +230,7 @@ class _MapScreenState extends State<MapScreen> {
   final _TileCacheService _cacheService = _TileCacheService();
   final http.Client _httpClient = http.Client();
   // Adjust 0.005 based on how tall your bottom sheet is
-  double _mapCenterOffset = 0.005;
+  double _mapCenterOffset = 0.001;
   final OfflineGeocoder _geocoder = OfflineGeocoder();
   String _currentAddress = "";
 
@@ -694,11 +694,7 @@ class _MapScreenState extends State<MapScreen> {
     api.Device device,
     List<api.Position> allPositions,
   ) async {
-    // --- START DEBUG CODE ---
-    int count = await _geocoder.getItemsCount();
-    print("Total records in Geocoder: $count");
-    // This will print to your debug console every time you select a car
-    // --- END DEBUG CODE ---
+    // 1. 基本資料準備
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt('selectedDeviceId', device.id!);
     await prefs.setString('selectedDeviceName', device.name!);
@@ -709,27 +705,19 @@ class _MapScreenState extends State<MapScreen> {
           api.Position(deviceId: device.id, latitude: 0.0, longitude: 0.0),
     );
 
-    // --- 新增離線地址查詢邏輯 ---
+    // 2. 立即顯示面板 (不要等地址查詢)
+    // 這樣使用者點擊後面板會立刻跳出來，地址顯示 "Loading..."
+    _showDeviceDetailPanel(device, position);
+
+    // 3. 重置地址狀態並開始相機動畫
     setState(() {
-      _currentAddress = "Loading..."; // 切換車輛時先重置地址
+      _currentAddress = "Loading...";
     });
 
     if (position.latitude != null &&
         position.longitude != null &&
         position.latitude != 0.0) {
-      // 異步獲取地址
-      String addr = await _geocoder.getAddress(
-        position.latitude!.toDouble(),
-        position.longitude!.toDouble(),
-      );
-
-      if (mounted) {
-        setState(() {
-          _currentAddress = addr;
-        });
-      }
-
-      // 地圖相機移動邏輯保持不變
+      // 異步移動相機
       _mapController!.animateCamera(
         maplibre.CameraUpdate.newCameraPosition(
           maplibre.CameraPosition(
@@ -737,18 +725,38 @@ class _MapScreenState extends State<MapScreen> {
               position.latitude!.toDouble() - _mapCenterOffset,
               position.longitude!.toDouble(),
             ),
-            zoom: 14.0,
+            zoom: 16.0,
           ),
         ),
       );
+
+      // 4. 異步獲取地址 (在背景執行)
+      try {
+        String addr = await _geocoder.getAddress(
+          position.latitude!.toDouble(),
+          position.longitude!.toDouble(),
+        );
+
+        if (mounted) {
+          setState(() {
+            _currentAddress = addr;
+          });
+          // 關鍵：地址更新後，重新刷一次面板內容（或確保面板內部的 Consumer/Provider 會自動刷新）
+          _showDeviceDetailPanel(device, position);
+        }
+      } catch (e) {
+        debugPrint("Geocoder error: $e");
+        if (mounted) {
+          setState(() => _currentAddress = "Address Unavailable");
+          _showDeviceDetailPanel(device, position);
+        }
+      }
     } else {
       setState(() {
         _currentAddress = "No GPS Signal";
       });
+      _showDeviceDetailPanel(device, position); // 也要刷新面板顯示此訊息
     }
-    // -----------------------
-
-    _showDeviceDetailPanel(device, position);
   }
 
   Color _getBatteryColor(double batteryLevel) {
@@ -1591,7 +1599,7 @@ class _MapScreenState extends State<MapScreen> {
                         );
 
                         // 1. Show your detail panel (This is your InfoWindow)
-                        // _showDeviceDetailPanel(device, pos);
+                        _showDeviceDetailPanel(device, pos);
                         _onDeviceSelected(device, traccarProvider.positions);
 
                         // 2. Center the camera on the device with the offset
@@ -1609,7 +1617,7 @@ class _MapScreenState extends State<MapScreen> {
                                     _mapCenterOffset, // 您的垂直偏移量
                                 pos.longitude!.toDouble(),
                               ),
-                              zoom: 14.0, // 在這裡設定縮放等級
+                              zoom: 16.0, // 在這裡設定縮放等級
                             ),
                           ),
                         );
