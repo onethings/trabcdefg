@@ -127,7 +127,26 @@ flutter:
 
   # To add assets to your application, add an assets section, like this:
   assets:
+    - assets/styles/voyager-gl-style.json
+    - assets/styles/aws-standard.json
+    - assets/styles/liberty.json
+    - assets/styles/aws-hybrid.json
     - assets/sqldb/myanmar_minimal.db
+    - assets/sqldb/korea_roads.db
+    - assets/sqldb/thailand_roads.db
+    - assets/sqldb/taiwan_roads.db
+    - assets/sqldb/china_roads.db
+    - assets/sqldb/msb_roads.db # malaysia-singapore-brunei
+    - assets/sqldb/india_roads.db
+    - assets/sqldb/japan_roads.db
+    - assets/sqldb/brazil_roads.db
+    - assets/sqldb/
+    - assets/sqldb/
+    - assets/sqldb/
+    - assets/sqldb/
+    - assets/sqldb/
+    - assets/sqldb/
+    - assets/sqldb/
     - assets/images/
     - assets/images/arrow.png
     - assets/images/logo.png

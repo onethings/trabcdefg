@@ -160,7 +160,7 @@ class CachedNetworkImageProvider
 
 // ADDED: Enum for managing map types
 enum AppMapType {
-  openStreetMap,
+  liberty,
   bright, // Added
   satellite,
   dark,
@@ -182,24 +182,12 @@ class _MapScreenState extends State<MapScreen> {
   // 街道模式：直接使用 URL (確保伺服器有提供 glyphs 屬性)
   // 街道模式：手動組合 JSON，確保包含字體路徑
   // 街道模式：直接使用 URL。Liberty 樣式通常已經內嵌了 glyphs 設定
+  static const String _satelliteStyle = "assets/styles/aws-hybrid.json";
+
   static const String _streetStyle =
-      "https://tiles.openfreemap.org/styles/liberty";
-  static const String _brightStyle =
-      "https://tiles.openfreemap.org/styles/bright";
-  static const String _satelliteStyle = '''
-{
-  "version": 8,
-  "glyphs": "https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf", 
-  "sources": {
-    "raster-tiles": {
-      "type": "raster",
-      "tiles": ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"],
-      "tileSize": 256
-    }
-  },
-  "layers": [{"id": "simple-tiles", "type": "raster", "source": "raster-tiles"}]
-}
-''';
+      "assets/styles/liberty.json";
+  static const String _brightStyle = "assets/styles/aws-standard.json";
+
   // 1. Positron (簡潔淺色模式) - 非常適合用來凸顯彩色車輛圖標
   static const String _positronStyle =
       "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json";
@@ -207,9 +195,8 @@ class _MapScreenState extends State<MapScreen> {
   // 2. Dark Matter (酷炫深色模式) - 適合夜間使用
   static const String _darkStyle = "https://tiles.openfreemap.org/styles/dark";
 
-  // 3. OpenStreetMap Bright (明亮強化版)
-  static const String _osmBrightStyle =
-      "https://tiles.openfreemap.org/styles/bright";
+  // 3. Google Maps 2026 (Local)
+  static const String _osmBrightStyle = "assets/styles/gmap.json";
 
   // 4. Terrain (地形等高線模式) - 使用 OpenFreeMap 提供的地形樣式
   static const String _terrainStyle =
@@ -223,7 +210,7 @@ class _MapScreenState extends State<MapScreen> {
   final Set<String> _loadedIcons = {};
   // REMOVED: final Map<String, gmap.BitmapDescriptor> _markerIcons = {};
   bool _markersLoaded = false;
-  AppMapType _mapType = AppMapType.openStreetMap;
+  AppMapType _mapType = AppMapType.liberty;
   MapController flutterMapController = MapController();
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   api.Device? _currentDevice;
@@ -236,7 +223,7 @@ class _MapScreenState extends State<MapScreen> {
 
   String _getStyleString(AppMapType type) {
     switch (type) {
-      case AppMapType.openStreetMap:
+      case AppMapType.liberty:
         return _streetStyle;
       case AppMapType.bright:
         return _brightStyle;
@@ -1654,54 +1641,7 @@ class _MapScreenState extends State<MapScreen> {
                           color: Colors.blueGrey,
                         ),
                         onPressed: () {
-                          // We show the menu manually since it's a FAB
-                          final RenderBox button =
-                              context.findRenderObject() as RenderBox;
-                          final RenderBox overlay =
-                              Overlay.of(context).context.findRenderObject()
-                                  as RenderBox;
-                          final RelativeRect position = RelativeRect.fromRect(
-                            Rect.fromPoints(
-                              button.localToGlobal(
-                                Offset.zero,
-                                ancestor: overlay,
-                              ),
-                              button.localToGlobal(
-                                button.size.bottomRight(Offset.zero),
-                                ancestor: overlay,
-                              ),
-                            ),
-                            Offset.zero & overlay.size,
-                          );
-
-                          showMenu<AppMapType>(
-                            context: context,
-                            position: position,
-                            items: [
-                              const PopupMenuItem(
-                                value: AppMapType.bright,
-                                child: Text('Bright'),
-                              ),
-                              const PopupMenuItem(
-                                value: AppMapType.dark,
-                                child: Text('Dark Mode'),
-                              ),
-                              const PopupMenuItem(
-                                value: AppMapType.terrain,
-                                child: Text('Fiord'),
-                              ),
-                              const PopupMenuItem(
-                                value: AppMapType.satellite,
-                                child: Text('Satellite'),
-                              ),
-                              const PopupMenuItem(
-                                value: AppMapType.hybrid,
-                                child: Text('Positron'),
-                              ),
-                            ],
-                          ).then((AppMapType? newValue) {
-                            if (newValue != null) _updateMapStyle(newValue);
-                          });
+                          _showMapTypeSelector();
                         },
                       ),
                       const SizedBox(height: 8),
@@ -1757,6 +1697,126 @@ class _MapScreenState extends State<MapScreen> {
           ),
         );
       },
+    );
+  }
+
+  void _showMapTypeSelector() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          padding: const EdgeInsets.symmetric(vertical: 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 20),
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              Text(
+                'Select Map Style'.tr,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 20),
+              SizedBox(
+                height: 120,
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  children: [
+                    _buildMapTypeItem(
+                      AppMapType.bright,
+                      'Standard', // Aws Standard renamed to Standard for clarity
+                      Icons.map_outlined,
+                    ),
+                    _buildMapTypeItem(
+                      AppMapType.liberty,
+                      'Liberty',
+                      Icons.streetview_outlined,
+                    ),
+                    _buildMapTypeItem(
+                      AppMapType.dark,
+                      'Dark Mode',
+                      Icons.dark_mode_outlined,
+                    ),
+                    _buildMapTypeItem(
+                      AppMapType.terrain,
+                      'Fiord/Terrain',
+                      Icons.terrain_outlined,
+                    ),
+                    _buildMapTypeItem(
+                      AppMapType.satellite,
+                      'Satellite', // Aws Satellite renamed to Satellite for clarity
+                      Icons.satellite_alt_outlined,
+                    ),
+                    _buildMapTypeItem(
+                      AppMapType.hybrid,
+                      'Positron',
+                      Icons.layers_outlined,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildMapTypeItem(AppMapType type, String label, IconData icon) {
+    final isSelected = _mapType == type;
+    return GestureDetector(
+      onTap: () {
+        _updateMapStyle(type);
+        Navigator.pop(context);
+      },
+      child: Container(
+        width: 100,
+        margin: const EdgeInsets.only(right: 12),
+        decoration: BoxDecoration(
+          color: isSelected ? Colors.blue.withOpacity(0.1) : Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected ? Colors.blue : Colors.grey[200]!,
+            width: 2,
+          ),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              size: 40,
+              color: isSelected ? Colors.blue : Colors.grey[600],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              label.tr,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                color: isSelected ? Colors.blue : Colors.black87,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
