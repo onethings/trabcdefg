@@ -190,21 +190,21 @@ class _MapScreenState extends State<MapScreen> {
 
   // 1. Positron (簡潔淺色模式) - 非常適合用來凸顯彩色車輛圖標
   static const String _positronStyle =
-      "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json";
+      "assets/styles/positron-gl-style.json";
 
   // 2. Dark Matter (酷炫深色模式) - 適合夜間使用
-  static const String _darkStyle = "https://tiles.openfreemap.org/styles/dark";
+  static const String _darkStyle = "assets/styles/dark.json";
 
   // 3. Google Maps 2026 (Local)
   static const String _osmBrightStyle = "assets/styles/gmap.json";
 
   // 4. Terrain (地形等高線模式) - 使用 OpenFreeMap 提供的地形樣式
   static const String _terrainStyle =
-      "https://tiles.openfreemap.org/styles/fiord";
+      "assets/styles/fiord.json";
 
   // 5. Google Maps 混合風格 (混合衛星與路網) - 透過自定義 JSON 實作
   static const String _hybridStyle =
-      "https://tiles.openfreemap.org/styles/positron";
+      "assets/styles/positron.json";
   maplibre.MapLibreMapController? _mapController;
   bool _isStyleLoaded = false;
   final Set<String> _loadedIcons = {};
@@ -507,6 +507,7 @@ class _MapScreenState extends State<MapScreen> {
             color: Colors.black,
             fontSize: 8.0,
             fontWeight: FontWeight.bold,
+            fontFamily: 'Noto Sans Myanmar',
             backgroundColor: Colors.white.withOpacity(0.0), // 文字背景 //0.85
           ),
         ),
