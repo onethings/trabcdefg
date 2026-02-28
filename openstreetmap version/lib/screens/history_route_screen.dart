@@ -4,6 +4,7 @@ import 'package:maplibre_gl/maplibre_gl.dart';
 import 'dart:async';
 import 'package:get/get.dart';
 import 'package:flutter/services.dart';
+import 'package:trabcdefg/providers/map_style_provider.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
 import 'package:provider/provider.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
@@ -15,7 +16,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:trabcdefg/models/report_summary_hive.dart';
 import 'package:trabcdefg/models/route_positions_hive.dart'; // Assuming you put the model here
 import 'package:intl/date_symbol_data_local.dart';
-import 'package:trabcdefg/services/offline_geocoder.dart';
+import 'package:trabcdefg/widgets/OfflineAddressService.dart';
 
 enum OSMMapType { normal, satellite }
 
@@ -30,25 +31,10 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen>
     with TickerProviderStateMixin {
   MapLibreMapController? _mapController;
   List<double> _distancePrefixSum = [];
-  final OfflineGeocoder _geocoder = OfflineGeocoder(); //
+  // final OfflineGeocoder _geocoder = OfflineGeocoder();
   final RxString _currentAddressRx = "".obs;
 
-  // Style Constants
-  static const String _streetStyle =
-      "https://tiles.openfreemap.org/styles/liberty";
-  static const String _satelliteStyle = '''
-  {
-    "version": 8,
-    "sources": {
-      "raster-tiles": {
-        "type": "raster",
-        "tiles": ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"],
-        "tileSize": 256,
-        "attribution": "Esri"
-      }
-    },
-    "layers": [{"id": "simple-tiles", "type": "raster", "source": "raster-tiles"}]
-  }''';
+  // Style strings moved to provider
 
   // State Variables
   List<api.Position> _positions = [];
@@ -59,7 +45,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen>
   bool _isLoading = false;
   bool _followUser = true; // NEW: Toggle for following the moving car
   Timer? _playbackTimer;
-  OSMMapType _mapType = OSMMapType.normal;
+  // Map type moved to provider
   double _playbackSpeed = 1.0;
 
   int? _deviceId;
@@ -82,7 +68,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen>
   @override
   void initState() {
     super.initState();
-    _geocoder.initDB();
+    OfflineAddressService.initDatabase();
     cleanExpiredRouteHistory();
     _loadInitialParamsAndFetch();
   }
@@ -119,12 +105,12 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen>
   void _calculateDistancePrefixSum() {
     _distancePrefixSum = [0.0];
     double total = 0;
-    for (int i = 0; i < _movingPositionsRx.length - 1; i++) {
+    for (int i = 0; i < _positions.length - 1; i++) {
       total += _distanceBetween(
-        _movingPositionsRx[i].latitude!.toDouble(),
-        _movingPositionsRx[i].longitude!.toDouble(),
-        _movingPositionsRx[i + 1].latitude!.toDouble(),
-        _movingPositionsRx[i + 1].longitude!.toDouble(),
+        _positions[i].latitude!.toDouble(),
+        _positions[i].longitude!.toDouble(),
+        _positions[i + 1].latitude!.toDouble(),
+        _positions[i + 1].longitude!.toDouble(),
       );
       _distancePrefixSum.add(total);
     }
@@ -132,35 +118,6 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen>
 
   // --- Data Fetching ---
 
-  // Future<void> _loadInitialParamsAndFetch() async {
-  //   final prefs = await SharedPreferences.getInstance();
-  //   final deviceName = prefs.getString('selectedDeviceName');
-  //   _deviceId = prefs.getInt('selectedDeviceId');
-  //   _historyFrom = DateTime(
-  //     _focusedDay.year,
-  //     _focusedDay.month,
-  //     _focusedDay.day,
-  //     0,
-  //     0,
-  //     0,
-  //   );
-  //   _historyTo = DateTime(
-  //     _focusedDay.year,
-  //     _focusedDay.month,
-  //     _focusedDay.day,
-  //     23,
-  //     59,
-  //     59,
-  //   );
-
-  //   setState(() {
-  //     _selectedDeviceName = deviceName;
-  //   });
-  //   if (_deviceId != null) {
-  //     _fetchHistoryRoute();
-  //     _fetchMonthlyData(_focusedDay);
-  //   }
-  // }
   Future<void> _loadInitialParamsAndFetch() async {
     final prefs = await SharedPreferences.getInstance();
     final deviceName = prefs.getString('selectedDeviceName');
@@ -241,16 +198,15 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen>
     }
   }
 
-  // 在 _fetchHistoryRoute 取得數據後
   void _calculatePrefixSum() {
     _distancePrefixSum = [0.0];
     double total = 0;
-    for (int i = 0; i < _movingPositionsRx.length - 1; i++) {
+    for (int i = 0; i < _positions.length - 1; i++) {
       total += _distanceBetween(
-        _movingPositionsRx[i].latitude!.toDouble(),
-        _movingPositionsRx[i].longitude!.toDouble(),
-        _movingPositionsRx[i + 1].latitude!.toDouble(),
-        _movingPositionsRx[i + 1].longitude!.toDouble(),
+        _positions[i].latitude!.toDouble(),
+        _positions[i].longitude!.toDouble(),
+        _positions[i + 1].latitude!.toDouble(),
+        _positions[i + 1].longitude!.toDouble(),
       );
       _distancePrefixSum.add(total);
     }
@@ -344,14 +300,10 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen>
         }
       }
 
-      // 5. 更新數據與過濾低速點
+      // 5. 更新數據
       if (mounted) {
         setState(() {
           _positions = fetchedPositions;
-          // 過濾：時速 > 2 km/h 才回放 (Traccar speed * 1.852 = km/h)
-          _movingPositionsRx.assignAll(
-            _positions.where((p) => ((p.speed ?? 0.0) * 1.852) > 2.0).toList(),
-          );
           _isLoading = false;
         });
 
@@ -407,12 +359,12 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen>
     _addMarker(points.first, _startIconId);
     _addMarker(points.last, _endIconId);
 
-    if (_movingPositionsRx.isNotEmpty) {
+    if (_positions.isNotEmpty) {
       _playbackSymbol = await _mapController!.addSymbol(
         SymbolOptions(
           geometry: LatLng(
-            _movingPositionsRx.first.latitude!.toDouble(),
-            _movingPositionsRx.first.longitude!.toDouble(),
+            _positions.first.latitude!.toDouble(),
+            _positions.first.longitude!.toDouble(),
           ),
           iconImage: _playbackIconId,
           iconSize: 1.2,
@@ -435,7 +387,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen>
   }
 
   void _togglePlayback() {
-    if (_movingPositionsRx.isEmpty) return;
+    if (_positions.isEmpty) return;
 
     setState(() {
       _isPlaying = !_isPlaying;
@@ -456,7 +408,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen>
 
         final double maxLimit = max(
           0,
-          _movingPositionsRx.length - 1,
+          _positions.length - 1,
         ).toDouble();
 
         if (_playbackPositionRx.value >= maxLimit) {
@@ -467,8 +419,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen>
             setState(() => _isPlaying = false);
           }
         } else {
-          // 2. 更新進度：使用 Rx 變數，不需要 setState
-          // 這裡 0.05 是基礎增量，配合 _playbackSpeed 實現倍速
+          // 2. 更新進度
           double increment = 0.05 * _playbackSpeed;
           _playbackPositionRx.value = (_playbackPositionRx.value + increment)
               .clamp(0.0, maxLimit);
@@ -482,19 +433,21 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen>
     }
   }
 
+  int _lastCameraUpdateTick = 0;
+
   void _updatePlaybackUI() async {
     if (_mapController == null ||
-        _movingPositionsRx.isEmpty ||
+        _positions.isEmpty ||
         _playbackSymbol == null)
       return;
 
     final double pos = _playbackPositionRx.value;
-    final int idx = pos.floor().clamp(0, _movingPositionsRx.length - 1);
-    final int nextIdx = (idx + 1).clamp(0, _movingPositionsRx.length - 1);
+    final int idx = pos.floor().clamp(0, _positions.length - 1);
+    final int nextIdx = (idx + 1).clamp(0, _positions.length - 1);
     final double fraction = pos - idx;
 
-    final p1 = _movingPositionsRx[idx];
-    final p2 = _movingPositionsRx[nextIdx];
+    final p1 = _positions[idx];
+    final p2 = _positions[nextIdx];
 
     // 插值計算平滑的經緯度
     final double smoothLat =
@@ -505,24 +458,24 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen>
         (p2.longitude!.toDouble() - p1.longitude!.toDouble()) * fraction;
     final currentLatLng = LatLng(smoothLat, smoothLng);
 
-    // 計算航向角
+    // 計算方向 (使用插值點或原始航向)
     double bearing = p1.course?.toDouble() ?? 0;
-    if (idx < _movingPositionsRx.length - 1 && fraction > 0.1) {
+    if (idx < _positions.length - 1 && fraction > 0.1) {
       bearing = _calculateBearing(
         LatLng(p1.latitude!.toDouble(), p1.longitude!.toDouble()),
         LatLng(p2.latitude!.toDouble(), p2.longitude!.toDouble()),
       );
     }
 
-    // --- New: Update Address ---
-  // To avoid redundant DB calls, only update if the position index changed
-  if (_currentAddressRx.value == "" || idx % 5 == 0) { // Update every few points or at start
-     String addr = await _geocoder.getAddress(
-       _movingPositionsRx[idx].latitude!.toDouble(),
-       _movingPositionsRx[idx].longitude!.toDouble(),
-     );
-     _currentAddressRx.value = addr; //
-  }
+    // --- 更新地址 (避免頻繁調用) ---
+    if (_currentAddressRx.value == "" || idx % 20 == 0) {
+      OfflineAddressService.getAddress(
+        p1.latitude!.toDouble(),
+        p1.longitude!.toDouble(),
+      ).then((addr) {
+        _currentAddressRx.value = addr;
+      });
+    }
 
     // 更新圖標位置與旋轉
     _mapController!.updateSymbol(
@@ -530,9 +483,9 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen>
       SymbolOptions(geometry: currentLatLng, iconRotate: bearing),
     );
 
-    // 更新藍色軌跡線
+    // 更新藍色軌跡線 (增量更新效能更好)
     if (_playedLine != null) {
-      final playedPoints = _movingPositionsRx
+      final playedPoints = _positions
           .sublist(0, idx + 1)
           .map((p) => LatLng(p.latitude!.toDouble(), p.longitude!.toDouble()))
           .toList();
@@ -543,36 +496,31 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen>
       );
     }
 
-    // --- 優化的相機跟隨邏輯 ---
+    // --- 優化的相機跟隨邏輯：碰到邊緣才發動 ---
     if (_followUser) {
-      LatLngBounds? visibleRegion = await _mapController!.getVisibleRegion();
-      if (visibleRegion != null) {
-        // 設定 15% 的邊際緩衝區
-        double latBuf =
-            (visibleRegion.northeast.latitude -
-                visibleRegion.southwest.latitude) *
-            0.15;
-        double lngBuf =
-            (visibleRegion.northeast.longitude -
-                visibleRegion.southwest.longitude) *
-            0.15;
+      _lastCameraUpdateTick++;
+      // 限制獲取可視區域的頻率 (約每秒 3 次)，減少 CPU 負擔
+      if (_lastCameraUpdateTick % 10 == 0) {
+        LatLngBounds? visibleRegion = await _mapController!.getVisibleRegion();
+        if (visibleRegion != null) {
+          // 設定 20% 的邊界觸發區 (讓車子快撞牆時才移鏡頭)
+          double latSpan = visibleRegion.northeast.latitude - visibleRegion.southwest.latitude;
+          double lngSpan = visibleRegion.northeast.longitude - visibleRegion.southwest.longitude;
+          
+          double latThreshold = latSpan * 0.2;
+          double lngThreshold = lngSpan * 0.2;
 
-        // 判斷是否超出安全區
-        bool isNearEdge =
-            currentLatLng.latitude >
-                (visibleRegion.northeast.latitude - latBuf) ||
-            currentLatLng.latitude <
-                (visibleRegion.southwest.latitude + latBuf) ||
-            currentLatLng.longitude >
-                (visibleRegion.northeast.longitude - lngBuf) ||
-            currentLatLng.longitude <
-                (visibleRegion.southwest.longitude + lngBuf);
+          bool isNearEdge = currentLatLng.latitude > (visibleRegion.northeast.latitude - latThreshold) ||
+                            currentLatLng.latitude < (visibleRegion.southwest.latitude + latThreshold) ||
+                            currentLatLng.longitude > (visibleRegion.northeast.longitude - lngThreshold) ||
+                            currentLatLng.longitude < (visibleRegion.southwest.longitude + lngThreshold);
 
-        if (isNearEdge) {
-          _mapController!.animateCamera(
-            CameraUpdate.newLatLng(currentLatLng),
-            duration: const Duration(milliseconds: 1200), // 較長的動畫讓移動更平緩
-          );
+          if (isNearEdge) {
+            _mapController!.animateCamera(
+              CameraUpdate.newLatLng(currentLatLng),
+              duration: const Duration(milliseconds: 1500),
+            );
+          }
         }
       }
     }
@@ -650,9 +598,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen>
               target: LatLng(0, 0),
               zoom: 2,
             ),
-            styleString: _mapType == OSMMapType.normal
-                ? _streetStyle
-                : _satelliteStyle,
+            styleString: Provider.of<MapStyleProvider>(context).styleString,
             myLocationEnabled: false,
             trackCameraPosition: true,
             onMapClick: (_, __) => setState(
@@ -670,14 +616,10 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen>
                 _mapFab(Icons.calendar_month, _showCalendarDialog, "btn_cal"),
                 const SizedBox(height: 12),
                 _mapFab(
-                  _mapType == OSMMapType.normal
-                      ? Icons.satellite_alt
-                      : Icons.map,
-                  () => setState(
-                    () => _mapType = _mapType == OSMMapType.normal
-                        ? OSMMapType.satellite
-                        : OSMMapType.normal,
-                  ),
+                  Provider.of<MapStyleProvider>(context).isSatelliteMode
+                      ? Icons.map
+                      : Icons.satellite_alt,
+                  () => Provider.of<MapStyleProvider>(context, listen: false).toggleMapType(),
                   "btn_style",
                 ),
                 const SizedBox(height: 12),
@@ -752,11 +694,11 @@ Obx(() => Text(
             Obx(() {
               final int idx = _playbackPositionRx.value.floor().clamp(
                 0,
-                max(0, _movingPositionsRx.length - 1),
+                max(0, _positions.length - 1),
               );
-              final pos = _movingPositionsRx.isEmpty
+              final pos = _positions.isEmpty
                   ? null
-                  : _movingPositionsRx[idx];
+                  : _positions[idx];
               final time = pos != null
                   ? DateFormat('HH:mm:ss').format(pos.serverTime!.toLocal())
                   : "--:--:--";
@@ -789,7 +731,7 @@ Obx(() => Text(
             Obx(() {
               final double maxVal = max(
                 0,
-                _movingPositionsRx.length - 1,
+                _positions.length - 1,
               ).toDouble();
               return SliderTheme(
                 data: SliderTheme.of(context).copyWith(

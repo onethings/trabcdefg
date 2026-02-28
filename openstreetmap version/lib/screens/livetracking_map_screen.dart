@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
 import 'package:provider/provider.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
+import 'package:trabcdefg/providers/map_style_provider.dart';
 import 'package:trabcdefg/src/generated_api/api.dart';
 import 'package:flutter/services.dart';
 import 'dart:ui' as ui;
@@ -16,7 +17,7 @@ import 'package:http/http.dart' as http;
 import 'dart:math';
 import 'dart:convert';
 import 'package:timeago/timeago.dart' as timeago;
-import 'package:trabcdefg/services/offline_geocoder.dart';
+import 'package:trabcdefg/widgets/OfflineAddressService.dart';
 
 // --- Reverse Geocoding Service Implementation using Hive and Nominatim ---
 class NominatimService {
@@ -103,14 +104,13 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
   bool _isCameraLocked = true;
   bool _isGeocodeServiceInitialized = false;
   bool _isStyleLoaded = false;
-  bool _isSatelliteMode = false;
   double _mapCenterOffset = 0.007;
   double _mapCenterOnset = 0.008;
 
   late NominatimService _nominatimService;
   
   // Initialize OfflineGeocoder from your service file
-  final OfflineGeocoder _offlineGeocoder = OfflineGeocoder();
+  // final OfflineGeocoder _offlineGeocoder = OfflineGeocoder();
 
   String _currentStreetName = 'Fetching Address...'.tr;
   DateTime _lastNominatimNetworkFetch = DateTime.fromMillisecondsSinceEpoch(0);
@@ -118,10 +118,7 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
   final http.Client _httpClient = http.Client();
   final Set<String> _loadedIcons = {};
 
-  static const String _streetStyle =
-      "https://tiles.openfreemap.org/styles/liberty";
-  static const String _satelliteStyle =
-      '{"version": 8, "sources": {"raster-tiles": {"type": "raster", "tiles": ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"], "tileSize": 256, "attribution": "Tiles &copy; Esri"}}, "layers": [{"id": "simple-tiles", "type": "raster", "source": "raster-tiles", "minzoom": 0, "maxzoom": 18}]}';
+  // Style strings moved to provider
 
   @override
   void initState() {
@@ -129,7 +126,7 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
     _setupTimeagoLocales();
 
     // Initialize Offline DB on screen load
-    _offlineGeocoder.initDB();
+    OfflineAddressService.initDatabase();
 
     _nominatimService = NominatimService(httpClient: _httpClient);
     _nominatimService.init().then((_) {
@@ -229,7 +226,7 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
 
     // 2. Fallback to your Offline Geocoder (getAddress method)
     try {
-      final offlineResult = await _offlineGeocoder.getAddress(lat, lon);
+      final offlineResult = await OfflineAddressService.getAddress(lat, lon);
       if (offlineResult != "Myanmar Road") {
         if (mounted) setState(() => _currentStreetName = offlineResult);
         return;
@@ -240,6 +237,7 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
 
     // 3. Fallback to Nominatim Network if offline fails
     if (!_isGeocodeServiceInitialized) return;
+    // Map type moved to provider
     final now = DateTime.now();
     if (now.difference(_lastNominatimNetworkFetch) <
         const Duration(seconds: 30))
@@ -289,7 +287,7 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
           return Stack(
             children: [
               MapLibreMap(
-                key: ValueKey(_isSatelliteMode),
+                key: ValueKey(Provider.of<MapStyleProvider>(context).isSatelliteMode),
                 initialCameraPosition: CameraPosition(
                   target: LatLng(
                     (lastPosition.latitude?.toDouble() ?? 0.0) -
@@ -298,7 +296,7 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
                   ),
                   zoom: 14.0,
                 ),
-                styleString: _isSatelliteMode ? _satelliteStyle : _streetStyle,
+                styleString: Provider.of<MapStyleProvider>(context).styleString,
                 onMapCreated: _onMapCreated,
                 onStyleLoadedCallback: () {
                   _isStyleLoaded = true;
@@ -314,13 +312,11 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
                 child: FloatingActionButton(
                   mini: true,
                   backgroundColor: Colors.white,
-                  onPressed: () => setState(() {
-                    _isSatelliteMode = !_isSatelliteMode;
-                    _isStyleLoaded = false;
-                    _loadedIcons.clear();
-                  }),
+                  onPressed: () {
+                    Provider.of<MapStyleProvider>(context, listen: false).toggleMapType();
+                  },
                   child: Icon(
-                    _isSatelliteMode ? Icons.map : Icons.satellite_alt,
+                    Provider.of<MapStyleProvider>(context).isSatelliteMode ? Icons.map : Icons.satellite_alt,
                     color: Colors.blue,
                   ),
                 ),

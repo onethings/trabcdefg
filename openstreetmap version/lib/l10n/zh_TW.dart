@@ -630,4 +630,5 @@ const Map<String, String> zhTW = {
 "SelectServer":"選擇服務器",
 "CustomServerURL":"自訂伺服器網址",
  "TapMapAddPolygon":"在地圖點擊為多邊形新增點。",
+ "pleaseSelectDevice": "請選擇設備",
 };

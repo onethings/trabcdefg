@@ -21,7 +21,7 @@ import 'device_details_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'settings/geofences_screen.dart';
+import 'package:trabcdefg/screens/settings/geofences_screen.dart' hide AppMapType;
 import 'package:trabcdefg/constants.dart';
 import 'dart:io';
 import 'share_device_screen.dart';
@@ -33,7 +33,8 @@ import 'package:hive/hive.dart';
 import 'dart:typed_data';
 import 'package:flutter_map/flutter_map.dart'; // Ensure this is imported for TileProvider
 import 'package:flutter/foundation.dart'; // Required for DiagnosticsProperty
-import 'package:trabcdefg/services/offline_geocoder.dart';
+import 'package:trabcdefg/widgets/OfflineAddressService.dart';
+import 'package:trabcdefg/providers/map_style_provider.dart';
 
 // --- Tile Caching Implementation using Hive ---
 
@@ -159,14 +160,7 @@ class CachedNetworkImageProvider
 // --- End of Tile Caching Implementation ---
 
 // ADDED: Enum for managing map types
-enum AppMapType {
-  liberty,
-  bright, // Added
-  satellite,
-  dark,
-  terrain,
-  hybrid,
-}
+// REMOVED local AppMapType to use provider's version
 
 class MapScreen extends StatefulWidget {
   final api.Device? selectedDevice;
@@ -210,7 +204,7 @@ class _MapScreenState extends State<MapScreen> {
   final Set<String> _loadedIcons = {};
   // REMOVED: final Map<String, gmap.BitmapDescriptor> _markerIcons = {};
   bool _markersLoaded = false;
-  AppMapType _mapType = AppMapType.liberty;
+  // MapType moved to provider
   MapController flutterMapController = MapController();
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   api.Device? _currentDevice;
@@ -218,23 +212,17 @@ class _MapScreenState extends State<MapScreen> {
   final http.Client _httpClient = http.Client();
   // Adjust 0.005 based on how tall your bottom sheet is
   double _mapCenterOffset = 0.001;
-  final OfflineGeocoder _geocoder = OfflineGeocoder();
+  // final OfflineGeocoder _geocoder = OfflineGeocoder();
   String _currentAddress = "";
 
   String _getStyleString(AppMapType type) {
     switch (type) {
-      case AppMapType.liberty:
-        return _streetStyle;
       case AppMapType.bright:
         return _brightStyle;
-      case AppMapType.dark:
-        return _darkStyle;
-      case AppMapType.terrain:
-        return _terrainStyle; // Matches AppMapType.terrain
       case AppMapType.satellite:
         return _satelliteStyle;
-      case AppMapType.hybrid:
-        return _hybridStyle;
+      default:
+        return _brightStyle;
     }
   }
 
@@ -253,7 +241,7 @@ class _MapScreenState extends State<MapScreen> {
   @override
   void initState() {
     super.initState();
-    _loadMapPreference();
+    // Preference loading moved to provider
     // Initialize cache service and then the tile provider
     _cacheService.init().then((_) {
       _tileProvider = _HiveTileProvider(
@@ -312,41 +300,21 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
-  Future<void> _loadMapPreference() async {
-    final prefs = await SharedPreferences.getInstance();
-    final int? savedIndex = prefs.getInt('preferred_map_type');
-
-    if (savedIndex != null && savedIndex < AppMapType.values.length) {
-      setState(() {
-        _mapType = AppMapType.values[savedIndex];
-        _isSatelliteMode =
-            (_mapType == AppMapType.satellite || _mapType == AppMapType.hybrid);
-      });
-    }
-  }
+  // Preference loading moved to provider
 
   void _updateMapStyle(AppMapType type) async {
-    final style = _getStyleString(type);
-    final prefs = await SharedPreferences.getInstance();
-
-    // Save preference for next launch
-    await prefs.setInt('preferred_map_type', type.index);
+    final styleProvider = Provider.of<MapStyleProvider>(context, listen: false);
+    await styleProvider.setMapType(type);
 
     setState(() {
-      _mapType = type;
       _isStyleLoaded = false;
-      _isSatelliteMode =
-          (type == AppMapType.satellite || type == AppMapType.hybrid);
+      _isSatelliteMode = (type == AppMapType.satellite);
     });
 
-    // FIX: Try setStyleString first; if it still errors, use setMapStyle
     try {
-      // _mapController?.setStyleString(style);
-      // _mapController?.setMapStyle(style);
-      _mapController?.setStyle(style);
+      _mapController?.setStyle(styleProvider.styleString);
     } catch (e) {
-      // Fallback for different maplibre/mapbox versions
-      debugPrint("setStyleString failed, check your package version: $e");
+      debugPrint("setStyle failed: $e");
     }
   }
 
@@ -720,7 +688,7 @@ class _MapScreenState extends State<MapScreen> {
 
       // 4. 異步獲取地址 (在背景執行)
       try {
-        String addr = await _geocoder.getAddress(
+        String addr = await OfflineAddressService.getAddress(
           position.latitude!.toDouble(),
           position.longitude!.toDouble(),
         );
@@ -1554,7 +1522,7 @@ class _MapScreenState extends State<MapScreen> {
               children: [
                 maplibre.MapLibreMap(
                   // key: ValueKey(_isSatelliteMode),
-                  key: ValueKey(_mapType),
+                  key: ValueKey(Provider.of<MapStyleProvider>(context).mapType),
                   initialCameraPosition: maplibre.CameraPosition(
                     target: maplibre.LatLng(
                       initialFlutterLatLng.latitude,
@@ -1563,7 +1531,7 @@ class _MapScreenState extends State<MapScreen> {
                     zoom: initialZoom,
                   ),
                   // styleString: _isSatelliteMode ? _satelliteStyle : _streetStyle,
-                  styleString: _getStyleString(_mapType),
+                  styleString: Provider.of<MapStyleProvider>(context).styleString,
                   onMapCreated: (controller) {
                     _mapController = controller;
 
@@ -1780,7 +1748,8 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   Widget _buildMapTypeItem(AppMapType type, String label, IconData icon) {
-    final isSelected = _mapType == type;
+    final styleProvider = Provider.of<MapStyleProvider>(context);
+    final isSelected = styleProvider.mapType == type;
     return GestureDetector(
       onTap: () {
         _updateMapStyle(type);

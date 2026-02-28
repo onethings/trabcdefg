@@ -7,7 +7,7 @@ import 'package:trabcdefg/src/generated_api/api.dart' as api;
 import 'package:trabcdefg/screens/livetracking_map_screen.dart';
 import 'package:get/get.dart';
 import 'package:timeago/timeago.dart' as timeago;
-import 'package:trabcdefg/services/offline_geocoder.dart';
+import 'package:trabcdefg/widgets/OfflineAddressService.dart';
 import 'package:collection/collection.dart';
 import 'package:shared_preferences/shared_preferences.dart'; //
 
@@ -23,7 +23,7 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
   String _searchQuery = '';
   int _selectedStatus = 0;
   bool _isCompactView = false; // 控制樣式切換的變數
-  final OfflineGeocoder _geocoder = OfflineGeocoder();
+  // final OfflineGeocoder _geocoder = OfflineGeocoder();
 
   // 演算法優化：快取地址減少重複計算
   final Map<String, String> _addressCache = {};
@@ -112,7 +112,7 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
     if (lat == null || lon == null) return 'sharedNoData'.tr;
     final cacheKey = "${lat.toStringAsFixed(5)}_${lon.toStringAsFixed(5)}";
     if (_addressCache.containsKey(cacheKey)) return _addressCache[cacheKey]!;
-    final address = await _geocoder.getAddress(lat.toDouble(), lon.toDouble());
+    final address = await OfflineAddressService.getAddress(lat.toDouble(), lon.toDouble());
     _addressCache[cacheKey] = address;
     return address;
   }

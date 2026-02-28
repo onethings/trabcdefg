@@ -8,16 +8,18 @@ import 'package:trabcdefg/src/generated_api/api.dart' as api;
 import 'package:trabcdefg/providers/traccar_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
-import 'package:http/http.dart' as http;
-// import 'package:google_maps_flutter/google_maps_flutter.dart'; // REMOVED
-import 'package:flutter_map/flutter_map.dart'; // ADDED
-import 'package:latlong2/latlong.dart'; // FIXED: Un-aliased import
-import 'dart:ui' as ui;
+import 'package:maplibre_gl/maplibre_gl.dart' as maplibre;
+import 'package:trabcdefg/providers/map_style_provider.dart';
 import 'package:flutter/services.dart';
+import 'dart:math';
+import 'package:trabcdefg/widgets/OfflineAddressService.dart';
+import 'package:hive_flutter/hive_flutter.dart';
+import 'package:http/http.dart' as http;
+import 'dart:ui' as ui;
 import 'package:get/get.dart';
-import 'package:hive/hive.dart'; // ADDED
-import 'dart:typed_data'; // ADDED
-import 'package:flutter/foundation.dart'; // ADDED for DiagnosticsProperty
+import 'package:flutter_map/flutter_map.dart' hide LatLng, LatLngBounds;
+import 'package:flutter/foundation.dart';
+import 'dart:typed_data';
 
 // --- Tile Caching Implementation using Hive (Copied from map_screen.dart) ---
 
@@ -127,10 +129,7 @@ class _HiveTileProvider extends TileProvider {
   }
 }
 
-enum AppMapType {
-  openStreetMap,
-  satellite,
-}
+// Enum moved to provider
 
 // --- End of Map Caching & FlutterMap Imports/Definitions ---
 
@@ -220,19 +219,10 @@ class _TripsReportScreenState extends State<TripsReportScreen> {
   List<TripReport> _tripsReport = [];
   bool _isLoading = true;
   String? _deviceName;
-  // final Completer<GoogleMapController> _controller = Completer(); // REMOVED
-  late MapController _mapController; // ADDED
-  final List<Marker> _markers = []; // Changed to FlutterMap Marker list
-  final List<Polyline> _polylines = []; // Changed to FlutterMap Polyline list
-  // late BitmapDescriptor _startIcon; // REMOVED
-  // late BitmapDescriptor _endIcon; // REMOVED
-  AppMapType _currentMapType = AppMapType.openStreetMap; // Changed to AppMapType
-
-  // Caching variables (ADDED)
-  final _TileCacheService _cacheService = _TileCacheService();
+  maplibre.MapLibreMapController? _mapController;
+  final Set<String> _loadedIcons = {};
+  bool _isStyleLoaded = false;
   final http.Client _httpClient = http.Client();
-  late _HiveTileProvider _tileProvider;
-  bool _isCacheInitialized = false;
   
   // Tile URLs (ADDED)
   static const String _osmUrlTemplate = 
@@ -245,22 +235,6 @@ class _TripsReportScreenState extends State<TripsReportScreen> {
   @override
   void initState() {
     super.initState();
-    // _loadMarkerIcons(); // Not needed for FlutterMap
-    _mapController = MapController(); // Initialized MapController
-    
-    // Initialize cache service and then the tile provider
-    _cacheService.init().then((_) {
-      _tileProvider = _HiveTileProvider(
-        cacheService: _cacheService,
-        httpClient: _httpClient,
-      );
-      if (mounted) {
-        setState(() {
-          _isCacheInitialized = true;
-        });
-      }
-    });
-
     _fetchTripsReport();
   }
 
@@ -344,7 +318,7 @@ Future<void> _fetchTripsReport() async {
                 .toList();
             if (_tripsReport.isNotEmpty) {
               _deviceName = _tripsReport.first.deviceName;
-              _createMarkersAndPolylines();
+              _createMapElements();
             }
           }
         } else {
@@ -366,58 +340,86 @@ Future<void> _fetchTripsReport() async {
     }
   }
 
-  void _createMarkersAndPolylines() {
-    _markers.clear();
-    _polylines.clear();
-    for (var i = 0; i < _tripsReport.length; i++) {
-      final trip = _tripsReport[i];
-      // Changed to latlong2 LatLng (un-aliased)
-      final LatLng startPoint = LatLng(trip.startLat, trip.startLon);
-      final LatLng endPoint = LatLng(trip.endLat, trip.endLon);
-
-      // FlutterMap Marker for Start Point
-      _markers.add(
-        Marker(
-          point: startPoint,
-          width: 30.0,
-          height: 30.0,
-          child: Image.asset(
-            'assets/images/start.png',
-            fit: BoxFit.contain,
-          ),
-        ),
-      );
-
-      // FlutterMap Marker for End Point
-      _markers.add(
-        Marker(
-          point: endPoint,
-          width: 30.0,
-          height: 30.0,
-          child: Image.asset(
-            'assets/images/destination.png',
-            fit: BoxFit.contain,
-          ),
-        ),
-      );
-
-      // FlutterMap Polyline
-      _polylines.add(
-        Polyline(
-          points: [startPoint, endPoint],
-          color: Colors.blue,
-          strokeWidth: 5.0,
-        ),
-      );
+  Future<void> _onStyleLoaded() async {
+    _isStyleLoaded = true;
+    if (_tripsReport.isNotEmpty) {
+      _createMapElements();
     }
   }
 
-  Future<void> _animateToPosition(LatLng position) async {
-    // Uses FlutterMap's move method
-    _mapController.move(
-      position,
-      16,
+  Future<void> _createMapElements() async {
+    if (_mapController == null || !_isStyleLoaded || _tripsReport.isEmpty) return;
+    
+    await _mapController!.clearSymbols();
+    await _mapController!.clearLines();
+
+    final List<maplibre.LatLng> allPoints = [];
+
+    for (var i = 0; i < _tripsReport.length; i++) {
+        final trip = _tripsReport[i];
+        final start = maplibre.LatLng(trip.startLat, trip.startLon);
+        final end = maplibre.LatLng(trip.endLat, trip.endLon);
+        
+        allPoints.add(start);
+        allPoints.add(end);
+
+        await _mapController!.addLine(
+          maplibre.LineOptions(
+            geometry: [start, end],
+            lineColor: "#0000FF",
+            lineWidth: 4.0,
+          ),
+        );
+
+        await _addMarker(start, "start_$i", "assets/images/start.png");
+        await _addMarker(end, "end_$i", "assets/images/destination.png");
+    }
+
+    if (allPoints.isNotEmpty) {
+      _zoomToFit(allPoints);
+    }
+  }
+
+  Future<void> _addMarker(maplibre.LatLng point, String iconId, String assetPath) async {
+    // For simplicity, using a generic iconId if multiple markers share the same asset
+    final baseIconId = assetPath.contains("start") ? "start_pin" : "end_pin";
+    if (!_loadedIcons.contains(baseIconId)) {
+      final ByteData bytes = await rootBundle.load(assetPath);
+      final Uint8List list = bytes.buffer.asUint8List();
+      await _mapController!.addImage(baseIconId, list);
+      _loadedIcons.add(baseIconId);
+    }
+    
+    await _mapController!.addSymbol(
+      maplibre.SymbolOptions(
+        geometry: point,
+        iconImage: baseIconId,
+        iconSize: 0.6,
+        iconAnchor: "bottom",
+      ),
     );
+  }
+
+  void _zoomToFit(List<maplibre.LatLng> points) {
+    if (points.isEmpty) return;
+    double minLat = points.map((p) => p.latitude).reduce(min);
+    double maxLat = points.map((p) => p.latitude).reduce(max);
+    double minLng = points.map((p) => p.longitude).reduce(min);
+    double maxLng = points.map((p) => p.longitude).reduce(max);
+
+    _mapController?.animateCamera(
+      maplibre.CameraUpdate.newLatLngBounds(
+        maplibre.LatLngBounds(
+          southwest: maplibre.LatLng(minLat, minLng),
+          northeast: maplibre.LatLng(maxLat, maxLng),
+        ),
+        left: 50, right: 50, top: 50, bottom: 50,
+      ),
+    );
+  }
+
+  void _animateToPosition(maplibre.LatLng position) {
+    _mapController?.animateCamera(maplibre.CameraUpdate.newLatLng(position));
   }
 
   // void _showInfoWindowForMarker(MarkerId markerId) { // REMOVED as it's a Google Maps API call
@@ -447,30 +449,20 @@ Future<void> _fetchTripsReport() async {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    }
-    
-    // Check for cache initialization
-    if (!_isCacheInitialized) { 
-       return Scaffold(
-        appBar: AppBar(title: Text('Loading Map...'.tr)),
-        body: const Center(child: Text('Initializing Map Assets...')),
-      );
+      return Scaffold(body: Center(child: Text('sharedLoading'.tr)));
     }
 
     if (_tripsReport.isEmpty) {
       return Scaffold(
-        appBar: AppBar(title: Text('${'reportTrips'.tr}: ${_deviceName ?? ''}')),
-        body: Center(
-          child: Text('No data available for the selected period.'.tr),
-        ),
+        appBar: AppBar(title: Text(_deviceName ?? 'reportTrips'.tr)),
+        body: Center(child: Text('sharedNoData'.tr)),
       );
     }
-    
-    // Determine the map's initial center (latlong2 LatLng)
-    final LatLng initialCenter = _tripsReport.isNotEmpty
-        ? LatLng(_tripsReport.first.startLat, _tripsReport.first.startLon)
-        : const LatLng(21.9162, 95.9560); // Mandalay, Myanmar
+
+    final mapProvider = Provider.of<MapStyleProvider>(context);
+    final initialCenter = _tripsReport.isNotEmpty
+        ? maplibre.LatLng(_tripsReport.first.startLat, _tripsReport.first.startLon)
+        : const maplibre.LatLng(21.9162, 95.9560);
 
     return Scaffold(
       appBar: AppBar(title: Text('${'reportTrips'.tr}: ${_deviceName ?? ''}')),
@@ -480,50 +472,23 @@ Future<void> _fetchTripsReport() async {
             flex: 1,
             child: Stack(
               children: [
-                // REPLACED GoogleMap with FlutterMap
-                FlutterMap(
-                  mapController: _mapController,
-                  options: MapOptions(
-                    initialCenter: initialCenter,
-                    initialZoom: 14.0,
-                    interactionOptions: const InteractionOptions(
-                        flags: InteractiveFlag.all & ~InteractiveFlag.rotate),
+                maplibre.MapLibreMap(
+                  onMapCreated: (c) => _mapController = c,
+                  onStyleLoadedCallback: _onStyleLoaded,
+                  initialCameraPosition: maplibre.CameraPosition(
+                    target: initialCenter,
+                    zoom: 14.0,
                   ),
-                  children: [
-                    // Tile Layer: Conditional based on map type (OSM/Satellite)
-                    TileLayer(
-                      urlTemplate: _currentMapType == AppMapType.openStreetMap
-                          ? _osmUrlTemplate
-                          : _satelliteUrlTemplate,
-                      subdomains: _currentMapType == AppMapType.openStreetMap
-                          ? _osmSubdomains
-                          : const [],
-                      userAgentPackageName: 'com.trabcdefg.app',
-                      tileProvider: _tileProvider, // Hive Caching
-                    ),
-                    // Polyline Layer
-                    PolylineLayer(polylines: _polylines),
-                    // Marker Layer
-                    MarkerLayer(markers: _markers),
-                  ],
+                  styleString: mapProvider.styleString,
                 ),
-                // Map Type Toggle Button
                 Positioned(
                   top: 10,
                   right: 10,
                   child: FloatingActionButton(
                     mini: true,
-                    onPressed: () {
-                      setState(() {
-                        _currentMapType = _currentMapType == AppMapType.openStreetMap
-                            ? AppMapType.satellite
-                            : AppMapType.openStreetMap;
-                      });
-                    },
+                    onPressed: () => mapProvider.toggleMapType(),
                     child: Icon(
-                      _currentMapType == AppMapType.openStreetMap
-                          ? Icons.satellite_alt
-                          : Icons.map,
+                      mapProvider.isSatelliteMode ? Icons.map : Icons.satellite_alt,
                     ),
                   ),
                 ),
@@ -538,12 +503,9 @@ Future<void> _fetchTripsReport() async {
               itemBuilder: (context, index) {
                 final trip = _tripsReport[index];
                 return GestureDetector(
-                  onTap: () {
-                    // Animate to start position
-                    _animateToPosition(LatLng(trip.startLat, trip.startLon));
-                    // Removed Google Maps specific showInfoWindowForMarker
-                  },
+                  onTap: () => _animateToPosition(maplibre.LatLng(trip.startLat, trip.startLon)),
                   child: Card(
+// ... Card content (retaining existing style)
                     elevation: 4,
                     margin: const EdgeInsets.only(bottom: 16.0),
                     child: Padding(
@@ -575,6 +537,24 @@ Future<void> _fetchTripsReport() async {
                           ListTile(
                             title: Text('reportAverageSpeed'.tr),
                             trailing: Text('${trip.averageSpeed.toStringAsFixed(2)} ${'sharedKmh'.tr}'),
+                          ),
+                          ListTile(
+                            title: Text('reportStartAddress'.tr),
+                            subtitle: FutureBuilder<String>(
+                              future: trip.startAddress != null && trip.startAddress!.isNotEmpty
+                                  ? Future.value(trip.startAddress)
+                                  : OfflineAddressService.getAddress(trip.startLat, trip.startLon),
+                              builder: (context, snapshot) => Text(snapshot.data ?? '...'),
+                            ),
+                          ),
+                          ListTile(
+                            title: Text('reportEndAddress'.tr),
+                            subtitle: FutureBuilder<String>(
+                              future: trip.endAddress != null && trip.endAddress!.isNotEmpty
+                                  ? Future.value(trip.endAddress)
+                                  : OfflineAddressService.getAddress(trip.endLat, trip.endLon),
+                              builder: (context, snapshot) => Text(snapshot.data ?? '...'),
+                            ),
                           ),
                         ],
                       ),

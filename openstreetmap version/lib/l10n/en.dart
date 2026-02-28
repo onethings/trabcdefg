@@ -634,6 +634,5 @@ const Map<String, String> enUS = {
   "SelectServer":"Select Server",
   "CustomServerURL":"Custom Server URL",
   "TapMapAddPolygon":"Tap on the map to add points for the polygon.",
-
-
+  "pleaseSelectDevice": "Please select a device"
 };

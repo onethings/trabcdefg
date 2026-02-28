@@ -10,17 +10,19 @@ import 'package:trabcdefg/providers/traccar_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
 // import 'package:google_maps_flutter/google_maps_flutter.dart'; // REMOVED
-import 'package:flutter_map/flutter_map.dart'; // ADDED
-import 'package:latlong2/latlong.dart'; // FIXED: Un-aliased import for LatLng
+import 'package:maplibre_gl/maplibre_gl.dart' as maplibre;
+import 'package:trabcdefg/providers/map_style_provider.dart';
+import 'package:flutter/services.dart';
+import 'dart:math';
+import 'package:trabcdefg/widgets/OfflineAddressService.dart';
+import 'package:hive_flutter/hive_flutter.dart';
+import 'package:http/http.dart' as http;
+import 'dart:ui' as ui;
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'dart:ui' as ui;
-import 'package:flutter/services.dart';
 import 'package:get/get.dart';
-import 'package:http/http.dart' as http; // ADDED
-import 'package:hive/hive.dart'; // ADDED
-import 'dart:typed_data'; // ADDED
-import 'package:flutter/foundation.dart'; // ADDED
+import 'package:flutter_map/flutter_map.dart' hide LatLng, LatLngBounds;
+import 'package:flutter/foundation.dart';
 
 // --- Tile Caching Implementation using Hive (Copied from map_screen.dart) ---
 
@@ -130,10 +132,7 @@ class _HiveTileProvider extends TileProvider {
   }
 }
 
-enum AppMapType {
-  openStreetMap,
-  satellite,
-}
+// Enum moved to provider
 
 // --- End of Map Caching & FlutterMap Imports/Definitions ---
 
@@ -210,16 +209,10 @@ class _RouteReportScreenState extends State<RouteReportScreen> {
   List<RouteReport> _routeReport = [];
   bool _isLoading = true;
   String? _deviceName;
-  late MapController _mapController; 
-  final List<Polyline> _polylines = []; 
-  final List<Marker> _markers = []; 
-
-  AppMapType _currentMapType = AppMapType.openStreetMap; 
-  
-  // Caching variables
-  final _TileCacheService _cacheService = _TileCacheService();
+  maplibre.MapLibreMapController? _mapController;
+  final Set<String> _loadedIcons = {};
+  bool _isStyleLoaded = false;
   final http.Client _httpClient = http.Client();
-  late _HiveTileProvider _tileProvider;
   bool _isCacheInitialized = false;
 
   // Tile URLs
@@ -233,21 +226,6 @@ class _RouteReportScreenState extends State<RouteReportScreen> {
   @override
   void initState() {
     super.initState();
-    _mapController = MapController(); 
-    
-    // Initialize cache service and then the tile provider
-    _cacheService.init().then((_) {
-      if (mounted) { // CHECK 1: Ensure widget is mounted before setting state/variables
-        _tileProvider = _HiveTileProvider(
-          cacheService: _cacheService,
-          httpClient: _httpClient,
-        );
-        setState(() {
-          _isCacheInitialized = true;
-        });
-      }
-    });
-
     _fetchRouteReport();
   }
   
@@ -329,7 +307,7 @@ class _RouteReportScreenState extends State<RouteReportScreen> {
                 orElse: () => api.Device(),
               );
               _deviceName = device.name;
-              _createMarkersAndPolylines();
+              _createMapElements();
             }
           }
         } else {
@@ -351,60 +329,77 @@ class _RouteReportScreenState extends State<RouteReportScreen> {
     }
   }
 
-  void _createMarkersAndPolylines() {
-    _polylines.clear();
-    _markers.clear();
+  Future<void> _onStyleLoaded() async {
+    _isStyleLoaded = true;
+    if (_routeReport.isNotEmpty) {
+      _createMapElements();
+    }
+  }
+
+  Future<void> _createMapElements() async {
+    if (_mapController == null || !_isStyleLoaded || _routeReport.isEmpty) return;
     
-    if (_routeReport.isEmpty) return;
+    await _mapController!.clearSymbols();
+    await _mapController!.clearLines();
 
-    final List<LatLng> polylinePoints = _routeReport.map((p) => LatLng(p.latitude, p.longitude)).toList();
+    final points = _routeReport
+        .map((p) => maplibre.LatLng(p.latitude, p.longitude))
+        .toList();
+
+    if (points.isNotEmpty) {
+      await _mapController!.addLine(
+        maplibre.LineOptions(
+          geometry: points,
+          lineColor: "#0000FF",
+          lineWidth: 4.0,
+        ),
+      );
+
+      await _addMarker(points.first, "start_pin", "assets/images/start.png");
+      await _addMarker(points.last, "end_pin", "assets/images/destination.png");
+      
+      _zoomToFit(points);
+    }
+  }
+
+  Future<void> _addMarker(maplibre.LatLng point, String iconId, String assetPath) async {
+    if (!_loadedIcons.contains(iconId)) {
+      final ByteData bytes = await rootBundle.load(assetPath);
+      final Uint8List list = bytes.buffer.asUint8List();
+      await _mapController!.addImage(iconId, list);
+      _loadedIcons.add(iconId);
+    }
     
-    // Polyline
-    _polylines.add(
-      Polyline(
-        points: polylinePoints,
-        color: Colors.blue,
-        strokeWidth: 5.0,
-      ),
-    );
-
-    // Start Marker
-    final start = _routeReport.first;
-    _markers.add(
-      Marker(
-        point: LatLng(start.latitude, start.longitude),
-        width: 30.0,
-        height: 30.0,
-        child: Image.asset(
-          'assets/images/start.png',
-          fit: BoxFit.contain,
-        ),
-      ),
-    );
-
-    // End Marker
-    final end = _routeReport.last;
-    _markers.add(
-      Marker(
-        point: LatLng(end.latitude, end.longitude),
-        width: 30.0,
-        height: 30.0,
-        child: Image.asset(
-          'assets/images/destination.png',
-          fit: BoxFit.contain,
-        ),
+    await _mapController!.addSymbol(
+      maplibre.SymbolOptions(
+        geometry: point,
+        iconImage: iconId,
+        iconSize: 0.8,
+        iconAnchor: "bottom",
       ),
     );
   }
 
-  Future<void> _animateToPosition(LatLng position) async {
-    // No need for a mounted check here since _mapController.move is synchronous
-    // but the position itself should be safe if the call originated from the
-    // currently built widget tree (e.g., from onTap in the ListView).
-    _mapController.move(
-      position,
-      16,
+  void _zoomToFit(List<maplibre.LatLng> points) {
+    if (points.isEmpty) return;
+    double minLat = points.map((p) => p.latitude).reduce(min);
+    double maxLat = points.map((p) => p.latitude).reduce(max);
+    double minLng = points.map((p) => p.longitude).reduce(min);
+    double maxLng = points.map((p) => p.longitude).reduce(max);
+
+    _mapController?.animateCamera(
+      maplibre.CameraUpdate.newLatLngBounds(
+        maplibre.LatLngBounds(
+          southwest: maplibre.LatLng(minLat, minLng),
+          northeast: maplibre.LatLng(maxLat, maxLng),
+        ),
+        left: 50, right: 50, top: 50, bottom: 50,
+      ),
     );
+  }
+
+  void _animateToPosition(maplibre.LatLng position) {
+    _mapController?.animateCamera(maplibre.CameraUpdate.newLatLng(position));
   }
 
   String _formatDateTime(DateTime dateTime) {
@@ -460,143 +455,111 @@ class _RouteReportScreenState extends State<RouteReportScreen> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    }
-    
-    if (!_isCacheInitialized) { 
-       return Scaffold(
-        appBar: AppBar(title: Text('Loading Map...'.tr)),
-        body: const Center(child: Text('Initializing Map Assets...')),
-      );
+      return Scaffold(body: Center(child: Text('sharedLoading'.tr)));
     }
 
     if (_routeReport.isEmpty) {
       return Scaffold(
-        appBar: AppBar(title: Text('reportReplay'.tr+': ${_deviceName ?? ''}')),
-        body: Center(
-          child: Text('No data available for the selected period.'.tr),
-        ),
+        appBar: AppBar(title: Text(_deviceName ?? 'reportReplay'.tr)),
+        body: Center(child: Text('sharedNoData'.tr)),
       );
     }
-    
-    final LatLng initialCenter = _routeReport.isNotEmpty
-        ? LatLng(_routeReport.first.latitude, _routeReport.first.longitude)
-        : const LatLng(21.9162, 95.9560); 
+
+    final mapProvider = Provider.of<MapStyleProvider>(context);
+    final initialCenter = _routeReport.isNotEmpty
+        ? maplibre.LatLng(_routeReport.first.latitude, _routeReport.first.longitude)
+        : const maplibre.LatLng(21.9162, 95.9560);
 
     return Scaffold(
       appBar: AppBar(
         title: Text('${'reportReplay'.tr}: ${_deviceName ?? ''}'),
         actions: [
-        IconButton(
+          IconButton(
             icon: const Icon(Icons.download),
             onPressed: _exportToCsv,
           ),
         ],
       ),
       body: Column(
+        children: [
+          Expanded(
+            flex: 1,
+            child: Stack(
               children: [
-                Expanded(
-                  flex: 1,
-                  child: Stack(
-                    children: [
-                      // REPLACED GoogleMap with FlutterMap
-                      FlutterMap(
-                        mapController: _mapController,
-                        options: MapOptions(
-                          initialCenter: initialCenter,
-                          initialZoom: 14.0,
-                          interactionOptions: const InteractionOptions(
-                              flags: InteractiveFlag.all & ~InteractiveFlag.rotate),
-                        ),
-                        children: [
-                          // Tile Layer: Conditional based on map type (OSM/Satellite)
-                          TileLayer(
-                            urlTemplate: _currentMapType == AppMapType.openStreetMap
-                                ? _osmUrlTemplate
-                                : _satelliteUrlTemplate,
-                            subdomains: _currentMapType == AppMapType.openStreetMap
-                                ? _osmSubdomains
-                                : const [],
-                            userAgentPackageName: 'com.trabcdefg.app',
-                            tileProvider: _tileProvider, // Hive Caching
-                          ),
-                          // Polyline Layer
-                          PolylineLayer(polylines: _polylines),
-                          // Marker Layer
-                          MarkerLayer(markers: _markers),
-                        ],
-                      ),
-                      // Map Type Toggle Button
-                      Positioned(
-                        top: 10,
-                        right: 10,
-                        child: FloatingActionButton(
-                          mini: true,
-                          onPressed: () {
-                            setState(() {
-                              _currentMapType = _currentMapType == AppMapType.openStreetMap
-                                  ? AppMapType.satellite
-                                  : AppMapType.openStreetMap;
-                            });
-                          },
-                          child: Icon(
-                            _currentMapType == AppMapType.openStreetMap
-                                ? Icons.satellite_alt
-                                : Icons.map,
-                          ),
-                        ),
-                      ),
-                    ],
+                maplibre.MapLibreMap(
+                  onMapCreated: (c) => _mapController = c,
+                  onStyleLoadedCallback: _onStyleLoaded,
+                  initialCameraPosition: maplibre.CameraPosition(
+                    target: initialCenter,
+                    zoom: 14.0,
                   ),
+                  styleString: mapProvider.styleString,
                 ),
-                Expanded(
-                  flex: 1,
-                  child: ListView.builder(
-                          padding: const EdgeInsets.all(16.0),
-                          itemCount: _routeReport.length,
-                          itemBuilder: (context, index) {
-                            final position = _routeReport[index];
-                            return GestureDetector(
-                              onTap: () {
-                                // Animate to the selected position
-                                _animateToPosition(LatLng(position.latitude, position.longitude));
-                              },
-                              child: Card(
-                                elevation: 4,
-                                margin: const EdgeInsets.only(bottom: 16.0),
-                                child: Padding(
-                                  padding: const EdgeInsets.all(16.0),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        '${'reportPositions'.tr} ${index + 1}',
-                                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                                      ),
-                                      const Divider(),
-                                      ListTile(
-                                        title: Text('positionDeviceTime'.tr),
-                                        trailing: Text(_formatDateTime(position.deviceTime)),
-                                      ),
-                                      ListTile(
-                                        title: Text('positionSpeed'.tr),
-                                        trailing: Text(_formatSpeed(position.speed)),
-                                      ),
-                                      if (position.address != null)
-                                        ListTile(
-                                          title: Text('positionAddress'.tr),
-                                          trailing: Text(position.address! as String),
-                                        ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            );
-                          },
-                        ),
+                Positioned(
+                  top: 10,
+                  right: 10,
+                  child: FloatingActionButton(
+                    mini: true,
+                    onPressed: () => mapProvider.toggleMapType(),
+                    child: Icon(
+                      mapProvider.isSatelliteMode ? Icons.map : Icons.satellite_alt,
+                    ),
+                  ),
                 ),
               ],
             ),
+          ),
+          Expanded(
+            flex: 1,
+            child: ListView.builder(
+              padding: const EdgeInsets.all(16.0),
+              itemCount: _routeReport.length,
+              itemBuilder: (context, index) {
+                final position = _routeReport[index];
+                return GestureDetector(
+                  onTap: () => _animateToPosition(maplibre.LatLng(position.latitude, position.longitude)),
+                  child: Card(
+                    elevation: 4,
+                    margin: const EdgeInsets.only(bottom: 16.0),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '${'reportPositions'.tr} ${index + 1}',
+                            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                          ),
+                          const Divider(),
+                          ListTile(
+                            title: Text('positionDeviceTime'.tr),
+                            trailing: Text(_formatDateTime(position.deviceTime)),
+                          ),
+                          ListTile(
+                            title: Text('positionSpeed'.tr),
+                            trailing: Text(_formatSpeed(position.speed)),
+                          ),
+                          ListTile(
+                            title: Text('positionAddress'.tr),
+                            trailing: FutureBuilder<String>(
+                              future: position.address != null && position.address!.isNotEmpty
+                                  ? Future.value(position.address)
+                                  : OfflineAddressService.getAddress(position.latitude, position.longitude),
+                              builder: (context, snapshot) {
+                                return Text(snapshot.data ?? '...');
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

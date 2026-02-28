@@ -629,5 +629,8 @@ const Map<String, String> en_US = {
   "categoryScooter": "Scooter",
   "maintenanceStart": "Start",
   "maintenancePeriod": "Period",
-  "deviceStatusAll":"All"
+  "deviceStatusAll":"All",
+  "CustomServerURL":"Custom Server URL",
+  "TapMapAddPolygon":"Tap on the map to add points for the polygon.",
+  "pleaseSelectDevice": "Please select a device"
 };

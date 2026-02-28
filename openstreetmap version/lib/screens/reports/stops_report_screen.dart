@@ -8,16 +8,18 @@ import 'package:trabcdefg/src/generated_api/api.dart' as api;
 import 'package:trabcdefg/providers/traccar_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
-import 'package:http/http.dart' as http;
-// import 'package:google_maps_flutter/google_maps_flutter.dart'; // REMOVED: Google Maps
-import 'package:flutter_map/flutter_map.dart'; // ADDED: FlutterMap for OpenStreetMap
-import 'package:latlong2/latlong.dart'; // FIXED: Un-aliased import for LatLng
-import 'dart:ui' as ui;
+import 'package:maplibre_gl/maplibre_gl.dart' as maplibre;
+import 'package:trabcdefg/providers/map_style_provider.dart';
 import 'package:flutter/services.dart';
+import 'dart:math';
+import 'package:trabcdefg/widgets/OfflineAddressService.dart';
 import 'package:get/get.dart';
-import 'package:hive/hive.dart'; // ADDED: Hive Caching
-import 'dart:typed_data'; // ADDED
-import 'package:flutter/foundation.dart'; // ADDED
+import 'package:hive/hive.dart';
+import 'package:http/http.dart' as http;
+import 'package:flutter_map/flutter_map.dart' hide LatLng, LatLngBounds;
+import 'package:flutter/foundation.dart';
+import 'dart:typed_data';
+import 'dart:ui' as ui;
 
 // --- Tile Caching Implementation using Hive (Copied from map_screen.dart) ---
 
@@ -124,7 +126,7 @@ class _HiveTileProvider extends TileProvider {
   }
 }
 
-enum AppMapType { openStreetMap, satellite }
+// Enum moved to provider
 
 // --- End of Map Caching & FlutterMap Imports/Definitions ---
 
@@ -198,19 +200,10 @@ class _StopsReportScreenState extends State<StopsReportScreen> {
   List<StopReport> _stopsReport = [];
   bool _isLoading = true;
   String? _deviceName;
-  // final Completer<GoogleMapController> _controller = Completer(); // REMOVED
-  late MapController _mapController; // ADDED
-  final List<Marker> _markers = []; // Changed to FlutterMap Marker list
-  // late BitmapDescriptor _stopIcon; // REMOVED
-
-  AppMapType _currentMapType =
-      AppMapType.openStreetMap; // Changed to AppMapType
-
-  // Caching variables (ADDED)
-  final _TileCacheService _cacheService = _TileCacheService();
+  maplibre.MapLibreMapController? _mapController;
+  final Set<String> _loadedIcons = {};
+  bool _isStyleLoaded = false;
   final http.Client _httpClient = http.Client();
-  late _HiveTileProvider _tileProvider;
-  bool _isCacheInitialized = false;
 
   // Tile URLs (ADDED)
   static const String _osmUrlTemplate =
@@ -222,22 +215,6 @@ class _StopsReportScreenState extends State<StopsReportScreen> {
   @override
   void initState() {
     super.initState();
-    // _loadMarkerIcons(); // Not needed for FlutterMap
-    _mapController = MapController(); // Initialized MapController
-
-    // Initialize cache service and then the tile provider
-    _cacheService.init().then((_) {
-      _tileProvider = _HiveTileProvider(
-        cacheService: _cacheService,
-        httpClient: _httpClient,
-      );
-      if (mounted) {
-        setState(() {
-          _isCacheInitialized = true;
-        });
-      }
-    });
-
     _fetchStopsReport();
   }
 
@@ -316,7 +293,7 @@ class _StopsReportScreenState extends State<StopsReportScreen> {
                 .toList();
             if (_stopsReport.isNotEmpty) {
               _deviceName = _stopsReport.first.deviceName;
-              _createMarkers();
+              _createMapElements();
             }
           }
         } else {
@@ -338,31 +315,71 @@ class _StopsReportScreenState extends State<StopsReportScreen> {
     }
   }
 
-  void _createMarkers() {
-    _markers.clear();
-    for (var i = 0; i < _stopsReport.length; i++) {
-      final stop = _stopsReport[i];
-      // LatLng from latlong2 (un-aliased)
-      final LatLng stopPoint = LatLng(stop.latitude, stop.longitude);
-
-      // FlutterMap Marker for Stop Point
-      _markers.add(
-        Marker(
-          point: stopPoint,
-          width: 30.0,
-          height: 30.0,
-          child: Image.asset(
-            'assets/images/parking.png', // Assuming you have a stop icon
-            fit: BoxFit.contain,
-          ),
-        ),
-      );
+  Future<void> _onStyleLoaded() async {
+    _isStyleLoaded = true;
+    if (_stopsReport.isNotEmpty) {
+      _createMapElements();
     }
   }
 
-  Future<void> _animateToPosition(LatLng position) async {
-    // Uses FlutterMap's move method
-    _mapController.move(position, 16);
+  Future<void> _createMapElements() async {
+    if (_mapController == null || !_isStyleLoaded || _stopsReport.isEmpty) return;
+    
+    await _mapController!.clearSymbols();
+
+    final List<maplibre.LatLng> points = [];
+
+    for (var i = 0; i < _stopsReport.length; i++) {
+        final stop = _stopsReport[i];
+        final point = maplibre.LatLng(stop.latitude, stop.longitude);
+        points.add(point);
+        await _addMarker(point, "stop_$i", "assets/images/parking.png");
+    }
+
+    if (points.isNotEmpty) {
+      _zoomToFit(points);
+    }
+  }
+
+  Future<void> _addMarker(maplibre.LatLng point, String iconId, String assetPath) async {
+    const baseIconId = "parking_pin";
+    if (!_loadedIcons.contains(baseIconId)) {
+      final ByteData bytes = await rootBundle.load(assetPath);
+      final Uint8List list = bytes.buffer.asUint8List();
+      await _mapController!.addImage(baseIconId, list);
+      _loadedIcons.add(baseIconId);
+    }
+    
+    await _mapController!.addSymbol(
+      maplibre.SymbolOptions(
+        geometry: point,
+        iconImage: baseIconId,
+        iconSize: 0.6,
+        iconAnchor: "bottom",
+      ),
+    );
+  }
+
+  void _zoomToFit(List<maplibre.LatLng> points) {
+    if (points.isEmpty) return;
+    double minLat = points.map((p) => p.latitude).reduce(min);
+    double maxLat = points.map((p) => p.latitude).reduce(max);
+    double minLng = points.map((p) => p.longitude).reduce(min);
+    double maxLng = points.map((p) => p.longitude).reduce(max);
+
+    _mapController?.animateCamera(
+      maplibre.CameraUpdate.newLatLngBounds(
+        maplibre.LatLngBounds(
+          southwest: maplibre.LatLng(minLat, minLng),
+          northeast: maplibre.LatLng(maxLat, maxLng),
+        ),
+        left: 50, right: 50, top: 50, bottom: 50,
+      ),
+    );
+  }
+
+  void _animateToPosition(maplibre.LatLng position) {
+    _mapController?.animateCamera(maplibre.CameraUpdate.newLatLng(position));
   }
 
   String _formatDuration(int milliseconds) {
@@ -376,32 +393,20 @@ class _StopsReportScreenState extends State<StopsReportScreen> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    }
-
-    // Check for cache initialization
-    if (!_isCacheInitialized) {
-      return Scaffold(
-        appBar: AppBar(title: Text('Loading Map...'.tr)),
-        body: const Center(child: Text('Initializing Map Assets...')),
-      );
+      return Scaffold(body: Center(child: Text('sharedLoading'.tr)));
     }
 
     if (_stopsReport.isEmpty) {
       return Scaffold(
-        appBar: AppBar(
-          title: Text('${'reportStops'.tr}: ${_deviceName ?? ''}'),
-        ),
-        body: Center(
-          child: Text('No data available for the selected period.'.tr),
-        ),
+        appBar: AppBar(title: Text(_deviceName ?? 'reportStops'.tr)),
+        body: Center(child: Text('sharedNoData'.tr)),
       );
     }
 
-    // Determine the map's initial center (LatLng from latlong2)
-    final LatLng initialCenter = _stopsReport.isNotEmpty
-        ? LatLng(_stopsReport.first.latitude, _stopsReport.first.longitude)
-        : const LatLng(21.9162, 95.9560); // Mandalay, Myanmar
+    final mapProvider = Provider.of<MapStyleProvider>(context);
+    final initialCenter = _stopsReport.isNotEmpty
+        ? maplibre.LatLng(_stopsReport.first.latitude, _stopsReport.first.longitude)
+        : const maplibre.LatLng(21.9162, 95.9560);
 
     return Scaffold(
       appBar: AppBar(title: Text('${'reportStops'.tr}: ${_deviceName ?? ''}')),
@@ -411,50 +416,23 @@ class _StopsReportScreenState extends State<StopsReportScreen> {
             flex: 1,
             child: Stack(
               children: [
-                // REPLACED GoogleMap with FlutterMap
-                FlutterMap(
-                  mapController: _mapController,
-                  options: MapOptions(
-                    initialCenter: initialCenter,
-                    initialZoom: 14.0,
-                    interactionOptions: const InteractionOptions(
-                      flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
-                    ),
+                maplibre.MapLibreMap(
+                  onMapCreated: (c) => _mapController = c,
+                  onStyleLoadedCallback: _onStyleLoaded,
+                  initialCameraPosition: maplibre.CameraPosition(
+                    target: initialCenter,
+                    zoom: 14.0,
                   ),
-                  children: [
-                    // Tile Layer: Conditional based on map type (OSM/Satellite)
-                    TileLayer(
-                      urlTemplate: _currentMapType == AppMapType.openStreetMap
-                          ? _osmUrlTemplate
-                          : _satelliteUrlTemplate,
-                      subdomains: _currentMapType == AppMapType.openStreetMap
-                          ? _osmSubdomains
-                          : const [],
-                      userAgentPackageName: 'com.trabcdefg.app',
-                      tileProvider: _tileProvider, // Hive Caching
-                    ),
-                    // Marker Layer
-                    MarkerLayer(markers: _markers),
-                  ],
+                  styleString: mapProvider.styleString,
                 ),
-                // Map Type Toggle Button
                 Positioned(
                   top: 10,
                   right: 10,
                   child: FloatingActionButton(
                     mini: true,
-                    onPressed: () {
-                      setState(() {
-                        _currentMapType =
-                            _currentMapType == AppMapType.openStreetMap
-                            ? AppMapType.satellite
-                            : AppMapType.openStreetMap;
-                      });
-                    },
+                    onPressed: () => mapProvider.toggleMapType(),
                     child: Icon(
-                      _currentMapType == AppMapType.openStreetMap
-                          ? Icons.satellite_alt
-                          : Icons.map,
+                      mapProvider.isSatelliteMode ? Icons.map : Icons.satellite_alt,
                     ),
                   ),
                 ),
@@ -469,12 +447,9 @@ class _StopsReportScreenState extends State<StopsReportScreen> {
               itemBuilder: (context, index) {
                 final stop = _stopsReport[index];
                 return GestureDetector(
-                  onTap: () {
-                    // Animate to stop position
-                    _animateToPosition(LatLng(stop.latitude, stop.longitude));
-                    // Removed Google Maps specific showInfoWindowForMarker
-                  },
+                  onTap: () => _animateToPosition(maplibre.LatLng(stop.latitude, stop.longitude)),
                   child: Card(
+// ... Card content (retaining existing style)
                     elevation: 4,
                     margin: const EdgeInsets.only(bottom: 16.0),
                     child: Padding(
@@ -512,8 +487,19 @@ class _StopsReportScreenState extends State<StopsReportScreen> {
                           ),
                           ListTile(
                             title: Text('positionAddress'.tr),
-                            trailing: Text(
-                              stop.address ?? 'Address not available'.tr,
+                            trailing: Expanded(
+                              child: FutureBuilder<String>(
+                                future: stop.address != null && stop.address!.isNotEmpty
+                                    ? Future.value(stop.address)
+                                    : OfflineAddressService.getAddress(stop.latitude, stop.longitude),
+                                builder: (context, snapshot) {
+                                  return Text(
+                                    snapshot.data ?? 'Address not available'.tr,
+                                    textAlign: TextAlign.right,
+                                    overflow: TextOverflow.ellipsis,
+                                  );
+                                },
+                              ),
                             ),
                           ),
                           ListTile(

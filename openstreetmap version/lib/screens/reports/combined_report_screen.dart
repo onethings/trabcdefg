@@ -4,131 +4,23 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 // import 'package:google_maps_flutter/google_maps_flutter.dart'; // REMOVED
-import 'package:flutter_map/flutter_map.dart'; // ADDED
-import 'package:latlong2/latlong.dart'; // ADDED (No alias as requested)
+import 'package:maplibre_gl/maplibre_gl.dart' as maplibre;
+import 'package:trabcdefg/providers/map_style_provider.dart';
+import 'dart:ui' as ui;
+import 'package:flutter/services.dart';
+import 'package:path_provider/path_provider.dart';
+import 'dart:io';
+import 'dart:typed_data';
+import 'dart:math';
+import 'package:trabcdefg/widgets/OfflineAddressService.dart';
 import 'package:provider/provider.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
 import 'package:trabcdefg/providers/traccar_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:ui' as ui;
 import 'package:get/get.dart';
-import 'package:http/http.dart' as http; // ADDED for caching
-import 'package:hive/hive.dart'; // ADDED for caching
-import 'dart:typed_data'; // ADDED for caching
-import 'package:flutter/foundation.dart'; // ADDED for caching
+// Caching logic moved to provider/centralized
 
-// --- Tile Caching Implementation using Hive (Copied from map_screen.dart) ---
-
-class _TileCacheService {
-  late Box<Uint8List> _tileBox;
-  static const String boxName = 'mapTilesCache';
-
-  Future<void> init() async {
-    _tileBox = await Hive.openBox<Uint8List>(boxName);
-  }
-
-  String _generateKey(String url) {
-    return url.hashCode.toString();
-  }
-
-  Future<Uint8List?> getTile(String url) async {
-    return _tileBox.get(_generateKey(url));
-  }
-
-  Future<void> saveTile(String url, Uint8List tileData) async {
-    await _tileBox.put(_generateKey(url), tileData);
-  }
-}
-
-class CachedNetworkImageProvider extends ImageProvider<CachedNetworkImageProvider> {
-  final String url;
-  final _TileCacheService cacheService;
-  final http.Client httpClient;
-
-  CachedNetworkImageProvider(
-    this.url, {
-    required this.cacheService,
-    required this.httpClient,
-  });
-
-  @override
-  ImageStreamCompleter loadImage(
-    CachedNetworkImageProvider key,
-    ImageDecoderCallback decode,
-  ) {
-    return MultiFrameImageStreamCompleter(
-      codec: _loadAsync(key, decode),
-      scale: 1.0,
-      informationCollector: () => <DiagnosticsNode>[
-        DiagnosticsProperty<ImageProvider>('Image provider', this),
-        DiagnosticsProperty<CachedNetworkImageProvider>('Original key', key),
-      ],
-    );
-  }
-
-  @override
-  Future<CachedNetworkImageProvider> obtainKey(
-    ImageConfiguration configuration, 
-  ) {
-    return Future<CachedNetworkImageProvider>.value(this);
-  }
-
-  Future<ui.Codec> _loadAsync(
-    CachedNetworkImageProvider key,
-    ImageDecoderCallback decode,
-  ) async {
-    assert(key == this);
-
-    final cachedData = await cacheService.getTile(url);
-
-    if (cachedData != null) {
-      return decode(await ui.ImmutableBuffer.fromUint8List(cachedData)); 
-    }
-
-    try {
-      final response = await httpClient.get(Uri.parse(url));
-
-      if (response.statusCode == 200) {
-        final Uint8List bytes = response.bodyBytes;
-        
-        await cacheService.saveTile(url, bytes);
-
-        return decode(await ui.ImmutableBuffer.fromUint8List(bytes)); 
-      } else {
-        throw Exception('Failed to load tile from network: ${response.statusCode}');
-      }
-    } catch (e) {
-      rethrow;
-    }
-  }
-}
-
-class _HiveTileProvider extends TileProvider {
-  final _TileCacheService cacheService;
-  final http.Client httpClient;
-
-  _HiveTileProvider({
-    required this.cacheService,
-    required this.httpClient,
-  });
-
-  @override
-  ImageProvider getImage(
-    TileCoordinates coordinates,
-    TileLayer options,
-  ) {
-    return CachedNetworkImageProvider(
-      getTileUrl(coordinates, options),
-      cacheService: cacheService,
-      httpClient: httpClient,
-    );
-  }
-}
-
-enum AppMapType {
-  openStreetMap,
-  satellite,
-}
+// Enum moved to MapStyleProvider
 
 // --- End of Map Caching & FlutterMap Definitions ---
 
@@ -149,64 +41,27 @@ class CombinedReportScreen extends StatefulWidget {
 }
 
 class _CombinedReportScreenState extends State<CombinedReportScreen> {
-  // final Completer<GoogleMapController> _controller = Completer(); // REMOVED
-  late MapController _mapController; // ADDED
-  CombinedReport? _combinedReport;
+  List<CombinedReport> _combinedReport = [];
   bool _isLoading = true;
-  // Set to List for FlutterMap compatibility
-  final List<Polyline> _polylines = []; 
-  final List<Marker> _markers = []; 
   String? _deviceName;
+  maplibre.MapLibreMapController? _mapController;
+  final Set<String> _loadedIcons = {};
+  bool _isStyleLoaded = false;
 
   // Icons are now asset paths/widgets, not BitmapDescriptors
-  // late BitmapDescriptor _ignitionOnIcon; // REMOVED
-  // late BitmapDescriptor _ignitionOffIcon; // REMOVED
   static const String _ignitionOnIconPath = 'assets/images/accon.png'; // ADDED
   static const String _ignitionOffIconPath = 'assets/images/accoff.png'; // ADDED
 
   Map<int, api.Position> _positionsMap = {};
-  // Replace MapType with AppMapType
-  AppMapType _currentMapType = AppMapType.openStreetMap; // CHANGED
-
-  // Caching variables
-  final _TileCacheService _cacheService = _TileCacheService(); // ADDED
-  final http.Client _httpClient = http.Client(); // ADDED
-  late _HiveTileProvider _tileProvider; // ADDED
-  bool _isCacheInitialized = false; // ADDED
-
-  // Tile URLs
-  static const String _osmUrlTemplate = 
-      'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
-  static const String _satelliteUrlTemplate = 
-      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
-  static const List<String> _osmSubdomains = ['a', 'b', 'c'];
-
 
   @override
   void initState() {
     super.initState();
-    _mapController = MapController(); // ADDED initialization
-
-    // Initialize cache service and then the tile provider
-    _cacheService.init().then((_) {
-      if (mounted) { 
-        _tileProvider = _HiveTileProvider(
-          cacheService: _cacheService,
-          httpClient: _httpClient,
-        );
-        setState(() {
-          _isCacheInitialized = true; // Set flag when initialization is complete
-        });
-      }
-    });
-
-    _loadMarkerIcons();
     _fetchCombinedReport();
   }
   
   @override
   void dispose() {
-    _httpClient.close(); // Dispose of http client
     super.dispose();
   }
 
@@ -311,12 +166,28 @@ class _CombinedReportScreenState extends State<CombinedReportScreen> {
             [];
 
         if (positions.isNotEmpty || events.isNotEmpty || route.isNotEmpty) {
-          _combinedReport = CombinedReport(
+          // For MapLibre, we'll flatten positions and events into a single list for display
+          // This assumes CombinedReport can represent a single point/event for the list view
+          // and the route is handled separately.
+          // This part needs careful adaptation based on how the new _combinedReport list is intended to be used.
+          // For now, let's keep the original CombinedReport structure and adapt _createMapElements.
+          // The diff implies _combinedReport is a list of objects with latitude/longitude directly.
+          // This is a mismatch with the existing CombinedReport model.
+          // To make the diff work, I'll assume a temporary structure or adapt the usage.
+          // Given the diff for _combinedReport is `List<CombinedReport> _combinedReport = [];`,
+          // and its usage `p.latitude`, it implies CombinedReport should have latitude/longitude.
+          // Since I cannot change the CombinedReport model, I will assume the `_combinedReport` list
+          // will be populated with a different type of object that has latitude/longitude,
+          // or that the diff's usage of `p.latitude` is a simplification for a different data structure.
+          // For faithful application, I will make _combinedReport a list of the original CombinedReport objects,
+          // and then adapt _createMapElements to extract LatLngs from the first CombinedReport's route/positions.
+          _combinedReport = [CombinedReport(
             positions: positions,
             events: events,
             route: route,
-          );
-          _updateMap();
+          )];
+          _positionsMap = {for (var pos in positions) pos.id!: pos};
+          _createMapElements();
         }
       }
     } catch (e) {
@@ -331,115 +202,114 @@ class _CombinedReportScreenState extends State<CombinedReportScreen> {
     }
   }
 
-  void _updateMap() {
-    if (_combinedReport == null) {
-      return;
+  Future<void> _onStyleLoaded() async {
+    _isStyleLoaded = true;
+    if (_combinedReport.isNotEmpty) {
+      _createMapElements();
     }
-
-    // Clear previous markers and polylines
-    _polylines.clear();
-    _markers.clear();
-
-    // Draw route polyline
-    if (_combinedReport!.route != null && _combinedReport!.route!.isNotEmpty) {
-      final List<LatLng> routePoints = _combinedReport!.route!
-          // Convert Traccar format [lon, lat] to LatLng(lat, lon)
-          .map((coord) => LatLng(coord[1], coord[0]))
-          .toList();
-
-      if (routePoints.isNotEmpty) {
-        // Use FlutterMap Polyline
-        _polylines.add(
-          Polyline(
-            points: routePoints,
-            color: Colors.blue,
-            strokeWidth: 4,
-          ),
-        );
-
-        // Add start marker (uses Image.asset in child)
-        _markers.add(
-          Marker(
-            point: routePoints.first,
-            width: 30.0,
-            height: 30.0,
-            child: Image.asset(
-              'assets/images/start.png',
-              fit: BoxFit.contain,
-            ),
-          ),
-        );
-
-        // Add end marker (uses Image.asset in child)
-        _markers.add(
-          Marker(
-            point: routePoints.last,
-            width: 30.0,
-            height: 30.0,
-            child: Image.asset(
-              'assets/images/destination.png',
-              fit: BoxFit.contain,
-            ),
-          ),
-        );
-      }
-    }
-
-    // Populate positions map for quick lookup
-    _positionsMap = {for (var pos in _combinedReport!.positions) pos.id!: pos};
-
-    // Add event markers
-    for (var event in _combinedReport!.events) {
-      if (event.positionId != null &&
-          _positionsMap.containsKey(event.positionId)) {
-        final position = _positionsMap[event.positionId]!;
-        if (position.latitude != null && position.longitude != null) {
-          String iconPath;
-          switch (event.type) {
-            case 'ignitionOn':
-              iconPath = _ignitionOnIconPath; // Use string path
-              break;
-            case 'ignitionOff':
-              iconPath = _ignitionOffIconPath; // Use string path
-              break;
-            default:
-              iconPath = 'assets/images/event_default.png'; // Generic icon
-              break;
-          }
-
-          final String markerId = 'event_marker_${event.id}';
-          
-          // Use FlutterMap Marker
-          _markers.add(
-            Marker(
-              point: LatLng(
-                position.latitude!.toDouble(),
-                position.longitude!.toDouble(),
-              ),
-              width: 30.0,
-              height: 30.0,
-              key: Key(markerId), 
-              child: Image.asset(
-                iconPath,
-                fit: BoxFit.contain,
-                errorBuilder: (context, error, stackTrace) => const Icon(Icons.warning, color: Colors.yellow),
-              ),
-            ),
-          );
-        }
-      }
-    }
-
-    setState(() {});
   }
 
-  // Future<void> _showInfoWindowForMarker(MarkerId markerId) async { ... } // REMOVED
+  Future<void> _createMapElements() async {
+    if (_mapController == null || !_isStyleLoaded || _combinedReport.isEmpty) return;
+    
+    await _mapController!.clearSymbols();
+    await _mapController!.clearLines();
 
-  Future<void> _animateToPosition(LatLng latLng) async {
-    _mapController.move(
-      latLng,
-      15,
+    final report = _combinedReport.first; // Assuming only one CombinedReport object in the list
+
+    final List<maplibre.LatLng> routePoints = [];
+    if (report.route != null && report.route!.isNotEmpty) {
+      routePoints.addAll(report.route!
+          .map((coord) => maplibre.LatLng(coord[1], coord[0]))
+          .toList());
+    } else if (report.positions.isNotEmpty) {
+      routePoints.addAll(report.positions
+          .where((p) => p.latitude != null && p.longitude != null)
+          .map((p) => maplibre.LatLng(p.latitude!.toDouble(), p.longitude!.toDouble()))
+          .toList());
+    }
+
+    if (routePoints.isNotEmpty) {
+      await _mapController!.addLine(
+        maplibre.LineOptions(
+          geometry: routePoints,
+          lineColor: "#0000FF",
+          lineWidth: 4.0,
+        ),
+      );
+
+      // Add markers for stops/events if any, or just start/end
+      await _addMarker(routePoints.first, "start_pin", "assets/images/start.png");
+      await _addMarker(routePoints.last, "end_pin", "assets/images/destination.png");
+      
+      // Add event markers
+      for (var event in report.events) {
+        if (event.positionId != null && _positionsMap.containsKey(event.positionId)) {
+          final position = _positionsMap[event.positionId]!;
+          if (position.latitude != null && position.longitude != null) {
+            String iconId;
+            String assetPath;
+            switch (event.type) {
+              case 'ignitionOn':
+                iconId = 'ignition_on';
+                assetPath = _ignitionOnIconPath;
+                break;
+              case 'ignitionOff':
+                iconId = 'ignition_off';
+                assetPath = _ignitionOffIconPath;
+                break;
+              default:
+                iconId = 'event_default';
+                assetPath = 'assets/images/event_default.png';
+                break;
+            }
+            await _addMarker(maplibre.LatLng(position.latitude!.toDouble(), position.longitude!.toDouble()), iconId, assetPath);
+          }
+        }
+      }
+
+      _zoomToFit(routePoints);
+    }
+  }
+
+  Future<void> _addMarker(maplibre.LatLng point, String iconId, String assetPath) async {
+    if (!_loadedIcons.contains(iconId)) {
+      final ByteData bytes = await rootBundle.load(assetPath);
+      final Uint8List list = bytes.buffer.asUint8List();
+      await _mapController!.addImage(iconId, list);
+      _loadedIcons.add(iconId);
+    }
+    
+    await _mapController!.addSymbol(
+      maplibre.SymbolOptions(
+        geometry: point,
+        iconImage: iconId,
+        iconSize: 0.8,
+        iconAnchor: "bottom",
+      ),
     );
+  }
+
+  void _zoomToFit(List<maplibre.LatLng> points) {
+    if (points.isEmpty) return;
+    double minLat = points.map((p) => p.latitude).reduce(min);
+    double maxLat = points.map((p) => p.latitude).reduce(max);
+    double minLng = points.map((p) => p.longitude).reduce(min);
+    double maxLng = points.map((p) => p.longitude).reduce(max);
+
+    _mapController?.animateCamera(
+      maplibre.CameraUpdate.newLatLngBounds(
+        maplibre.LatLngBounds(
+          southwest: maplibre.LatLng(minLat, minLng),
+          northeast: maplibre.LatLng(maxLat, maxLng),
+        ),
+        left: 50, right: 50, top: 50, bottom: 50,
+      ),
+    );
+  }
+
+  void _animateToPosition(maplibre.LatLng position) {
+    _mapController?.animateCamera(maplibre.CameraUpdate.newLatLng(position));
   }
 
   @override
@@ -448,80 +318,47 @@ class _CombinedReportScreenState extends State<CombinedReportScreen> {
       return Scaffold(body: Center(child: Text('sharedLoading'.tr)));
     }
 
-    // Check for cache initialization
-    if (!_isCacheInitialized) { 
-      return Scaffold(
-        appBar: AppBar(title: Text('Loading Map...'.tr)),
-        body: const Center(child: Text('Initializing Map Assets...')),
-      );
-    }
-
-    if (_combinedReport == null ||
-        (_combinedReport!.positions.isEmpty &&
-            (_combinedReport!.route == null || _combinedReport!.route!.isEmpty))) {
+    if (_combinedReport.isEmpty ||
+        (_combinedReport.first.positions.isEmpty &&
+            (_combinedReport.first.route == null || _combinedReport.first.route!.isEmpty))) {
       return Scaffold(
         appBar: AppBar(title: Text(_deviceName ?? 'reportCombinedReport'.tr)),
         body: Center(child: Text('sharedNoData'.tr)),
       );
     }
     
-    // Determine initial center for FlutterMap
-    final LatLng initialCenter = (_combinedReport!.route != null && _combinedReport!.route!.isNotEmpty)
-        ? LatLng(_combinedReport!.route!.first[1], _combinedReport!.route!.first[0])
-        : const LatLng(0, 0);
+    final mapProvider = Provider.of<MapStyleProvider>(context);
+    final initialCenter = (_combinedReport.first.route != null && _combinedReport.first.route!.isNotEmpty)
+        ? maplibre.LatLng(_combinedReport.first.route!.first[1], _combinedReport.first.route!.first[0])
+        : (_combinedReport.first.positions.isNotEmpty
+            ? maplibre.LatLng(_combinedReport.first.positions.first.latitude!.toDouble(), _combinedReport.first.positions.first.longitude!.toDouble())
+            : const maplibre.LatLng(21.9162, 95.9560)); // Default if no data
 
     return Scaffold(
-      appBar: AppBar(title: Text(_deviceName ?? 'reportCombinedReport'.tr)),
+      appBar: AppBar(title: Text('${'reportCombined'.tr}: ${_deviceName ?? ''}')),
       body: Column(
         children: [
           Expanded(
-            flex: 2,
+            flex: 1,
             child: Stack(
               children: [
-                // Replace GoogleMap with FlutterMap
-                FlutterMap(
-                  mapController: _mapController,
-                  options: MapOptions(
-                    initialCenter: initialCenter,
-                    initialZoom: 13,
-                    interactionOptions: const InteractionOptions(
-                        flags: InteractiveFlag.all & ~InteractiveFlag.rotate),
+                maplibre.MapLibreMap(
+                  onMapCreated: (c) => _mapController = c,
+                  onStyleLoadedCallback: _onStyleLoaded,
+                  initialCameraPosition: maplibre.CameraPosition(
+                    target: initialCenter,
+                    zoom: 14.0,
                   ),
-                  children: [
-                    // Tile Layer: Conditional based on map type (OSM/Satellite)
-                    TileLayer(
-                      urlTemplate: _currentMapType == AppMapType.openStreetMap
-                          ? _osmUrlTemplate
-                          : _satelliteUrlTemplate,
-                      subdomains: _currentMapType == AppMapType.openStreetMap
-                          ? _osmSubdomains
-                          : const [],
-                      userAgentPackageName: 'com.trabcdefg.app',
-                      tileProvider: _tileProvider, // Hive Caching
-                    ),
-                    // Polyline Layer
-                    PolylineLayer(polylines: _polylines),
-                    // Marker Layer
-                    MarkerLayer(markers: _markers),
-                  ],
+                  styleString: mapProvider.styleString,
                 ),
-                // Map Type Toggle Button (updated for AppMapType)
                 Positioned(
                   top: 10,
                   right: 10,
                   child: FloatingActionButton(
                     mini: true,
-                    onPressed: () {
-                      setState(() {
-                        _currentMapType = _currentMapType == AppMapType.openStreetMap
-                            ? AppMapType.satellite
-                            : AppMapType.openStreetMap;
-                      });
-                    },
+                    onPressed: () => mapProvider.toggleMapType(),
                     child: Icon(
-                      _currentMapType == AppMapType.openStreetMap
-                          ? Icons.satellite_alt
-                          : Icons.map,
+                      mapProvider.isSatelliteMode ? Icons.map : Icons.satellite_alt,
                     ),
                   ),
                 ),
@@ -530,91 +367,93 @@ class _CombinedReportScreenState extends State<CombinedReportScreen> {
           ),
           Expanded(
             flex: 1,
-            child: ListView(
+            child: ListView.builder(
               padding: const EdgeInsets.all(16.0),
-              children: [
-                Text(
-                  'reportPositions'.tr,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                ..._combinedReport!.positions
-                    .map(
-                      (pos) => ListTile(
+              itemCount: _combinedReport.first.positions.length + _combinedReport.first.events.length,
+              itemBuilder: (context, index) {
+                final report = _combinedReport.first;
+                if (index < report.positions.length) {
+                  final pos = report.positions[index];
+                  return Card(
+                    child: ListTile(
+                      title: Text(
+                        '${'sharedDevice'.tr}: ${_deviceName}, '
+                        '${'positionSpeed'.tr}: ${pos.speed} ${'sharedKmh'.tr}',
+                      ),
+                      subtitle: Text(
+                        '${'reportTimeType'.tr}: ${pos.deviceTime?.toLocal().toString().split('.')[0]}',
+                      ),
+                      trailing: FutureBuilder<String>(
+                        future: pos.address != null && pos.address!.isNotEmpty
+                            ? Future.value(pos.address)
+                            : OfflineAddressService.getAddress(pos.latitude!.toDouble(), pos.longitude!.toDouble()),
+                        builder: (context, snapshot) {
+                          return Container(
+                            width: 120,
+                            child: Text(
+                              snapshot.data ?? '...',
+                              style: const TextStyle(fontSize: 10),
+                              textAlign: TextAlign.right,
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 2,
+                            ),
+                          );
+                        },
+                      ),
+                      onTap: () async {
+                        if (pos.latitude != null && pos.longitude != null) {
+                          _animateToPosition(
+                            maplibre.LatLng(
+                              pos.latitude!.toDouble(),
+                              pos.longitude!.toDouble(),
+                            ),
+                          );
+                        }
+                      },
+                    ),
+                  );
+                  } else {
+                    final eventIndex = index - report.positions.length;
+                    final event = report.events[eventIndex];
+                    String translatedEventKey;
+                    if (event.type != null && event.type!.isNotEmpty) {
+                      translatedEventKey =
+                          'event' +
+                          event.type![0].toUpperCase() +
+                          event.type!.substring(1);
+                    } else {
+                      translatedEventKey = 'eventUnknown';
+                    }
+                    return Card(
+                      child: ListTile(
                         title: Text(
-                          'sharedDevice'.tr +
-                              ': ${_deviceName}, ' +
-                              'positionSpeed'.tr +
-                              ': ${pos.speed} ' +
-                              'sharedKmh'.tr,
+                          'reportEventTypes'.tr + ': ${translatedEventKey.tr}',
                         ),
                         subtitle: Text(
                           'reportTimeType'.tr +
-                              ': ${pos.deviceTime?.toLocal().toString().split('.')[0]}',
+                              ': ${event.eventTime?.toLocal().toString().split('.')[0]}',
                         ),
                         onTap: () async {
-                          if (pos.latitude != null && pos.longitude != null) {
-                            await _animateToPosition(
-                              LatLng(
-                                pos.latitude!.toDouble(),
-                                pos.longitude!.toDouble(),
-                              ),
-                            );
-                            // Removed temporary marker and info window logic
+                          if (event.positionId != null &&
+                              _positionsMap.containsKey(event.positionId)) {
+                            final position = _positionsMap[event.positionId]!;
+                            if (position.latitude != null &&
+                                position.longitude != null) {
+                              _animateToPosition(
+                                maplibre.LatLng(
+                                  position.latitude!.toDouble(),
+                                  position.longitude!.toDouble(),
+                                ),
+                              );
+                            }
                           }
                         },
                       ),
-                    )
-                    .toList(),
-                const Divider(),
-                Text(
-                  'reportEvents'.tr,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                ..._combinedReport!.events.map((event) {
-                  String translatedEventKey;
-                  if (event.type != null && event.type!.isNotEmpty) {
-                    translatedEventKey =
-                        'event' +
-                        event.type![0].toUpperCase() +
-                        event.type!.substring(1);
-                  } else {
-                    translatedEventKey = 'eventUnknown';
+                    );
                   }
-                  return ListTile(
-                    title: Text(
-                      'reportEventTypes'.tr + ': ${translatedEventKey.tr}',
-                    ),
-                    subtitle: Text(
-                      'reportTimeType'.tr +
-                          ': ${event.eventTime?.toLocal().toString().split('.')[0]}',
-                    ),
-                    onTap: () async {
-                      if (event.positionId != null &&
-                          _positionsMap.containsKey(event.positionId)) {
-                        final position = _positionsMap[event.positionId]!;
-                        if (position.latitude != null &&
-                            position.longitude != null) {
-                          await _animateToPosition(
-                            LatLng(
-                              position.latitude!.toDouble(),
-                              position.longitude!.toDouble(),
-                            ),
-                          );
-                          // Removed _showInfoWindowForMarker call
-                        }
-                      }
-                    },
-                  );
-                }).toList(),
-              ],
+                },
+              ),
             ),
-          ),
         ],
       ),
     );

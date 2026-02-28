@@ -25,6 +25,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:trabcdefg/services/localization_service.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:trabcdefg/models/route_positions_hive.dart';
+import 'package:trabcdefg/providers/map_style_provider.dart';
 
 
 void main() async {
@@ -97,6 +98,9 @@ class TraccarApp extends StatelessWidget {
             webSocketService: context.read<WebSocketService>(),
             authService: context.read<AuthService>(),
           ),
+        ),
+        ChangeNotifierProvider<MapStyleProvider>(
+          create: (_) => MapStyleProvider(),
         ),
       ],
       // Changed MaterialApp to GetMaterialApp to correctly handle GetX localization.
