@@ -91,6 +91,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       'vi': 'Tiếng Việt',
       'zh_TW': '繁體中文',
       'zh': '简体中文',
+      'my': 'မြန်မာဘာသာ',
     };
 
     final List<Locale> supportedLocales = [
@@ -157,6 +158,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       const Locale('vi'),
       const Locale('zh', 'TW'),
       const Locale('zh'),
+      const Locale('my'),
     ];
 
     showDialog(

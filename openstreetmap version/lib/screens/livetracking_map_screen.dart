@@ -18,78 +18,9 @@ import 'dart:math';
 import 'dart:convert';
 import 'package:timeago/timeago.dart' as timeago;
 import 'package:trabcdefg/widgets/OfflineAddressService.dart';
+import 'package:trabcdefg/l10n/timeago_my.dart'; // 新增 Myanmar TimeAgo
 
-// --- Reverse Geocoding Service Implementation using Hive and Nominatim ---
-class NominatimService {
-  late Box<String> _geocodeBox;
-  final http.Client _httpClient;
-  static const String boxName = 'geocodeCache';
-  static const String _nominatimBaseUrl =
-      'https://nominatim.openstreetmap.org/reverse';
-
-  NominatimService({required http.Client httpClient})
-    : _httpClient = httpClient;
-
-  Future<void> init() async {
-    _geocodeBox = await Hive.openBox<String>(boxName);
-  }
-
-  String _generateKey(double lat, double lon) {
-    final roundedLat = lat.toStringAsFixed(3);
-    final roundedLon = lon.toStringAsFixed(3);
-    return '$roundedLat,$roundedLon';
-  }
-
-  Future<String> fetchStreetName({
-    required double lat,
-    required double lon,
-    required String defaultValue,
-    required String langCode,
-    required String appName,
-    required String userEmail,
-  }) async {
-    final key = _generateKey(lat, lon);
-    String? cachedAddress = _geocodeBox.get(key);
-    if (cachedAddress != null) {
-      return cachedAddress;
-    }
-
-    final url = Uri.parse(
-      '$_nominatimBaseUrl?lat=$lat&lon=$lon&format=json&zoom=18&addressdetails=1',
-    );
-
-    try {
-      final response = await _httpClient.get(
-        url,
-        headers: {
-          'User-Agent': '$appName/1.0 ($userEmail)',
-          'Accept-Language': langCode,
-        },
-      );
-
-      if (response.statusCode == 200) {
-        final Map<String, dynamic> result =
-            json.decode(response.body) as Map<String, dynamic>;
-
-        final address = result['address'] as Map<String, dynamic>?;
-        final streetName =
-            address?['road'] as String? ??
-            address?['footway'] as String? ??
-            address?['cycleway'] as String? ??
-            result['display_name'] as String? ??
-            defaultValue;
-
-        await _geocodeBox.put(key, streetName);
-        return streetName;
-      } else {
-        throw Exception('Failed to load address');
-      }
-    } catch (e) {
-      return 'Geocoding Failed'.tr;
-    }
-  }
-}
-
+// Offline address fallback via OfflineAddressService
 class LiveTrackingMapScreen extends StatefulWidget {
   final Device selectedDevice;
   const LiveTrackingMapScreen({super.key, required this.selectedDevice});
@@ -102,37 +33,21 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
   MapLibreMapController? _mapController;
   Position? _currentDevicePosition;
   bool _isCameraLocked = true;
-  bool _isGeocodeServiceInitialized = false;
   bool _isStyleLoaded = false;
   double _mapCenterOffset = 0.007;
   double _mapCenterOnset = 0.008;
 
-  late NominatimService _nominatimService;
-  
-  // Initialize OfflineGeocoder from your service file
-  // final OfflineGeocoder _offlineGeocoder = OfflineGeocoder();
-
   String _currentStreetName = 'Fetching Address...'.tr;
-  DateTime _lastNominatimNetworkFetch = DateTime.fromMillisecondsSinceEpoch(0);
-  String _cachedUserEmail = 'kevin16iwin@gmail.com';
-  final http.Client _httpClient = http.Client();
   final Set<String> _loadedIcons = {};
 
   // Style strings moved to provider
 
-  @override
   void initState() {
     super.initState();
     _setupTimeagoLocales();
 
     // Initialize Offline DB on screen load
     OfflineAddressService.initDatabase();
-
-    _nominatimService = NominatimService(httpClient: _httpClient);
-    _nominatimService.init().then((_) {
-      if (mounted) setState(() => _isGeocodeServiceInitialized = true);
-    });
-    _fetchUserEmailFromApi();
   }
 
   bool _checkIsStale(Device device, Position? position) {
@@ -145,6 +60,7 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
   void _setupTimeagoLocales() {
     timeago.setLocaleMessages('en_short', timeago.EnShortMessages());
     timeago.setLocaleMessages('zh', timeago.ZhMessages());
+    timeago.setLocaleMessages('my', MyMessages()); // 關鍵修正：註冊 Myanmar 語系
   }
 
   void _onMapCreated(MapLibreMapController controller) {
@@ -196,7 +112,7 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
             ? iconKey
             : 'marker_default_unknown',
         iconRotate: _currentDevicePosition!.course?.toDouble() ?? 0.0,
-        iconSize: 3.2,
+        iconSize: 3.8, // 調整：從 3.2 增加到 3.8
       ),
     );
 
@@ -212,48 +128,19 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
     }
   }
 
-  // UPDATED: Logic to handle street names with Offline Geocoder fallback
   Future<void> _fetchStreetName(
     double lat,
     double lon,
     Position? position,
   ) async {
-    // 1. Check Traccar API Address first
-    if (position?.address != null && position!.address!.isNotEmpty) {
-      if (mounted) setState(() => _currentStreetName = position.address!);
-      return;
-    }
-
-    // 2. Fallback to your Offline Geocoder (getAddress method)
+    // Traccar 伺服器通常不帶地址，直接使用 Offline Geocoder (which internally handles Hive/DB/Nominatim)
     try {
       final offlineResult = await OfflineAddressService.getAddress(lat, lon);
-      if (offlineResult != "Myanmar Road") {
-        if (mounted) setState(() => _currentStreetName = offlineResult);
-        return;
-      }
+      if (mounted) setState(() => _currentStreetName = offlineResult);
     } catch (e) {
       debugPrint("Offline lookup error: $e");
+      if (mounted) setState(() => _currentStreetName = "Location: ${lat.toStringAsFixed(4)}, ${lon.toStringAsFixed(4)}");
     }
-
-    // 3. Fallback to Nominatim Network if offline fails
-    if (!_isGeocodeServiceInitialized) return;
-    // Map type moved to provider
-    final now = DateTime.now();
-    if (now.difference(_lastNominatimNetworkFetch) <
-        const Duration(seconds: 30))
-      return;
-    _lastNominatimNetworkFetch = now;
-
-    final resultAddress = await _nominatimService.fetchStreetName(
-      lat: lat,
-      lon: lon,
-      defaultValue: 'Address not found'.tr,
-      langCode: Get.locale?.toLanguageTag() ?? 'en',
-      appName: 'TrabcdefgMobileApp',
-      userEmail: _cachedUserEmail,
-    );
-
-    if (mounted) setState(() => _currentStreetName = resultAddress);
   }
 
   @override
@@ -310,6 +197,7 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
                 top: 16,
                 right: 16,
                 child: FloatingActionButton(
+                  heroTag: 'map_layer_toggle_btn_${widget.selectedDevice.id}',
                   mini: true,
                   backgroundColor: Colors.white,
                   onPressed: () {
@@ -325,6 +213,7 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
                 top: 80,
                 right: 16,
                 child: FloatingActionButton(
+                  heroTag: 'map_center_lock_btn_${widget.selectedDevice.id}',
                   mini: true,
                   onPressed: () {
                     setState(() => _isCameraLocked = true);
@@ -505,19 +394,5 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
     }
   }
 
-  Future<void> _fetchUserEmailFromApi() async {
-    try {
-      final traccarProvider = Provider.of<TraccarProvider>(
-        context,
-        listen: false,
-      );
-      final sessionApi = SessionApi(traccarProvider.apiClient);
-      final user = await sessionApi.sessionGet();
-      if (mounted) {
-        _cachedUserEmail = user?.email ?? _cachedUserEmail;
-      }
-    } catch (e) {
-      debugPrint('Error fetching email: $e');
-    }
-  }
+  // _fetchUserEmailFromApi removed as Nominatim is handled by OfflineAddressService
 }

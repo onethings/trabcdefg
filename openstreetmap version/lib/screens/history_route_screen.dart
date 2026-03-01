@@ -300,6 +300,9 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen>
         }
       }
 
+      // 4.5 關鍵修正：過濾掉速度為零的點，提升回放體驗
+      fetchedPositions = fetchedPositions.where((p) => (p.speed ?? 0) > 0).toList();
+
       // 5. 更新數據
       if (mounted) {
         setState(() {

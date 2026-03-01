@@ -36,128 +36,11 @@ import 'package:flutter/foundation.dart'; // Required for DiagnosticsProperty
 import 'package:trabcdefg/widgets/OfflineAddressService.dart';
 import 'package:trabcdefg/providers/map_style_provider.dart';
 
-// --- Tile Caching Implementation using Hive ---
+import '../services/tile_cache_service.dart';
+import '../services/marker_icon_service.dart';
+import '../widgets/device_detail_panel.dart';
 
-class _TileCacheService {
-  late Box<Uint8List> _tileBox;
-  static const String boxName = 'mapTilesCache';
-
-  Future<void> init() async {
-    // Open the Hive box for storing map tiles.
-    _tileBox = await Hive.openBox<Uint8List>(boxName);
-  }
-
-  // Generate a unique key for the tile URL to use in Hive.
-  String _generateKey(String url) {
-    return url.hashCode.toString();
-  }
-
-  Future<Uint8List?> getTile(String url) async {
-    // Try to retrieve the tile from the local cache.
-    return _tileBox.get(_generateKey(url));
-  }
-
-  Future<void> saveTile(String url, Uint8List tileData) async {
-    // Save the tile data to the local cache.
-    await _tileBox.put(_generateKey(url), tileData);
-  }
-}
-
-// Custom TileProvider to integrate Hive caching with FlutterMap
-class _HiveTileProvider extends TileProvider {
-  final _TileCacheService cacheService;
-  final http.Client httpClient;
-
-  _HiveTileProvider({required this.cacheService, required this.httpClient});
-
-  @override
-  ImageProvider getImage(TileCoordinates coordinates, TileLayer options) {
-    // This is the key method to load the image. We return a FutureProvider.
-    return CachedNetworkImageProvider(
-      getTileUrl(coordinates, options),
-      cacheService: cacheService,
-      httpClient: httpClient,
-    );
-  }
-}
-
-// Custom ImageProvider to handle the cache/network logic
-class CachedNetworkImageProvider
-    extends ImageProvider<CachedNetworkImageProvider> {
-  final String url;
-  final _TileCacheService cacheService;
-  final http.Client httpClient;
-
-  CachedNetworkImageProvider(
-    this.url, {
-    required this.cacheService,
-    required this.httpClient,
-  });
-
-  @override
-  ImageStreamCompleter loadImage(
-    CachedNetworkImageProvider key,
-    ImageDecoderCallback decode,
-  ) {
-    return MultiFrameImageStreamCompleter(
-      codec: _loadAsync(key, decode),
-      scale: 1.0,
-      informationCollector: () => <DiagnosticsNode>[
-        DiagnosticsProperty<ImageProvider>('Image provider', this),
-        DiagnosticsProperty<CachedNetworkImageProvider>('Original key', key),
-      ],
-    );
-  }
-
-  // Corrected obtainKey signature
-  @override
-  Future<CachedNetworkImageProvider> obtainKey(
-    ImageConfiguration configuration,
-  ) {
-    // FIXED: Corrected the type name from CachedNetworkProvider to CachedNetworkImageProvider
-    return Future<CachedNetworkImageProvider>.value(this);
-  }
-
-  Future<ui.Codec> _loadAsync(
-    CachedNetworkImageProvider key,
-    ImageDecoderCallback decode,
-  ) async {
-    assert(key == this);
-
-    // 1. Check Cache
-    final cachedData = await cacheService.getTile(url);
-
-    if (cachedData != null) {
-      // Load from cache
-      return decode(await ImmutableBuffer.fromUint8List(cachedData));
-    }
-
-    // 2. Fetch from Network
-    try {
-      final response = await httpClient.get(Uri.parse(url));
-
-      if (response.statusCode == 200) {
-        final Uint8List bytes = response.bodyBytes;
-
-        // 3. Save to Cache
-        await cacheService.saveTile(url, bytes);
-
-        // Load from fetched bytes
-        return decode(await ImmutableBuffer.fromUint8List(bytes));
-      } else {
-        // Fallback or error handling for network failure
-        throw Exception(
-          'Failed to load tile from network: ${response.statusCode}',
-        );
-      }
-    } catch (e) {
-      // Fallback or error handling for any other failure
-      rethrow;
-    }
-  }
-}
-
-// --- End of Tile Caching Implementation ---
+// --- End of Imports ---
 
 // ADDED: Enum for managing map types
 // REMOVED local AppMapType to use provider's version
@@ -208,7 +91,8 @@ class _MapScreenState extends State<MapScreen> {
   MapController flutterMapController = MapController();
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   api.Device? _currentDevice;
-  final _TileCacheService _cacheService = _TileCacheService();
+  final TileCacheService _cacheService = TileCacheService();
+  late MarkerIconService _iconService;
   final http.Client _httpClient = http.Client();
   // Adjust 0.005 based on how tall your bottom sheet is
   double _mapCenterOffset = 0.001;
@@ -234,7 +118,7 @@ class _MapScreenState extends State<MapScreen> {
   static const List<String> _osmSubdomains = ['a', 'b', 'c'];
 
   // Custom Tile Provider
-  late _HiveTileProvider _tileProvider;
+  late HiveTileProvider _tileProvider;
   bool _isCacheInitialized =
       false; // State to track cache/provider initialization
 
@@ -243,8 +127,9 @@ class _MapScreenState extends State<MapScreen> {
     super.initState();
     // Preference loading moved to provider
     // Initialize cache service and then the tile provider
+    _iconService = MarkerIconService(loadedIcons: _loadedIcons);
     _cacheService.init().then((_) {
-      _tileProvider = _HiveTileProvider(
+      _tileProvider = HiveTileProvider(
         cacheService: _cacheService,
         httpClient: _httpClient,
       );
@@ -354,24 +239,7 @@ class _MapScreenState extends State<MapScreen> {
 
   // Add this inside _MapScreenState
   Future<void> _ensureIconLoaded(String iconKey) async {
-    if (_mapController == null || _loadedIcons.contains(iconKey)) return;
-
-    try {
-      final String assetPath = 'assets/images/$iconKey.png';
-      final ByteData bytes = await rootBundle.load(assetPath);
-      final Uint8List list = bytes.buffer.asUint8List();
-
-      await _mapController!.addImage(iconKey, list);
-      _loadedIcons.add(iconKey);
-
-      // Small delay to ensure the engine registers the new sprite
-      await Future.delayed(const Duration(milliseconds: 50));
-    } catch (e) {
-      debugPrint("❌ Failed to load icon '$iconKey': $e");
-      if (iconKey != 'marker_default_unknown') {
-        await _ensureIconLoaded('marker_default_unknown');
-      }
-    }
+    await _iconService.ensureIconLoaded(_mapController, iconKey);
   }
 
   // void _updateAllMarkers(TraccarProvider provider) async {
@@ -418,6 +286,9 @@ class _MapScreenState extends State<MapScreen> {
   void _updateAllMarkers(TraccarProvider provider) async {
     if (_mapController == null || !_isStyleLoaded) return;
 
+    // 清除舊標記以避免重複
+    await _mapController!.clearSymbols();
+
     for (final device in provider.devices) {
       final pos = _findPositionOrNull(provider.positions, device.id);
       if (pos == null || pos.latitude == null) continue;
@@ -427,11 +298,10 @@ class _MapScreenState extends State<MapScreen> {
       final String baseIconKey =
           'marker_${category.toLowerCase()}_${status.toLowerCase()}';
 
-      // 唯一的圖標 ID，例如：marker_car_online_ABC-1234
       final String plate = device.name ?? '';
       final String customIconId = "${baseIconKey}_$plate";
 
-      // 使用自定義方法合成並加載圖標
+      // 修正：傳入 _mapController
       await _ensureCustomIconLoaded(baseIconKey, plate, customIconId);
 
       await _mapController!.addSymbol(
@@ -440,9 +310,10 @@ class _MapScreenState extends State<MapScreen> {
             pos.latitude!.toDouble(),
             pos.longitude!.toDouble(),
           ),
-          iconImage: customIconId, // 使用合成後的圖片
+          iconImage: customIconId,
           iconRotate: pos.course?.toDouble() ?? 0.0,
-          iconSize: 3.0, // 因為合成圖較大，size 可以設為 1.0
+          iconSize: 3, // 調整：從 1.0 增加到 1.5 以提升辨識度
+          iconAnchor: 'center',
         ),
         {'deviceId': device.id.toString()},
       );
@@ -454,77 +325,12 @@ class _MapScreenState extends State<MapScreen> {
     String plate,
     String customIconId,
   ) async {
-    if (_loadedIcons.contains(customIconId)) return;
-
-    try {
-      // 1. 加載原始圖標
-      final ByteData data = await rootBundle.load(
-        'assets/images/$baseIconKey.png',
-      );
-      final ui.Codec codec = await ui.instantiateImageCodec(
-        data.buffer.asUint8List(),
-      );
-      final ui.FrameInfo fi = await codec.getNextFrame();
-      final ui.Image markerImage = fi.image;
-
-      // 2. 準備文字繪製器 (TextPainter)
-      final textPainter = TextPainter(
-        text: TextSpan(
-          text: plate,
-          style: TextStyle(
-            color: Colors.black,
-            fontSize: 8.0,
-            fontWeight: FontWeight.bold,
-            fontFamily: 'Noto Sans Myanmar',
-            backgroundColor: Colors.white.withOpacity(0.0), // 文字背景 //0.85
-          ),
-        ),
-        // 修正點：使用 ui.TextDirection.ltr 確保編譯通過
-        textDirection: ui.TextDirection.ltr,
-      );
-      textPainter.layout();
-
-      // 3. 建立畫布並繪製
-      final recorder = ui.PictureRecorder();
-      final canvas = Canvas(recorder);
-      final paint = Paint();
-
-      // 計算畫布總尺寸：寬度取圖標或文字的最大值，高度為圖標+文字+間距
-      final double canvasWidth = markerImage.width > textPainter.width
-          ? markerImage.width.toDouble()
-          : textPainter.width;
-      final double canvasHeight = markerImage.height + textPainter.height + 10;
-
-      // A. 畫車輛圖標 (置中)
-      final double markerX = (canvasWidth - markerImage.width) / 2;
-      canvas.drawImage(markerImage, Offset(markerX, 0), paint);
-
-      // B. 畫車牌文字 (置中，放在車圖下方 5 像素處)
-      final double textX = (canvasWidth - textPainter.width) / 2;
-      textPainter.paint(
-        canvas,
-        Offset(textX, markerImage.height.toDouble() + 5),
-      );
-
-      // 4. 轉換為圖片格式
-      final picture = recorder.endRecording();
-      final img = await picture.toImage(
-        canvasWidth.toInt(),
-        canvasHeight.toInt(),
-      );
-      final pngBytes = await img.toByteData(format: ui.ImageByteFormat.png);
-
-      if (pngBytes != null) {
-        // 5. 註冊到 MapLibre 引擎
-        await _mapController!.addImage(
-          customIconId,
-          pngBytes.buffer.asUint8List(),
-        );
-        _loadedIcons.add(customIconId);
-      }
-    } catch (e) {
-      debugPrint("❌ 合成圖標錯誤 ($customIconId): $e");
-    }
+    await _iconService.ensureCustomIconLoaded(
+      _mapController,
+      baseIconKey,
+      plate,
+      customIconId,
+    );
   }
 
   // Simplified _loadMarkerIcons: now just sets _markersLoaded
@@ -661,14 +467,24 @@ class _MapScreenState extends State<MapScreen> {
           api.Position(deviceId: device.id, latitude: 0.0, longitude: 0.0),
     );
 
-    // 2. 立即顯示面板 (不要等地址查詢)
-    // 這樣使用者點擊後面板會立刻跳出來，地址顯示 "Loading..."
-    _showDeviceDetailPanel(device, position);
+    // 2. 由於 Traccar 伺服器通常不帶地址，直接嘗試從 Hive 快取中同步獲取 (避免閃爍 Loading...)
+    String? immediateAddress;
 
-    // 3. 重置地址狀態並開始相機動畫
+    if (position.latitude != null && position.longitude != null) {
+      // 嘗試從 Hive 快取中同步獲取 (1毫秒內)
+      immediateAddress = OfflineAddressService.getAddressFromCache(
+        position.latitude!.toDouble(),
+        position.longitude!.toDouble(),
+      );
+    }
+
+    // 更新狀態
     setState(() {
-      _currentAddress = "Loading...";
+      _currentAddress = immediateAddress ?? "Loading...";
     });
+
+    // 3. 立即顯示面板 (以最快速度渲染)
+    _showDeviceDetailPanel(device, position);
 
     if (position.latitude != null &&
         position.longitude != null &&
@@ -686,32 +502,35 @@ class _MapScreenState extends State<MapScreen> {
         ),
       );
 
-      // 4. 異步獲取地址 (在背景執行)
-      try {
-        String addr = await OfflineAddressService.getAddress(
-          position.latitude!.toDouble(),
-          position.longitude!.toDouble(),
-        );
+      // 4. 如果快取沒有命中，才發起異步地址查詢
+      if (immediateAddress == null) {
+        try {
+          String addr = await OfflineAddressService.getAddress(
+            position.latitude!.toDouble(),
+            position.longitude!.toDouble(),
+          );
 
-        if (mounted) {
-          setState(() {
-            _currentAddress = addr;
-          });
-          // 關鍵：地址更新後，重新刷一次面板內容（或確保面板內部的 Consumer/Provider 會自動刷新）
-          _showDeviceDetailPanel(device, position);
-        }
-      } catch (e) {
-        debugPrint("Geocoder error: $e");
-        if (mounted) {
-          setState(() => _currentAddress = "Address Unavailable");
-          _showDeviceDetailPanel(device, position);
+          if (mounted) {
+             setState(() {
+               _currentAddress = addr;
+             });
+             _showDeviceDetailPanel(device, position);
+          }
+        } catch (e) {
+          debugPrint("Geocoder error: $e");
+          if (mounted) {
+            setState(() => _currentAddress = "Location: ${position.latitude!.toStringAsFixed(4)}, ${position.longitude!.toStringAsFixed(4)}");
+            _showDeviceDetailPanel(device, position);
+          }
         }
       }
     } else {
-      setState(() {
-        _currentAddress = "No GPS Signal";
-      });
-      _showDeviceDetailPanel(device, position); // 也要刷新面板顯示此訊息
+      if (mounted) {
+        setState(() {
+          _currentAddress = "No GPS Signal";
+        });
+        _showDeviceDetailPanel(device, position);
+      }
     }
   }
 
@@ -826,284 +645,25 @@ class _MapScreenState extends State<MapScreen> {
   ) {
     _bottomSheetController?.close();
 
-    final traccarProvider = Provider.of<TraccarProvider>(
-      context,
-      listen: false,
-    );
+    _bottomSheetController = _scaffoldKey.currentState!.showBottomSheet((context) {
+      final position = Provider.of<TraccarProvider>(context, listen: false)
+          .positions
+          .firstWhere((p) => p.deviceId == device.id, orElse: () => api.Position());
 
-    _bottomSheetController = _scaffoldKey.currentState!.showBottomSheet((
-      context,
-    ) {
-      final currentPosition =
-          Provider.of<TraccarProvider>(
-            context,
-            listen: false,
-          ).positions.firstWhere(
-            (p) => p.deviceId == device.id,
-            orElse: () => api.Position(),
-          );
-
-      return Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Container(
-          width: double.infinity,
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.95), // 增加一點透明感
-            borderRadius: BorderRadius.circular(28.0), // 更圓潤的角，視覺更柔和
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.08),
-                blurRadius: 20,
-                spreadRadius: 5,
-              ),
-            ],
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Top handle
-              Center(
-                child: Container(
-                  margin: const EdgeInsets.only(top: 8, bottom: 16),
-                  height: 4,
-                  width: 40,
-                  decoration: BoxDecoration(
-                    color: Colors.grey[300],
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              // Device Name and Status
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.start,
-                      children: [
-                        Text(
-                          device.name ?? 'Unknown Device'.tr,
-                          style: const TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        IconButton(
-                          icon: const Icon(
-                            Icons.info,
-                            color: Color(0xFF5B697B),
-                          ),
-                          onPressed: () async {
-                            final prefs = await SharedPreferences.getInstance();
-                            await prefs.setInt('selectedDeviceId', device.id!);
-                            await prefs.setString(
-                              'selectedDeviceName',
-                              device.name!,
-                            );
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) =>
-                                    const DeviceDetailsScreen(),
-                              ),
-                            );
-                            print('Info button tapped!');
-                          },
-                        ),
-                        if ((currentPosition.attributes
-                                    as Map<String, dynamic>?)?['distance'] !=
-                                null &&
-                            ((currentPosition.attributes
-                                        as Map<String, dynamic>)['distance']
-                                    as double) >
-                                0.0)
-                          Text(
-                            '${((currentPosition.attributes as Map<String, dynamic>)['distance'] as double).toStringAsFixed(0)} ' +
-                                'sharedKm'.tr, //2
-                            style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                      ],
-                    ),
-                    Row(
-                      children: [
-                        //Speed
-                        if (currentPosition.speed != null &&
-                            currentPosition.speed != 0.0)
-                          Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 4.0,
-                            ),
-                            child: Text(
-                              '${currentPosition.speed?.toStringAsFixed(0)}' +
-                                  ' ' +
-                                  'km/h',
-                              style: const TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.black,
-                              ),
-                            ),
-                          ),
-                        // Ignition Icon
-                        if ((currentPosition.attributes
-                                as Map<String, dynamic>?)?['ignition'] !=
-                            null)
-                          Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 4.0,
-                            ),
-                            child: Icon(
-                              Icons.key,
-                              color:
-                                  (currentPosition.attributes
-                                          as Map<
-                                            String,
-                                            dynamic
-                                          >?)?['ignition'] ==
-                                      true
-                                  ? Colors.green
-                                  : Colors.red,
-                            ),
-                          ),
-                        // Battery Icon with Percentage
-                        if ((currentPosition.attributes
-                                as Map<String, dynamic>?)?['batteryLevel'] !=
-                            null)
-                          Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 4.0,
-                            ),
-                            child: Stack(
-                              alignment: Alignment.center,
-                              children: [
-                                Icon(
-                                  Icons.battery_full,
-                                  color: _getBatteryColor(
-                                    ((currentPosition.attributes
-                                                as Map<
-                                                  String,
-                                                  dynamic
-                                                >)['batteryLevel']
-                                            as int)
-                                        .toDouble(), // Cast to double
-                                  ),
-                                ),
-                                Text(
-                                  '${(currentPosition.attributes as Map<String, dynamic>)['batteryLevel']}',
-                                  style: const TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              //Road Name Start
-              Row(
-                children: [
-                  Icon(Icons.location_on, size: 14, color: Colors.red[400]),
-                  const SizedBox(width: 4),
-                  Expanded(
-                    child: Text(
-                      // 如果查到的是 Myanmar Road，顯示為 "Myanmar (Road info unavailable)" 比較專業
-                      _currentAddress == "Myanmar Road"
-                          ? "Myanmar (Street name unlisted)"
-                          : _currentAddress,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.blueGrey[800],
-                        fontStyle: _currentAddress == "Myanmar Road"
-                            ? FontStyle.italic
-                            : FontStyle.normal,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ),
-
-              //Road Name End
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                child: Column(
-                  children: [
-                    _buildDetailsPanel(
-                      fixTime: _formatDate(currentPosition.fixTime),
-                      address:
-                          (currentPosition.attributes
-                              as Map<String, dynamic>?)?['address'] ??
-                          'N/A',
-                      totalDistance:
-                          (currentPosition.attributes
-                                  as Map<String, dynamic>?)?['totalDistance'] !=
-                              null
-                          ? '${((currentPosition.attributes as Map<String, dynamic>)['totalDistance'] / 1000).toStringAsFixed(0)} ${'sharedKm'.tr}'
-                          : 'N/A',
-                    ),
-                    _buildReportPanel(
-                      onRefreshPressed: () async {
-                        final prefs = await SharedPreferences.getInstance();
-                        await prefs.setInt('selectedDeviceId', device.id!);
-                        await prefs.setString(
-                          'selectedDeviceName',
-                          device.name!,
-                        );
-                        _bottomSheetController?.close();
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => MonthlyMileageScreen(),
-                          ),
-                        );
-                      },
-                      onMoreOptionsPressed: () =>
-                          _showMoreOptionsDialog(device, currentPosition),
-                      onUploadPressed: () async {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const CommandScreen(),
-                          ),
-                        );
-                      },
-                      onEditPressed: () async {
-                        _bottomSheetController?.close();
-
-                        final updatedDevice = await Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) =>
-                                AddDeviceScreen(device: device),
-                          ),
-                        );
-
-                        if (updatedDevice != null) {
-                          await traccarProvider.fetchInitialData();
-                        }
-                      },
-                      onDeletePressed: () {
-                        _bottomSheetController?.close();
-                        _showDeleteConfirmationDialog(device);
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
+      return DeviceDetailPanel(
+        device: device,
+        position: position,
+        address: _currentAddress,
+        formattedDate: _formatDate(position.fixTime),
+        onMoreOptionsPressed: () => _showMoreOptionsDialog(device, position),
+        onDeletePressed: () {
+          _bottomSheetController?.close();
+          _showDeleteConfirmationDialog(device);
+        },
+        onRefresh: () async {
+          final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
+          await traccarProvider.fetchInitialData();
+        },
       );
     });
   }
@@ -1594,6 +1154,12 @@ class _MapScreenState extends State<MapScreen> {
                     }
                   },
                 ),
+                // 修正：移除 Builder hack，改用 addPostFrameCallback 處理反應式更新
+                if (_isStyleLoaded)
+                  _DataUpdateListener(
+                    data: traccarProvider.positions,
+                    onUpdate: () => _updateAllMarkers(traccarProvider),
+                  ),
                 // 在 Stack 的 children 中
                 Positioned(
                   top: 60,
@@ -1789,4 +1355,39 @@ class _MapScreenState extends State<MapScreen> {
       ),
     );
   }
+}
+
+// 輔助組件：監聽數據變化並觸發回呼，規避 build phase 副作用
+class _DataUpdateListener extends StatefulWidget {
+  final List<api.Position> data;
+  final VoidCallback onUpdate;
+
+  const _DataUpdateListener({required this.data, required this.onUpdate});
+
+  @override
+  _DataUpdateListenerState createState() => _DataUpdateListenerState();
+}
+
+class _DataUpdateListenerState extends State<_DataUpdateListener> {
+  @override
+  void didUpdateWidget(_DataUpdateListener oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // 如果數據發生變化（這裏簡化比較），則觸發更新
+    if (widget.data != oldWidget.data) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        widget.onUpdate();
+      });
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      widget.onUpdate();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => const SizedBox.shrink();
 }

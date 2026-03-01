@@ -224,6 +224,7 @@ class _LoginScreenState extends State<LoginScreen> {
       'vi': 'Tiếng Việt',
       'zh_TW': '繁體中文',
       'zh': '简体中文',
+      'my': 'မြန်မာဘာသာ',
     };
 
     final List<Locale> supportedLocales = [
@@ -290,6 +291,7 @@ class _LoginScreenState extends State<LoginScreen> {
       const Locale('vi'),
       const Locale('zh', 'TW'),
       const Locale('zh'),
+      const Locale('my'),
     ];
 
     showDialog(

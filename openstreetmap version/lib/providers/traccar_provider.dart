@@ -18,6 +18,7 @@ class TraccarProvider with ChangeNotifier {
 
   List<api.Device> _devices = [];
   List<api.Position> _positions = [];
+  final Map<int, api.Position> _positionMap = {};
   List<api.Event> _events = [];
   Map<int, api.Event> _latestDeviceEvent = {};
   bool _isLoading = false;
@@ -65,6 +66,8 @@ class TraccarProvider with ChangeNotifier {
           final newPosition = api.Position.fromJson(newPositionJson);
 
           if (newPosition != null && newPosition.deviceId != null) {
+            _positionMap[newPosition.deviceId!] = newPosition;
+            
             final existingPositionIndex = _positions.indexWhere(
               (pos) => pos.deviceId == newPosition.deviceId,
             );
@@ -92,6 +95,12 @@ class TraccarProvider with ChangeNotifier {
             _events.add(newEvent);
           }
         });
+        
+        // Prevent Out of Memory (OOM) by limiting events array size
+        if (_events.length > 1000) {
+          _events.removeRange(0, _events.length - 1000);
+        }
+        
         notifyListeners();
       }
     });
@@ -101,6 +110,7 @@ class TraccarProvider with ChangeNotifier {
 
   List<api.Device> get devices => _devices;
   List<api.Position> get positions => _positions;
+  api.Position? getPosition(int deviceId) => _positionMap[deviceId];
   List<api.Event> get events => _events;
   Map<int, api.Event> get latestDeviceEvent => _latestDeviceEvent;
   bool get isLoading => _isLoading;
@@ -141,6 +151,7 @@ class TraccarProvider with ChangeNotifier {
     _sessionId = null;
     _devices = [];
     _positions = [];
+    _positionMap.clear();
     _events = [];
     _latestDeviceEvent = {};
 
@@ -179,6 +190,12 @@ class TraccarProvider with ChangeNotifier {
       _currentUser = fetchedUser;
       _devices = (fetchedDevices ?? []).whereType<api.Device>().toList();
       _positions = fetchedPositions ?? [];
+      _positionMap.clear();
+      for (var pos in _positions) {
+        if (pos.deviceId != null) {
+          _positionMap[pos.deviceId!] = pos;
+        }
+      }
     } on api.ApiException catch (e) {
       throw Exception('Failed to fetch initial data: ${e.message}');
     } finally {

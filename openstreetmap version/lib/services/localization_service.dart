@@ -66,8 +66,9 @@ import 'package:trabcdefg/l10n/tr.dart';
 import 'package:trabcdefg/l10n/uk.dart';
 import 'package:trabcdefg/l10n/uz.dart';
 import 'package:trabcdefg/l10n/vi.dart';
-import 'package:trabcdefg/l10n/zh_TW.dart';
 import 'package:trabcdefg/l10n/zh.dart';
+import 'package:trabcdefg/l10n/zh_TW.dart';
+import 'package:trabcdefg/l10n/my.dart';
 
 class LocalizationService extends Translations {
   static const fallbackLocale = Locale('en', 'US');
@@ -135,6 +136,7 @@ class LocalizationService extends Translations {
     'Tiếng Việt',
     '繁體中文',
     '简体中文',
+    'မြန်မာဘာသာ',
   ];
 
   static final locales = [
@@ -201,6 +203,7 @@ class LocalizationService extends Translations {
     const Locale('vi'),
     const Locale('zh', 'TW'),
     const Locale('zh'), // Assuming this is for generic Chinese
+    const Locale('my'),
   ];
 
   @override
@@ -268,6 +271,7 @@ class LocalizationService extends Translations {
         'vi': vi,
         'zh_TW': zhTW,
         'zh': zhCN,
+        'my': my,
       };
 
   // Method to save the selected locale to SharedPreferences
@@ -416,6 +420,8 @@ class LocalizationService extends Translations {
         return const Locale('zh', 'TW');
       case 'zh':
         return const Locale('zh');
+      case 'my':
+        return const Locale('my');
       default:
         return Get.deviceLocale ?? fallbackLocale;
     }

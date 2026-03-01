@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'dart:math';
 import 'package:flutter/services.dart';
@@ -26,9 +27,11 @@ class OfflineAddressService {
   // Local AI State: 軌跡黏著 (Trajectory Stickiness)
   static String? _lastMatchedStreetName;
 
-  // Nominatim Rate Limiting State
+  // Nominatim Rate Limiting & Queue State
   static DateTime? _lastNominatimRequest;
-  static const int _minNominatimIntervalMs = 1500;
+  static const int _minNominatimIntervalMs = 1550; // Slightly more than 1.5s for safety
+  static final List<Completer<String?>> _nominatimQueue = [];
+  static bool _isProcessingQueue = false;
 
   static Future<void> _initCache() async {
     if (_cacheBox == null || !_cacheBox!.isOpen) {
@@ -41,8 +44,8 @@ class OfflineAddressService {
     }
   }
   static String _getDbName(String langCode) {
-    if (langCode == 'my') return "myanmar_ultra_res.db";
     if (langCode == 'zh') return "chinese_ultra_res.db";
+    if (langCode == 'my') return "myanmar_ultra_res.db";
     return "english_ultra_res.db";
   }
 
@@ -53,6 +56,7 @@ class OfflineAddressService {
         Get.deviceLocale?.languageCode ??
         'en';
 
+    // 關鍵修正：確保 _currentLang 與當前 Get.locale 同步
     if (_db != null && _currentLang == langCode) return;
 
     if (_db != null) {
@@ -108,6 +112,15 @@ class OfflineAddressService {
       
       if (_cacheBox?.containsKey(cacheKey) ?? false) {
         return AddressResult(address: _cacheBox!.get(cacheKey));
+      }
+
+      // --- 語言策略優先順序 ---
+      // 1. 如果是緬甸語 (my)，且本地沒有緬文 DB，先嘗試從 Nominatim 拿真正的緬文
+      if (_currentLang == 'my') {
+        String? remote = await _getRemoteAddressQueued(lat, lon);
+        if (remote != null) {
+          return AddressResult(address: remote);
+        }
       }
 
       if (_db == null) return AddressResult(address: "Unknown");
@@ -200,20 +213,12 @@ class OfflineAddressService {
         }
       }
 
-      // 3. 組合地址
-      List<String> parts = [
-        if (street != null) street,
-        if (town != null) town,
-        if (state != null && state != town) state
-      ];
+      // 3. 組合地址: 嚴格遵循「路名，行政區，城市」格式
+      String result = _formatAddressParts(street, town, state, lat, lon);
 
-      String result = parts.isNotEmpty
-          ? parts.join(", ")
-          : "Location: ${lat.toStringAsFixed(4)}, ${lon.toStringAsFixed(4)}";
-
-      // --- 如果離線庫查不到街道，嘗試 Nominatim (備援機制) ---
-      if (street == null) {
-        String? remoteAddress = await _getRemoteAddress(lat, lon);
+      // --- 補救機制：如果離線庫查不到街道，且之前沒跑過遠端，就嘗試 Nominatim ---
+      if (street == null && _currentLang != 'my') {
+        String? remoteAddress = await _getRemoteAddressQueued(lat, lon);
         if (remoteAddress != null) {
           result = remoteAddress;
         }
@@ -237,44 +242,86 @@ class OfflineAddressService {
     }
   }
 
-  /// Nominatim 原生查詢 (備援)
-  static Future<String?> _getRemoteAddress(double lat, double lon) async {
-    // 1. 檢查速率限制 (每 1.5 秒最多一次)
-    final now = DateTime.now();
-    if (_lastNominatimRequest != null) {
-      if (now.difference(_lastNominatimRequest!).inMilliseconds < _minNominatimIntervalMs) {
-        debugPrint("Nominatim: Rate limit skipped.");
-        return null;
-      }
+  /// 封裝：嚴格遵循格式化的地址組合
+  static String _formatAddressParts(String? street, String? district, String? city, double lat, double lon) {
+    List<String> parts = [];
+    if (street != null && street.isNotEmpty) parts.add(street);
+    if (district != null && district.isNotEmpty) parts.add(district);
+    if (city != null && city.isNotEmpty && city != district) parts.add(city);
+
+    if (parts.isEmpty) {
+      return "${lat.toStringAsFixed(4)}, ${lon.toStringAsFixed(4)}";
     }
-    _lastNominatimRequest = now;
+    return parts.join(", ");
+  }
+
+  /// Nominatim 佇列處理：確保 1.5s 請求限制
+  static Future<String?> _getRemoteAddressQueued(double lat, double lon) async {
+    final completer = Completer<String?>();
+    
+    // 將請求邏輯放入佇列
+    _processNominatimRequest(lat, lon, completer);
+    
+    return completer.future;
+  }
+
+  static void _processNominatimRequest(double lat, double lon, Completer<String?> completer) async {
+    // 簡單的順序排隊邏輯
+    while (_isProcessingQueue) {
+      await Future.delayed(const Duration(milliseconds: 300));
+    }
+    _isProcessingQueue = true;
 
     try {
-      // 2. 構建請求 (需要 User-Agent 否則可能被封鎖)
-      final url = Uri.parse("https://nominatim.openstreetmap.org/reverse?format=json&lat=$lat&lon=$lon&zoom=18&addressdetails=1");
+      final now = DateTime.now();
+      if (_lastNominatimRequest != null) {
+        final elapsed = now.difference(_lastNominatimRequest!).inMilliseconds;
+        if (elapsed < _minNominatimIntervalMs) {
+          await Future.delayed(Duration(milliseconds: _minNominatimIntervalMs - elapsed));
+        }
+      }
+      
+      final result = await _fetchNominatimStructured(lat, lon);
+      _lastNominatimRequest = DateTime.now();
+      completer.complete(result);
+    } catch (e) {
+      completer.complete(null);
+    } finally {
+      _isProcessingQueue = false;
+    }
+  }
+
+  /// 獲取結構化的 Nominatim 地址
+  static Future<String?> _fetchNominatimStructured(double lat, double lon) async {
+    try {
+      final url = Uri.parse("https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=$lat&lon=$lon&zoom=18&addressdetails=1");
       
       final response = await http.get(url, headers: {
         'User-Agent': 'ShweGPS-Pro-App-Flutter',
         'Accept-Language': _currentLang ?? 'en'
-      }).timeout(const Duration(seconds: 4));
+      }).timeout(const Duration(seconds: 5));
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        final String? displayName = data['display_name'];
-        if (displayName != null) {
-          debugPrint("Nominatim Success: $displayName");
+        final addressObj = data['address'];
+        if (addressObj != null) {
+          // 嚴格對應欄位
+          String? road = addressObj['road'] ?? addressObj['pedestrian'] ?? addressObj['hamlet'];
+          String? district = addressObj['suburb'] ?? addressObj['neighbourhood'] ?? addressObj['township'] ?? addressObj['village'] ?? addressObj['county'];
+          String? city = addressObj['city'] ?? addressObj['town'] ?? addressObj['state'];
+
+          String formatted = _formatAddressParts(road, district, city, lat, lon);
           
-          // 只取前幾個部分以保持簡潔
-          List<String> parts = displayName.split(', ');
-          if (parts.length > 4) {
-             return parts.take(4).join(', ');
-          }
-          return displayName;
+          // 快取到 Hive
+          final String fullHash = GeoHasher().encode(lon, lat, precision: 9);
+          final String cacheKey = "${_currentLang}_${fullHash.substring(0, 7)}";
+          _cacheBox?.put(cacheKey, formatted);
+          
+          return formatted;
         }
       }
       return null;
     } catch (e) {
-      debugPrint("Nominatim Error: $e");
       return null;
     }
   }

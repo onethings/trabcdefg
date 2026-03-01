@@ -1,6 +1,5 @@
 // lib/models/combined_report.dart
 // Model to represent a combined report of positions and events.
-import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
 
 class CombinedReport {

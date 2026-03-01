@@ -115,7 +115,9 @@ class _MonthlyMileageScreenState extends State<MonthlyMileageScreen> {
       _isLoading = false;
     });
 
-    // Step 2: Fetch data from the network in the background and update cache
+    // Step 2: Fetch data from the network concurrently and update cache
+    final List<Future<void>> fetchTasks = [];
+
     for (
       var date = firstDayOfMonth;
       date.isBefore(lastDayOfMonth.add(const Duration(days: 1)));
@@ -127,26 +129,31 @@ class _MonthlyMileageScreenState extends State<MonthlyMileageScreen> {
       final String hiveKey =
           '$_selectedDeviceId\_${DateFormat('yyyy-MM-dd').format(dayUtc)}';
 
-      try {
-        final summary = await reportsApi.reportsSummaryGet(
-          from,
-          to,
-          deviceId: [_selectedDeviceId!],
-        );
-        if (summary != null && summary.isNotEmpty) {
-          final dailySummary = summary.first;
-          _dailySummaries[dayUtc] = dailySummary;
+      fetchTasks.add(() async {
+        try {
+          final summary = await reportsApi.reportsSummaryGet(
+            from,
+            to,
+            deviceId: [_selectedDeviceId!],
+          );
+          if (summary != null && summary.isNotEmpty) {
+            final dailySummary = summary.first;
+            
+            // Dart maps are safe to mutate concurrently in async functions that don't switch isolates,
+            // effectively making them safe here because the JS loop yields.
+            _dailySummaries[dayUtc] = dailySummary;
 
-          // Step 3: Update Hive cache with fresh data
-          // This line now correctly includes engineHours because ReportSummaryHive.fromApi
-          // has been updated.
-          final newSummaryHive = ReportSummaryHive.fromApi(dailySummary);
-          await dailyBox.put(hiveKey, newSummaryHive);
+            final newSummaryHive = ReportSummaryHive.fromApi(dailySummary);
+            await dailyBox.put(hiveKey, newSummaryHive);
+          }
+        } catch (e) {
+          print('Failed to fetch data for day $date: $e');
         }
-      } catch (e) {
-        print('Failed to fetch data for day $date: $e');
-      }
+      }());
     }
+
+    // Wait for all concurrent fetch requests to finish
+    await Future.wait(fetchTasks);
 
     // Update the UI with any newly fetched data
     if (mounted) {
@@ -321,24 +328,24 @@ class _MonthlyMileageScreenState extends State<MonthlyMileageScreen> {
                                   (summary.engineHours ?? 0) / 3600000;
 
                               return Positioned(
-                                bottom: -5, // Adjust position as needed
+                                bottom: -3.1, // Adjust position as needed
                                 child: Column(
                                   mainAxisSize: MainAxisSize.min,
                                   crossAxisAlignment: CrossAxisAlignment.center,
                                   children: [
-                                    // Distance in blue
+                                    // Distance in ble
                                     Text(
-                                      '${distanceInKm.toStringAsFixed(0)}'+'sharedKm'.tr,
+                                      '${distanceInKm.toStringAsFixed(0)}km',
                                       style: const TextStyle(
-                                        fontSize: 10,
+                                        fontSize: 9,
                                         color: Colors.blue,
                                       ),
                                     ),
                                     // Engine Hours in red
                                     Text(
-                                      '${engineHoursInHours.toStringAsFixed(1)}'+'sharedHourAbbreviation'.tr,
+                                      '${engineHoursInHours.toStringAsFixed(1)}h',
                                       style: const TextStyle(
-                                        fontSize: 10,
+                                        fontSize: 9,
                                         color: Colors.red,
                                       ),
                                     ),
@@ -350,6 +357,7 @@ class _MonthlyMileageScreenState extends State<MonthlyMileageScreen> {
                           },
                         ),
                       ),
+                      const SizedBox(height: 8),
                       const Divider(),
                       if (_selectedDaySummary != null)
                         Expanded(
