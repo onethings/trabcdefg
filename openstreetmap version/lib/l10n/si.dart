@@ -196,7 +196,6 @@ const Map<String, String> si = {
     "userTermsAccepted": "Terms Accepted",
     "userBilling": "Billing",
     "loginTitle": "ඇතුල් වන්න",
-    "loginLanguage": "භාෂාව",
     "loginReset": "මුරපදය නැවත සකසන්න",
     "loginRegister": "ලියාපදිංචි වන්න",
     "loginLogin": "ඇතුල් වන්න",
@@ -624,5 +623,11 @@ const Map<String, String> si = {
     "categoryVan": "වෑන්",
     "categoryScooter": "ස්කූටරය",
     "maintenanceStart": "ආරම්භය",
-    "maintenancePeriod": "කාලය"
+    "maintenancePeriod": "කාලය",
+  "settingsTheme": "Theme Mode",
+  "themeSystem": "System Default",
+  "themeLight": "Light Mode",
+  "themeDark": "Dark Mode",
+  "appVersion": "Version",
+  "loginLanguage": "Language"
 };

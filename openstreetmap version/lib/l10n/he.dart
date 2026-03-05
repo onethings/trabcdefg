@@ -196,7 +196,6 @@ const Map<String, String> he = {
     "userTermsAccepted": "התנאי השימוש התקבלו",
     "userBilling": "Billing",
     "loginTitle": "כניסה",
-    "loginLanguage": "שפה",
     "loginReset": "איפוס סיסמה",
     "loginRegister": "הרשם",
     "loginLogin": "כניסה",
@@ -624,5 +623,11 @@ const Map<String, String> he = {
     "categoryVan": "מסחרית",
     "categoryScooter": "קטנוע",
     "maintenanceStart": "התחל",
-    "maintenancePeriod": "פרק זמן "
+    "maintenancePeriod": "פרק זמן ",
+  "settingsTheme": "Theme Mode",
+  "themeSystem": "System Default",
+  "themeLight": "Light Mode",
+  "themeDark": "Dark Mode",
+  "appVersion": "Version",
+  "loginLanguage": "Language"
 };

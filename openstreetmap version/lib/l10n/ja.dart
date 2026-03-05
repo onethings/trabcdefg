@@ -196,7 +196,6 @@ const Map<String, String> ja = {
     "userTermsAccepted": "Terms Accepted",
     "userBilling": "Billing",
     "loginTitle": "ログイン",
-    "loginLanguage": "言語",
     "loginReset": "パスワードをリセット",
     "loginRegister": "登録",
     "loginLogin": "ログイン",
@@ -624,5 +623,11 @@ const Map<String, String> ja = {
     "categoryVan": "バン",
     "categoryScooter": "スクーター",
     "maintenanceStart": "メンテナンス開始",
-    "maintenancePeriod": "メンテナンス終了"
+    "maintenancePeriod": "メンテナンス終了",
+  "settingsTheme": "Theme Mode",
+  "themeSystem": "System Default",
+  "themeLight": "Light Mode",
+  "themeDark": "Dark Mode",
+  "appVersion": "Version",
+  "loginLanguage": "Language"
 };

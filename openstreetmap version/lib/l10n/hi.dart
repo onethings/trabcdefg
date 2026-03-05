@@ -196,7 +196,6 @@ const Map<String, String> hi = {
     "userTermsAccepted": "Terms Accepted",
     "userBilling": "Billing",
     "loginTitle": "लॉगिन / प्रवेश करें",
-    "loginLanguage": "भाषा",
     "loginReset": "Reset Password",
     "loginRegister": "रजिस्टर / पंजीकृत करें",
     "loginLogin": "लॉगिन / प्रवेश करें",
@@ -624,5 +623,11 @@ const Map<String, String> hi = {
     "categoryVan": "वैन",
     "categoryScooter": "Scooter",
     "maintenanceStart": "प्रारंभ",
-    "maintenancePeriod": "अवधि"
+    "maintenancePeriod": "अवधि",
+  "settingsTheme": "Theme Mode",
+  "themeSystem": "System Default",
+  "themeLight": "Light Mode",
+  "themeDark": "Dark Mode",
+  "appVersion": "Version",
+  "loginLanguage": "Language"
 };

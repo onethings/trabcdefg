@@ -196,7 +196,6 @@ const Map<String, String> zhCN = {
     "userTermsAccepted": "接受条款",
     "userBilling": "Billing",
     "loginTitle": "登录",
-    "loginLanguage": "语言",
     "loginReset": "密码重设",
     "loginRegister": "注册",
     "loginLogin": "登录",
@@ -630,4 +629,10 @@ const Map<String, String> zhCN = {
 "SelectServer":"選擇服務器",
 "CustomServerURL":"自定义服务器網址",
   "TapMapAddPolygon":"在地图点击为多边形添加点。",
+  "settingsTheme": "Theme Mode",
+  "themeSystem": "System Default",
+  "themeLight": "Light Mode",
+  "themeDark": "Dark Mode",
+  "appVersion": "Version",
+  "loginLanguage": "Language"
 };

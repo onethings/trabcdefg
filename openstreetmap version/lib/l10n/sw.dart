@@ -196,7 +196,6 @@ const Map<String, String> sw = {
     "userTermsAccepted": "Terms Accepted",
     "userBilling": "Billing",
     "loginTitle": "Ingia",
-    "loginLanguage": "Lugha",
     "loginReset": "Weka upya nenosiri",
     "loginRegister": "Sajili",
     "loginLogin": "Ingia",
@@ -624,5 +623,11 @@ const Map<String, String> sw = {
     "categoryVan": "Gari",
     "categoryScooter": "Pikipiki",
     "maintenanceStart": "Anza",
-    "maintenancePeriod": "Kipindi"
+    "maintenancePeriod": "Kipindi",
+  "settingsTheme": "Theme Mode",
+  "themeSystem": "System Default",
+  "themeLight": "Light Mode",
+  "themeDark": "Dark Mode",
+  "appVersion": "Version",
+  "loginLanguage": "Language"
 };

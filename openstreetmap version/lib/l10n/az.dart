@@ -196,7 +196,6 @@ const Map<String, String> az ={
     "userTermsAccepted": "Terms Accepted",
     "userBilling": "Billing",
     "loginTitle": "Giriş",
-    "loginLanguage": "Dil",
     "loginReset": "Reset Password",
     "loginRegister": "Qeydiyyat",
     "loginLogin": "Giriş",
@@ -624,5 +623,11 @@ const Map<String, String> az ={
     "categoryVan": "Furqon",
     "categoryScooter": "Scooter",
     "maintenanceStart": "Başlamaq",
-    "maintenancePeriod": "Dövr"
+    "maintenancePeriod": "Dövr",
+  "settingsTheme": "Theme Mode",
+  "themeSystem": "System Default",
+  "themeLight": "Light Mode",
+  "themeDark": "Dark Mode",
+  "appVersion": "Version",
+  "loginLanguage": "Language"
 };

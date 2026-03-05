@@ -196,7 +196,6 @@ const Map<String, String> pl = {
     "userTermsAccepted": "Warunki Zaakceptowane",
     "userBilling": "Rozliczenie",
     "loginTitle": "Login",
-    "loginLanguage": "Język",
     "loginReset": "Zresetuj hasło",
     "loginRegister": "Rejestracja",
     "loginLogin": "Zaloguj",
@@ -624,5 +623,11 @@ const Map<String, String> pl = {
     "categoryVan": "Van",
     "categoryScooter": "Skuter",
     "maintenanceStart": "Start",
-    "maintenancePeriod": "Okres"
+    "maintenancePeriod": "Okres",
+  "settingsTheme": "Theme Mode",
+  "themeSystem": "System Default",
+  "themeLight": "Light Mode",
+  "themeDark": "Dark Mode",
+  "appVersion": "Version",
+  "loginLanguage": "Language"
 };

@@ -196,7 +196,6 @@ const Map<String, String> bg = {
     "userTermsAccepted": "Terms Accepted",
     "userBilling": "Billing",
     "loginTitle": "Вход",
-    "loginLanguage": "Език",
     "loginReset": "Reset Password",
     "loginRegister": "Регистрация",
     "loginLogin": "Вход",
@@ -624,5 +623,11 @@ const Map<String, String> bg = {
     "categoryVan": "Ван",
     "categoryScooter": "Скутер",
     "maintenanceStart": "Старт",
-    "maintenancePeriod": "Период"
+    "maintenancePeriod": "Период",
+  "settingsTheme": "Theme Mode",
+  "themeSystem": "System Default",
+  "themeLight": "Light Mode",
+  "themeDark": "Dark Mode",
+  "appVersion": "Version",
+  "loginLanguage": "Language"
 };

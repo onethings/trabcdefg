@@ -196,7 +196,6 @@ const Map<String, String> ka = {
     "userTermsAccepted": "Terms Accepted",
     "userBilling": "Billing",
     "loginTitle": "ავტორიზაცია",
-    "loginLanguage": "ენა",
     "loginReset": "პაროლის განულება",
     "loginRegister": "რეგისტრაცია",
     "loginLogin": "შესვლა",
@@ -624,5 +623,11 @@ const Map<String, String> ka = {
     "categoryVan": "ფურგონი",
     "categoryScooter": "სკუტერი",
     "maintenanceStart": "დაწყება",
-    "maintenancePeriod": "პერიოდი"
+    "maintenancePeriod": "პერიოდი",
+  "settingsTheme": "Theme Mode",
+  "themeSystem": "System Default",
+  "themeLight": "Light Mode",
+  "themeDark": "Dark Mode",
+  "appVersion": "Version",
+  "loginLanguage": "Language"
 };

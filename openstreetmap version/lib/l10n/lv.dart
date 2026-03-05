@@ -196,7 +196,6 @@ const Map<String, String> lv = {
     "userTermsAccepted": "Noteikumi pieņemti",
     "userBilling": "Billing",
     "loginTitle": "Lietotājvārds",
-    "loginLanguage": "Valoda",
     "loginReset": "Atiestatīt paroli",
     "loginRegister": "Reģistrēties",
     "loginLogin": "Ieiet",
@@ -624,5 +623,11 @@ const Map<String, String> lv = {
     "categoryVan": "Busiņš",
     "categoryScooter": "Skrejritenis",
     "maintenanceStart": "Sākt",
-    "maintenancePeriod": "Periods"
+    "maintenancePeriod": "Periods",
+  "settingsTheme": "Theme Mode",
+  "themeSystem": "System Default",
+  "themeLight": "Light Mode",
+  "themeDark": "Dark Mode",
+  "appVersion": "Version",
+  "loginLanguage": "Language"
 };

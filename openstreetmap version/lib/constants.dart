@@ -1,6 +1,7 @@
 // lib/constants.dart
 // Application-wide constants for the TracDefg app.
 class AppConstants {
+  static const String appName = 'Trabcdefg';
   static const String traccarServerUrl = 'https://demo3.traccar.org';
   static const String traccarApiUrl = '$traccarServerUrl/api';
 

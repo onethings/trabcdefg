@@ -196,7 +196,6 @@ const Map<String, String> sl = {
     "userTermsAccepted": "Pogoji sprejeti",
     "userBilling": "Billing",
     "loginTitle": "Prijava",
-    "loginLanguage": "Jezik",
     "loginReset": "Ponastavi geslo",
     "loginRegister": "Registracija",
     "loginLogin": "Prijava",
@@ -624,5 +623,11 @@ const Map<String, String> sl = {
     "categoryVan": "Kombi",
     "categoryScooter": "Skuter",
     "maintenanceStart": "Začetek",
-    "maintenancePeriod": "Obdobje"
+    "maintenancePeriod": "Obdobje",
+  "settingsTheme": "Theme Mode",
+  "themeSystem": "System Default",
+  "themeLight": "Light Mode",
+  "themeDark": "Dark Mode",
+  "appVersion": "Version",
+  "loginLanguage": "Language"
 };

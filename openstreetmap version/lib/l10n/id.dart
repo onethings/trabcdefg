@@ -196,7 +196,6 @@ const Map<String, String> id = {
     "userTermsAccepted": "Terms Accepted",
     "userBilling": "Billing",
     "loginTitle": "Masuk",
-    "loginLanguage": "Bahasa",
     "loginReset": "Reset Password",
     "loginRegister": "Daftar",
     "loginLogin": "Masuk",
@@ -624,5 +623,11 @@ const Map<String, String> id = {
     "categoryVan": "Van",
     "categoryScooter": "Scooter",
     "maintenanceStart": "Start",
-    "maintenancePeriod": "Period"
+    "maintenancePeriod": "Period",
+  "settingsTheme": "Theme Mode",
+  "themeSystem": "System Default",
+  "themeLight": "Light Mode",
+  "themeDark": "Dark Mode",
+  "appVersion": "Version",
+  "loginLanguage": "Language"
 };

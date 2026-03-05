@@ -196,7 +196,6 @@ const Map<String, String> ne = {
     "userTermsAccepted": "Terms Accepted",
     "userBilling": "Billing",
     "loginTitle": "लगिन गर्ने ",
-    "loginLanguage": "भाषा ",
     "loginReset": "पासवर्ड रिसेट",
     "loginRegister": "दर्ता गर्ने",
     "loginLogin": "भित्रिने ",
@@ -624,5 +623,11 @@ const Map<String, String> ne = {
     "categoryVan": "भ्यान ",
     "categoryScooter": "स्कुटर",
     "maintenanceStart": "शुरु",
-    "maintenancePeriod": "अवधि"
+    "maintenancePeriod": "अवधि",
+  "settingsTheme": "Theme Mode",
+  "themeSystem": "System Default",
+  "themeLight": "Light Mode",
+  "themeDark": "Dark Mode",
+  "appVersion": "Version",
+  "loginLanguage": "Language"
 };

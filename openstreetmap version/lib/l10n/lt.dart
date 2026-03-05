@@ -196,7 +196,6 @@ const Map<String, String> lt = {
     "userTermsAccepted": "Sąlygos priimtos",
     "userBilling": "Billing",
     "loginTitle": "Prisijungimas",
-    "loginLanguage": "Kalba",
     "loginReset": "Atstatyti slaptažodį",
     "loginRegister": "Registruotis",
     "loginLogin": "Prisijungti",
@@ -624,5 +623,11 @@ const Map<String, String> lt = {
     "categoryVan": "Autobusiuskas",
     "categoryScooter": "Mopedas",
     "maintenanceStart": "Pradėti",
-    "maintenancePeriod": "Periodas"
+    "maintenancePeriod": "Periodas",
+  "settingsTheme": "Theme Mode",
+  "themeSystem": "System Default",
+  "themeLight": "Light Mode",
+  "themeDark": "Dark Mode",
+  "appVersion": "Version",
+  "loginLanguage": "Language"
 };

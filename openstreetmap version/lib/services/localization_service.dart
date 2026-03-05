@@ -75,74 +75,73 @@ class LocalizationService extends Translations {
   static const _languageKey = 'saved_language_code';
 
   static final langs = [
-    'Afrikaans',
-    'العربية',
-    'Azərbaycan',
-    'Български',
-    'বাংলা',
-    'Català',
-    'Čeština',
-    'Dansk',
-    'Deutsch',
-    'Ελληνικά',
-    'English',
-    'Español',
-    'Eesti',
-    'فارسی',
-    'Suomi',
-    'Français',
-    'Galego',
-    'עברית',
-    'हिंदी',
-    'Hrvatski',
-    'Magyar',
-    'Հայերեն',
-    'Bahasa Indonesia',
-    'Italiano',
-    '日本語',
-    'ქართული',
-    'Қазақ',
-    'ភាសាខ្មែរ',
-    '한국어',
-    'ລາວ',
-    'Lietuvių',
-    'Latviešu',
-    'Македонски',
-    'മലയാളം',
-    'Монгол',
-    'Melayu',
-    'Norsk bokmål',
-    'नेपाली',
-    'Nederlands',
-    'Nynorsk',
-    'Polski',
-    'Português (Brasil)',
-    'Português',
-    'Română',
-    'Русский',
-    'සිංහල',
-    'Slovenčina',
-    'Slovenščina',
-    'Shqip',
-    'Srpski',
-    'Svenska',
-    'Kiswahili',
-    'தமிழ்',
-    'ไทย',
-    'Türkmen',
-    'Türkçe',
-    'Українська',
-    'Oʻzbekcha',
-    'Tiếng Việt',
-    '繁體中文',
-    '简体中文',
-    'မြန်မာဘာသာ',
+    'Afrikaans', // af_ZA
+    'العربية', // ar_SA
+    'Azərbaycan', // az
+    'Български', // bg
+    'বাংলা', // bn
+    'Català', // ca
+    'Čeština', // cs
+    'Dansk', // da
+    'Deutsch', // de
+    'Ελληνικά', // el
+    'English', // en_US
+    'Español', // es
+    'Eesti', // et
+    'فارسی', // fa
+    'Suomi', // fi
+    'Français', // fr
+    'Galego', // gl
+    'עבריတ', // he
+    'हिंदी', // hi
+    'Hrvatski', // hr
+    'Magyar', // hu
+    'Հայերեն', // hy
+    'Bahasa Indonesia', // id
+    'Italiano', // it
+    '日本語', // ja
+    'ქართული', // ka
+    'Қазақ', // kk
+    'ភាសាខ្មဲរ', // km
+    '한국어', // ko
+    'ລາວ', // lo
+    'Lietuvių', // lt
+    'Latviešu', // lv
+    'Македонски', // mk
+    'മലയാളം', // ml
+    'Монгол', // mn
+    'Melayu', // ms
+    'Norsk bokmål', // nb
+    'नेपाली', // ne
+    'Nederlands', // nl
+    'Nynorsk', // nn
+    'Polski', // pl
+    'Português (Brasil)', // pt_BR
+    'Português', // pt
+    'Română', // ro
+    'Русский', // ru
+    'සිංහල', // si
+    'Slovenčina', // sk
+    'Slovenščina', // sl
+    'Shqip', // sq
+    'Srpski', // sr
+    'Svenska', // sv
+    'Kiswahili', // sw
+    'தமிழ்', // ta
+    'ไทย', // th
+    'Türkmen', // tk
+    'Türkçe', // tr
+    'Українська', // uk
+    'Oʻzbekcha', // uz
+    'Tiếng Việt', // vi
+    '繁體中文', // zh_TW
+    '简体中文', // zh
+    'မြန်မာဘာသာ', // my
   ];
 
   static final locales = [
     const Locale('af', 'ZA'),
     const Locale('ar', 'SA'),
-    const Locale('ar'), // Assuming this is for generic Arabic
     const Locale('az'),
     const Locale('bg'),
     const Locale('bn'),
@@ -152,7 +151,6 @@ class LocalizationService extends Translations {
     const Locale('de'),
     const Locale('el'),
     const Locale('en', 'US'),
-    const Locale('en'), // Assuming this is for generic English
     const Locale('es'),
     const Locale('et'),
     const Locale('fa'),
@@ -184,7 +182,7 @@ class LocalizationService extends Translations {
     const Locale('nn'),
     const Locale('pl'),
     const Locale('pt', 'BR'),
-    const Locale('pt'), // Assuming this is for generic Portuguese
+    const Locale('pt'),
     const Locale('ro'),
     const Locale('ru'),
     const Locale('si'),
@@ -202,7 +200,7 @@ class LocalizationService extends Translations {
     const Locale('uz'),
     const Locale('vi'),
     const Locale('zh', 'TW'),
-    const Locale('zh'), // Assuming this is for generic Chinese
+    const Locale('zh'),
     const Locale('my'),
   ];
 

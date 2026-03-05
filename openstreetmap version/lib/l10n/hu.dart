@@ -196,7 +196,6 @@ const Map<String, String> hu = {
     "userTermsAccepted": "Terms Accepted",
     "userBilling": "Billing",
     "loginTitle": "Bejelentkezés",
-    "loginLanguage": "Nyelv",
     "loginReset": "Jelszó reset",
     "loginRegister": "Regisztráció",
     "loginLogin": "Bejelentkezés",
@@ -624,5 +623,11 @@ const Map<String, String> hu = {
     "categoryVan": "Teherkocsi",
     "categoryScooter": "Roller",
     "maintenanceStart": "Start",
-    "maintenancePeriod": "Periódus"
+    "maintenancePeriod": "Periódus",
+  "settingsTheme": "Theme Mode",
+  "themeSystem": "System Default",
+  "themeLight": "Light Mode",
+  "themeDark": "Dark Mode",
+  "appVersion": "Version",
+  "loginLanguage": "Language"
 };

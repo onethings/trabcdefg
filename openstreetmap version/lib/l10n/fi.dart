@@ -196,7 +196,6 @@ const Map<String, String> fi = {
     "userTermsAccepted": "Ehdot hyväksytty",
     "userBilling": "Billing",
     "loginTitle": "Kirjaudu",
-    "loginLanguage": "Kieli",
     "loginReset": "Nollaa salasana",
     "loginRegister": "Rekisteröidy",
     "loginLogin": "Kirjaudu",
@@ -624,5 +623,11 @@ const Map<String, String> fi = {
     "categoryVan": "Pakettiauto",
     "categoryScooter": "Potkulauta",
     "maintenanceStart": "Alku",
-    "maintenancePeriod": "Huoltoväli"
+    "maintenancePeriod": "Huoltoväli",
+  "settingsTheme": "Theme Mode",
+  "themeSystem": "System Default",
+  "themeLight": "Light Mode",
+  "themeDark": "Dark Mode",
+  "appVersion": "Version",
+  "loginLanguage": "Language"
 };

@@ -196,7 +196,6 @@ const Map<String, String> gl = {
     "userTermsAccepted": "Terms Accepted",
     "userBilling": "Billing",
     "loginTitle": "Iniciar sesión",
-    "loginLanguage": "Idioma",
     "loginReset": "Restablecer o contrasinal",
     "loginRegister": "Rexistrarse",
     "loginLogin": "Iniciar sesión",
@@ -624,5 +623,11 @@ const Map<String, String> gl = {
     "categoryVan": "Furgoneta",
     "categoryScooter": "Scooter",
     "maintenanceStart": "Comezar",
-    "maintenancePeriod": "Período"
+    "maintenancePeriod": "Período",
+  "settingsTheme": "Theme Mode",
+  "themeSystem": "System Default",
+  "themeLight": "Light Mode",
+  "themeDark": "Dark Mode",
+  "appVersion": "Version",
+  "loginLanguage": "Language"
 };

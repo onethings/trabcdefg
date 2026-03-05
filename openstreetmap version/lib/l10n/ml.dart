@@ -196,7 +196,6 @@ const Map<String, String> ml = {
     "userTermsAccepted": "Terms Accepted",
     "userBilling": "Billing",
     "loginTitle": "ലോഗിൻ ചെയ്യുക ",
-    "loginLanguage": "ഭാഷ",
     "loginReset": "Reset Password",
     "loginRegister": "രെജിസ്റ്റർ ",
     "loginLogin": "അകത്തു പ്രവേശിക്കുക",
@@ -624,5 +623,11 @@ const Map<String, String> ml = {
     "categoryVan": "Van",
     "categoryScooter": "Scooter",
     "maintenanceStart": "Start",
-    "maintenancePeriod": "Period"
+    "maintenancePeriod": "Period",
+  "settingsTheme": "Theme Mode",
+  "themeSystem": "System Default",
+  "themeLight": "Light Mode",
+  "themeDark": "Dark Mode",
+  "appVersion": "Version",
+  "loginLanguage": "Language"
 };

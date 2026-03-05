@@ -196,7 +196,6 @@ const Map<String, String> kk = {
     "userTermsAccepted": "Terms Accepted",
     "userBilling": "Billing",
     "loginTitle": "Кіру",
-    "loginLanguage": "Тіл",
     "loginReset": "Reset Password",
     "loginRegister": "Тіркеу",
     "loginLogin": "Кіру",
@@ -624,5 +623,11 @@ const Map<String, String> kk = {
     "categoryVan": "Van",
     "categoryScooter": "Scooter",
     "maintenanceStart": "Start",
-    "maintenancePeriod": "Period"
+    "maintenancePeriod": "Period",
+  "settingsTheme": "Theme Mode",
+  "themeSystem": "System Default",
+  "themeLight": "Light Mode",
+  "themeDark": "Dark Mode",
+  "appVersion": "Version",
+  "loginLanguage": "Language"
 };

@@ -199,7 +199,6 @@ const Map<String, String> enUS = {
   "userTermsAccepted": "Terms Accepted",
   "userBilling": "Billing",
   "loginTitle": "Login",
-  "loginLanguage": "Language",
   "loginReset": "Reset Password",
   "loginRegister": "Register",
   "loginLogin": "Login",
@@ -634,5 +633,11 @@ const Map<String, String> enUS = {
   "SelectServer":"Select Server",
   "CustomServerURL":"Custom Server URL",
   "TapMapAddPolygon":"Tap on the map to add points for the polygon.",
-  "pleaseSelectDevice": "Please select a device"
+  "pleaseSelectDevice": "Please select a device",
+  "settingsTheme": "Theme Mode",
+  "themeSystem": "System Default",
+  "themeLight": "Light Mode",
+  "themeDark": "Dark Mode",
+  "appVersion": "Version",
+  "loginLanguage": "Language"
 };

@@ -196,7 +196,6 @@ const Map<String, String> ta = {
     "userTermsAccepted": "Terms Accepted",
     "userBilling": "Billing",
     "loginTitle": "உள் நுழை",
-    "loginLanguage": "மொழி",
     "loginReset": "Reset Password",
     "loginRegister": "பதிவு செய்ய",
     "loginLogin": "உள்நுழைய",
@@ -624,5 +623,11 @@ const Map<String, String> ta = {
     "categoryVan": "வேன் வாகனம் ",
     "categoryScooter": "Scooter",
     "maintenanceStart": "துவக்கு ",
-    "maintenancePeriod": "காலம்"
+    "maintenancePeriod": "காலம்",
+  "settingsTheme": "Theme Mode",
+  "themeSystem": "System Default",
+  "themeLight": "Light Mode",
+  "themeDark": "Dark Mode",
+  "appVersion": "Version",
+  "loginLanguage": "Language"
 };

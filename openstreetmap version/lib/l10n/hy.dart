@@ -196,7 +196,6 @@ const Map<String, String> hy = {
     "userTermsAccepted": "Terms Accepted",
     "userBilling": "Billing",
     "loginTitle": "Login",
-    "loginLanguage": "Language",
     "loginReset": "Reset Password",
     "loginRegister": "Register",
     "loginLogin": "Login",
@@ -624,5 +623,11 @@ const Map<String, String> hy = {
     "categoryVan": "Վան",
     "categoryScooter": "Սկուտեր",
     "maintenanceStart": "Ստարտ",
-    "maintenancePeriod": "Ժամանակաշրջան"
+    "maintenancePeriod": "Ժամանակաշրջան",
+  "settingsTheme": "Theme Mode",
+  "themeSystem": "System Default",
+  "themeLight": "Light Mode",
+  "themeDark": "Dark Mode",
+  "appVersion": "Version",
+  "loginLanguage": "Language"
 };

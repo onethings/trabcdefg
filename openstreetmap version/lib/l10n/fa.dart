@@ -196,7 +196,6 @@ const Map<String, String> fa = {
     "userTermsAccepted": "پذیرفتن قوانین",
     "userBilling": "Billing",
     "loginTitle": "ورود",
-    "loginLanguage": "انتخاب زبان",
     "loginReset": "بازیابی رمز عبور",
     "loginRegister": "ثبت نام",
     "loginLogin": "ورود",
@@ -624,5 +623,11 @@ const Map<String, String> fa = {
     "categoryVan": "ون",
     "categoryScooter": "اسکوتر",
     "maintenanceStart": "شروع",
-    "maintenancePeriod": "بازه"
+    "maintenancePeriod": "بازه",
+  "settingsTheme": "Theme Mode",
+  "themeSystem": "System Default",
+  "themeLight": "Light Mode",
+  "themeDark": "Dark Mode",
+  "appVersion": "Version",
+  "loginLanguage": "Language"
 };

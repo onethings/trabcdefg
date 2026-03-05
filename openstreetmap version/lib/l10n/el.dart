@@ -196,7 +196,6 @@ const Map<String, String> el = {
     "userTermsAccepted": "Οι όροι έγιναν αποδεκτοί",
     "userBilling": "Billing",
     "loginTitle": "Σύνδεση",
-    "loginLanguage": "Γλώσσα",
     "loginReset": "Επαναφορά κωδικού",
     "loginRegister": "Εγγραφή",
     "loginLogin": "Σύνδεση",
@@ -624,5 +623,11 @@ const Map<String, String> el = {
     "categoryVan": "Κλειστό Φορτηγό",
     "categoryScooter": "Σκούτερ",
     "maintenanceStart": "Εκκίνηση",
-    "maintenancePeriod": "Περίοδος"
+    "maintenancePeriod": "Περίοδος",
+  "settingsTheme": "Theme Mode",
+  "themeSystem": "System Default",
+  "themeLight": "Light Mode",
+  "themeDark": "Dark Mode",
+  "appVersion": "Version",
+  "loginLanguage": "Language"
 };

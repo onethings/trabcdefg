@@ -196,7 +196,6 @@ const Map<String, String> tk = {
     "userTermsAccepted": "Terms Accepted",
     "userBilling": "Billing",
     "loginTitle": "Login",
-    "loginLanguage": "Language",
     "loginReset": "Reset Password",
     "loginRegister": "Register",
     "loginLogin": "Login",
@@ -624,5 +623,11 @@ const Map<String, String> tk = {
     "categoryVan": "Van",
     "categoryScooter": "Scooter",
     "maintenanceStart": "Start",
-    "maintenancePeriod": "Period"
+    "maintenancePeriod": "Period",
+  "settingsTheme": "Theme Mode",
+  "themeSystem": "System Default",
+  "themeLight": "Light Mode",
+  "themeDark": "Dark Mode",
+  "appVersion": "Version",
+  "loginLanguage": "Language"
 };

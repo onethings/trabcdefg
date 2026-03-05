@@ -196,7 +196,6 @@ const Map<String, String> af = {
     "userTermsAccepted": "Terms Accepted",
     "userBilling": "Billing",
     "loginTitle": "Teken aan",
-    "loginLanguage": "Taal",
     "loginReset": "Herstel Wagwoord",
     "loginRegister": "Registreer",
     "loginLogin": "Teken aan",
@@ -624,5 +623,11 @@ const Map<String, String> af = {
     "categoryVan": "Paneelwa",
     "categoryScooter": "Moffiebike",
     "maintenanceStart": "Aan",
-    "maintenancePeriod": "Periode"
+    "maintenancePeriod": "Periode",
+  "settingsTheme": "Theme Mode",
+  "themeSystem": "System Default",
+  "themeLight": "Light Mode",
+  "themeDark": "Dark Mode",
+  "appVersion": "Version",
+  "loginLanguage": "Language"
 };

@@ -196,7 +196,6 @@ const Map<String, String> km = {
     "userTermsAccepted": "Terms Accepted",
     "userBilling": "Billing",
     "loginTitle": "ចូល",
-    "loginLanguage": "ភាសា",
     "loginReset": "Reset Password",
     "loginRegister": "ចុះឈ្មោះ",
     "loginLogin": "ចូល",
@@ -624,5 +623,11 @@ const Map<String, String> km = {
     "categoryVan": "Van",
     "categoryScooter": "Scooter",
     "maintenanceStart": "Start",
-    "maintenancePeriod": "Period"
+    "maintenancePeriod": "Period",
+  "settingsTheme": "Theme Mode",
+  "themeSystem": "System Default",
+  "themeLight": "Light Mode",
+  "themeDark": "Dark Mode",
+  "appVersion": "Version",
+  "loginLanguage": "Language"
 };

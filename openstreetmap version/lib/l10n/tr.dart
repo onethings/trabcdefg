@@ -196,7 +196,6 @@ const Map<String, String> tr = {
     "userTermsAccepted": "Terms Accepted",
     "userBilling": "Billing",
     "loginTitle": "Oturum aç",
-    "loginLanguage": "Lisan",
     "loginReset": "Şifreyi yenile",
     "loginRegister": "Kayıt",
     "loginLogin": "Oturumu aç",
@@ -624,5 +623,11 @@ const Map<String, String> tr = {
     "categoryVan": "Van",
     "categoryScooter": "Mobilet",
     "maintenanceStart": "Başlat",
-    "maintenancePeriod": "Dönem"
+    "maintenancePeriod": "Dönem",
+  "settingsTheme": "Theme Mode",
+  "themeSystem": "System Default",
+  "themeLight": "Light Mode",
+  "themeDark": "Dark Mode",
+  "appVersion": "Version",
+  "loginLanguage": "Language"
 };

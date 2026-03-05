@@ -196,7 +196,6 @@ const Map<String, String> hr = {
     "userTermsAccepted": "Uvjeti prihvaćeni",
     "userBilling": "Billing",
     "loginTitle": "Prijava",
-    "loginLanguage": "Jezik",
     "loginReset": "Ponovo postavi lozinku",
     "loginRegister": "Registracija",
     "loginLogin": "Prijava",
@@ -624,5 +623,11 @@ const Map<String, String> hr = {
     "categoryVan": "Kombi",
     "categoryScooter": "Skuter",
     "maintenanceStart": "Start",
-    "maintenancePeriod": "Period"
+    "maintenancePeriod": "Period",
+  "settingsTheme": "Theme Mode",
+  "themeSystem": "System Default",
+  "themeLight": "Light Mode",
+  "themeDark": "Dark Mode",
+  "appVersion": "Version",
+  "loginLanguage": "Language"
 };

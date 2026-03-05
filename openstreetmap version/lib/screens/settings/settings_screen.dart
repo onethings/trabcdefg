@@ -14,8 +14,11 @@ import 'package:trabcdefg/screens/settings/calendars_screen.dart';
 import 'package:trabcdefg/screens/settings/computed_attributes_screen.dart';
 import 'package:trabcdefg/screens/settings/maintenance_screen.dart';
 import 'package:trabcdefg/screens/settings/saved_commands_screen.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:get/get.dart';
 import 'package:trabcdefg/services/localization_service.dart';
+import 'package:trabcdefg/providers/theme_provider.dart';
+
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -188,6 +191,68 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  void _showThemeSelectionDialog() {
+    final themeProvider = context.read<ThemeProvider>();
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text('settingsTheme'.tr),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                title: Text('themeSystem'.tr),
+                leading: Radio<ThemeMode>(
+                  value: ThemeMode.system,
+                  groupValue: themeProvider.themeMode,
+                  onChanged: (ThemeMode? value) {
+                    if (value != null) themeProvider.setThemeMode(value);
+                    Navigator.of(context).pop();
+                  },
+                ),
+                onTap: () {
+                  themeProvider.setThemeMode(ThemeMode.system);
+                  Navigator.of(context).pop();
+                },
+              ),
+              ListTile(
+                title: Text('themeLight'.tr),
+                leading: Radio<ThemeMode>(
+                  value: ThemeMode.light,
+                  groupValue: themeProvider.themeMode,
+                  onChanged: (ThemeMode? value) {
+                    if (value != null) themeProvider.setThemeMode(value);
+                    Navigator.of(context).pop();
+                  },
+                ),
+                onTap: () {
+                  themeProvider.setThemeMode(ThemeMode.light);
+                  Navigator.of(context).pop();
+                },
+              ),
+              ListTile(
+                title: Text('themeDark'.tr),
+                leading: Radio<ThemeMode>(
+                  value: ThemeMode.dark,
+                  groupValue: themeProvider.themeMode,
+                  onChanged: (ThemeMode? value) {
+                    if (value != null) themeProvider.setThemeMode(value);
+                    Navigator.of(context).pop();
+                  },
+                ),
+                onTap: () {
+                  themeProvider.setThemeMode(ThemeMode.dark);
+                  Navigator.of(context).pop();
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final traccarProvider = context.read<TraccarProvider>();
@@ -208,6 +273,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     leading: const Icon(Icons.settings),
                     title: Text('loginLanguage'.tr),
                     onTap: _showLanguageSelectionDialog,
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.brightness_6),
+                    title: Text('settingsTheme'.tr),
+                    onTap: _showThemeSelectionDialog,
                   ),
                   ListTile(
                     leading: const Icon(Icons.notifications),
@@ -349,6 +419,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   minimumSize: const Size.fromHeight(50), // Make the button full-width
                 ),
                 child: Text('loginLogout'.tr),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 24.0),
+              child: FutureBuilder<PackageInfo>(
+                future: PackageInfo.fromPlatform(),
+                builder: (context, snapshot) {
+                  if (snapshot.hasData) {
+                    return Text(
+                      '${'appVersion'.tr}: ${snapshot.data!.version}+${snapshot.data!.buildNumber}',
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
+                        fontSize: 12,
+                      ),
+                    );
+                  }
+                  return const SizedBox.shrink();
+                },
               ),
             ),
           ],

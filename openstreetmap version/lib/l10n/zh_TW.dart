@@ -196,7 +196,6 @@ const Map<String, String> zhTW = {
     "userTermsAccepted": "接受條款",
     "userBilling": "Billing",
     "loginTitle": "登入",
-    "loginLanguage": "語言",
     "loginReset": "密碼重設",
     "loginRegister": "註冊",
     "loginLogin": "登入",
@@ -631,4 +630,9 @@ const Map<String, String> zhTW = {
 "CustomServerURL":"自訂伺服器網址",
  "TapMapAddPolygon":"在地圖點擊為多邊形新增點。",
  "pleaseSelectDevice": "請選擇設備",
+  "settingsTheme": "主題模式",
+  "themeSystem": "跟隨系統",
+  "themeLight": "日間模式",
+  "themeDark": "夜間模式",
+  "appVersion": "版本",
 };

@@ -196,7 +196,6 @@ const Map<String, String> uk = {
     "userTermsAccepted": "Terms Accepted",
     "userBilling": "Billing",
     "loginTitle": "Логiн",
-    "loginLanguage": "Мова",
     "loginReset": "Reset Password",
     "loginRegister": "Реєстрація",
     "loginLogin": "Ввійти",
@@ -624,5 +623,11 @@ const Map<String, String> uk = {
     "categoryVan": "Фургон",
     "categoryScooter": "Скутер",
     "maintenanceStart": "Початок",
-    "maintenancePeriod": "Період"
+    "maintenancePeriod": "Період",
+  "settingsTheme": "Theme Mode",
+  "themeSystem": "System Default",
+  "themeLight": "Light Mode",
+  "themeDark": "Dark Mode",
+  "appVersion": "Version",
+  "loginLanguage": "Language"
 };

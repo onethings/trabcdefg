@@ -196,7 +196,6 @@ const Map<String, String> mk = {
     "userTermsAccepted": "Условите се прифатени",
     "userBilling": "Billing",
     "loginTitle": "Најава",
-    "loginLanguage": "Јазик",
     "loginReset": "Ресетирај лозинка",
     "loginRegister": "Регистрација",
     "loginLogin": "Најава",
@@ -624,5 +623,11 @@ const Map<String, String> mk = {
     "categoryVan": "Комбе",
     "categoryScooter": "Скутер",
     "maintenanceStart": "Почеток",
-    "maintenancePeriod": "Период"
+    "maintenancePeriod": "Период",
+  "settingsTheme": "Theme Mode",
+  "themeSystem": "System Default",
+  "themeLight": "Light Mode",
+  "themeDark": "Dark Mode",
+  "appVersion": "Version",
+  "loginLanguage": "Language"
 };

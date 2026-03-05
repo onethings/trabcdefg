@@ -196,7 +196,6 @@ const Map<String, String> lo = {
     "userTermsAccepted": "Terms Accepted",
     "userBilling": "Billing",
     "loginTitle": "ເຂົ້າສູ່ລະບົບ",
-    "loginLanguage": "ພາສາ",
     "loginReset": "Reset Password",
     "loginRegister": "ລົງທະບຽນ",
     "loginLogin": "ເຂົ້າສູ່ລະບົບ",
@@ -624,5 +623,11 @@ const Map<String, String> lo = {
     "categoryVan": "Van",
     "categoryScooter": "Scooter",
     "maintenanceStart": "Start",
-    "maintenancePeriod": "Period"
+    "maintenancePeriod": "Period",
+  "settingsTheme": "Theme Mode",
+  "themeSystem": "System Default",
+  "themeLight": "Light Mode",
+  "themeDark": "Dark Mode",
+  "appVersion": "Version",
+  "loginLanguage": "Language"
 };

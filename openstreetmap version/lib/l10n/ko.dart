@@ -196,7 +196,6 @@ const Map<String, String> ko = {
     "userTermsAccepted": "Terms Accepted",
     "userBilling": "Billing",
     "loginTitle": "로그인",
-    "loginLanguage": "언어",
     "loginReset": "비밀번호 초기화",
     "loginRegister": "회원가입",
     "loginLogin": "로그인",
@@ -624,5 +623,11 @@ const Map<String, String> ko = {
     "categoryVan": "밴",
     "categoryScooter": "오토바이",
     "maintenanceStart": "시작",
-    "maintenancePeriod": "주기"
+    "maintenancePeriod": "주기",
+  "settingsTheme": "Theme Mode",
+  "themeSystem": "System Default",
+  "themeLight": "Light Mode",
+  "themeDark": "Dark Mode",
+  "appVersion": "Version",
+  "loginLanguage": "Language"
 };

@@ -196,7 +196,6 @@ const Map<String, String> pt = {
     "userTermsAccepted": "Termos Aceites",
     "userBilling": "Billing",
     "loginTitle": "Entrar",
-    "loginLanguage": "Idioma",
     "loginReset": "Redefinir Password",
     "loginRegister": "Registar",
     "loginLogin": "Entrar",
@@ -624,5 +623,11 @@ const Map<String, String> pt = {
     "categoryVan": "Caravana",
     "categoryScooter": "Scooter",
     "maintenanceStart": "Iniciar",
-    "maintenancePeriod": "Período"
+    "maintenancePeriod": "Período",
+  "settingsTheme": "Theme Mode",
+  "themeSystem": "System Default",
+  "themeLight": "Light Mode",
+  "themeDark": "Dark Mode",
+  "appVersion": "Version",
+  "loginLanguage": "Language"
 };

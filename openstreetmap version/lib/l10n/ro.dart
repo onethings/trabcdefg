@@ -196,7 +196,6 @@ const Map<String, String> ro = {
     "userTermsAccepted": "Terms Accepted",
     "userBilling": "Billing",
     "loginTitle": "Autentificare",
-    "loginLanguage": "Limbă",
     "loginReset": "Reconfigurare Parolă",
     "loginRegister": "Înregistrare",
     "loginLogin": "Autentificare",
@@ -624,5 +623,11 @@ const Map<String, String> ro = {
     "categoryVan": "Duba",
     "categoryScooter": "Scooter",
     "maintenanceStart": "Start",
-    "maintenancePeriod": "Perioada"
+    "maintenancePeriod": "Perioada",
+  "settingsTheme": "Theme Mode",
+  "themeSystem": "System Default",
+  "themeLight": "Light Mode",
+  "themeDark": "Dark Mode",
+  "appVersion": "Version",
+  "loginLanguage": "Language"
 };

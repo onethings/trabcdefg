@@ -196,7 +196,6 @@ const Map<String, String> vi = {
     "userTermsAccepted": "Terms Accepted",
     "userBilling": "Billing",
     "loginTitle": "Đăng nhập",
-    "loginLanguage": "Ngôn ngữ",
     "loginReset": "Reset Password",
     "loginRegister": "Đăng ký",
     "loginLogin": "Đăng nhập",
@@ -624,5 +623,11 @@ const Map<String, String> vi = {
     "categoryVan": "Xe thùng",
     "categoryScooter": "Scooter",
     "maintenanceStart": "Start",
-    "maintenancePeriod": "Period"
+    "maintenancePeriod": "Period",
+  "settingsTheme": "Theme Mode",
+  "themeSystem": "System Default",
+  "themeLight": "Light Mode",
+  "themeDark": "Dark Mode",
+  "appVersion": "Version",
+  "loginLanguage": "Language"
 };

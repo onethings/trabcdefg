@@ -196,7 +196,6 @@ const Map<String, String> ca = {
     "userTermsAccepted": "Condicions Acceptades",
     "userBilling": "Billing",
     "loginTitle": "Iniciar sessió",
-    "loginLanguage": "Idioma",
     "loginReset": "Reiniciar contrasenya",
     "loginRegister": "Registrar-se",
     "loginLogin": "Iniciar sessió",
@@ -624,5 +623,11 @@ const Map<String, String> ca = {
     "categoryVan": "Furgoneta",
     "categoryScooter": "Moto",
     "maintenanceStart": "Iniciar",
-    "maintenancePeriod": "Període"
+    "maintenancePeriod": "Període",
+  "settingsTheme": "Theme Mode",
+  "themeSystem": "System Default",
+  "themeLight": "Light Mode",
+  "themeDark": "Dark Mode",
+  "appVersion": "Version",
+  "loginLanguage": "Language"
 };

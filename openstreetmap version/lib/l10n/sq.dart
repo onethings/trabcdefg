@@ -196,7 +196,6 @@ const Map<String, String> sq = {
     "userTermsAccepted": "Terms Accepted",
     "userBilling": "Billing",
     "loginTitle": "Hyrje",
-    "loginLanguage": "Gjuha",
     "loginReset": "Reset Password",
     "loginRegister": "Regjistrim",
     "loginLogin": "Lidhu",
@@ -624,5 +623,11 @@ const Map<String, String> sq = {
     "categoryVan": "Van",
     "categoryScooter": "Scooter",
     "maintenanceStart": "Start",
-    "maintenancePeriod": "Period"
+    "maintenancePeriod": "Period",
+  "settingsTheme": "Theme Mode",
+  "themeSystem": "System Default",
+  "themeLight": "Light Mode",
+  "themeDark": "Dark Mode",
+  "appVersion": "Version",
+  "loginLanguage": "Language"
 };

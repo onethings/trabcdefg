@@ -138,19 +138,29 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
     if (isCompact) {
       return Text(
         text,
-        style: const TextStyle(fontSize: 10, color: Colors.blueGrey),
+        style: TextStyle(
+          fontSize: 10,
+          color: Theme.of(context).colorScheme.secondary,
+        ),
         maxLines: 2,
         overflow: TextOverflow.ellipsis,
       );
     } else {
       return Row(
         children: [
-          const Icon(Icons.location_on, size: 14, color: Colors.grey),
+          Icon(
+            Icons.location_on,
+            size: 14,
+            color: Theme.of(context).colorScheme.outline,
+          ),
           const SizedBox(width: 6),
           Expanded(
             child: Text(
               text,
-              style: TextStyle(color: Colors.grey[600], fontSize: 12),
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                fontSize: 12,
+              ),
               overflow: TextOverflow.ellipsis,
             ),
           ),
@@ -164,10 +174,10 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
     final traccarProvider = Provider.of<TraccarProvider>(context);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF1F5F9),
+      backgroundColor: Theme.of(context).colorScheme.surface,
       appBar: AppBar(
         automaticallyImplyLeading: false,
-        backgroundColor: Colors.white,
+        backgroundColor: Theme.of(context).colorScheme.surface,
         elevation: 0,
         toolbarHeight: 0,
         bottom: PreferredSize(
@@ -245,7 +255,7 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.5),
         borderRadius: BorderRadius.circular(16),
       ),
       child: InkWell(
@@ -279,9 +289,9 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
                                       'zh', // 改為讀取 GetX 當前語系
                                 )
                               : '--',
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 9,
-                            color: Colors.grey,
+                            color: Theme.of(context).colorScheme.outline,
                           ),
                         ),
                       ],
@@ -326,7 +336,7 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
       height: 72,
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
         borderRadius: BorderRadius.circular(8),
       ),
       child: InkWell(
@@ -367,7 +377,10 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
                                 'zh', // 改為讀取 GetX 當前語系
                           )
                         : '--',
-                    style: const TextStyle(fontSize: 9, color: Colors.grey),
+                    style: TextStyle(
+                      fontSize: 9,
+                      color: Theme.of(context).colorScheme.outline,
+                    ),
                   ),
                 ],
               ),
@@ -415,13 +428,16 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
                     style: TextStyle(
                       fontSize: 11,
                       color: _selectedStatus == i
-                          ? Colors.white
-                          : Colors.black87,
+                          ? Theme.of(context).colorScheme.onPrimary
+                          : Theme.of(context).colorScheme.onSurface,
                     ),
                   ),
                   selected: _selectedStatus == i,
+                  selectedColor: Theme.of(context).colorScheme.primary,
+                  backgroundColor: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.5),
+                  side: BorderSide.none,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                   onSelected: (_) => setState(() => _selectedStatus = i),
-                  selectedColor: Colors.blueAccent,
                 ),
               ),
             ),
@@ -433,7 +449,6 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
             _isCompactView
                 ? Icons.view_agenda_outlined
                 : Icons.view_headline_rounded,
-            color: Colors.blueAccent,
           ),
           onPressed: _toggleViewMode,
           tooltip: "切換顯示樣式",
@@ -454,7 +469,7 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
             hintText: 'sharedSearchDevices'.tr,
             prefixIcon: const Icon(Icons.search, size: 20),
             filled: true,
-            fillColor: const Color(0xFFF1F5F9),
+            fillColor: Theme.of(context).colorScheme.surfaceVariant,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
               borderSide: BorderSide.none,

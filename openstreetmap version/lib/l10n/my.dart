@@ -198,8 +198,7 @@ const Map<String, String> my = {
   "userTermsAccepted": "သတ်မှတ်ချက်များကို လက်ခံပြီးပါပြီ",
   "userBilling": "ငွေတောင်းခံလွှာ",
   "loginTitle": "ဝင်ရောက်ရန်",
-  "loginLanguage": "ဘာသာစကား",
-  "loginReset": "စကားဝှက် ပြန်လည်သတ်မှတ်ရန်",
+  "loginReset": "စကားဝှက် ပြောင်းရန်",
   "loginRegister": "မှတ်ပုံတင်ရန်",
   "loginLogin": "ဝင်မည်",
   "loginOpenId": "OpenID ဖြင့် ဝင်ရန်",
@@ -630,5 +629,11 @@ const Map<String, String> my = {
   "SelectServer": "ဆာဗာ ရွေးပါ",
   "CustomServerURL": "စိတ်ကြိုက် ဆာဗာ URL",
   "TapMapAddPolygon": "ဗဟုဂံအတွက် အမှတ်များထည့်ရန် မြေပုံကို နှိပ်ပါ။",
-  "pleaseSelectDevice": "စက်ပစ္စည်းတစ်ခုကို ရွေးချယ်ပါ။"
+  "pleaseSelectDevice": "စက်ပစ္စည်းတစ်ခုကို ရွေးချယ်ပါ။",
+  "settingsTheme": "Theme Mode",
+  "themeSystem": "System Default",
+  "themeLight": "Light Mode",
+  "themeDark": "Dark Mode",
+  "appVersion": "Version",
+  "loginLanguage": "Language"
 };

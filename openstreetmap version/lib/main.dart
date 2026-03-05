@@ -26,6 +26,9 @@ import 'package:trabcdefg/services/localization_service.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:trabcdefg/models/route_positions_hive.dart';
 import 'package:trabcdefg/providers/map_style_provider.dart';
+import 'package:trabcdefg/providers/theme_provider.dart';
+import 'package:trabcdefg/theme/app_theme.dart';
+
 
 
 void main() async {
@@ -102,15 +105,21 @@ class TraccarApp extends StatelessWidget {
         ChangeNotifierProvider<MapStyleProvider>(
           create: (_) => MapStyleProvider(),
         ),
+        ChangeNotifierProvider<ThemeProvider>(
+          create: (_) => ThemeProvider(),
+        ),
       ],
       // Changed MaterialApp to GetMaterialApp to correctly handle GetX localization.
-      child: GetMaterialApp(
-        title: 'Trabcdefg',
-        theme: ThemeData(
-          primarySwatch: Colors.blue,
-        ),
-        // Configure localization for the app using GetX properties.
-        translations: LocalizationService(),
+      child: Consumer<ThemeProvider>(
+        builder: (context, themeProvider, child) {
+          return GetMaterialApp(
+            debugShowCheckedModeBanner: false,
+            title: 'Trabcdefg',
+            theme: themeProvider.getTheme(Brightness.light),
+            darkTheme: themeProvider.getTheme(Brightness.dark),
+            themeMode: themeProvider.themeMode,
+            // Configure localization for the app using GetX properties.
+            translations: LocalizationService(),
         locale: initialLanguageCode != null
             ? LocalizationService.getLocaleFromLang(initialLanguageCode!)
             : Get.deviceLocale ?? LocalizationService.fallbackLocale,
@@ -131,7 +140,9 @@ class TraccarApp extends StatelessWidget {
           '/reports/trips': (context) => const TripsReportScreen(),
           '/reports/events': (context) => const EventsReportScreen(),
         },
-      ),
-    );
-  }
+      );
+    },
+  ),
+);
+}
 }

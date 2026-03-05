@@ -196,7 +196,6 @@ const Map<String, String> th = {
     "userTermsAccepted": "ยอมรับข้อกำหนดแล้ว",
     "userBilling": "การเรียกเก็บเงิน",
     "loginTitle": "เข้าสู่ระบบ",
-    "loginLanguage": "ภาษา",
     "loginReset": "รีเซ็ตรหัสผ่าน",
     "loginRegister": "ลงทะเบียน",
     "loginLogin": "เข้าสู่ระบบ",
@@ -624,5 +623,11 @@ const Map<String, String> th = {
     "categoryVan": "รถตู้",
     "categoryScooter": "สกู๊ตเตอร์",
     "maintenanceStart": "เริ่มต้น",
-    "maintenancePeriod": "ระยะเวลา"
+    "maintenancePeriod": "ระยะเวลา",
+  "settingsTheme": "Theme Mode",
+  "themeSystem": "System Default",
+  "themeLight": "Light Mode",
+  "themeDark": "Dark Mode",
+  "appVersion": "Version",
+  "loginLanguage": "Language"
 };

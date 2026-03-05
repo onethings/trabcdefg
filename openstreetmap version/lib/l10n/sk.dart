@@ -196,7 +196,6 @@ const Map<String, String> sk = {
     "userTermsAccepted": "Podmienky prijaté",
     "userBilling": "Billing",
     "loginTitle": "Prihlásenie",
-    "loginLanguage": "Jazyk",
     "loginReset": "Obnoviť heslo",
     "loginRegister": "Registrovať",
     "loginLogin": "Prihlásenie",
@@ -624,5 +623,11 @@ const Map<String, String> sk = {
     "categoryVan": "Dodávka",
     "categoryScooter": "Skúter",
     "maintenanceStart": "Štart",
-    "maintenancePeriod": "Obdobie"
+    "maintenancePeriod": "Obdobie",
+  "settingsTheme": "Theme Mode",
+  "themeSystem": "System Default",
+  "themeLight": "Light Mode",
+  "themeDark": "Dark Mode",
+  "appVersion": "Version",
+  "loginLanguage": "Language"
 };
