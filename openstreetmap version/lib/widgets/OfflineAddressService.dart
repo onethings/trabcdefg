@@ -45,7 +45,7 @@ class OfflineAddressService {
   }
   static String _getDbName(String langCode) {
     if (langCode == 'zh') return "chinese_ultra_res.db";
-    if (langCode == 'my') return "myanmar_ultra_res.db";
+    if (langCode == 'my') return "myanmar_ultra_res_my.db";//"myanmar_ultra_res.db";
     return "english_ultra_res.db";
   }
 
@@ -130,7 +130,7 @@ class OfflineAddressService {
 
       // 1. 街道搜索 (精度 9 -> 7)
       // 優化：搜尋鄰近網格以解決邊界問題 (Boundary Problem)
-      for (int len = 9; len >= 7; len--) {
+      for (int len = 8; len >= 7; len--) {
         String centerPrefix = fullHash.substring(0, len);
         List<String> searchPrefixes = _getNeighbors(centerPrefix);
         searchPrefixes.add(centerPrefix);
@@ -153,7 +153,7 @@ class OfflineAddressService {
         int limit = len == 9 ? 10 : 20; // Level 9 範圍小，取 10 筆夠了
         
         List<Map> res = await _db!.rawQuery(
-          "SELECT name, gh FROM streets WHERE $whereClause LIMIT $limit",
+          "SELECT n.name, s.gh FROM streets s JOIN names n ON s.name_id = n.id WHERE $whereClause LIMIT $limit",
           args);
         candidates.addAll(res);
 
@@ -386,7 +386,7 @@ class OfflineAddressService {
     // 構建 WHERE SUBSTR(gh, 1, len) IN (?, ?, ...)
     String placeholders = List.filled(prefixes.length, '?').join(',');
     String sql =
-        "SELECT admin, lvl, gh FROM regions WHERE SUBSTR(gh, 1, $len) IN ($placeholders)";
+        "SELECT n.name AS admin, r.lvl, r.gh FROM regions r JOIN names n ON r.name_id = n.id WHERE SUBSTR(r.gh, 1, $len) IN ($placeholders)";
 
     return await _db!.rawQuery(sql, prefixes);
   }
