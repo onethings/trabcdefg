@@ -629,5 +629,10 @@ const Map<String, String> gl = {
   "themeLight": "Light Mode",
   "themeDark": "Dark Mode",
   "appVersion": "Version",
-  "loginLanguage": "Language"
+  "loginLanguage": "Language",
+  "sharedOn": "ON",
+  "sharedOff": "OFF",
+  "sharedLocating": "Locating...",
+  "deviceStatusAccOn": "ACC ON",
+  "deviceStatusOfflineUpper": "OFFLINE"
 };

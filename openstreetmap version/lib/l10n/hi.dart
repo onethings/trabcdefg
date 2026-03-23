@@ -629,5 +629,10 @@ const Map<String, String> hi = {
   "themeLight": "Light Mode",
   "themeDark": "Dark Mode",
   "appVersion": "Version",
-  "loginLanguage": "Language"
+  "loginLanguage": "Language",
+  "sharedOn": "ON",
+  "sharedOff": "OFF",
+  "sharedLocating": "Locating...",
+  "deviceStatusAccOn": "ACC ON",
+  "deviceStatusOfflineUpper": "OFFLINE"
 };

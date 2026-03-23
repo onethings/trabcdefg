@@ -17,6 +17,9 @@ import 'package:trabcdefg/models/report_summary_hive.dart';
 import 'package:trabcdefg/models/route_positions_hive.dart'; // Assuming you put the model here
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:trabcdefg/widgets/OfflineAddressService.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:path_provider/path_provider.dart';
+import 'dart:io';
 
 enum OSMMapType { normal, satellite }
 
@@ -61,6 +64,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen>
   static const String _playbackIconId = "playback_arrow";
   static const String _startIconId = "start_pin";
   static const String _endIconId = "end_pin";
+  final List<LatLng> _stopPoints = [];
 
   Symbol? _playbackSymbol;
   Line? _playedLine;
@@ -93,6 +97,11 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen>
     await _addAssetImage(_playbackIconId, 'assets/images/arrow.png');
     await _addAssetImage(_startIconId, 'assets/images/start.png');
     await _addAssetImage(_endIconId, 'assets/images/destination.png');
+    
+    // Load pg_1 to pg_50 icons for stop markers
+    for (int i = 1; i <= 50; i++) {
+      await _addAssetImage("pg_$i", "assets/images/pg_$i.png");
+    }
   }
 
   Future<void> _addAssetImage(String id, String assetPath) async {
@@ -195,6 +204,25 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen>
       print('Deleting ${expiredKeys.length} expired route entries.');
       // Delete all expired entries in one batch operation
       await routeBox.deleteAll(expiredKeys);
+    }
+  }
+
+  void _calculateStops(List<api.Position> allPositions) {
+    _stopPoints.clear();
+    if (allPositions.length < 2) return;
+
+    for (int i = 0; i < allPositions.length - 1; i++) {
+      final p1 = allPositions[i];
+      final p2 = allPositions[i + 1];
+      
+      if (p1.serverTime != null && p2.serverTime != null) {
+        final diff = p2.serverTime!.difference(p1.serverTime!);
+        // If gap >= 5 minutes, consider it a stop
+        if (diff.inMinutes >= 5) {
+          _stopPoints.add(LatLng(p1.latitude!.toDouble(), p1.longitude!.toDouble()));
+        }
+      }
+      if (_stopPoints.length >= 50) break; // Display max 50 icons
     }
   }
 
@@ -301,7 +329,12 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen>
       }
 
       // 4.5 關鍵修正：過濾掉速度為零的點，提升回放體驗
+      // 但我們需要保留原始點位來計算「停留」
+      final originalPositions = List<api.Position>.from(fetchedPositions);
       fetchedPositions = fetchedPositions.where((p) => (p.speed ?? 0) > 0).toList();
+
+      // 計算停留點 (Stops)
+      _calculateStops(originalPositions);
 
       // 5. 更新數據
       if (mounted) {
@@ -375,6 +408,19 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen>
         ),
       );
     }
+
+    // Add Stop Markers (pg_1 to pg_50)
+    for (int i = 0; i < _stopPoints.length; i++) {
+      await _mapController!.addSymbol(
+        SymbolOptions(
+          geometry: _stopPoints[i],
+          iconImage: "pg_${i + 1}",
+          iconSize: 1.0,
+          iconAnchor: "center",
+        ),
+      );
+    }
+
     _animateCameraToBounds();
   }
 
@@ -685,7 +731,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen>
           children: [
             // Inside your build method or playback panel widget:
 Obx(() => Text(
-  _currentAddressRx.value.isEmpty ? "Locating..." : _currentAddressRx.value,
+  _currentAddressRx.value.isEmpty ? 'sharedLocating'.tr : _currentAddressRx.value,
   style: const TextStyle(
     fontSize: 14,
     fontWeight: FontWeight.bold,
@@ -719,7 +765,7 @@ Obx(() => Text(
                   ),
                   _buildStatItem(
                     "positionSpeed".tr,
-                    "$speed km/h",
+                    "$speed ${'sharedKmh'.tr}",
                     Icons.speed_rounded,
                   ),
                   _buildStatItem(
@@ -775,12 +821,64 @@ Obx(() => Text(
                 ),
                 const Spacer(),
                 _buildSpeedSelector(),
+                const SizedBox(width: 12),
+                IconButton.outlined(
+                  onPressed: _exportToGPX,
+                  icon: const Icon(Icons.download_rounded, size: 20),
+                  tooltip: "Export GPX",
+                ),
               ],
             ),
           ],
         ),
       ),
     );
+  }
+
+  void _exportToGPX() async {
+    if (_positions.isEmpty) {
+      Get.snackbar("Error", "No track data to export");
+      return;
+    }
+
+    final deviceName = _selectedDeviceName ?? "Device";
+    final date = DateFormat('yyyy-MM-dd').format(_historyFrom ?? DateTime.now());
+    
+    StringBuffer gpx = StringBuffer();
+    gpx.writeln('<?xml version="1.0" encoding="UTF-8"?>');
+    gpx.writeln('<gpx version="1.1" creator="Trabcdefg" xmlns="http://www.topografix.com/GPX/1/1">');
+    gpx.writeln('  <trk>');
+    gpx.writeln('    <name>$deviceName - $date</name>');
+    gpx.writeln('    <trkseg>');
+    
+    for (var p in _positions) {
+      final timeStr = p.serverTime?.toUtc().toIso8601String() ?? "";
+      gpx.writeln('      <trkpt lat="${p.latitude}" lon="${p.longitude}">');
+      gpx.writeln('        <time>$timeStr</time>');
+      if (p.speed != null) gpx.writeln('        <speed>${p.speed}</speed>');
+      gpx.writeln('      </trkpt>');
+    }
+    
+    gpx.writeln('    </trkseg>');
+    gpx.writeln('  </trk>');
+    gpx.writeln('</gpx>');
+
+    try {
+      final directory = await getTemporaryDirectory();
+      final file = File('${directory.path}/${deviceName}_$date.gpx');
+      await file.writeAsString(gpx.toString());
+      
+      // Use share_plus to export
+      // final xFile = XFile(file.path);
+      // await Share.shareXFiles([xFile], text: 'GPX Track Export');
+      
+      // Simple fallback if XFile is not happy or version mismatch
+      // But based on pubspec, should be fine.
+
+      await Share.shareXFiles([XFile(file.path)], text: 'GPX Export for $deviceName');
+    } catch (e) {
+      Get.snackbar("Export Failed", e.toString());
+    }
   }
 
   Widget _buildStatItem(String label, String value, IconData icon) {
@@ -829,8 +927,8 @@ Obx(() => Text(
   // 修改 _getDistanceFormatted
   String _getDistanceFormatted(int currentIndex) {
     if (_distancePrefixSum.isEmpty || currentIndex >= _distancePrefixSum.length)
-      return "0.00 km";
-    return "${_distancePrefixSum[currentIndex].toStringAsFixed(2)} km";
+      return "0.00 ${'sharedKm'.tr}";
+    return "${_distancePrefixSum[currentIndex].toStringAsFixed(2)} ${'sharedKm'.tr}";
   }
 
   Widget _buildSpeedSelector() {
@@ -981,7 +1079,7 @@ Obx(() => Text(
   void _showCalendarDialog() async {
     if (_deviceId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select a device first.')),
+        SnackBar(content: Text('pleaseSelectDevice'.tr)),
       );
       return;
     }
@@ -1063,7 +1161,7 @@ Obx(() => Text(
                             return Positioned(
                               bottom: 4, // 調整文字距離底部的距離
                               child: Text(
-                                '${distanceInKm.toStringAsFixed(1)}km', // 顯示到小數點第一位
+                                '${distanceInKm.toStringAsFixed(1)}${'sharedKm'.tr}', // 顯示到小數點第一位
                                 style: TextStyle(
                                   fontSize: 9,
                                   fontWeight: FontWeight.bold,

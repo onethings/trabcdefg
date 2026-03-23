@@ -113,7 +113,7 @@ class DeviceDetailPanel extends StatelessWidget {
                         _buildStatusItem(
                           context,
                           Icons.speed_rounded,
-                          '${position.speed?.toStringAsFixed(0) ?? 0} km/h',
+                          '${position.speed?.toStringAsFixed(0) ?? 0} ${'sharedKmh'.tr}',
                           'positionSpeed'.tr,
                         ),
                         _buildStatusDivider(context),
@@ -215,7 +215,7 @@ class DeviceDetailPanel extends StatelessWidget {
     return _buildStatusItem(
       context,
       Icons.power_settings_new_rounded,
-      isOn ? 'ON' : 'OFF',
+      isOn ? 'sharedOn'.tr : 'sharedOff'.tr,
       'positionIgnition'.tr,
     );
   }

@@ -563,8 +563,8 @@ class _AccTimerBadgeState extends State<_AccTimerBadge> {
       ),
       child: Text(
         isMoving
-            ? "${widget.speed.toStringAsFixed(0)} km/h"
-            : (widget.isStale ? "OFFLINE" : "ACC ON$timerText"),
+            ? "${widget.speed.toStringAsFixed(0)} ${'sharedKmh'.tr}"
+            : (widget.isStale ? 'deviceStatusOfflineUpper'.tr : "${'deviceStatusAccOn'.tr}$timerText"),
         style: TextStyle(
           color: isMoving ? Colors.green : widget.baseColor,
           fontWeight: FontWeight.bold,
@@ -576,10 +576,10 @@ class _AccTimerBadgeState extends State<_AccTimerBadge> {
 
   Widget _buildCompact() {
     if (widget.isStale) {
-      return const Padding(
+      return Padding(
         padding: EdgeInsets.only(right: 8),
         child: Text(
-          "OFFLINE",
+          'deviceStatusOfflineUpper'.tr,
           style: TextStyle(
             fontSize: 10,
             color: Colors.grey,
@@ -592,7 +592,7 @@ class _AccTimerBadgeState extends State<_AccTimerBadge> {
       return Padding(
         padding: const EdgeInsets.only(right: 8),
         child: Text(
-          "${widget.speed.toStringAsFixed(0)} km/h",
+          "${widget.speed.toStringAsFixed(0)} ${'sharedKmh'.tr}",
           style: const TextStyle(
             fontSize: 10,
             color: Colors.green,
@@ -611,7 +611,7 @@ class _AccTimerBadgeState extends State<_AccTimerBadge> {
     return Padding(
       padding: const EdgeInsets.only(right: 8),
       child: Text(
-        "ACC ON$timeStr",
+        "${'deviceStatusAccOn'.tr}$timeStr",
         textAlign: TextAlign.center,
         style: TextStyle(
           fontSize: 9,

@@ -22,6 +22,8 @@ class TraccarProvider with ChangeNotifier {
   List<api.Event> _events = [];
   Map<int, api.Event> _latestDeviceEvent = {};
   bool _isLoading = false;
+  final Map<int, List<api.Position>> _prefetchedHistory = {};
+  Map<int, List<api.Position>> get prefetchedHistory => _prefetchedHistory;
 
   TraccarProvider({
     required this.apiClient,
@@ -201,6 +203,28 @@ class TraccarProvider with ChangeNotifier {
     } finally {
       _isLoading = false;
       notifyListeners();
+    }
+  }
+
+  Future<void> prefetchDeviceHistory(int deviceId) async {
+    if (_sessionId == null || _prefetchedHistory.containsKey(deviceId)) return;
+
+    final to = DateTime.now();
+    final from = to.subtract(const Duration(hours: 1));
+
+    try {
+      debugPrint('Pre-fetching 1h history for device: ');
+      final positionsApi = api.PositionsApi(apiClient);
+      final history = await positionsApi.positionsGet(
+        deviceId: deviceId,
+        from: from.toUtc(),
+        to: to.toUtc(),
+      ) ?? [];
+      
+      _prefetchedHistory[deviceId] = history;
+      notifyListeners();
+    } catch (e) {
+      debugPrint("Pre-fetch failed: ");
     }
   }
 }

@@ -71,7 +71,7 @@ class _MapScreenState extends State<MapScreen> {
   final TileCacheService _cacheService = TileCacheService();
   late MarkerIconService _iconService;
   final http.Client _httpClient = http.Client();
-  // Adjust 0.005 based on how tall your bottom sheet is
+  bool _showGeofences = true;
   double _mapCenterOffset = 0.001;
   // final OfflineGeocoder _geocoder = OfflineGeocoder();
   String _currentAddress = "";
@@ -150,6 +150,15 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
+  void _onStyleLoaded() async {
+    setState(() {
+      _isStyleLoaded = true;
+    });
+    _loadedIcons.clear();
+    final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
+    await _updateAllMarkers(traccarProvider);
+  }
+
   void _zoomToFitAll(TraccarProvider provider) {
     if (provider.positions.isEmpty || _mapController == null) return;
 
@@ -181,7 +190,7 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
-  void _updateAllMarkers(TraccarProvider provider) async {
+  Future<void> _updateAllMarkers(TraccarProvider provider) async {
     if (_mapController == null || !_isStyleLoaded) return;
     await _mapController!.clearSymbols();
 
@@ -364,6 +373,12 @@ class _MapScreenState extends State<MapScreen> {
       _currentAddress = immediateAddress ?? "Loading...";
     });
     _showDeviceDetailPanel(device, position);
+    if (device.id != null) {
+      Provider.of<TraccarProvider>(
+        context,
+        listen: false,
+      ).prefetchDeviceHistory(device.id!);
+    }
 
     if (position.latitude != null &&
         position.longitude != null &&
@@ -580,7 +595,9 @@ class _MapScreenState extends State<MapScreen> {
       child: Column(
         children: [
           DrawerHeader(
-            decoration: BoxDecoration(color: Theme.of(context).colorScheme.primary),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.primary,
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -596,7 +613,9 @@ class _MapScreenState extends State<MapScreen> {
                 Text(
                   traccarProvider.currentUser?.email ?? 'Logged in user'.tr,
                   style: TextStyle(
-                    color: Theme.of(context).colorScheme.onPrimary.withOpacity(0.8),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onPrimary.withOpacity(0.8),
                     fontSize: 14,
                   ),
                 ),
@@ -763,6 +782,25 @@ class _MapScreenState extends State<MapScreen> {
               backgroundColor: Colors.transparent,
               elevation: 0,
               surfaceTintColor: Colors.transparent,
+              flexibleSpace: ClipRRect(
+                child: BackdropFilter(
+                  filter: ui.ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+                  child: Container(
+                    color:
+                        (Theme.of(context).brightness == Brightness.dark
+                                ? Colors.black
+                                : Colors.white)
+                            .withOpacity(0.2),
+                  ),
+                ),
+              ),
+              title: Text(
+                'mapTitle'.tr,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.5,
+                ),
+              ),
             ),
 
             drawer: _buildDeviceListDrawer(context, traccarProvider),
@@ -780,15 +818,22 @@ class _MapScreenState extends State<MapScreen> {
                   styleString: Provider.of<MapStyleProvider>(
                     context,
                   ).styleString,
+                  onStyleLoadedCallback: _onStyleLoaded,
                   onMapCreated: (controller) {
                     _mapController = controller;
-                    
+
                     // Automatic Map Style Switching based on Theme
-                    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-                    final styleProvider = Provider.of<MapStyleProvider>(context, listen: false);
-                    if (isDarkMode && styleProvider.mapType == AppMapType.bright) {
+                    final isDarkMode =
+                        Theme.of(context).brightness == Brightness.dark;
+                    final styleProvider = Provider.of<MapStyleProvider>(
+                      context,
+                      listen: false,
+                    );
+                    if (isDarkMode &&
+                        styleProvider.mapType == AppMapType.bright) {
                       styleProvider.setMapType(AppMapType.dark);
-                    } else if (!isDarkMode && styleProvider.mapType == AppMapType.dark) {
+                    } else if (!isDarkMode &&
+                        styleProvider.mapType == AppMapType.dark) {
                       styleProvider.setMapType(AppMapType.bright);
                     }
 
@@ -801,105 +846,95 @@ class _MapScreenState extends State<MapScreen> {
                           context,
                           listen: false,
                         );
-                        final device = traccarProvider.devices.firstWhere(
-                          (d) => d.id == deviceId,
-                        );
-                        final pos = traccarProvider.positions.firstWhere(
-                          (p) => p.deviceId == deviceId,
-                        );
-                        _showDeviceDetailPanel(device, pos);
-                        _onDeviceSelected(device, traccarProvider.positions);
-                        _mapController!.animateCamera(
-                          maplibre.CameraUpdate.newCameraPosition(
-                            maplibre.CameraPosition(
-                              target: maplibre.LatLng(
-                                pos.latitude!.toDouble() - _mapCenterOffset,
-                                pos.longitude!.toDouble(),
-                              ),
-                              zoom: 16.0,
-                            ),
+                        _onDeviceSelected(
+                          traccarProvider.devices.firstWhere(
+                            (d) => d.id == deviceId,
                           ),
+                          traccarProvider.positions,
                         );
                       }
                     });
                   },
-                  onStyleLoadedCallback: () {
-                    setState(() => _isStyleLoaded = true);
-                    _loadedIcons.clear();
-                    _updateAllMarkers(traccarProvider);
-                    if (widget.selectedDevice == null) {
-                      Future.delayed(const Duration(milliseconds: 500), () {
-                        _zoomToFitAll(traccarProvider);
-                      });
-                    }
-                  },
                 ),
+
+                // Map Controls (Right Side)
+                Positioned(
+                  top: MediaQuery.of(context).padding.top + 70,
+                  right: 16,
+                  child: Column(
+                    children: [
+                      _buildMapControl(
+                        Icons.explore_rounded,
+                        () => _mapController?.animateCamera(
+                          maplibre.CameraUpdate.bearingTo(0),
+                        ),
+                        "btn_compass",
+                      ),
+                      const SizedBox(height: 12),
+                      _buildMapControl(Icons.my_location_rounded, () {
+                        // Center on specific location or user
+                        if (_currentDevice != null) {
+                          final pos = traccarProvider.getPosition(
+                            _currentDevice!.id!,
+                          );
+                          if (pos != null)
+                            _onDeviceSelected(
+                              _currentDevice!,
+                              traccarProvider.positions,
+                            );
+                        }
+                      }, "btn_myloc"),
+                      const SizedBox(height: 12),
+                      _buildMapControl(
+                        _showGeofences
+                            ? Icons.layers_rounded
+                            : Icons.layers_outlined,
+                        () => setState(() => _showGeofences = !_showGeofences),
+                        "btn_geofence",
+                        isActive: _showGeofences,
+                      ),
+                      const SizedBox(height: 12),
+                      _buildMapControl(
+                        Provider.of<MapStyleProvider>(context).isSatelliteMode
+                            ? Icons.map
+                            : Icons.satellite_alt,
+                        () => Provider.of<MapStyleProvider>(
+                          context,
+                          listen: false,
+                        ).toggleMapType(),
+                        "btn_style",
+                      ),
+                      const SizedBox(height: 12),
+                      _buildMapControl(
+                        Icons.arrow_upward_rounded,
+                        () => _navigateToDevice(-1, traccarProvider.devices, traccarProvider.positions),
+                        "btn_prev",
+                      ),
+                      const SizedBox(height: 12),
+                      _buildMapControl(
+                        Icons.arrow_downward_rounded,
+                        () => _navigateToDevice(1, traccarProvider.devices, traccarProvider.positions),
+                        "btn_next",
+                      ),
+                      const SizedBox(height: 12),
+                      _buildMapControl(
+                        Icons.zoom_out_map_rounded,
+                        () => _zoomToFitAll(traccarProvider),
+                        "btn_zoom",
+                      ),
+                    ],
+                  ),
+                ),
+
                 if (_isStyleLoaded)
                   _DataUpdateListener(
                     data: traccarProvider.positions,
                     onUpdate: () => _updateAllMarkers(traccarProvider),
                   ),
-                Positioned(
-                  top: 60,
-                  right: 10,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      FloatingActionButton.small(
-                        heroTag: "map_layers",
-                        backgroundColor: Colors.white,
-                        child: const Icon(
-                          Icons.layers_outlined,
-                          color: Colors.blueGrey,
-                        ),
-                        onPressed: () {
-                          _showMapTypeSelector();
-                        },
-                      ),
-                      const SizedBox(height: 8),
-                      FloatingActionButton.small(
-                        heroTag: "zoom_all",
-                        backgroundColor: Colors.white,
-                        onPressed: () => _zoomToFitAll(traccarProvider),
-                        child: const Icon(
-                          Icons.zoom_out_map,
-                          color: Colors.blue,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
 
-                      if (traccarProvider.devices.length > 1) ...[
-                        FloatingActionButton.small(
-                          heroTag: "prev_car",
-                          backgroundColor: Colors.white,
-                          onPressed: () => _navigateToDevice(
-                            -1,
-                            traccarProvider.devices,
-                            traccarProvider.positions,
-                          ),
-                          child: const Icon(
-                            Icons.arrow_upward,
-                            color: Colors.black54,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        FloatingActionButton.small(
-                          heroTag: "next_car",
-                          backgroundColor: Colors.white,
-                          onPressed: () => _navigateToDevice(
-                            1,
-                            traccarProvider.devices,
-                            traccarProvider.positions,
-                          ),
-                          child: const Icon(
-                            Icons.arrow_downward,
-                            color: Colors.black54,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
+                if (traccarProvider.isLoading &&
+                    traccarProvider.devices.isEmpty)
+                  const Center(child: CircularProgressIndicator()),
               ],
             ),
           ),
@@ -908,133 +943,39 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
-  void _showMapTypeSelector() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (context) {
-        return Container(
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          padding: const EdgeInsets.symmetric(vertical: 20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 40,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: 20),
-                decoration: BoxDecoration(
-                  color: Colors.grey[300],
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              Text(
-                'Select Map Style'.tr,
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 20),
-              SizedBox(
-                height: 120,
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  children: [
-                    _buildMapTypeItem(
-                      AppMapType.bright,
-                      'Standard',
-                      Icons.map_outlined,
-                    ),
-                    _buildMapTypeItem(
-                      AppMapType.liberty,
-                      'Liberty',
-                      Icons.streetview_outlined,
-                    ),
-                    _buildMapTypeItem(
-                      AppMapType.dark,
-                      'Dark Mode',
-                      Icons.dark_mode_outlined,
-                    ),
-                    _buildMapTypeItem(
-                      AppMapType.terrain,
-                      'Fiord/Terrain',
-                      Icons.terrain_outlined,
-                    ),
-                    _buildMapTypeItem(
-                      AppMapType.satellite,
-                      'Satellite',
-                      Icons.satellite_alt_outlined,
-                    ),
-                    _buildMapTypeItem(
-                      AppMapType.hybrid,
-                      'Positron',
-                      Icons.layers_outlined,
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 20),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildMapTypeItem(AppMapType type, String label, IconData icon) {
-    final styleProvider = Provider.of<MapStyleProvider>(context);
-    final isSelected = styleProvider.mapType == type;
-    return GestureDetector(
-      onTap: () {
-        _updateMapStyle(type);
-        Navigator.pop(context);
-      },
-      child: Container(
-        width: 100,
-        margin: const EdgeInsets.only(right: 12),
-        decoration: BoxDecoration(
-          color: isSelected ? Colors.blue.withOpacity(0.1) : Colors.transparent,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: isSelected ? Colors.blue : Colors.grey[200]!,
-            width: 2,
-          ),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              icon,
-              size: 40,
-              color: isSelected ? Colors.blue : Colors.grey[600],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              label.tr,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                color: isSelected ? Colors.blue : Colors.black87,
-              ),
-            ),
-          ],
-        ),
+  Widget _buildMapControl(
+    IconData icon,
+    VoidCallback onTap,
+    String heroTag, {
+    bool isActive = false,
+  }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return FloatingActionButton(
+      heroTag: heroTag,
+      onPressed: onTap,
+      mini: true,
+      backgroundColor: isActive
+          ? Theme.of(context).primaryColor
+          : (isDark ? Colors.grey[850] : Colors.white),
+      child: Icon(
+        icon,
+        color: isActive
+            ? Colors.white
+            : (isDark ? Colors.white70 : Colors.black87),
+        size: 20,
       ),
     );
   }
 }
 
 class _DataUpdateListener extends StatefulWidget {
-  final List<api.Position> data;
+  final dynamic data;
   final VoidCallback onUpdate;
 
-  const _DataUpdateListener({required this.data, required this.onUpdate});
+  const _DataUpdateListener({
+    required this.data,
+    required this.onUpdate,
+  });
 
   @override
   _DataUpdateListenerState createState() => _DataUpdateListenerState();
@@ -1044,20 +985,9 @@ class _DataUpdateListenerState extends State<_DataUpdateListener> {
   @override
   void didUpdateWidget(_DataUpdateListener oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // 如果數據發生變化（這裏簡化比較），則觸發更新
     if (widget.data != oldWidget.data) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        widget.onUpdate();
-      });
-    }
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
       widget.onUpdate();
-    });
+    }
   }
 
   @override
