@@ -634,7 +634,7 @@ const Map<String, String> ptBR = {
   "sharedOff": "OFF",
   "sharedLocating": "Locating...",
   "deviceStatusAccOn": "ACC ON",
-  "deviceStatusOfflineUpper": "OFFLINE"
+  "deviceStatusOfflineUpper": "OFFLINE",
   "dashboardTitle": "Painel",
   "notificationsTitle": "Notificações",
   "dashboardHello": "Olá",

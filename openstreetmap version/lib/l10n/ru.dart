@@ -634,7 +634,7 @@ const Map<String, String> ru = {
   "sharedOff": "OFF",
   "sharedLocating": "Locating...",
   "deviceStatusAccOn": "ACC ON",
-  "deviceStatusOfflineUpper": "OFFLINE"
+  "deviceStatusOfflineUpper": "OFFLINE",
   "dashboardTitle": "Панель",
   "notificationsTitle": "Уведомления",
   "dashboardHello": "Здравствуйте",

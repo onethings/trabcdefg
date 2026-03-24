@@ -634,7 +634,7 @@ const Map<String, String> es = {
   "sharedOff": "OFF",
   "sharedLocating": "Locating...",
   "deviceStatusAccOn": "ACC ON",
-  "deviceStatusOfflineUpper": "OFFLINE"
+  "deviceStatusOfflineUpper": "OFFLINE",
   "dashboardTitle": "Tablero",
   "notificationsTitle": "Notificaciones",
   "dashboardHello": "Hola",

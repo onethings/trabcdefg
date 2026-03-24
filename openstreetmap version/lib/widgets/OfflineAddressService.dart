@@ -27,6 +27,25 @@ class OfflineAddressService {
   // Local AI State: 軌跡黏著 (Trajectory Stickiness)
   static String? _lastMatchedStreetName;
 
+  static const String _base32 = '0123456789bcdefghjkmnpqrstuvwxyz';
+
+  static int _ghToInt(String gh) {
+    int val = 0;
+    for (int i = 0; i < gh.length; i++) {
+        val = (val << 5) | _base32.indexOf(gh[i]);
+    }
+    return val;
+  }
+
+  static String _intToGh(int val, int length) {
+    List<String> chars = List.filled(length, '');
+    for (int i = length - 1; i >= 0; i--) {
+        chars[i] = _base32[val & 31];
+        val >>= 5;
+    }
+    return chars.join();
+  }
+
   // Nominatim Rate Limiting & Queue State
   static DateTime? _lastNominatimRequest;
   static const int _minNominatimIntervalMs = 1550; // Slightly more than 1.5s for safety
@@ -146,15 +165,30 @@ class OfflineAddressService {
         // 優化：Level 9 也啟用鄰居搜尋，追求極致精度 (+- 5m 範圍內的邊界問題)
         // 雖然 Level 9 網格很小，但若車輛壓線，最近的路名點可能在隔壁網格
         
-        // 構建 SQL: SELECT ... WHERE gh LIKE ? OR gh LIKE ? ...
-        String whereClause = List.filled(searchPrefixes.length, "gh LIKE ?").join(" OR ");
-        List<String> args = searchPrefixes.map((e) => "$e%").toList();
-        
-        int limit = len == 9 ? 10 : 20; // Level 9 範圍小，取 10 筆夠了
-        
-        List<Map> res = await _db!.rawQuery(
-          "SELECT n.name, s.gh FROM streets s JOIN names n ON s.name_id = n.id WHERE $whereClause LIMIT $limit",
-          args);
+        // 構建 SQL: 使用整數查詢
+        int limit = len == 9 ? 10 : 20; 
+        List<Map> res;
+        if (len == 8) {
+          // 精確 8 位查詢: WHERE gh IN (ints)
+          List<int> searchInts = searchPrefixes.map((e) => _ghToInt(e)).toList();
+          String placeholders = List.filled(searchInts.length, "?").join(",");
+          res = await _db!.rawQuery(
+            "SELECT n.name, s.gh, s.weight FROM streets s JOIN names n ON s.name_id = n.id WHERE s.gh IN ($placeholders) LIMIT $limit",
+            searchInts);
+        } else {
+          // 7 位字首查詢: 轉化為 8 位的範圍查詢 (BETWEEN)
+          // 每個 7 位 Geohash 對應 32 個 8 位 Geohash (val << 5 到 (val << 5) + 31)
+          String whereClause = List.filled(searchPrefixes.length, "(s.gh BETWEEN ? AND ?)").join(" OR ");
+          List<int> args = [];
+          for (var prefix in searchPrefixes) {
+            int base = _ghToInt(prefix) << 5;
+            args.add(base);
+            args.add(base + 31);
+          }
+          res = await _db!.rawQuery(
+            "SELECT n.name, s.gh, s.weight FROM streets s JOIN names n ON s.name_id = n.id WHERE $whereClause LIMIT $limit",
+            args);
+        }
         candidates.addAll(res);
 
         if (candidates.isNotEmpty) {
@@ -236,7 +270,7 @@ class OfflineAddressService {
         _cacheBox?.put(cacheKey, result);
       }
 
-      return AddressResult(address: result, matchedGeohash: matchedStreetGeohash);
+      return AddressResult(address: result, matchedGeohash: matchedStreetGeohash != null ? _intToGh(matchedStreetGeohash as int, 8) : null);
     } catch (e) {
       return AddressResult(address: "Error: $e");
     }
@@ -383,12 +417,27 @@ class OfflineAddressService {
       List<String> prefixes, int len) async {
     if (prefixes.isEmpty) return [];
 
-    // 構建 WHERE SUBSTR(gh, 1, len) IN (?, ?, ...)
-    String placeholders = List.filled(prefixes.length, '?').join(',');
-    String sql =
-        "SELECT n.name AS admin, r.lvl, r.gh FROM regions r JOIN names n ON r.name_id = n.id WHERE SUBSTR(r.gh, 1, $len) IN ($placeholders)";
-
-    return await _db!.rawQuery(sql, prefixes);
+    // 構建整數查詢
+    if (len == 5) {
+      // regions 表存儲的是 5 位 Geohash 整數，直接用 IN
+      List<int> searchInts = prefixes.map((e) => _ghToInt(e)).toList();
+      String placeholders = List.filled(searchInts.length, "?").join(",");
+      return await _db!.rawQuery(
+          "SELECT n.name AS admin, r.lvl, r.gh FROM regions r JOIN names n ON r.name_id = n.id WHERE r.gh IN ($placeholders)",
+          searchInts);
+    } else {
+      // 4 位查詢需要轉換為 5 位的範圍
+      String whereClause = List.filled(prefixes.length, "(r.gh BETWEEN ? AND ?)").join(" OR ");
+      List<int> args = [];
+      for (var p in prefixes) {
+        int base = _ghToInt(p) << 5;
+        args.add(base);
+        args.add(base + 31);
+      }
+      return await _db!.rawQuery(
+          "SELECT n.name AS admin, r.lvl, r.gh FROM regions r JOIN names n ON r.name_id = n.id WHERE $whereClause",
+          args);
+    }
   }
 
   /// 獲取周邊 8 個鄰居的 Geohash (對應 Java 的 getNeighbors)
@@ -453,18 +502,23 @@ class OfflineAddressService {
     Map? best;
     
     for (var item in items) {
-      final decoded = GeoHasher().decode(item['gh']);
+      // gh 現在是整數，需要轉回字串解碼 (或者手動位運算解碼更佳，但為保持一致性先轉回)
+      final String ghStr = _intToGh(item['gh'] as int, item.containsKey('lvl') ? 5 : 8);
+      final decoded = GeoHasher().decode(ghStr);
       final double pLat = decoded[1];
       final double pLon = decoded[0];
-      // 1. 計算原始歐幾里得距離 (單位: 度數平房，非米)
-      // 簡單起見，我們視為相對距離
-      double dist = sqrt(pow(lat - pLat, 2) + pow(lon - pLon, 2));
       
-      // 2. 應用軌跡黏著與 AI 加權
+      double dist = sqrt(pow(lat - pLat, 2) + pow(lon - pLon, 2));
       double score = dist;
       
-      // Stickiness Logic: 如果路名與上一條相同，給予距離減免優惠
-      // 0.00015 度約等於 15~20 米
+      // 1. 權重加成 (Google 演算法邏輯：主幹道權重高，得分更小/更優)
+      // weight=1 為主幹道，給予 0.7 倍距離減免；weight=2 為普通道路
+      if (item.containsKey('weight')) {
+        int weight = item['weight'] as int;
+        if (weight == 1) score *= 0.7; 
+      }
+
+      // 2. 軌跡黏著度 (Stickiness Logic)
       if (previousStreetName != null && item['name'] == previousStreetName) {
         score -= 0.00015; 
       }

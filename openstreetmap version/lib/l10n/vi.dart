@@ -634,7 +634,7 @@ const Map<String, String> vi = {
   "sharedOff": "OFF",
   "sharedLocating": "Locating...",
   "deviceStatusAccOn": "ACC ON",
-  "deviceStatusOfflineUpper": "OFFLINE"
+  "deviceStatusOfflineUpper": "OFFLINE",
   "dashboardTitle": "Bảng điều khiển",
   "notificationsTitle": "Thông báo",
   "dashboardHello": "Xin chào",

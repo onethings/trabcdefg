@@ -634,7 +634,7 @@ const Map<String, String> tr = {
   "sharedOff": "OFF",
   "sharedLocating": "Locating...",
   "deviceStatusAccOn": "ACC ON",
-  "deviceStatusOfflineUpper": "OFFLINE"
+  "deviceStatusOfflineUpper": "OFFLINE",
   "dashboardTitle": "Panel",
   "notificationsTitle": "Bildirimler",
   "dashboardHello": "Merhaba",
