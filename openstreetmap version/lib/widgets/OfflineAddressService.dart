@@ -62,10 +62,11 @@ class OfflineAddressService {
       }
     }
   }
-  static String _getDbName(String langCode) {
+  static String? _getDbName(String langCode) {
     if (langCode == 'zh') return "chinese_ultra_res.db";
     if (langCode == 'my') return "myanmar_ultra_res_my.db";//"myanmar_ultra_res.db";
-    return "english_ultra_res.db";
+    if (langCode == 'en') return "english_ultra_res.db";
+    return null; // Return null if no specific DB for this language
   }
 
   static Future<void> initDatabase({String? manualLangCode}) async {
@@ -83,18 +84,22 @@ class OfflineAddressService {
       _db = null;
     }
 
-    String dbName = _getDbName(langCode);
-    var databasesPath = await getDatabasesPath();
-    var path = join(databasesPath, dbName);
+    String? dbName = _getDbName(langCode);
+    if (dbName != null) {
+      var databasesPath = await getDatabasesPath();
+      var path = join(databasesPath, dbName);
 
-    if (!(await databaseExists(path))) {
-      ByteData data = await rootBundle.load("assets/sqldb/$dbName");
-      List<int> bytes =
-          data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
-      await File(path).writeAsBytes(bytes, flush: true);
+      if (!(await databaseExists(path))) {
+        ByteData data = await rootBundle.load("assets/sqldb/$dbName");
+        List<int> bytes =
+            data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
+        await File(path).writeAsBytes(bytes, flush: true);
+      }
+
+      _db = await openDatabase(path, readOnly: true);
+    } else {
+      _db = null; // No offline DB for this language
     }
-
-    _db = await openDatabase(path, readOnly: true);
     _currentLang = langCode;
   }
 
@@ -142,14 +147,15 @@ class OfflineAddressService {
         }
       }
 
-      if (_db == null) return AddressResult(address: "Unknown");
+      // if (_db == null) return AddressResult(address: "Unknown");
+      // Don't return here, let it fallback to Nominatim if _db is null
 
       String? street, town, state;
-      String? matchedStreetGeohash;
+      int? matchedStreetGeohash;
 
       // 1. 街道搜索 (精度 9 -> 7)
-      // 優化：搜尋鄰近網格以解決邊界問題 (Boundary Problem)
-      for (int len = 8; len >= 7; len--) {
+      if (_db != null) {
+        for (int len = 8; len >= 7; len--) {
         String centerPrefix = fullHash.substring(0, len);
         List<String> searchPrefixes = _getNeighbors(centerPrefix);
         searchPrefixes.add(centerPrefix);
@@ -196,7 +202,7 @@ class OfflineAddressService {
           var best = _findClosestItem(lat, lon, candidates, previousStreetName: _lastMatchedStreetName);
           
           if (best != null) {
-            street = best['name'];
+            street = best['name']?.toString();
             matchedStreetGeohash = best['gh'];
             
             // Local AI: 更新狀態，讓下一次查詢傾向於這條路
@@ -204,6 +210,7 @@ class OfflineAddressService {
           }
           break;
         }
+      }
       }
 
       // 2. 行政區域搜索 (移植 Java 的九宮格優化)
@@ -218,12 +225,12 @@ class OfflineAddressService {
         // 優先找最近的鎮區 (lvl 8-15)
         var closestTown = _findClosestItem(
             lat, lon, admins5.where((e) => e['lvl'] >= 8).toList());
-        if (closestTown != null) town = closestTown['admin'];
+        if (closestTown != null) town = closestTown['admin']?.toString();
 
         // 找最近的省份 (lvl 0-6)
         var closestState = _findClosestItem(
             lat, lon, admins5.where((e) => e['lvl'] <= 6).toList());
-        if (closestState != null) state = closestState['admin'];
+        if (closestState != null) state = closestState['admin']?.toString();
       }
 
       // --- 第二階段：補救邏輯 (如果沒找到，擴大到精度 4 的九宮格) ---
@@ -237,13 +244,13 @@ class OfflineAddressService {
         if (state == null) {
           var closestState = _findClosestItem(
               lat, lon, admins4.where((e) => e['lvl'] <= 6).toList());
-          if (closestState != null) state = closestState['admin'];
+          if (closestState != null) state = closestState['admin']?.toString();
         }
 
         if (town == null) {
           var closestTown = _findClosestItem(
               lat, lon, admins4.where((e) => e['lvl'] >= 8).toList());
-          if (closestTown != null) town = closestTown['admin'];
+          if (closestTown != null) town = closestTown['admin']?.toString();
         }
       }
 
@@ -340,9 +347,9 @@ class OfflineAddressService {
         final addressObj = data['address'];
         if (addressObj != null) {
           // 嚴格對應欄位
-          String? road = addressObj['road'] ?? addressObj['pedestrian'] ?? addressObj['hamlet'];
-          String? district = addressObj['suburb'] ?? addressObj['neighbourhood'] ?? addressObj['township'] ?? addressObj['village'] ?? addressObj['county'];
-          String? city = addressObj['city'] ?? addressObj['town'] ?? addressObj['state'];
+          String? road = (addressObj['road'] ?? addressObj['pedestrian'] ?? addressObj['hamlet'])?.toString();
+          String? district = (addressObj['suburb'] ?? addressObj['neighbourhood'] ?? addressObj['township'] ?? addressObj['village'] ?? addressObj['county'])?.toString();
+          String? city = (addressObj['city'] ?? addressObj['town'] ?? addressObj['state'])?.toString();
 
           String formatted = _formatAddressParts(road, district, city, lat, lon);
           
@@ -415,7 +422,7 @@ class OfflineAddressService {
   /// 移植 Java 的 queryRegionsIn：使用 IN 子句查詢多個網格
   static Future<List<Map>> _queryRegionsIn(
       List<String> prefixes, int len) async {
-    if (prefixes.isEmpty) return [];
+    if (prefixes.isEmpty || _db == null) return [];
 
     // 構建整數查詢
     if (len == 5) {
