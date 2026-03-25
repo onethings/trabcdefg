@@ -629,6 +629,7 @@ const Map<String, String> enUS = {
   "maintenanceStart": "Start",
   "maintenancePeriod": "Period",
   "deviceStatusAll":"All",
+  "deviceStatusFavorite":"Favorite",
   "ServerUrl":"Server URL",
   "SelectServer":"Select Server",
   "CustomServerURL":"Custom Server URL",

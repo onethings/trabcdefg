@@ -629,6 +629,7 @@ const Map<String, String> en_US = {
   "maintenanceStart": "Start",
   "maintenancePeriod": "Period",
   "deviceStatusAll":"All",
+  "deviceStatusFavorite":"Favorite",
   "CustomServerURL":"Custom Server URL",
   "TapMapAddPolygon":"Tap on the map to add points for the polygon.",
   "pleaseSelectDevice": "Please select a device",

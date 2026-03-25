@@ -625,6 +625,7 @@ const Map<String, String> zhTW = {
     "maintenanceStart": "起始值",
     "maintenancePeriod": "期間",
     "deviceStatusAll": "所有",
+    "deviceStatusFavorite": "關注",
     "ServerUrl": "服務器網址",
     "SelectServer": "選擇服務器",
     "CustomServerURL": "自訂伺服器網址",

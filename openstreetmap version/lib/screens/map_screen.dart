@@ -591,6 +591,15 @@ class _MapScreenState extends State<MapScreen> {
     BuildContext context,
     TraccarProvider traccarProvider,
   ) {
+    final devices = traccarProvider.devices.toList();
+    devices.sort((a, b) {
+      final aFav = traccarProvider.isFavorite(a.id!);
+      final bFav = traccarProvider.isFavorite(b.id!);
+      if (aFav && !bFav) return -1;
+      if (!aFav && bFav) return 1;
+      return 0;
+    });
+
     return Drawer(
       child: Column(
         children: [
@@ -625,9 +634,9 @@ class _MapScreenState extends State<MapScreen> {
           // Device List
           Expanded(
             child: ListView.builder(
-              itemCount: traccarProvider.devices.length,
+              itemCount: devices.length,
               itemBuilder: (context, index) {
-                final device = traccarProvider.devices[index];
+                final device = devices[index];
                 final position = _findPositionOrNull(
                   traccarProvider.positions,
                   device.id,

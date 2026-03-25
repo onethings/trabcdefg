@@ -212,8 +212,10 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
           : (device.status ?? 'unknown');
 
       final String? filterStatus = _getStatusText(_selectedStatus);
-      return matchesQuery &&
-          (_selectedStatus == 0 || filterStatus == effectiveStatus);
+      final bool matchesFilter = (_selectedStatus == 0) ||
+          (_selectedStatus == 4 && provider.isFavorite(device.id!)) ||
+          (filterStatus == effectiveStatus);
+      return matchesQuery && matchesFilter;
     }).toList();
 
     // 排序：愛心放在最上面
@@ -448,6 +450,7 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
       'deviceStatusOnline'.tr,
       'deviceStatusOffline'.tr,
       'deviceStatusUnknown'.tr,
+      'deviceStatusFavorite'.tr,
     ];
     return Row(
       children: [
@@ -519,7 +522,7 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
   }
 
   String? _getStatusText(int index) =>
-      [null, 'online', 'offline', 'unknown'][index];
+      [null, 'online', 'offline', 'unknown', 'favorite'][index];
 }
 
 // --- 獨立的 ACC 計時器 Widget，只有這個小區塊每秒更新 ---

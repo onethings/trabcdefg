@@ -625,6 +625,7 @@ const Map<String, String> zhCN = {
     "maintenanceStart": "开启",
     "maintenancePeriod": "时段",
 "deviceStatusAll":"所有",
+"deviceStatusFavorite":"关注",
 "ServerUrl":"服務器網址",
 "SelectServer":"選擇服務器",
 "CustomServerURL":"自定义服务器網址",
