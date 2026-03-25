@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
 import 'package:trabcdefg/services/websocket_service.dart';
 import 'package:trabcdefg/services/auth_service.dart';
+import 'package:trabcdefg/storage/user_database_helper.dart';
 
 class TraccarProvider with ChangeNotifier {
   // FIX: Removed 'final' to allow the client to be updated
@@ -22,6 +23,9 @@ class TraccarProvider with ChangeNotifier {
   List<api.Event> _events = [];
   Map<int, api.Event> _latestDeviceEvent = {};
   bool _isLoading = false;
+  Set<int> _favoriteDeviceIds = {};
+  Set<int> get favoriteDeviceIds => _favoriteDeviceIds;
+
   final Map<int, List<api.Position>> _prefetchedHistory = {};
   Map<int, List<api.Position>> get prefetchedHistory => _prefetchedHistory;
 
@@ -31,6 +35,25 @@ class TraccarProvider with ChangeNotifier {
     required this.authService,
   }) {
     _listenToWebSocket();
+    _loadFavorites();
+  }
+
+  Future<void> _loadFavorites() async {
+    _favoriteDeviceIds = await UserDatabaseHelper.getFavorites();
+    notifyListeners();
+  }
+
+  bool isFavorite(int deviceId) => _favoriteDeviceIds.contains(deviceId);
+
+  Future<void> toggleFavorite(int deviceId) async {
+    if (_favoriteDeviceIds.contains(deviceId)) {
+      _favoriteDeviceIds.remove(deviceId);
+      await UserDatabaseHelper.removeFavorite(deviceId);
+    } else {
+      _favoriteDeviceIds.add(deviceId);
+      await UserDatabaseHelper.addFavorite(deviceId);
+    }
+    notifyListeners();
   }
   
   // FIX: Method to replace the entire ApiClient instance

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
+import 'package:provider/provider.dart';
+import 'package:trabcdefg/providers/traccar_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:trabcdefg/screens/monthly_mileage_screen.dart';
 import 'package:trabcdefg/screens/command_screen.dart';
@@ -234,11 +236,23 @@ class DeviceDetailPanel extends StatelessWidget {
           Icons.refresh_rounded,
           onRefresh,
         ),
+        const SizedBox(width: 8),
+        Consumer<TraccarProvider>(
+          builder: (context, provider, child) {
+            final isFavorite = provider.isFavorite(device.id!);
+            return _buildCircleIcon(
+              context,
+              isFavorite ? Icons.favorite : Icons.favorite_border,
+              () => provider.toggleFavorite(device.id!),
+              color: isFavorite ? Colors.red : null,
+            );
+          },
+        ),
       ],
     );
   }
 
-  Widget _buildCircleIcon(BuildContext context, IconData icon, VoidCallback onTap) {
+  Widget _buildCircleIcon(BuildContext context, IconData icon, VoidCallback onTap, {Color? color}) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return GestureDetector(
       onTap: onTap,
@@ -248,7 +262,7 @@ class DeviceDetailPanel extends StatelessWidget {
           color: (isDark ? Colors.white : Colors.black).withOpacity(0.08),
           shape: BoxShape.circle,
         ),
-        child: Icon(icon, size: 18, color: Theme.of(context).colorScheme.onSurface),
+        child: Icon(icon, size: 18, color: color ?? Theme.of(context).colorScheme.onSurface),
       ),
     );
   }

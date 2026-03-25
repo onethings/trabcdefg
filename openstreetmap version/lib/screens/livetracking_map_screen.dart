@@ -291,12 +291,29 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          widget.selectedDevice.name ?? 'Unknown',
-                          style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                          ),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                widget.selectedDevice.name ?? 'Unknown',
+                                style: const TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                            IconButton(
+                              icon: Icon(
+                                provider.isFavorite(widget.selectedDevice.id!)
+                                    ? Icons.favorite
+                                    : Icons.favorite_border,
+                                color: provider.isFavorite(widget.selectedDevice.id!)
+                                    ? Colors.red
+                                    : Colors.grey,
+                              ),
+                              onPressed: () => provider.toggleFavorite(widget.selectedDevice.id!),
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 4),
                         // Display either API or Offline street name

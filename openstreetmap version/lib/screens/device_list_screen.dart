@@ -216,6 +216,15 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
           (_selectedStatus == 0 || filterStatus == effectiveStatus);
     }).toList();
 
+    // 排序：愛心放在最上面
+    filteredDevices.sort((a, b) {
+      final aFav = provider.isFavorite(a.id!);
+      final bFav = provider.isFavorite(b.id!);
+      if (aFav && !bFav) return -1;
+      if (!aFav && bFav) return 1;
+      return 0; // 保持原有順序（通常是 API 返回的順序）
+    });
+
     if (filteredDevices.isEmpty) return Center(child: Text('sharedNoData'.tr));
 
     return RefreshIndicator(
@@ -229,15 +238,16 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
 
           // 根據切換狀態決定顯示哪種卡片
           return _isCompactView
-              ? _buildCompactListItem(device, position)
-              : _buildStandardCard(device, position);
+              ? _buildCompactListItem(device, position, provider)
+              : _buildStandardCard(device, position, provider);
         },
       ),
     );
   }
 
   // --- 樣式 A: 標準大卡片 ---
-  Widget _buildStandardCard(api.Device device, api.Position? position) {
+  Widget _buildStandardCard(api.Device device, api.Position? position, TraccarProvider provider) {
+    bool isFavorite = provider.isFavorite(device.id!);
     final Map<String, dynamic> attributes =
         (position?.attributes as Map<String, dynamic>?) ?? {};
     final bool isIgnitionOn = attributes['ignition'] == true;
@@ -267,19 +277,35 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
             children: [
               Row(
                 children: [
-                  Icon(Icons.directions_car, color: statusColor),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          device.name ?? '...',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          ),
-                        ),
+                   Icon(Icons.directions_car, color: statusColor),
+                   const SizedBox(width: 12),
+                   Expanded(
+                     child: Column(
+                       crossAxisAlignment: CrossAxisAlignment.start,
+                       children: [
+                         Row(
+                           children: [
+                             Expanded(
+                               child: Text(
+                                 device.name ?? '...',
+                                 style: const TextStyle(
+                                   fontWeight: FontWeight.bold,
+                                   fontSize: 16,
+                                 ),
+                               ),
+                             ),
+                             IconButton(
+                               icon: Icon(
+                                 isFavorite ? Icons.favorite : Icons.favorite_border,
+                                 color: isFavorite ? Colors.red : Colors.grey,
+                                 size: 20,
+                               ),
+                               padding: EdgeInsets.zero,
+                               constraints: const BoxConstraints(),
+                               onPressed: () => provider.toggleFavorite(device.id!),
+                             ),
+                           ],
+                         ),
                         Text(
                           lastUpdate != null
                               ? timeago.format(
@@ -317,7 +343,8 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
   }
 
   // --- 樣式 B: 緊湊列表 (一頁 9 台) ---
-  Widget _buildCompactListItem(api.Device device, api.Position? position) {
+  Widget _buildCompactListItem(api.Device device, api.Position? position, TraccarProvider provider) {
+    bool isFavorite = provider.isFavorite(device.id!);
     final Map<String, dynamic> attributes =
         (position?.attributes as Map<String, dynamic>?) ?? {};
     final bool isIgnitionOn = attributes['ignition'] == true;
@@ -352,6 +379,17 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
                   left: Radius.circular(8),
                 ),
               ),
+            ),
+            const SizedBox(width: 8),
+            IconButton(
+              icon: Icon(
+                isFavorite ? Icons.favorite : Icons.favorite_border,
+                color: isFavorite ? Colors.red : Colors.grey,
+                size: 18,
+              ),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+              onPressed: () => provider.toggleFavorite(device.id!),
             ),
             const SizedBox(width: 10),
             Expanded(

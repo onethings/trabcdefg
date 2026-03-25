@@ -135,6 +135,20 @@ class DeviceDetailsScreen extends StatelessWidget {
           return Scaffold(
             appBar: AppBar(
               title: Text(deviceName! + ' - ' + 'deviceSecondaryInfo'.tr),
+              actions: [
+                Consumer<TraccarProvider>(
+                  builder: (context, provider, child) {
+                    final isFavorite = provider.isFavorite(deviceId);
+                    return IconButton(
+                      icon: Icon(
+                        isFavorite ? Icons.favorite : Icons.favorite_border,
+                        color: isFavorite ? Colors.red : null,
+                      ),
+                      onPressed: () => provider.toggleFavorite(deviceId),
+                    );
+                  },
+                ),
+              ],
             ),
             body: FutureBuilder<DeviceData>(
               future: _fetchDeviceAndPositions(context, deviceId),
