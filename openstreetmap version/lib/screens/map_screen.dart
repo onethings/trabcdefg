@@ -7,8 +7,8 @@ import 'package:latlong2/latlong.dart'
 // ALIAS: Required for Satellite view, Marker, BitmapDescriptor - REMOVED: google_maps_flutter is gone
 import 'package:provider/provider.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
+import 'package:trabcdefg/providers/settings_provider.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
-// import 'package:trabcdefg/src/generated_api/model/device_extensions.dart';
 import 'dart:async';
 import 'package:flutter/services.dart';
 import 'dart:ui' as ui;
@@ -216,7 +216,7 @@ class _MapScreenState extends State<MapScreen> {
           ),
           iconImage: customIconId,
           iconRotate: pos.course?.toDouble() ?? 0.0,
-          iconSize: 3, // 調整：從 1.0 增加到 1.5 以提升辨識度
+          iconSize: 3 * context.read<SettingsProvider>().markerSizeScale, // 調整：從 1.0 增加到 1.5 以提升辨識度 並且套用設定
           iconAnchor: 'center',
         ),
         {'deviceId': device.id.toString()},

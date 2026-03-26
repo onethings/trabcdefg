@@ -415,7 +415,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen>
         SymbolOptions(
           geometry: _stopPoints[i],
           iconImage: "pg_${i + 1}",
-          iconSize: 1.0,
+          iconSize: 1.2,
           iconAnchor: "center",
         ),
       );
@@ -1161,7 +1161,7 @@ Obx(() => Text(
                             return Positioned(
                               bottom: 4, // 調整文字距離底部的距離
                               child: Text(
-                                '${distanceInKm.toStringAsFixed(1)}${'sharedKm'.tr}', // 顯示到小數點第一位
+                                '${distanceInKm.toStringAsFixed(1)} km', // 顯示到小數點第一位
                                 style: TextStyle(
                                   fontSize: 9,
                                   fontWeight: FontWeight.bold,

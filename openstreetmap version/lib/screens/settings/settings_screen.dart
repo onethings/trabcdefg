@@ -18,6 +18,8 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:get/get.dart';
 import 'package:trabcdefg/services/localization_service.dart';
 import 'package:trabcdefg/providers/theme_provider.dart';
+import 'package:trabcdefg/providers/settings_provider.dart';
+
 
 
 class SettingsScreen extends StatefulWidget {
@@ -253,6 +255,130 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  void _showFontSizeDialog() {
+    final settingsProvider = context.read<SettingsProvider>();
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text('settingsFontSize'.tr),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                title: Text('settingsNormal'.tr),
+                leading: Radio<double>(
+                  value: 1.0,
+                  groupValue: settingsProvider.fontSizeScale,
+                  onChanged: (double? value) {
+                    if (value != null) settingsProvider.setFontSizeScale(value);
+                    Navigator.of(context).pop();
+                  },
+                ),
+                onTap: () {
+                  settingsProvider.setFontSizeScale(1.0);
+                  Navigator.of(context).pop();
+                },
+              ),
+              ListTile(
+                title: Text('settingsLarge'.tr),
+                leading: Radio<double>(
+                  value: 1.2,
+                  groupValue: settingsProvider.fontSizeScale,
+                  onChanged: (double? value) {
+                    if (value != null) settingsProvider.setFontSizeScale(value);
+                    Navigator.of(context).pop();
+                  },
+                ),
+                onTap: () {
+                  settingsProvider.setFontSizeScale(1.2);
+                  Navigator.of(context).pop();
+                },
+              ),
+              ListTile(
+                title: Text('settingsExtraLarge'.tr),
+                leading: Radio<double>(
+                  value: 1.4,
+                  groupValue: settingsProvider.fontSizeScale,
+                  onChanged: (double? value) {
+                    if (value != null) settingsProvider.setFontSizeScale(value);
+                    Navigator.of(context).pop();
+                  },
+                ),
+                onTap: () {
+                  settingsProvider.setFontSizeScale(1.4);
+                  Navigator.of(context).pop();
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _showMarkerSizeDialog() {
+    final settingsProvider = context.read<SettingsProvider>();
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text('settingsMarkerSize'.tr),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                title: Text('settingsNormal'.tr),
+                leading: Radio<double>(
+                  value: 1.0,
+                  groupValue: settingsProvider.markerSizeScale,
+                  onChanged: (double? value) {
+                    if (value != null) settingsProvider.setMarkerSizeScale(value);
+                    Navigator.of(context).pop();
+                  },
+                ),
+                onTap: () {
+                  settingsProvider.setMarkerSizeScale(1.0);
+                  Navigator.of(context).pop();
+                },
+              ),
+              ListTile(
+                title: Text('settingsLarge'.tr),
+                leading: Radio<double>(
+                  value: 1.5,
+                  groupValue: settingsProvider.markerSizeScale,
+                  onChanged: (double? value) {
+                    if (value != null) settingsProvider.setMarkerSizeScale(value);
+                    Navigator.of(context).pop();
+                  },
+                ),
+                onTap: () {
+                  settingsProvider.setMarkerSizeScale(1.5);
+                  Navigator.of(context).pop();
+                },
+              ),
+              ListTile(
+                title: Text('settingsExtraLarge'.tr),
+                leading: Radio<double>(
+                  value: 2.0,
+                  groupValue: settingsProvider.markerSizeScale,
+                  onChanged: (double? value) {
+                    if (value != null) settingsProvider.setMarkerSizeScale(value);
+                    Navigator.of(context).pop();
+                  },
+                ),
+                onTap: () {
+                  settingsProvider.setMarkerSizeScale(2.0);
+                  Navigator.of(context).pop();
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final traccarProvider = context.read<TraccarProvider>();
@@ -278,6 +404,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     leading: const Icon(Icons.brightness_6),
                     title: Text('settingsTheme'.tr),
                     onTap: _showThemeSelectionDialog,
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.text_fields),
+                    title: Text('settingsFontSize'.tr),
+                    onTap: _showFontSizeDialog,
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.location_on),
+                    title: Text('settingsMarkerSize'.tr),
+                    onTap: _showMarkerSizeDialog,
                   ),
                   ListTile(
                     leading: const Icon(Icons.notifications),

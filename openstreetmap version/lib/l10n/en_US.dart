@@ -661,5 +661,10 @@ const Map<String, String> en_US = {
   "geofenceEnter": "Entered Geofence",
   "geofenceExit": "Exited Geofence",
   "alarm": "Alarm",
-  "unknownEvent": "Unknown Event"
+  "unknownEvent": "Unknown Event",
+  "settingsFontSize": "Font Size",
+  "settingsMarkerSize": "Marker Size",
+  "settingsNormal": "Normal",
+  "settingsLarge": "Large",
+  "settingsExtraLarge": "Extra Large",
 };

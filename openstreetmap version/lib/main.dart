@@ -28,6 +28,8 @@ import 'package:trabcdefg/models/route_positions_hive.dart';
 import 'package:trabcdefg/providers/map_style_provider.dart';
 import 'package:trabcdefg/providers/theme_provider.dart';
 import 'package:trabcdefg/theme/app_theme.dart';
+import 'package:trabcdefg/providers/settings_provider.dart';
+
 
 
 
@@ -108,16 +110,26 @@ class TraccarApp extends StatelessWidget {
         ChangeNotifierProvider<ThemeProvider>(
           create: (_) => ThemeProvider(),
         ),
+        ChangeNotifierProvider<SettingsProvider>(
+          create: (_) => SettingsProvider(),
+        ),
       ],
       // Changed MaterialApp to GetMaterialApp to correctly handle GetX localization.
-      child: Consumer<ThemeProvider>(
-        builder: (context, themeProvider, child) {
+      child: Consumer2<ThemeProvider, SettingsProvider>(
+        builder: (context, themeProvider, settingsProvider, child) {
           return GetMaterialApp(
             debugShowCheckedModeBanner: false,
             title: 'Trabcdefg',
             theme: themeProvider.getTheme(Brightness.light),
             darkTheme: themeProvider.getTheme(Brightness.dark),
             themeMode: themeProvider.themeMode,
+            builder: (context, child) {
+              final data = MediaQuery.of(context);
+              return MediaQuery(
+                data: data.copyWith(textScaler: TextScaler.linear(settingsProvider.fontSizeScale)),
+                child: child!,
+              );
+            },
             // Configure localization for the app using GetX properties.
             translations: LocalizationService(),
         locale: initialLanguageCode != null

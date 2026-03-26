@@ -5,6 +5,7 @@ import 'package:maplibre_gl/maplibre_gl.dart';
 import 'package:provider/provider.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
 import 'package:trabcdefg/providers/map_style_provider.dart';
+import 'package:trabcdefg/providers/settings_provider.dart';
 import 'package:trabcdefg/src/generated_api/api.dart';
 import 'package:flutter/services.dart';
 import 'dart:ui' as ui;
@@ -112,7 +113,7 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
             ? iconKey
             : 'marker_default_unknown',
         iconRotate: _currentDevicePosition!.course?.toDouble() ?? 0.0,
-        iconSize: 3.8, // 調整：從 3.2 增加到 3.8
+        iconSize: 3.8 * context.read<SettingsProvider>().markerSizeScale, // 調整：從 3.2 增加到 3.8 並且套用設定
       ),
     );
 

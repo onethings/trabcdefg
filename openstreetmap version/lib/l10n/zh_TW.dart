@@ -659,5 +659,10 @@ const Map<String, String> zhTW = {
     "geofenceEnter": "進入電子圍欄",
     "geofenceExit": "離開電子圍欄",
     "alarm": "警報",
-    "unknownEvent": "未知事件"
+    "unknownEvent": "未知事件",
+    "settingsFontSize": "字型大小",
+    "settingsMarkerSize": "地圖圖標大小",
+    "settingsNormal": "正常",
+    "settingsLarge": "大",
+    "settingsExtraLarge": "特大",
 };
