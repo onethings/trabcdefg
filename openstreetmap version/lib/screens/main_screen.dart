@@ -35,16 +35,13 @@ class _MainScreenState extends State<MainScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: IndexedStack(
-        index: _currentIndex,
-        children: _screens,
-      ),
+      body: IndexedStack(index: _currentIndex, children: _screens),
       bottomNavigationBar: ClipRRect(
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
           child: BottomNavigationBar(
-            backgroundColor: Theme.of(context).brightness == Brightness.dark 
-                ? Colors.black.withOpacity(0.5) 
+            backgroundColor: Theme.of(context).brightness == Brightness.dark
+                ? Colors.black.withOpacity(0.5)
                 : Colors.white.withOpacity(0.5),
             elevation: 0,
             type: BottomNavigationBarType.fixed,
@@ -53,11 +50,26 @@ class _MainScreenState extends State<MainScreen> {
             selectedItemColor: Theme.of(context).primaryColor,
             unselectedItemColor: Theme.of(context).unselectedWidgetColor,
             items: [
-              BottomNavigationBarItem(icon: const Icon(Icons.dashboard_rounded), label: 'dashboardTitle'.tr),
-              BottomNavigationBarItem(icon: const Icon(Icons.list_rounded), label: 'deviceTitle'.tr),
-              BottomNavigationBarItem(icon: const Icon(Icons.map_rounded), label: 'mapTitle'.tr),
-              BottomNavigationBarItem(icon: const Icon(Icons.description_rounded), label: 'reportTitle'.tr),
-              BottomNavigationBarItem(icon: const Icon(Icons.settings_rounded), label: 'settingsTitle'.tr),
+              BottomNavigationBarItem(
+                icon: const Icon(Icons.dashboard_rounded),
+                label: 'dashboardTitle'.tr,
+              ),
+              BottomNavigationBarItem(
+                icon: const Icon(Icons.list_rounded),
+                label: 'deviceTitle'.tr,
+              ),
+              BottomNavigationBarItem(
+                icon: const Icon(Icons.map_rounded),
+                label: 'mapTitle'.tr,
+              ),
+              BottomNavigationBarItem(
+                icon: const Icon(Icons.description_rounded),
+                label: 'reportTitle'.tr,
+              ),
+              BottomNavigationBarItem(
+                icon: const Icon(Icons.settings_rounded),
+                label: 'settingsTitle'.tr,
+              ),
             ],
           ),
         ),

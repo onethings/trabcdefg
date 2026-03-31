@@ -18,7 +18,7 @@ class MapStyleProvider with ChangeNotifier {
 
   // Style Strings/Assets
   static const String _streetStyle = "assets/styles/liberty.json";
-  static const String _brightStyle = "assets/styles/aws-standard.json";
+  static const String _brightStyle = "assets/styles/versatiles-style.json";
   static const String _darkStyle = "assets/styles/dark.json";
   static const String _terrainStyle = "assets/styles/fiord.json";
   static const String _hybridStyle = "assets/styles/positron.json";
@@ -33,6 +33,10 @@ class MapStyleProvider with ChangeNotifier {
     final int? savedIndex = prefs.getInt(_prefKey);
     if (savedIndex != null && savedIndex < AppMapType.values.length) {
       _mapType = AppMapType.values[savedIndex];
+      // Force only bright or satellite as requested by the user
+      if (_mapType != AppMapType.bright && _mapType != AppMapType.satellite) {
+        _mapType = AppMapType.bright;
+      }
       notifyListeners();
     }
   }

@@ -292,7 +292,7 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
                                  device.name ?? '...',
                                  style: const TextStyle(
                                    fontWeight: FontWeight.bold,
-                                   fontSize: 16,
+                                   fontSize: 14,//16
                                  ),
                                ),
                              ),
@@ -404,7 +404,7 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
                     device.name ?? '...',
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
-                      fontSize: 13,
+                      fontSize: 11, //13
                     ),
                     overflow: TextOverflow.ellipsis,
                   ),

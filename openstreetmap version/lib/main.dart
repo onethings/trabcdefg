@@ -43,6 +43,9 @@ void main() async {
 
   Hive.registerAdapter(RoutePositionsHiveAdapter());
   
+  // Open the UI settings box for persisting local UI states (e.g. Map Controls toggle)
+  await Hive.openBox('ui_settings');
+  
   // Load the saved Traccar server URL and the language code from shared preferences.
   final prefs = await SharedPreferences.getInstance();
   final savedUrl = prefs.getString('traccarServerUrl');

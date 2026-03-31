@@ -50,17 +50,20 @@ class MapScreen extends StatefulWidget {
   State<MapScreen> createState() => _MapScreenState();
 }
 
-class _MapScreenState extends State<MapScreen> {
+class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
+  Key _mapKey = UniqueKey();
   bool _isSatelliteMode = false;
 
   static const String _satelliteStyle = "assets/styles/aws-hybrid.json";
 
-  static const String _brightStyle = "assets/styles/aws-standard.json";
+  static const String _brightStyle = "assets/styles/versatiles-style.json";
 
   // 1. Positron (簡潔淺色模式) - 非常適合用來凸顯彩色車輛圖標
 
   maplibre.MapLibreMapController? _mapController;
+  maplibre.CameraPosition? _lastCameraPosition;
   bool _isStyleLoaded = false;
+  bool _hasInitialZoomed = false;
   final Set<String> _loadedIcons = {};
   // REMOVED: final Map<String, gmap.BitmapDescriptor> _markerIcons = {};
   bool _markersLoaded = false;
@@ -71,7 +74,9 @@ class _MapScreenState extends State<MapScreen> {
   final TileCacheService _cacheService = TileCacheService();
   late MarkerIconService _iconService;
   final http.Client _httpClient = http.Client();
+  bool _isControlsExpanded = true;
   bool _showGeofences = true;
+  final String _controlsExpandedKey = 'isMapControlsExpanded';
   double _mapCenterOffset = 0.001;
   // final OfflineGeocoder _geocoder = OfflineGeocoder();
   String _currentAddress = "";
@@ -102,7 +107,10 @@ class _MapScreenState extends State<MapScreen> {
   @override
   void initState() {
     super.initState();
-    // Preference loading moved to provider
+    WidgetsBinding.instance.addObserver(this);
+
+    // Initial preference loading from Hive
+    _loadUIPreferences();
     // Initialize cache service and then the tile provider
     _iconService = MarkerIconService(loadedIcons: _loadedIcons);
     _cacheService.init().then((_) {
@@ -128,10 +136,50 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
+  void _loadUIPreferences() {
+    final box = Hive.box('ui_settings');
+    setState(() {
+      _isControlsExpanded = box.get(_controlsExpandedKey, defaultValue: false);
+    });
+  }
+
+  void _toggleMapControls() {
+    setState(() {
+      _isControlsExpanded = !_isControlsExpanded;
+    });
+    Hive.box('ui_settings').put(_controlsExpandedKey, _isControlsExpanded);
+  }
+
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _httpClient.close();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      if (mounted) {
+        // Capture current camera position before rebuilding to preserve view
+        if (_mapController != null) {
+          _lastCameraPosition = _mapController!.cameraPosition;
+        }
+
+        setState(() {
+          _mapKey = UniqueKey(); // Force MapLibre GL to re-create to prevent blank screen
+        });
+        
+        // Refresh data to ensure WebSocket connection and session are alive
+        final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
+        traccarProvider.fetchInitialData().catchError((error) {
+           debugPrint("Session validation failed on resume: $error");
+           if (mounted) {
+             Get.offAllNamed('/login'); 
+           }
+        });
+      }
+    }
   }
 
   void _updateMapStyle(AppMapType type) async {
@@ -155,8 +203,17 @@ class _MapScreenState extends State<MapScreen> {
       _isStyleLoaded = true;
     });
     _loadedIcons.clear();
-    final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
+    final traccarProvider = Provider.of<TraccarProvider>(
+      context,
+      listen: false,
+    );
     await _updateAllMarkers(traccarProvider);
+    
+    // Auto zoom to fit all markers if no specific device was requested on load
+    if (widget.selectedDevice == null && !_hasInitialZoomed) {
+      _zoomToFitAll(traccarProvider);
+      _hasInitialZoomed = true;
+    }
   }
 
   void _zoomToFitAll(TraccarProvider provider) {
@@ -174,19 +231,30 @@ class _MapScreenState extends State<MapScreen> {
       if (minLng == null || lng < minLng) minLng = lng;
       if (maxLng == null || lng > maxLng) maxLng = lng;
     }
+    
     if (minLat != null && maxLat != null && minLng != null && maxLng != null) {
-      _mapController!.animateCamera(
-        maplibre.CameraUpdate.newLatLngBounds(
-          maplibre.LatLngBounds(
-            southwest: maplibre.LatLng(minLat, minLng),
-            northeast: maplibre.LatLng(maxLat, maxLng),
+      // Handle edge case where there is only one position or bounds are too small
+      if ((maxLat - minLat).abs() < 0.0001 && (maxLng - minLng).abs() < 0.0001) {
+        _mapController!.animateCamera(
+          maplibre.CameraUpdate.newLatLngZoom(
+            maplibre.LatLng(minLat, minLng),
+            14.0, // Default zoom for single marker
           ),
-          left: 50,
-          right: 50,
-          top: 100,
-          bottom: 100,
-        ),
-      );
+        );
+      } else {
+        _mapController!.animateCamera(
+          maplibre.CameraUpdate.newLatLngBounds(
+            maplibre.LatLngBounds(
+              southwest: maplibre.LatLng(minLat, minLng),
+              northeast: maplibre.LatLng(maxLat, maxLng),
+            ),
+            left: 50,
+            right: 50,
+            top: 100,
+            bottom: 100,
+          ),
+        );
+      }
     }
   }
 
@@ -216,7 +284,11 @@ class _MapScreenState extends State<MapScreen> {
           ),
           iconImage: customIconId,
           iconRotate: pos.course?.toDouble() ?? 0.0,
-          iconSize: 3 * context.read<SettingsProvider>().markerSizeScale, // 調整：從 1.0 增加到 1.5 以提升辨識度 並且套用設定
+          iconSize:
+              3 *
+              context
+                  .read<SettingsProvider>()
+                  .markerSizeScale, // 調整：從 1.0 增加到 1.5 以提升辨識度 並且套用設定
           iconAnchor: 'center',
         ),
         {'deviceId': device.id.toString()},
@@ -788,27 +860,22 @@ class _MapScreenState extends State<MapScreen> {
             extendBodyBehindAppBar: true,
             key: _scaffoldKey,
             appBar: AppBar(
+              // 1. 基本背景設為透明
               backgroundColor: Colors.transparent,
               elevation: 0,
               surfaceTintColor: Colors.transparent,
-              flexibleSpace: ClipRRect(
-                child: BackdropFilter(
-                  filter: ui.ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-                  child: Container(
-                    color:
-                        (Theme.of(context).brightness == Brightness.dark
-                                ? Colors.black
-                                : Colors.white)
-                            .withOpacity(0.2),
-                  ),
-                ),
-              ),
-              title: Text(
-                'mapTitle'.tr,
-                style: const TextStyle(
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -0.5,
-                ),
+
+              // 2. 移除 title 屬性
+              title: null,
+
+              // 3. 移除之前的毛玻璃與顏色填充，改為 null 或空的實體
+              flexibleSpace: null,
+
+              // 4. 確保圖標顏色在您的背景上清晰可見
+              iconTheme: IconThemeData(
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? Colors.white
+                    : Colors.black,
               ),
             ),
 
@@ -816,8 +883,8 @@ class _MapScreenState extends State<MapScreen> {
             body: Stack(
               children: [
                 maplibre.MapLibreMap(
-                  key: ValueKey(Provider.of<MapStyleProvider>(context).mapType),
-                  initialCameraPosition: maplibre.CameraPosition(
+                  key: _mapKey,
+                  initialCameraPosition: _lastCameraPosition ?? maplibre.CameraPosition(
                     target: maplibre.LatLng(
                       initialFlutterLatLng.latitude,
                       initialFlutterLatLng.longitude,
@@ -831,20 +898,8 @@ class _MapScreenState extends State<MapScreen> {
                   onMapCreated: (controller) {
                     _mapController = controller;
 
-                    // Automatic Map Style Switching based on Theme
-                    final isDarkMode =
-                        Theme.of(context).brightness == Brightness.dark;
-                    final styleProvider = Provider.of<MapStyleProvider>(
-                      context,
-                      listen: false,
-                    );
-                    if (isDarkMode &&
-                        styleProvider.mapType == AppMapType.bright) {
-                      styleProvider.setMapType(AppMapType.dark);
-                    } else if (!isDarkMode &&
-                        styleProvider.mapType == AppMapType.dark) {
-                      styleProvider.setMapType(AppMapType.bright);
-                    }
+                    // Map style is strictly controlled by explicit user toggle now
+                    // (Bright or Satellite only)
 
                     _mapController!.onSymbolTapped.add((symbol) {
                       final deviceIdString = symbol.data?['deviceId'];
@@ -864,14 +919,34 @@ class _MapScreenState extends State<MapScreen> {
                       }
                     });
                   },
+                  onMapClick: (point, latLng) {
+                    // Hide the detail panel when clicking on the map (empty space)
+                    if (_bottomSheetController != null) {
+                      _bottomSheetController!.close();
+                      _bottomSheetController = null;
+                    }
+                  },
                 ),
 
                 // Map Controls (Right Side)
                 Positioned(
-                  top: MediaQuery.of(context).padding.top + 70,
+                  top: MediaQuery.of(context).padding.top + 70, // Avoid overlap with AppBar hit area
                   right: 16,
                   child: Column(
                     children: [
+                      // Toggle Button (Hive Persisted)
+                      _buildMapControl(
+                        _isControlsExpanded
+                            ? Icons.keyboard_arrow_up_rounded
+                            : Icons.keyboard_arrow_down_rounded,
+                        _toggleMapControls,
+                        "btn_expand_toggle",
+                        isActive: _isControlsExpanded,
+                        isToggle: true,
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Primary Controls
                       _buildMapControl(
                         Icons.explore_rounded,
                         () => _mapController?.animateCamera(
@@ -881,7 +956,6 @@ class _MapScreenState extends State<MapScreen> {
                       ),
                       const SizedBox(height: 12),
                       _buildMapControl(Icons.my_location_rounded, () {
-                        // Center on specific location or user
                         if (_currentDevice != null) {
                           final pos = traccarProvider.getPosition(
                             _currentDevice!.id!,
@@ -895,42 +969,55 @@ class _MapScreenState extends State<MapScreen> {
                       }, "btn_myloc"),
                       const SizedBox(height: 12),
                       _buildMapControl(
-                        _showGeofences
-                            ? Icons.layers_rounded
-                            : Icons.layers_outlined,
-                        () => setState(() => _showGeofences = !_showGeofences),
-                        "btn_geofence",
-                        isActive: _showGeofences,
-                      ),
-                      const SizedBox(height: 12),
-                      _buildMapControl(
-                        Provider.of<MapStyleProvider>(context).isSatelliteMode
-                            ? Icons.map
-                            : Icons.satellite_alt,
-                        () => Provider.of<MapStyleProvider>(
-                          context,
-                          listen: false,
-                        ).toggleMapType(),
-                        "btn_style",
-                      ),
-                      const SizedBox(height: 12),
-                      _buildMapControl(
-                        Icons.arrow_upward_rounded,
-                        () => _navigateToDevice(-1, traccarProvider.devices, traccarProvider.positions),
-                        "btn_prev",
-                      ),
-                      const SizedBox(height: 12),
-                      _buildMapControl(
-                        Icons.arrow_downward_rounded,
-                        () => _navigateToDevice(1, traccarProvider.devices, traccarProvider.positions),
-                        "btn_next",
-                      ),
-                      const SizedBox(height: 12),
-                      _buildMapControl(
                         Icons.zoom_out_map_rounded,
                         () => _zoomToFitAll(traccarProvider),
                         "btn_zoom",
                       ),
+
+                      // Secondary Controls (Collapsible)
+                      if (_isControlsExpanded) ...[
+                        const SizedBox(height: 12),
+                        _buildMapControl(
+                          _showGeofences
+                              ? Icons.layers_rounded
+                              : Icons.layers_outlined,
+                          () =>
+                              setState(() => _showGeofences = !_showGeofences),
+                          "btn_geofence",
+                          isActive: _showGeofences,
+                        ),
+                        const SizedBox(height: 12),
+                        _buildMapControl(
+                          Provider.of<MapStyleProvider>(context).isSatelliteMode
+                              ? Icons.map
+                              : Icons.satellite_alt,
+                          () => Provider.of<MapStyleProvider>(
+                            context,
+                            listen: false,
+                          ).toggleMapType(),
+                          "btn_style",
+                        ),
+                        const SizedBox(height: 12),
+                        _buildMapControl(
+                          Icons.arrow_upward_rounded,
+                          () => _navigateToDevice(
+                            -1,
+                            traccarProvider.devices,
+                            traccarProvider.positions,
+                          ),
+                          "btn_prev",
+                        ),
+                        const SizedBox(height: 12),
+                        _buildMapControl(
+                          Icons.arrow_downward_rounded,
+                          () => _navigateToDevice(
+                            1,
+                            traccarProvider.devices,
+                            traccarProvider.positions,
+                          ),
+                          "btn_next",
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -957,21 +1044,54 @@ class _MapScreenState extends State<MapScreen> {
     VoidCallback onTap,
     String heroTag, {
     bool isActive = false,
+    bool isToggle = false,
   }) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    return FloatingActionButton(
-      heroTag: heroTag,
-      onPressed: onTap,
-      mini: true,
-      backgroundColor: isActive
-          ? Theme.of(context).primaryColor
-          : (isDark ? Colors.grey[850] : Colors.white),
-      child: Icon(
-        icon,
-        color: isActive
-            ? Colors.white
-            : (isDark ? Colors.white70 : Colors.black87),
-        size: 20,
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: BackdropFilter(
+        filter: ui.ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            color: isActive
+                ? colorScheme.primary.withOpacity(0.85)
+                : (isDark
+                    ? Colors.black.withOpacity(0.4)
+                    : Colors.white.withOpacity(0.7)),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isDark
+                  ? Colors.white.withOpacity(0.1)
+                  : Colors.black.withOpacity(0.05),
+              width: 0.5,
+            ),
+          ),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: onTap,
+              borderRadius: BorderRadius.circular(12),
+              splashColor: colorScheme.primary.withOpacity(0.1),
+              highlightColor: colorScheme.primary.withOpacity(0.05),
+              child: Center(
+                child: Hero(
+                  tag: heroTag,
+                  child: Icon(
+                    icon,
+                    color: isActive
+                        ? colorScheme.onPrimary
+                        : (isDark ? Colors.white70 : Colors.black87),
+                    size: isToggle ? 24 : 20,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -981,10 +1101,7 @@ class _DataUpdateListener extends StatefulWidget {
   final dynamic data;
   final VoidCallback onUpdate;
 
-  const _DataUpdateListener({
-    required this.data,
-    required this.onUpdate,
-  });
+  const _DataUpdateListener({required this.data, required this.onUpdate});
 
   @override
   _DataUpdateListenerState createState() => _DataUpdateListenerState();

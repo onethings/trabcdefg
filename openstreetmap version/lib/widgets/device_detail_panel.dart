@@ -4,13 +4,14 @@ import 'package:trabcdefg/src/generated_api/api.dart' as api;
 import 'package:provider/provider.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:trabcdefg/screens/monthly_mileage_screen.dart';
 import 'package:trabcdefg/screens/command_screen.dart';
 import 'package:trabcdefg/screens/settings/add_device_screen.dart';
 import 'package:trabcdefg/screens/device_details_screen.dart';
 import 'dart:ui';
 
-class DeviceDetailPanel extends StatelessWidget {
+class DeviceDetailPanel extends StatefulWidget {
   final api.Device device;
   final api.Position position;
   final String address;
@@ -31,7 +32,54 @@ class DeviceDetailPanel extends StatelessWidget {
   });
 
   @override
+  State<DeviceDetailPanel> createState() => _DeviceDetailPanelState();
+}
+
+class _DeviceDetailPanelState extends State<DeviceDetailPanel> {
+  bool _isExpanded = false;
+  bool _isLoadingPreference = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPreference();
+  }
+
+  Future<void> _loadPreference() async {
+    try {
+      final box = await Hive.openBox('user_preferences');
+      if (mounted) {
+        setState(() {
+          _isExpanded = box.get('detail_panel_expanded', defaultValue: false);
+          _isLoadingPreference = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Failed to load preference: $e');
+      if (mounted) {
+        setState(() => _isLoadingPreference = false);
+      }
+    }
+  }
+
+  Future<void> _toggleExpanded() async {
+    setState(() {
+      _isExpanded = !_isExpanded;
+    });
+    try {
+      final box = await Hive.openBox('user_preferences');
+      await box.put('detail_panel_expanded', _isExpanded);
+    } catch (e) {
+      debugPrint('Failed to save preference: $e');
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    if (_isLoadingPreference) {
+      return const SizedBox.shrink(); // Prevent visual jumping before preference loads
+    }
+    
     final isDark = Theme.of(context).brightness == Brightness.dark;
     
     return Padding(
@@ -74,7 +122,7 @@ class DeviceDetailPanel extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              device.name ?? 'Unknown Device'.tr,
+                              widget.device.name ?? 'Unknown Device'.tr,
                               style: TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.w600,
@@ -84,7 +132,7 @@ class DeviceDetailPanel extends StatelessWidget {
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              formattedDate,
+                              widget.formattedDate,
                               style: TextStyle(
                                 fontSize: 11,
                                 color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -115,7 +163,7 @@ class DeviceDetailPanel extends StatelessWidget {
                         _buildStatusItem(
                           context,
                           Icons.speed_rounded,
-                          '${position.speed?.toStringAsFixed(0) ?? 0} ${'sharedKmh'.tr}',
+                          '${widget.position.speed?.toStringAsFixed(0) ?? 0} ${'sharedKmh'.tr}',
                           'positionSpeed'.tr,
                         ),
                         _buildStatusDivider(context),
@@ -142,7 +190,7 @@ class DeviceDetailPanel extends StatelessWidget {
                       const SizedBox(width: 6),
                       Expanded(
                         child: Text(
-                          address,
+                          widget.address,
                           style: TextStyle(
                             fontSize: 12,
                             color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -154,10 +202,12 @@ class DeviceDetailPanel extends StatelessWidget {
                   ),
                 ),
                 
-                const SizedBox(height: 16),
                 
-                // Action Buttons
-                _buildAppleActionButtons(context),
+                // Action Buttons (Conditionally Visible)
+                if (_isExpanded) ...[
+                  const SizedBox(height: 16),
+                  _buildAppleActionButtons(context),
+                ],
               ],
             ),
           ),
@@ -202,7 +252,7 @@ class DeviceDetailPanel extends StatelessWidget {
   }
 
   Widget _buildBatteryItem(BuildContext context) {
-    final battery = _getAttribute(position, 'batteryLevel') as num?;
+    final battery = _getAttribute(widget.position, 'batteryLevel') as num?;
     final val = battery?.toDouble() ?? 0.0;
     return _buildStatusItem(
       context,
@@ -213,7 +263,7 @@ class DeviceDetailPanel extends StatelessWidget {
   }
 
   Widget _buildIgnitionItem(BuildContext context) {
-    final isOn = _getAttribute(position, 'ignition') == true;
+    final isOn = _getAttribute(widget.position, 'ignition') == true;
     return _buildStatusItem(
       context,
       Icons.power_settings_new_rounded,
@@ -227,26 +277,32 @@ class DeviceDetailPanel extends StatelessWidget {
       children: [
         _buildCircleIcon(
           context,
-          Icons.info_outline_rounded,
-          () => _navigateToDetails(context),
+          Icons.route_rounded,
+          () => _navigateToMileage(context),
         ),
         const SizedBox(width: 8),
         _buildCircleIcon(
           context,
           Icons.refresh_rounded,
-          onRefresh,
+          widget.onRefresh,
         ),
         const SizedBox(width: 8),
         Consumer<TraccarProvider>(
           builder: (context, provider, child) {
-            final isFavorite = provider.isFavorite(device.id!);
+            final isFavorite = provider.isFavorite(widget.device.id!);
             return _buildCircleIcon(
               context,
               isFavorite ? Icons.favorite : Icons.favorite_border,
-              () => provider.toggleFavorite(device.id!),
+              () => provider.toggleFavorite(widget.device.id!),
               color: isFavorite ? Colors.red : null,
             );
           },
+        ),
+        const SizedBox(width: 8),
+        _buildCircleIcon(
+          context,
+          _isExpanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
+          _toggleExpanded,
         ),
       ],
     );
@@ -269,8 +325,8 @@ class DeviceDetailPanel extends StatelessWidget {
 
   void _navigateToDetails(BuildContext context) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt('selectedDeviceId', device.id!);
-    await prefs.setString('selectedDeviceName', device.name!);
+    await prefs.setInt('selectedDeviceId', widget.device.id!);
+    await prefs.setString('selectedDeviceName', widget.device.name!);
     if (context.mounted) {
       Navigator.push(
         context,
@@ -290,11 +346,11 @@ class DeviceDetailPanel extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
-          _buildActionItem(context, Icons.more_horiz_rounded, onMoreOptionsPressed),
-          _buildActionItem(context, Icons.route_rounded, () => _navigateToMileage(context)),
+          _buildActionItem(context, Icons.info_outline_rounded, () => _navigateToDetails(context)),
           _buildActionItem(context, Icons.send_rounded, () => _navigateToCommand(context)),
+          _buildActionItem(context, Icons.more_horiz_rounded, widget.onMoreOptionsPressed),
           _buildActionItem(context, Icons.edit_outlined, () => _navigateToEdit(context)),
-          _buildActionItem(context, Icons.delete_outline_rounded, onDeletePressed, color: Colors.red),
+          _buildActionItem(context, Icons.delete_outline_rounded, widget.onDeletePressed, color: Colors.red),
         ],
       ),
     );
@@ -309,8 +365,8 @@ class DeviceDetailPanel extends StatelessWidget {
 
   void _navigateToMileage(BuildContext context) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt('selectedDeviceId', device.id!);
-    await prefs.setString('selectedDeviceName', device.name!);
+    await prefs.setInt('selectedDeviceId', widget.device.id!);
+    await prefs.setString('selectedDeviceName', widget.device.name!);
     if (context.mounted) {
       Navigator.push(context, MaterialPageRoute(builder: (context) => MonthlyMileageScreen()));
     }
@@ -323,9 +379,9 @@ class DeviceDetailPanel extends StatelessWidget {
   void _navigateToEdit(BuildContext context) async {
     final result = await Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => AddDeviceScreen(device: device)),
+      MaterialPageRoute(builder: (context) => AddDeviceScreen(device: widget.device)),
     );
-    if (result != null) onRefresh();
+    if (result != null) widget.onRefresh();
   }
 
   double _getDistance(api.Position pos) {
