@@ -47,8 +47,8 @@ class _MainScreenState extends State<MainScreen> {
             type: BottomNavigationBarType.fixed,
             currentIndex: _currentIndex,
             onTap: _onTabTapped,
-            selectedItemColor: Theme.of(context).primaryColor,
-            unselectedItemColor: Theme.of(context).unselectedWidgetColor,
+            selectedItemColor: Theme.of(context).colorScheme.primary,
+            unselectedItemColor: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
             items: [
               BottomNavigationBarItem(
                 icon: const Icon(Icons.dashboard_rounded),

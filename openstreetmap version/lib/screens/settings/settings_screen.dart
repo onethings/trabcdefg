@@ -553,6 +553,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 },
                 style: ElevatedButton.styleFrom(
                   minimumSize: const Size.fromHeight(50), // Make the button full-width
+                  backgroundColor: Theme.of(context).colorScheme.error,
+                  foregroundColor: Theme.of(context).colorScheme.onError,
                 ),
                 child: Text('loginLogout'.tr),
               ),
