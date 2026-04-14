@@ -81,7 +81,14 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   final String _controlsExpandedKey = 'isMapControlsExpanded';
   double _mapCenterOffset = 0.001;
   // final OfflineGeocoder _geocoder = OfflineGeocoder();
+  bool _isPanelOpen = false;
+  bool _isFollowingDevice = false;
   String _currentAddress = "";
+
+  // Reactive notifiers for seamless detail panel updates
+  final ValueNotifier<api.Device?> _selectedDeviceNotifier = ValueNotifier(null);
+  final ValueNotifier<api.Position?> _selectedPositionNotifier = ValueNotifier(null);
+  final ValueNotifier<String> _selectedAddressNotifier = ValueNotifier("");
 
   String _getStyleString(AppMapType type) {
     switch (type) {
@@ -184,6 +191,9 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _httpClient.close();
+    _selectedDeviceNotifier.dispose();
+    _selectedPositionNotifier.dispose();
+    _selectedAddressNotifier.dispose();
     super.dispose();
   }
 
@@ -307,6 +317,22 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
   Future<void> _updateAllMarkers(TraccarProvider provider) async {
     if (_mapController == null || !_isStyleLoaded) return;
+
+    // Smart Auto-Follow: 只有在啟用跟隨且有選中車輛時才自動移動相機
+    if (_currentDevice != null && _isFollowingDevice) {
+      final currentPos = provider.positions.firstWhereOrNull((p) => p.deviceId == _currentDevice!.id);
+      if (currentPos != null && currentPos.latitude != null && currentPos.longitude != null) {
+        _mapController?.animateCamera(
+          maplibre.CameraUpdate.newLatLng(
+            maplibre.LatLng(
+              currentPos.latitude!.toDouble(),
+              currentPos.longitude!.toDouble(),
+            ),
+          ),
+        );
+      }
+    }
+
     await _mapController!.clearSymbols();
 
     for (final device in provider.devices) {
@@ -354,8 +380,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
           geometry: latLng,
           iconImage: customLabelId,
           iconRotate: 0.0,
-          // 增加偏移量 (從 18 -> 26) 以配合更大的車輛圖標，並使用 center 錨點精確定位
-          iconOffset: const Offset(0, 26), 
+          // 縮小偏移量 (從 26 -> 15) 讓車牌更靠近車體，增加整體感
+          iconOffset: const Offset(0, 15), 
           iconSize: 1.2, // 配合 18 號字體
           iconAnchor: 'top', 
           zIndex: 5,
@@ -483,15 +509,17 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     final nextDevice = devices[nextIndex];
     setState(() {
       _currentDevice = nextDevice;
+      _isFollowingDevice = true; // Enable follow mode on navigation
     });
 
-    _onDeviceSelected(nextDevice, positions);
+    _onDeviceSelected(nextDevice, positions, forceShowPanel: false);
   }
 
   void _onDeviceSelected(
     api.Device device,
-    List<api.Position> allPositions,
-  ) async {
+    List<api.Position> allPositions, {
+    bool forceShowPanel = false,
+  }) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt('selectedDeviceId', device.id!);
     await prefs.setString('selectedDeviceName', device.name!);
@@ -513,7 +541,21 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     setState(() {
       _currentAddress = immediateAddress ?? "Loading...";
     });
-    _showDeviceDetailPanel(device, position);
+
+    // Update reactive notifiers
+    _selectedDeviceNotifier.value = device;
+    _selectedPositionNotifier.value = position;
+    _selectedAddressNotifier.value = immediateAddress ?? "Loading...";
+
+    if (forceShowPanel) {
+      _isFollowingDevice = true; // Enable follow mode on explicit map interaction (marker tap)
+    }
+
+    // Only show panel if forced (tap) or already open (habit)
+    if (forceShowPanel || _isPanelOpen) {
+      _showDeviceDetailPanel(device, position);
+    }
+
     if (device.id != null) {
       Provider.of<TraccarProvider>(
         context,
@@ -524,14 +566,12 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     if (position.latitude != null &&
         position.longitude != null &&
         position.latitude != 0.0) {
+      
       _mapController!.animateCamera(
-        maplibre.CameraUpdate.newCameraPosition(
-          maplibre.CameraPosition(
-            target: maplibre.LatLng(
-              position.latitude!.toDouble() - _mapCenterOffset,
-              position.longitude!.toDouble(),
-            ),
-            zoom: _currentZoom,
+        maplibre.CameraUpdate.newLatLng(
+          maplibre.LatLng(
+            position.latitude!.toDouble(),
+            position.longitude!.toDouble(),
           ),
         ),
       );
@@ -547,7 +587,11 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
             setState(() {
               _currentAddress = addr;
             });
-            _showDeviceDetailPanel(device, position);
+            _selectedAddressNotifier.value = addr;
+            
+            if (forceShowPanel || _isPanelOpen) {
+              _showDeviceDetailPanel(device, position);
+            }
           }
         } catch (e) {
           debugPrint("Geocoder error: $e");
@@ -565,7 +609,10 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
         setState(() {
           _currentAddress = "No GPS Signal";
         });
-        _showDeviceDetailPanel(device, position);
+        _selectedAddressNotifier.value = "No GPS Signal";
+        if (forceShowPanel || _isPanelOpen) {
+          _showDeviceDetailPanel(device, position);
+        }
       }
     }
   }
@@ -666,36 +713,59 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     api.Device device,
     api.Position? currentPosition,
   ) {
-    _bottomSheetController?.close();
+    // If panel is already open, the ValueNotifiers will update the content reactively.
+    // We only need to call showBottomSheet if it's currently closed.
+    if (_isPanelOpen && _bottomSheetController != null) {
+      return; 
+    }
 
+    _isPanelOpen = true;
     _bottomSheetController = _scaffoldKey.currentState!.showBottomSheet((
       context,
     ) {
-      final position = Provider.of<TraccarProvider>(context, listen: false)
-          .positions
-          .firstWhere(
-            (p) => p.deviceId == device.id,
-            orElse: () => api.Position(),
+      return ValueListenableBuilder<api.Device?>(
+        valueListenable: _selectedDeviceNotifier,
+        builder: (context, currentDev, _) {
+          return ValueListenableBuilder<api.Position?>(
+            valueListenable: _selectedPositionNotifier,
+            builder: (context, currentPos, _) {
+              return ValueListenableBuilder<String>(
+                valueListenable: _selectedAddressNotifier,
+                builder: (context, currentAddr, _) {
+                  if (currentDev == null) return const SizedBox.shrink();
+                  
+                  return DeviceDetailPanel(
+                    device: currentDev,
+                    position: currentPos ?? api.Position(),
+                    address: currentAddr,
+                    formattedDate: _formatDate(currentPos?.fixTime),
+                    onMoreOptionsPressed: () => _showMoreOptionsDialog(currentDev, currentPos),
+                    onDeletePressed: () {
+                      _bottomSheetController?.close();
+                      _showDeleteConfirmationDialog(currentDev);
+                    },
+                    onRefresh: () async {
+                      final traccarProvider = Provider.of<TraccarProvider>(
+                        context,
+                        listen: false,
+                      );
+                      await traccarProvider.fetchInitialData();
+                    },
+                  );
+                },
+              );
+            },
           );
-
-      return DeviceDetailPanel(
-        device: device,
-        position: position,
-        address: _currentAddress,
-        formattedDate: _formatDate(position.fixTime),
-        onMoreOptionsPressed: () => _showMoreOptionsDialog(device, position),
-        onDeletePressed: () {
-          _bottomSheetController?.close();
-          _showDeleteConfirmationDialog(device);
-        },
-        onRefresh: () async {
-          final traccarProvider = Provider.of<TraccarProvider>(
-            context,
-            listen: false,
-          );
-          await traccarProvider.fetchInitialData();
         },
       );
+    });
+
+    _bottomSheetController!.closed.then((_) {
+      if (mounted) {
+        setState(() {
+          _isPanelOpen = false;
+        });
+      }
     });
   }
 
@@ -821,7 +891,11 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                     Navigator.of(context).pop();
 
                     if (position != null) {
-                      _onDeviceSelected(device, traccarProvider.positions);
+                      _onDeviceSelected(
+                        device, 
+                        traccarProvider.positions,
+                        forceShowPanel: true,
+                      );
                     }
                   },
                 );
@@ -951,8 +1025,17 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
             drawer: _buildDeviceListDrawer(context, traccarProvider),
             body: Stack(
               children: [
-                maplibre.MapLibreMap(
-                  key: _mapKey,
+                Listener(
+                  onPointerDown: (_) {
+                    if (_isFollowingDevice) {
+                      setState(() {
+                        _isFollowingDevice = false;
+                      });
+                      debugPrint("Smart Auto-Follow disabled by user gesture");
+                    }
+                  },
+                  child: maplibre.MapLibreMap(
+                    key: _mapKey,
                   initialCameraPosition: _lastCameraPosition ?? maplibre.CameraPosition(
                     target: maplibre.LatLng(
                       initialFlutterLatLng.latitude,
@@ -990,6 +1073,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                             (d) => d.id == deviceId,
                           ),
                           traccarProvider.positions,
+                          forceShowPanel: true,
                         );
                       }
                     });
@@ -999,9 +1083,11 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                     if (_bottomSheetController != null) {
                       _bottomSheetController!.close();
                       _bottomSheetController = null;
+                      _isFollowingDevice = false; // Stop following on empty map click
                     }
                   },
                 ),
+              ),
 
                 // Map Controls (Right Side)
                 Positioned(
@@ -1039,6 +1125,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                             _onDeviceSelected(
                               _currentDevice!,
                               traccarProvider.positions,
+                              forceShowPanel: true,
                             );
                         }
                       }, "btn_myloc"),
