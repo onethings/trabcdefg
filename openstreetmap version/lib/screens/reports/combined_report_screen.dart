@@ -14,6 +14,8 @@ import 'dart:typed_data';
 import 'dart:math';
 import 'package:trabcdefg/widgets/OfflineAddressService.dart';
 import 'package:provider/provider.dart';
+import 'package:get/get.dart';
+import 'package:intl/intl.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
 import 'package:trabcdefg/providers/traccar_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -233,7 +235,7 @@ class _CombinedReportScreenState extends State<CombinedReportScreen> {
       await _mapController!.addLine(
         maplibre.LineOptions(
           geometry: routePoints,
-          lineColor: "#0000FF",
+          lineColor: Theme.of(context).colorScheme.primary.toHex(),
           lineWidth: 4.0,
         ),
       );
@@ -315,7 +317,13 @@ class _CombinedReportScreenState extends State<CombinedReportScreen> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return Scaffold(body: Center(child: Text('sharedLoading'.tr)));
+      return Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(
+            color: Theme.of(context).colorScheme.primary,
+          ),
+        ),
+      );
     }
 
     if (_combinedReport.isEmpty ||
@@ -349,16 +357,19 @@ class _CombinedReportScreenState extends State<CombinedReportScreen> {
                     target: initialCenter,
                     zoom: 14.0,
                   ),
-                  styleString: mapProvider.styleString,
+                  styleString: mapProvider.getStyle(Theme.of(context).brightness),
                 ),
                 Positioned(
                   top: 10,
                   right: 10,
                   child: FloatingActionButton(
+                    heroTag: "btn_style_combined",
                     mini: true,
+                    backgroundColor: Theme.of(context).colorScheme.surface,
                     onPressed: () => mapProvider.toggleMapType(),
                     child: Icon(
                       mapProvider.isSatelliteMode ? Icons.map : Icons.satellite_alt,
+                      color: Theme.of(context).colorScheme.onSurface,
                     ),
                   ),
                 ),
@@ -379,20 +390,25 @@ class _CombinedReportScreenState extends State<CombinedReportScreen> {
                       title: Text(
                         '${'sharedDevice'.tr}: ${_deviceName}, '
                         '${'positionSpeed'.tr}: ${pos.speed} ${'sharedKmh'.tr}',
+                        style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
                       ),
                       subtitle: Text(
-                        '${'reportTimeType'.tr}: ${pos.deviceTime?.toLocal().toString().split('.')[0]}',
+                        '${'reportTimeType'.tr}: ${DateFormat('yyyy-MM-dd HH:mm').format(pos.deviceTime?.toLocal() ?? DateTime.now())}',
+                        style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
                       ),
                       trailing: FutureBuilder<String>(
                         future: pos.address != null && pos.address!.isNotEmpty
                             ? Future.value(pos.address)
                             : OfflineAddressService.getAddress(pos.latitude!.toDouble(), pos.longitude!.toDouble()),
                         builder: (context, snapshot) {
-                          return Container(
+                          return SizedBox(
                             width: 120,
                             child: Text(
                               snapshot.data ?? '...',
-                              style: const TextStyle(fontSize: 10),
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                              ),
                               textAlign: TextAlign.right,
                               overflow: TextOverflow.ellipsis,
                               maxLines: 2,
@@ -427,11 +443,12 @@ class _CombinedReportScreenState extends State<CombinedReportScreen> {
                     return Card(
                       child: ListTile(
                         title: Text(
-                          'reportEventTypes'.tr + ': ${translatedEventKey.tr}',
+                          '${'reportEventTypes'.tr}: ${translatedEventKey.tr}',
+                          style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
                         ),
                         subtitle: Text(
-                          'reportTimeType'.tr +
-                              ': ${event.eventTime?.toLocal().toString().split('.')[0]}',
+                          '${'reportTimeType'.tr}: ${DateFormat('yyyy-MM-dd HH:mm').format(event.eventTime?.toLocal() ?? DateTime.now())}',
+                          style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
                         ),
                         onTap: () async {
                           if (event.positionId != null &&
@@ -458,4 +475,8 @@ class _CombinedReportScreenState extends State<CombinedReportScreen> {
       ),
     );
   }
+}
+
+extension ColorToHex on Color {
+  String toHex() => '#${value.toRadixString(16).padLeft(8, '0').substring(2)}';
 }

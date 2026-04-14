@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
 import 'package:get/get.dart';
+import 'package:intl/intl.dart';
 
 class ReportsScreen extends StatefulWidget {
   const ReportsScreen({super.key});
@@ -136,13 +137,17 @@ class _ReportsScreenState extends State<ReportsScreen> {
                   child: ListTile(
                     leading: Icon(
                       Icons.directions_car,
-                      color: _selectedDevice != null ? Theme.of(context).primaryColor : Colors.grey,
+                      color: _selectedDevice != null 
+                          ? Theme.of(context).colorScheme.primary 
+                          : Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
                     title: Text(
                       _selectedDevice?.name ?? 'reportDevice'.tr,
                       style: TextStyle(
                         fontWeight: _selectedDevice != null ? FontWeight.bold : FontWeight.normal,
-                        color: _selectedDevice != null ? Colors.black : Colors.redAccent,
+                        color: _selectedDevice != null 
+                            ? Theme.of(context).colorScheme.onSurface 
+                            : Theme.of(context).colorScheme.error,
                       ),
                     ),
                     subtitle: _selectedDevice == null ? Text('pleaseSelectDevice'.tr) : null,
@@ -155,11 +160,12 @@ class _ReportsScreenState extends State<ReportsScreen> {
                   elevation: 2,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   child: ListTile(
-                    leading: const Icon(Icons.calendar_today, color: Colors.blue),
+                    leading: Icon(Icons.calendar_today, color: Theme.of(context).colorScheme.primary),
                     title: Text(
-                      '${'reportFrom'.tr}: ${_selectedDate.toString().split(' ')[0]}',
+                      '${'reportFrom'.tr}: ${DateFormat('yyyy-MM-dd').format(_selectedDate)}',
+                      style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
                     ),
-                    trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                    trailing: Icon(Icons.arrow_forward_ios, size: 16, color: Theme.of(context).colorScheme.onSurfaceVariant),
                     onTap: () => _selectDate(context),
                   ),
                 ),
@@ -180,9 +186,12 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
   Widget _buildReportItem(String title, String type, IconData icon) {
     return ListTile(
-      leading: Icon(icon, color: Colors.blueGrey),
-      title: Text(title),
-      trailing: const Icon(Icons.chevron_right),
+      leading: Icon(icon, color: Theme.of(context).colorScheme.primary),
+      title: Text(
+        title,
+        style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
+      ),
+      trailing: Icon(Icons.chevron_right, color: Theme.of(context).colorScheme.onSurfaceVariant),
       onTap: () => _navigateToReport(type),
     );
   }

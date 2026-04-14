@@ -26,6 +26,8 @@ class OfflineAddressService {
   
   // Local AI State: 軌跡黏著 (Trajectory Stickiness)
   static String? _lastMatchedStreetName;
+  static String? _lastMatchedTown;
+  static String? _lastMatchedState;
 
   static const String _base32 = '0123456789bcdefghjkmnpqrstuvwxyz';
 
@@ -224,13 +226,19 @@ class OfflineAddressService {
       if (admins5.isNotEmpty) {
         // 優先找最近的鎮區 (lvl 8-15)
         var closestTown = _findClosestItem(
-            lat, lon, admins5.where((e) => e['lvl'] >= 8).toList());
-        if (closestTown != null) town = closestTown['admin']?.toString();
+            lat, lon, admins5.where((e) => e['lvl'] >= 8).toList(), previousStreetName: _lastMatchedTown);
+        if (closestTown != null) {
+          town = closestTown['admin']?.toString();
+          _lastMatchedTown = town;
+        }
 
         // 找最近的省份 (lvl 0-6)
         var closestState = _findClosestItem(
-            lat, lon, admins5.where((e) => e['lvl'] <= 6).toList());
-        if (closestState != null) state = closestState['admin']?.toString();
+            lat, lon, admins5.where((e) => e['lvl'] <= 6).toList(), previousStreetName: _lastMatchedState);
+        if (closestState != null) {
+          state = closestState['admin']?.toString();
+          _lastMatchedState = state;
+        }
       }
 
       // --- 第二階段：補救邏輯 (如果沒找到，擴大到精度 4 的九宮格) ---
@@ -243,14 +251,20 @@ class OfflineAddressService {
 
         if (state == null) {
           var closestState = _findClosestItem(
-              lat, lon, admins4.where((e) => e['lvl'] <= 6).toList());
-          if (closestState != null) state = closestState['admin']?.toString();
+              lat, lon, admins4.where((e) => e['lvl'] <= 6).toList(), previousStreetName: _lastMatchedState);
+          if (closestState != null) {
+            state = closestState['admin']?.toString();
+            _lastMatchedState = state;
+          }
         }
 
         if (town == null) {
           var closestTown = _findClosestItem(
-              lat, lon, admins4.where((e) => e['lvl'] >= 8).toList());
-          if (closestTown != null) town = closestTown['admin']?.toString();
+              lat, lon, admins4.where((e) => e['lvl'] >= 8).toList(), previousStreetName: _lastMatchedTown);
+          if (closestTown != null) {
+            town = closestTown['admin']?.toString();
+            _lastMatchedTown = town;
+          }
         }
       }
 
@@ -262,6 +276,8 @@ class OfflineAddressService {
         String? remoteAddress = await _getRemoteAddressQueued(lat, lon);
         if (remoteAddress != null) {
           result = remoteAddress;
+          // Note: we don't update _lastMatchedTown/State from Nominatim yet
+          // as we want to keep the offline context if the user moves back to a known area
         }
       }
 
@@ -526,8 +542,11 @@ class OfflineAddressService {
       }
 
       // 2. 軌跡黏著度 (Stickiness Logic)
-      if (previousStreetName != null && item['name'] == previousStreetName) {
-        score -= 0.00015; 
+      if (previousStreetName != null && (item['name'] == previousStreetName || item['admin'] == previousStreetName)) {
+        // 針對不同層級給予不同的優先權係數
+        // 鎮區 (lvl >= 8) 中心點較遠，給予較大權重；路名 (lvl 無) 精度高，給予精確權重
+        double bonus = item.containsKey('lvl') ? 0.05 : 0.0005; 
+        score -= bonus; 
       }
       
       if (score < minScore) {

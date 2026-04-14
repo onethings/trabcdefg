@@ -14,117 +14,8 @@ import 'package:flutter/services.dart';
 import 'dart:math';
 import 'package:trabcdefg/widgets/OfflineAddressService.dart';
 import 'package:get/get.dart';
-import 'package:hive/hive.dart';
 import 'package:http/http.dart' as http;
-import 'package:flutter_map/flutter_map.dart' hide LatLng, LatLngBounds;
-import 'package:flutter/foundation.dart';
-import 'dart:typed_data';
-import 'dart:ui' as ui;
-
-// --- Tile Caching Implementation using Hive (Copied from map_screen.dart) ---
-
-class _TileCacheService {
-  late Box<Uint8List> _tileBox;
-  static const String boxName = 'mapTilesCache';
-
-  Future<void> init() async {
-    _tileBox = await Hive.openBox<Uint8List>(boxName);
-  }
-
-  String _generateKey(String url) {
-    return url.hashCode.toString();
-  }
-
-  Future<Uint8List?> getTile(String url) async {
-    return _tileBox.get(_generateKey(url));
-  }
-
-  Future<void> saveTile(String url, Uint8List tileData) async {
-    await _tileBox.put(_generateKey(url), tileData);
-  }
-}
-
-class CachedNetworkImageProvider
-    extends ImageProvider<CachedNetworkImageProvider> {
-  final String url;
-  final _TileCacheService cacheService;
-  final http.Client httpClient;
-
-  CachedNetworkImageProvider(
-    this.url, {
-    required this.cacheService,
-    required this.httpClient,
-  });
-
-  @override
-  ImageStreamCompleter loadImage(
-    CachedNetworkImageProvider key,
-    ImageDecoderCallback decode,
-  ) {
-    return MultiFrameImageStreamCompleter(
-      codec: _loadAsync(key, decode),
-      scale: 1.0,
-      informationCollector: () => <DiagnosticsNode>[
-        DiagnosticsProperty<ImageProvider>('Image provider', this),
-        DiagnosticsProperty<CachedNetworkImageProvider>('Original key', key),
-      ],
-    );
-  }
-
-  @override
-  Future<CachedNetworkImageProvider> obtainKey(
-    ImageConfiguration configuration,
-  ) {
-    return Future<CachedNetworkImageProvider>.value(this);
-  }
-
-  Future<ui.Codec> _loadAsync(
-    CachedNetworkImageProvider key,
-    ImageDecoderCallback decode,
-  ) async {
-    assert(key == this);
-
-    final cachedData = await cacheService.getTile(url);
-
-    if (cachedData != null) {
-      return decode(await ui.ImmutableBuffer.fromUint8List(cachedData));
-    }
-
-    try {
-      final response = await httpClient.get(Uri.parse(url));
-
-      if (response.statusCode == 200) {
-        final Uint8List bytes = response.bodyBytes;
-
-        await cacheService.saveTile(url, bytes);
-
-        return decode(await ui.ImmutableBuffer.fromUint8List(bytes));
-      } else {
-        throw Exception(
-          'Failed to load tile from network: ${response.statusCode}',
-        );
-      }
-    } catch (e) {
-      rethrow;
-    }
-  }
-}
-
-class _HiveTileProvider extends TileProvider {
-  final _TileCacheService cacheService;
-  final http.Client httpClient;
-
-  _HiveTileProvider({required this.cacheService, required this.httpClient});
-
-  @override
-  ImageProvider getImage(TileCoordinates coordinates, TileLayer options) {
-    return CachedNetworkImageProvider(
-      getTileUrl(coordinates, options),
-      cacheService: cacheService,
-      httpClient: httpClient,
-    );
-  }
-}
+// Enum and Tile Provider removed as they are no longer needed with native MapLibre caching.
 
 // Enum moved to provider
 
@@ -203,14 +94,7 @@ class _StopsReportScreenState extends State<StopsReportScreen> {
   maplibre.MapLibreMapController? _mapController;
   final Set<String> _loadedIcons = {};
   bool _isStyleLoaded = false;
-  final http.Client _httpClient = http.Client();
-
-  // Tile URLs (ADDED)
-  static const String _osmUrlTemplate =
-      'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
-  static const String _satelliteUrlTemplate =
-      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
-  static const List<String> _osmSubdomains = ['a', 'b', 'c'];
+// Constants for manual tile URLs removed as we use MapStyleProvider now.
 
   @override
   void initState() {
@@ -220,7 +104,6 @@ class _StopsReportScreenState extends State<StopsReportScreen> {
 
   @override
   void dispose() {
-    _httpClient.close(); // Dispose HTTP client
     super.dispose();
   }
 
@@ -393,7 +276,13 @@ class _StopsReportScreenState extends State<StopsReportScreen> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return Scaffold(body: Center(child: Text('sharedLoading'.tr)));
+      return Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(
+            color: Theme.of(context).colorScheme.primary,
+          ),
+        ),
+      );
     }
 
     if (_stopsReport.isEmpty) {
@@ -423,16 +312,19 @@ class _StopsReportScreenState extends State<StopsReportScreen> {
                     target: initialCenter,
                     zoom: 14.0,
                   ),
-                  styleString: mapProvider.styleString,
+                  styleString: mapProvider.getStyle(Theme.of(context).brightness),
                 ),
                 Positioned(
                   top: 10,
                   right: 10,
                   child: FloatingActionButton(
+                    heroTag: "btn_style_stop",
                     mini: true,
+                    backgroundColor: Theme.of(context).colorScheme.surface,
                     onPressed: () => mapProvider.toggleMapType(),
                     child: Icon(
                       mapProvider.isSatelliteMode ? Icons.map : Icons.satellite_alt,
+                      color: Theme.of(context).colorScheme.onSurface,
                     ),
                   ),
                 ),
@@ -459,35 +351,23 @@ class _StopsReportScreenState extends State<StopsReportScreen> {
                         children: [
                           Text(
                             '${'reportStops'.tr} ${index + 1}',
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
+                              color: Theme.of(context).colorScheme.onSurface,
                             ),
                           ),
                           const Divider(),
+                          _buildStopDetailRow('reportStartDate'.tr, DateFormat('yyyy-MM-dd HH:mm').format(stop.startTime.toLocal())),
+                          _buildStopDetailRow('reportEndTime'.tr, DateFormat('yyyy-MM-dd HH:mm').format(stop.endTime.toLocal())),
+                          _buildStopDetailRow('reportDuration'.tr, _formatDuration(stop.duration)),
                           ListTile(
-                            title: Text('reportStartDate'.tr),
-                            trailing: Text(
-                              DateFormat(
-                                'yyyy-MM-dd HH:mm',
-                              ).format(stop.startTime.toLocal()),
+                            title: Text(
+                              'positionAddress'.tr,
+                              style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
                             ),
-                          ),
-                          ListTile(
-                            title: Text('reportEndTime'.tr),
-                            trailing: Text(
-                              DateFormat(
-                                'yyyy-MM-dd HH:mm',
-                              ).format(stop.endTime.toLocal()),
-                            ),
-                          ),
-                          ListTile(
-                            title: Text('reportDuration'.tr),
-                            trailing: Text(_formatDuration(stop.duration)),
-                          ),
-                          ListTile(
-                            title: Text('positionAddress'.tr),
-                            trailing: Expanded(
+                            trailing: ConstrainedBox(
+                              constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.5),
                               child: FutureBuilder<String>(
                                 future: stop.address != null && stop.address!.isNotEmpty
                                     ? Future.value(stop.address)
@@ -497,15 +377,17 @@ class _StopsReportScreenState extends State<StopsReportScreen> {
                                     snapshot.data ?? 'Address not available'.tr,
                                     textAlign: TextAlign.right,
                                     overflow: TextOverflow.ellipsis,
+                                    maxLines: 2,
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: Theme.of(context).colorScheme.onSurface,
+                                    ),
                                   );
                                 },
                               ),
                             ),
                           ),
-                          ListTile(
-                            title: Text('reportEngineHours'.tr),
-                            trailing: Text(_formatDuration(stop.engineHours)),
-                          ),
+                          _buildStopDetailRow('reportEngineHours'.tr, _formatDuration(stop.engineHours)),
                         ],
                       ),
                     ),
@@ -515,6 +397,22 @@ class _StopsReportScreenState extends State<StopsReportScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildStopDetailRow(String title, String value) {
+    return ListTile(
+      title: Text(
+        title,
+        style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+      ),
+      trailing: Text(
+        value,
+        style: TextStyle(
+          fontWeight: FontWeight.bold,
+          color: Theme.of(context).colorScheme.onSurface,
+        ),
       ),
     );
   }

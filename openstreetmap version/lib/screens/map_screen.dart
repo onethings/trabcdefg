@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:collection/collection.dart';
 // import 'package:flutter_map/flutter_map.dart'; // Primary map package for OpenStreetMap
 import 'package:maplibre_gl/maplibre_gl.dart' as maplibre;
 import 'package:flutter_map/flutter_map.dart' hide LatLng, LatLngBounds;
@@ -56,7 +57,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
   static const String _satelliteStyle = "assets/styles/aws-hybrid.json";
 
-  static const String _brightStyle = "assets/styles/versatiles-style.json";
+  static const String _brightStyle = "assets/styles/streets-v4.json";
 
   // 1. Positron (簡潔淺色模式) - 非常適合用來凸顯彩色車輛圖標
 
@@ -71,6 +72,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   MapController flutterMapController = MapController();
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   api.Device? _currentDevice;
+  double _currentZoom = 16.0;
   final TileCacheService _cacheService = TileCacheService();
   late MarkerIconService _iconService;
   final http.Client _httpClient = http.Client();
@@ -118,6 +120,10 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
         cacheService: _cacheService,
         httpClient: _httpClient,
       );
+      
+      // OPTIMIZATION: Warm up OfflineAddressService early on map screen arrival
+      OfflineAddressService.initDatabase();
+
       if (mounted) {
         setState(() {
           _isCacheInitialized =
@@ -133,6 +139,30 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         // Your logic for initial state handling
       });
+    } else {
+      _loadLastSelectedDevice();
+    }
+  }
+
+  Future<void> _loadLastSelectedDevice() async {
+    final prefs = await SharedPreferences.getInstance();
+    final lastDeviceId = prefs.getInt('selectedDeviceId');
+    final lastZoom = prefs.getDouble('map_zoom_level');
+    
+    if (lastZoom != null) {
+      _currentZoom = lastZoom;
+    }
+
+    if (lastDeviceId != null) {
+      final provider = Provider.of<TraccarProvider>(context, listen: false);
+      if (provider.devices.isNotEmpty) {
+        final device = provider.devices.firstWhereOrNull((d) => d.id == lastDeviceId);
+        if (device != null) {
+          setState(() {
+            _currentDevice = device;
+          });
+        }
+      }
     }
   }
 
@@ -207,11 +237,28 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       context,
       listen: false,
     );
-    await _updateAllMarkers(traccarProvider);
+    await _mapController!.setSymbolIconAllowOverlap(true);
+    await _mapController!.setSymbolIconIgnorePlacement(true);
+    await _mapController!.setSymbolTextAllowOverlap(true);
+    await _mapController!.setSymbolTextIgnorePlacement(true);
     
+    await _updateAllMarkers(traccarProvider);
+
     // Auto zoom to fit all markers if no specific device was requested on load
     if (widget.selectedDevice == null && !_hasInitialZoomed) {
-      _zoomToFitAll(traccarProvider);
+      final prefs = await SharedPreferences.getInstance();
+      final lastDeviceId = prefs.getInt('selectedDeviceId');
+      
+      if (lastDeviceId != null) {
+        final device = traccarProvider.devices.firstWhereOrNull((d) => d.id == lastDeviceId);
+        if (device != null) {
+          _onDeviceSelected(device, traccarProvider.positions);
+        } else {
+          _zoomToFitAll(traccarProvider);
+        }
+      } else {
+        _zoomToFitAll(traccarProvider);
+      }
       _hasInitialZoomed = true;
     }
   }
@@ -272,26 +319,48 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
           'marker_${category.toLowerCase()}_${status.toLowerCase()}';
 
       final String plate = device.name ?? '';
-      final String customIconId = "${baseIconKey}_$plate";
+      final String customLabelId = "label_$plate";
 
-      await _ensureCustomIconLoaded(baseIconKey, plate, customIconId);
+      // 1. 確保基礎圖標已加載
+      await _iconService.ensureIconLoaded(_mapController, baseIconKey);
+      
+      // 2. 確保獨立車牌標籤已加載 (帶有白色窄背景)
+      await _iconService.ensureLabelIconLoaded(_mapController, plate, customLabelId);
 
+      final latLng = maplibre.LatLng(
+        pos.latitude!.toDouble(),
+        pos.longitude!.toDouble(),
+      );
+
+      final deviceData = {'deviceId': device.id.toString()};
+
+      // 3. 添加車輛符號 (會旋轉)
       await _mapController!.addSymbol(
         maplibre.SymbolOptions(
-          geometry: maplibre.LatLng(
-            pos.latitude!.toDouble(),
-            pos.longitude!.toDouble(),
-          ),
-          iconImage: customIconId,
+          geometry: latLng,
+          iconImage: baseIconKey,
           iconRotate: pos.course?.toDouble() ?? 0.0,
-          iconSize:
-              3 *
-              context
-                  .read<SettingsProvider>()
-                  .markerSizeScale, // 調整：從 1.0 增加到 1.5 以提升辨識度 並且套用設定
+          // 大幅增加車輛圖標尺寸倍率 (從 3.0 -> 4.0)，確保比標籤大且清晰
+          iconSize: 4.0 * context.read<SettingsProvider>().markerSizeScale,
           iconAnchor: 'center',
+          zIndex: 10,
         ),
-        {'deviceId': device.id.toString()},
+        deviceData,
+      );
+
+      // 4. 添加標籤符號 (始終垂直，不旋轉)
+      await _mapController!.addSymbol(
+        maplibre.SymbolOptions(
+          geometry: latLng,
+          iconImage: customLabelId,
+          iconRotate: 0.0,
+          // 增加偏移量 (從 18 -> 26) 以配合更大的車輛圖標，並使用 center 錨點精確定位
+          iconOffset: const Offset(0, 26), 
+          iconSize: 1.2, // 配合 18 號字體
+          iconAnchor: 'top', 
+          zIndex: 5,
+        ),
+        deviceData,
       );
     }
   }
@@ -462,7 +531,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
               position.latitude!.toDouble() - _mapCenterOffset,
               position.longitude!.toDouble(),
             ),
-            zoom: 16.0,
+            zoom: _currentZoom,
           ),
         ),
       );
@@ -894,6 +963,12 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                   styleString: Provider.of<MapStyleProvider>(
                     context,
                   ).styleString,
+                  onCameraMove: (position) {
+                    _currentZoom = position.zoom;
+                    SharedPreferences.getInstance().then((prefs) {
+                      prefs.setDouble('map_zoom_level', position.zoom);
+                    });
+                  },
                   onStyleLoadedCallback: _onStyleLoaded,
                   onMapCreated: (controller) {
                     _mapController = controller;

@@ -59,6 +59,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen>
   DateTime? _selectedCalendarDay = DateTime.now();
   final Map<DateTime, api.ReportSummary> _dailySummaries = {};
   bool _isCalendarLoading = false;
+  double _currentZoom = 14.0;
 
   // Map Assets
   static const String _playbackIconId = "playback_arrow";
@@ -133,10 +134,14 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen>
     final deviceId = prefs.getInt('selectedDeviceId');
     final fromString = prefs.getString('historyFrom');
     final toString = prefs.getString('historyTo');
+    final lastZoom = prefs.getDouble('history_zoom_level');
 
     DateTime defaultDate = DateTime.now();
 
     setState(() {
+      if (lastZoom != null) {
+        _currentZoom = lastZoom;
+      }
       _deviceId = deviceId;
       _focusedDay = defaultDate;
       _selectedCalendarDay = defaultDate;
@@ -630,24 +635,34 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen>
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: AppBar(
-        backgroundColor: Colors.white.withOpacity(0.9),
+        backgroundColor: Theme.of(context).colorScheme.surface.withOpacity(0.85),
         elevation: 0,
         title: Text(
           '${'reportReplay'.tr}: ${DateFormat('MM/dd').format(_historyFrom ?? DateTime.now())}$devicePart',
-          style: const TextStyle(color: Colors.black, fontSize: 16),
+          style: TextStyle(
+            color: Theme.of(context).colorScheme.onSurface, 
+            fontSize: 16,
+            fontWeight: FontWeight.bold
+          ),
         ),
-        iconTheme: const IconThemeData(color: Colors.black),
+        iconTheme: IconThemeData(color: Theme.of(context).colorScheme.onSurface),
       ),
       body: Stack(
         children: [
           MapLibreMap(
             onMapCreated: (c) => _mapController = c,
             onStyleLoadedCallback: _onStyleLoaded,
-            initialCameraPosition: const CameraPosition(
-              target: LatLng(0, 0),
-              zoom: 2,
+            initialCameraPosition: CameraPosition(
+              target: const LatLng(0, 0),
+              zoom: _currentZoom,
             ),
-            styleString: Provider.of<MapStyleProvider>(context).styleString,
+            styleString: Provider.of<MapStyleProvider>(context).getStyle(Theme.of(context).brightness),
+            onCameraMove: (position) {
+              _currentZoom = position.zoom;
+              SharedPreferences.getInstance().then((prefs) {
+                prefs.setDouble('history_zoom_level', position.zoom);
+              });
+            },
             myLocationEnabled: false,
             trackCameraPosition: true,
             onMapClick: (_, __) => setState(
@@ -694,16 +709,20 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen>
     IconData icon,
     VoidCallback onPressed,
     String tag, {
-    Color color = Colors.white,
+    Color? color,
   }) {
+    final theme = Theme.of(context);
+    final bgColor = color ?? theme.colorScheme.surface;
+    final iconColor = color == null ? theme.colorScheme.onSurface : Colors.white;
+
     return FloatingActionButton(
       heroTag: tag,
       mini: true,
-      backgroundColor: color,
+      backgroundColor: bgColor,
       onPressed: onPressed,
       child: Icon(
         icon,
-        color: color == Colors.white ? Colors.black87 : Colors.white,
+        color: iconColor,
       ),
     );
   }
@@ -716,11 +735,13 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen>
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: Theme.of(context).colorScheme.surface,
           borderRadius: BorderRadius.circular(28),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.1),
+              color: Theme.of(context).brightness == Brightness.dark 
+                  ? Colors.black.withOpacity(0.4) 
+                  : Colors.black.withOpacity(0.1),
               blurRadius: 20,
               offset: const Offset(0, 10),
             ),
@@ -732,10 +753,10 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen>
             // Inside your build method or playback panel widget:
 Obx(() => Text(
   _currentAddressRx.value.isEmpty ? 'sharedLocating'.tr : _currentAddressRx.value,
-  style: const TextStyle(
+  style: TextStyle(
     fontSize: 14,
     fontWeight: FontWeight.bold,
-    color: Colors.black87,
+    color: Theme.of(context).colorScheme.onSurface,
   ),
   maxLines: 1,
   overflow: TextOverflow.ellipsis,
@@ -793,15 +814,14 @@ Obx(() => Text(
                   ),
                 ),
                 child: Slider(
-                  value: _playbackPositionRx.value.clamp(0.0, maxVal),
-                  min: 0.0,
+                  value: _playbackPositionRx.value,
                   max: maxVal,
-                  activeColor: const Color(0xFF0F53FE),
-                  inactiveColor: Colors.blue.withOpacity(0.1),
                   onChanged: (v) {
                     _playbackPositionRx.value = v;
                     _updatePlaybackUI();
                   },
+                  activeColor: Theme.of(context).colorScheme.primary,
+                  inactiveColor: Theme.of(context).colorScheme.primary.withOpacity(0.15),
                 ),
               );
             }),
@@ -809,13 +829,13 @@ Obx(() => Text(
               children: [
                 IconButton.filled(
                   style: IconButton.styleFrom(
-                    backgroundColor: const Color(0xFF0F53FE),
+                    backgroundColor: Theme.of(context).colorScheme.primary,
                     minimumSize: const Size(50, 50),
                   ),
                   onPressed: _togglePlayback,
                   icon: Icon(
                     _isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                    color: Colors.white,
+                    color: Theme.of(context).colorScheme.onPrimary,
                     size: 30,
                   ),
                 ),
@@ -886,13 +906,13 @@ Obx(() => Text(
       children: [
         Row(
           children: [
-            Icon(icon, size: 14, color: Colors.blueAccent),
+            Icon(icon, size: 14, color: Theme.of(context).colorScheme.primary),
             const SizedBox(width: 4),
             Text(
               label,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 11,
-                color: Colors.grey,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -901,9 +921,10 @@ Obx(() => Text(
         const SizedBox(height: 2),
         Text(
           value,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 15,
             fontWeight: FontWeight.bold,
+            color: Theme.of(context).colorScheme.onSurface,
             letterSpacing: -0.5,
           ),
         ),
@@ -936,7 +957,7 @@ Obx(() => Text(
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: Colors.grey.shade100,
+        color: Theme.of(context).colorScheme.surfaceVariant,
         borderRadius: BorderRadius.circular(16),
       ),
       child: Row(
@@ -948,7 +969,9 @@ Obx(() => Text(
               duration: const Duration(milliseconds: 200),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
-                color: selected ? Colors.white : Colors.transparent,
+                color: selected 
+                  ? Theme.of(context).colorScheme.primaryContainer 
+                  : Colors.transparent,
                 borderRadius: BorderRadius.circular(12),
                 boxShadow: selected
                     ? [
@@ -964,7 +987,9 @@ Obx(() => Text(
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: selected ? FontWeight.bold : FontWeight.normal,
-                  color: selected ? Colors.blue : Colors.grey,
+                  color: selected 
+                    ? Theme.of(context).colorScheme.onPrimaryContainer 
+                    : Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
               ),
             ),
@@ -1135,10 +1160,6 @@ Obx(() => Text(
                         Navigator.pop(context);
                       },
 
-                      headerStyle: const HeaderStyle(
-                        formatButtonVisible: false,
-                        titleCentered: true,
-                      ),
 
                       // --- 關鍵部分：添加 MarkerBuilder 來顯示里程 ---
                       calendarBuilders: CalendarBuilders(
@@ -1177,17 +1198,35 @@ Obx(() => Text(
                         },
                       ),
 
-                      calendarStyle: const CalendarStyle(
+                      calendarStyle: CalendarStyle(
                         todayDecoration: BoxDecoration(
-                          color: Colors.blueAccent,
+                          color: Theme.of(context).colorScheme.primary.withOpacity(0.5),
                           shape: BoxShape.circle,
                         ),
                         selectedDecoration: BoxDecoration(
-                          color: Color(0xFF0F53FE),
+                          color: Theme.of(context).colorScheme.primary,
                           shape: BoxShape.circle,
                         ),
+                        defaultTextStyle: TextStyle(color: Theme.of(context).colorScheme.onSurface),
+                        weekendTextStyle: TextStyle(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7)),
+                        outsideTextStyle: TextStyle(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.3)),
                         // 為了不讓里程文字跟日期重疊，稍微調整邊距
-                        cellMargin: EdgeInsets.all(6),
+                        cellMargin: const EdgeInsets.all(6),
+                      ),
+                      headerStyle: HeaderStyle(
+                        formatButtonVisible: false,
+                        titleCentered: true,
+                        titleTextStyle: TextStyle(
+                          color: Theme.of(context).colorScheme.onSurface,
+                          fontSize: 17,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        leftChevronIcon: Icon(Icons.chevron_left, color: Theme.of(context).colorScheme.primary),
+                        rightChevronIcon: Icon(Icons.chevron_right, color: Theme.of(context).colorScheme.primary),
+                      ),
+                      daysOfWeekStyle: DaysOfWeekStyle(
+                        weekdayStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                        weekendStyle: TextStyle(color: Theme.of(context).colorScheme.primary.withOpacity(0.8)),
                       ),
                     ),
                   ),

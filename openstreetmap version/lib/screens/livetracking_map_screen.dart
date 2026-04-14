@@ -20,6 +20,7 @@ import 'dart:convert';
 import 'package:timeago/timeago.dart' as timeago;
 import 'package:trabcdefg/widgets/OfflineAddressService.dart';
 import 'package:trabcdefg/l10n/timeago_my.dart'; // 新增 Myanmar TimeAgo
+import 'package:shared_preferences/shared_preferences.dart';
 
 // Offline address fallback via OfflineAddressService
 class LiveTrackingMapScreen extends StatefulWidget {
@@ -35,6 +36,7 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
   Position? _currentDevicePosition;
   bool _isCameraLocked = true;
   bool _isStyleLoaded = false;
+  double _currentZoom = 14.0;
   double _mapCenterOffset = 0.007;
   double _mapCenterOnset = 0.008;
 
@@ -49,6 +51,17 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
 
     // Initialize Offline DB on screen load
     OfflineAddressService.initDatabase();
+    _loadZoomLevel();
+  }
+
+  Future<void> _loadZoomLevel() async {
+    final prefs = await SharedPreferences.getInstance();
+    final lastZoom = prefs.getDouble('live_tracking_zoom_level');
+    if (lastZoom != null) {
+      setState(() {
+        _currentZoom = lastZoom;
+      });
+    }
   }
 
   bool _checkIsStale(Device device, Position? position) {
@@ -119,10 +132,13 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
 
     if (_isCameraLocked) {
       _mapController!.animateCamera(
-        CameraUpdate.newLatLng(
-          LatLng(
-            _currentDevicePosition!.latitude!.toDouble() - _mapCenterOffset,
-            _currentDevicePosition!.longitude!.toDouble(),
+        CameraUpdate.newCameraPosition(
+          CameraPosition(
+            target: LatLng(
+              _currentDevicePosition!.latitude!.toDouble() - _mapCenterOffset,
+              _currentDevicePosition!.longitude!.toDouble(),
+            ),
+            zoom: _currentZoom,
           ),
         ),
       );
@@ -182,9 +198,15 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
                         _mapCenterOffset,
                     lastPosition.longitude?.toDouble() ?? 0.0,
                   ),
-                  zoom: 14.0,
+                  zoom: _currentZoom,
                 ),
                 styleString: Provider.of<MapStyleProvider>(context).styleString,
+                onCameraMove: (position) {
+                  _currentZoom = position.zoom;
+                  SharedPreferences.getInstance().then((prefs) {
+                    prefs.setDouble('live_tracking_zoom_level', position.zoom);
+                  });
+                },
                 onMapCreated: _onMapCreated,
                 onStyleLoadedCallback: () {
                   _isStyleLoaded = true;

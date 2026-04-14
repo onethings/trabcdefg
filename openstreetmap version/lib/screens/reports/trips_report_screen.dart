@@ -13,121 +13,9 @@ import 'package:trabcdefg/providers/map_style_provider.dart';
 import 'package:flutter/services.dart';
 import 'dart:math';
 import 'package:trabcdefg/widgets/OfflineAddressService.dart';
-import 'package:hive_flutter/hive_flutter.dart';
 import 'package:http/http.dart' as http;
-import 'dart:ui' as ui;
 import 'package:get/get.dart';
-import 'package:flutter_map/flutter_map.dart' hide LatLng, LatLngBounds;
-import 'package:flutter/foundation.dart';
-import 'dart:typed_data';
-
-// --- Tile Caching Implementation using Hive (Copied from map_screen.dart) ---
-
-class _TileCacheService {
-  late Box<Uint8List> _tileBox;
-  static const String boxName = 'mapTilesCache';
-
-  Future<void> init() async {
-    _tileBox = await Hive.openBox<Uint8List>(boxName);
-  }
-
-  String _generateKey(String url) {
-    return url.hashCode.toString();
-  }
-
-  Future<Uint8List?> getTile(String url) async {
-    return _tileBox.get(_generateKey(url));
-  }
-
-  Future<void> saveTile(String url, Uint8List tileData) async {
-    await _tileBox.put(_generateKey(url), tileData);
-  }
-}
-
-class CachedNetworkImageProvider extends ImageProvider<CachedNetworkImageProvider> {
-  final String url;
-  final _TileCacheService cacheService;
-  final http.Client httpClient;
-
-  CachedNetworkImageProvider(
-    this.url, {
-    required this.cacheService,
-    required this.httpClient,
-  });
-
-  @override
-  ImageStreamCompleter loadImage(
-    CachedNetworkImageProvider key,
-    ImageDecoderCallback decode,
-  ) {
-    return MultiFrameImageStreamCompleter(
-      codec: _loadAsync(key, decode),
-      scale: 1.0,
-      informationCollector: () => <DiagnosticsNode>[
-        DiagnosticsProperty<ImageProvider>('Image provider', this),
-        DiagnosticsProperty<CachedNetworkImageProvider>('Original key', key),
-      ],
-    );
-  }
-
-  @override
-  Future<CachedNetworkImageProvider> obtainKey(
-    ImageConfiguration configuration, 
-  ) {
-    return Future<CachedNetworkImageProvider>.value(this);
-  }
-
-  Future<ui.Codec> _loadAsync(
-    CachedNetworkImageProvider key,
-    ImageDecoderCallback decode,
-  ) async {
-    assert(key == this);
-
-    final cachedData = await cacheService.getTile(url);
-
-    if (cachedData != null) {
-      return decode(await ui.ImmutableBuffer.fromUint8List(cachedData)); 
-    }
-
-    try {
-      final response = await httpClient.get(Uri.parse(url));
-
-      if (response.statusCode == 200) {
-        final Uint8List bytes = response.bodyBytes;
-        
-        await cacheService.saveTile(url, bytes);
-
-        return decode(await ui.ImmutableBuffer.fromUint8List(bytes)); 
-      } else {
-        throw Exception('Failed to load tile from network: ${response.statusCode}');
-      }
-    } catch (e) {
-      rethrow;
-    }
-  }
-}
-
-class _HiveTileProvider extends TileProvider {
-  final _TileCacheService cacheService;
-  final http.Client httpClient;
-
-  _HiveTileProvider({
-    required this.cacheService,
-    required this.httpClient,
-  });
-
-  @override
-  ImageProvider getImage(
-    TileCoordinates coordinates,
-    TileLayer options,
-  ) {
-    return CachedNetworkImageProvider(
-      getTileUrl(coordinates, options),
-      cacheService: cacheService,
-      httpClient: httpClient,
-    );
-  }
-}
+// Enum and Tile Provider removed as they are no longer needed with native MapLibre caching.
 
 // Enum moved to provider
 
@@ -222,14 +110,7 @@ class _TripsReportScreenState extends State<TripsReportScreen> {
   maplibre.MapLibreMapController? _mapController;
   final Set<String> _loadedIcons = {};
   bool _isStyleLoaded = false;
-  final http.Client _httpClient = http.Client();
-  
-  // Tile URLs (ADDED)
-  static const String _osmUrlTemplate = 
-      'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
-  static const String _satelliteUrlTemplate = 
-      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
-  static const List<String> _osmSubdomains = ['a', 'b', 'c'];
+// Constants for manual tile URLs removed as we use MapStyleProvider now.
 
 
   @override
@@ -240,7 +121,6 @@ class _TripsReportScreenState extends State<TripsReportScreen> {
 
   @override
   void dispose() {
-    _httpClient.close(); // Dispose HTTP client
     super.dispose();
   }
 
@@ -366,7 +246,7 @@ Future<void> _fetchTripsReport() async {
         await _mapController!.addLine(
           maplibre.LineOptions(
             geometry: [start, end],
-            lineColor: "#0000FF",
+            lineColor: Theme.of(context).colorScheme.primary.toHex(),
             lineWidth: 4.0,
           ),
         );
@@ -449,7 +329,13 @@ Future<void> _fetchTripsReport() async {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return Scaffold(body: Center(child: Text('sharedLoading'.tr)));
+      return Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(
+            color: Theme.of(context).colorScheme.primary,
+          ),
+        ),
+      );
     }
 
     if (_tripsReport.isEmpty) {
@@ -479,16 +365,19 @@ Future<void> _fetchTripsReport() async {
                     target: initialCenter,
                     zoom: 14.0,
                   ),
-                  styleString: mapProvider.styleString,
+                  styleString: mapProvider.getStyle(Theme.of(context).brightness),
                 ),
                 Positioned(
                   top: 10,
                   right: 10,
                   child: FloatingActionButton(
+                    heroTag: "btn_style_trip",
                     mini: true,
+                    backgroundColor: Theme.of(context).colorScheme.surface,
                     onPressed: () => mapProvider.toggleMapType(),
                     child: Icon(
                       mapProvider.isSatelliteMode ? Icons.map : Icons.satellite_alt,
+                      color: Theme.of(context).colorScheme.onSurface,
                     ),
                   ),
                 ),
@@ -515,45 +404,46 @@ Future<void> _fetchTripsReport() async {
                         children: [
                           Text(
                             '${'reportTrips'.tr} ${index + 1}',
-                            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                            style: TextStyle(
+                              fontSize: 18, 
+                              fontWeight: FontWeight.bold,
+                              color: Theme.of(context).colorScheme.onSurface,
+                            ),
                           ),
                           const Divider(),
+                          _buildTripDetailRow('reportStartTime'.tr, DateFormat('yyyy-MM-dd HH:mm').format(trip.startTime.toLocal())),
+                          _buildTripDetailRow('reportEndTime'.tr, DateFormat('yyyy-MM-dd HH:mm').format(trip.endTime.toLocal())),
+                          _buildTripDetailRow('reportDuration'.tr, _formatDuration(trip.duration)),
+                          _buildTripDetailRow('sharedDistance'.tr, _formatDistance(trip.distance)),
+                          _buildTripDetailRow('reportAverageSpeed'.tr, '${trip.averageSpeed.toStringAsFixed(2)} ${'sharedKmh'.tr}'),
                           ListTile(
-                            title: Text('reportStartTime'.tr),
-                            trailing: Text(DateFormat('yyyy-MM-dd HH:mm').format(trip.startTime.toLocal())),
-                          ),
-                          ListTile(
-                            title: Text('reportEndTime'.tr),
-                            trailing: Text(DateFormat('yyyy-MM-dd HH:mm').format(trip.endTime.toLocal())),
-                          ),
-                          ListTile(
-                            title: Text('reportDuration'.tr),
-                            trailing: Text(_formatDuration(trip.duration)),
-                          ),
-                          ListTile(
-                            title: Text('sharedDistance'.tr),
-                            trailing: Text(_formatDistance(trip.distance)),
-                          ),
-                          ListTile(
-                            title: Text('reportAverageSpeed'.tr),
-                            trailing: Text('${trip.averageSpeed.toStringAsFixed(2)} ${'sharedKmh'.tr}'),
-                          ),
-                          ListTile(
-                            title: Text('reportStartAddress'.tr),
+                            title: Text(
+                              'reportStartAddress'.tr,
+                              style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                            ),
                             subtitle: FutureBuilder<String>(
                               future: trip.startAddress != null && trip.startAddress!.isNotEmpty
                                   ? Future.value(trip.startAddress)
                                   : OfflineAddressService.getAddress(trip.startLat, trip.startLon),
-                              builder: (context, snapshot) => Text(snapshot.data ?? '...'),
+                              builder: (context, snapshot) => Text(
+                                snapshot.data ?? '...',
+                                style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
+                              ),
                             ),
                           ),
                           ListTile(
-                            title: Text('reportEndAddress'.tr),
+                            title: Text(
+                              'reportEndAddress'.tr,
+                              style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                            ),
                             subtitle: FutureBuilder<String>(
                               future: trip.endAddress != null && trip.endAddress!.isNotEmpty
                                   ? Future.value(trip.endAddress)
                                   : OfflineAddressService.getAddress(trip.endLat, trip.endLon),
-                              builder: (context, snapshot) => Text(snapshot.data ?? '...'),
+                              builder: (context, snapshot) => Text(
+                                snapshot.data ?? '...',
+                                style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
+                              ),
                             ),
                           ),
                         ],
@@ -568,4 +458,24 @@ Future<void> _fetchTripsReport() async {
       ),
     );
   }
+
+  Widget _buildTripDetailRow(String title, String value) {
+    return ListTile(
+      title: Text(
+        title,
+        style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+      ),
+      trailing: Text(
+        value,
+        style: TextStyle(
+          fontWeight: FontWeight.bold,
+          color: Theme.of(context).colorScheme.onSurface,
+        ),
+      ),
+    );
+  }
+}
+
+extension ColorToHex on Color {
+  String toHex() => '#${value.toRadixString(16).padLeft(8, '0').substring(2)}';
 }

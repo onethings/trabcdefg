@@ -18,7 +18,7 @@ class MapStyleProvider with ChangeNotifier {
 
   // Style Strings/Assets
   static const String _streetStyle = "assets/styles/liberty.json";
-  static const String _brightStyle = "assets/styles/versatiles-style.json";
+  static const String _brightStyle = "assets/styles/versatiles-style.json";//streets-v4.json";//"assets/styles/versatiles-style.json";
   static const String _darkStyle = "assets/styles/dark.json";
   static const String _terrainStyle = "assets/styles/fiord.json";
   static const String _hybridStyle = "assets/styles/positron.json";
@@ -50,22 +50,26 @@ class MapStyleProvider with ChangeNotifier {
     await prefs.setInt(_prefKey, type.index);
   }
 
-  String get styleString {
+  String getStyle(Brightness brightness) {
+    bool isDark = brightness == Brightness.dark;
+    
     switch (_mapType) {
-      case AppMapType.liberty:
-        return _streetStyle;
       case AppMapType.bright:
-        return _brightStyle;
-      case AppMapType.dark:
-        return _darkStyle;
-      case AppMapType.terrain:
-        return _terrainStyle;
+        return isDark ? _darkStyle : _brightStyle;
       case AppMapType.satellite:
         return _satelliteStyle;
+      case AppMapType.dark:
+        return _darkStyle;
+      case AppMapType.liberty:
+        return _streetStyle;
+      case AppMapType.terrain:
+        return _terrainStyle;
       case AppMapType.hybrid:
         return _hybridStyle;
     }
   }
+
+  String get styleString => getStyle(Brightness.light);
 
   bool get isSatelliteMode => _mapType == AppMapType.satellite;
 

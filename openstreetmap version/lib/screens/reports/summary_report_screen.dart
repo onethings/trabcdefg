@@ -152,7 +152,13 @@ class _SummaryReportScreenState extends State<SummaryReportScreen> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return Scaffold(body: Center(child: Text('sharedLoading'.tr)));
+      return Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(
+            color: Theme.of(context).colorScheme.primary,
+          ),
+        ),
+      );
     }
 
     if (_summaryReport == null) {
@@ -177,49 +183,45 @@ class _SummaryReportScreenState extends State<SummaryReportScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('sharedName'.tr + ': ${_summaryReport!.deviceName}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    Text(
+                      '${'sharedName'.tr}: ${_summaryReport!.deviceName}', 
+                      style: TextStyle(
+                        fontSize: 18, 
+                        fontWeight: FontWeight.bold,
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
+                    ),
                     const Divider(),
-                    ListTile(
-                      title: Text('deviceTotalDistance'.tr),
-                      trailing: Text('${(_summaryReport!.distance / 1000).toStringAsFixed(2)} ' + 'sharedKm'.tr),
-                    ),
-                    ListTile(
-                      title: Text('reportAverageSpeed'.tr),
-                      trailing: Text('${_summaryReport!.averageSpeed.toStringAsFixed(2)} ' + 'sharedKmh'.tr),
-                    ),
-                    ListTile(
-                      title: Text('reportMaximumSpeed'.tr),
-                      trailing: Text('${_summaryReport!.maxSpeed.toStringAsFixed(2)} ' + 'sharedKmh'.tr),
-                    ),
-                    ListTile(
-                      title: Text('reportSpentFuel'.tr),
-                      trailing: Text('${_summaryReport!.spentFuel.toStringAsFixed(2)} ' + 'sharedLiter'.tr),
-                    ),
-                    ListTile(
-                      title: Text('reportStartOdometer'.tr),
-                      trailing: Text('${(_summaryReport!.startOdometer / 1000).toStringAsFixed(2)} ' + 'sharedKm'.tr),
-                    ),
-                    ListTile(
-                      title: Text('reportEndOdometer'.tr),
-                      trailing: Text('${(_summaryReport!.endOdometer / 1000).toStringAsFixed(2)} ' + 'sharedKm'.tr),
-                    ),
-                    ListTile(
-                      title: Text('reportStartTime'.tr),
-                      trailing: Text(DateFormat('yyyy-MM-dd HH:mm').format(_summaryReport!.startTime.toLocal())),
-                    ),
-                    ListTile(
-                      title: Text('reportEndTime'.tr),
-                      trailing: Text(DateFormat('yyyy-MM-dd HH:mm').format(_summaryReport!.endTime.toLocal())),
-                    ),
-                    ListTile(
-                      title: Text('reportEngineHours'.tr),
-                      trailing: Text(_formatEngineHours(_summaryReport!.engineHours)),
-                    ),
+                    _buildSummaryItem('deviceTotalDistance'.tr, '${(_summaryReport!.distance / 1000).toStringAsFixed(2)} ${'sharedKm'.tr}'),
+                    _buildSummaryItem('reportAverageSpeed'.tr, '${_summaryReport!.averageSpeed.toStringAsFixed(2)} ${'sharedKmh'.tr}'),
+                    _buildSummaryItem('reportMaximumSpeed'.tr, '${_summaryReport!.maxSpeed.toStringAsFixed(2)} ${'sharedKmh'.tr}'),
+                    _buildSummaryItem('reportSpentFuel'.tr, '${_summaryReport!.spentFuel.toStringAsFixed(2)} ${'sharedLiter'.tr}'),
+                    _buildSummaryItem('reportStartOdometer'.tr, '${(_summaryReport!.startOdometer / 1000).toStringAsFixed(2)} ${'sharedKm'.tr}'),
+                    _buildSummaryItem('reportEndOdometer'.tr, '${(_summaryReport!.endOdometer / 1000).toStringAsFixed(2)} ${'sharedKm'.tr}'),
+                    _buildSummaryItem('reportStartTime'.tr, DateFormat('yyyy-MM-dd HH:mm').format(_summaryReport!.startTime.toLocal())),
+                    _buildSummaryItem('reportEndTime'.tr, DateFormat('yyyy-MM-dd HH:mm').format(_summaryReport!.endTime.toLocal())),
+                    _buildSummaryItem('reportEngineHours'.tr, _formatEngineHours(_summaryReport!.engineHours)),
                   ],
                 ),
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSummaryItem(String title, String value) {
+    return ListTile(
+      title: Text(
+        title,
+        style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+      ),
+      trailing: Text(
+        value,
+        style: TextStyle(
+          fontWeight: FontWeight.bold,
+          color: Theme.of(context).colorScheme.onSurface,
         ),
       ),
     );

@@ -193,14 +193,20 @@ class _EventsReportScreenState extends State<EventsReportScreen> {
         title: Text('${'reportEvents'.tr}: ${_deviceName ?? ''}'),
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? Center(
+              child: CircularProgressIndicator(
+                color: Theme.of(context).colorScheme.primary,
+              ),
+            )
           : Column(
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
                   child: DropdownButton<String>(
                     isExpanded: true,
                     value: _selectedEventType,
+                    dropdownColor: Theme.of(context).colorScheme.surface,
+                    style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
                     onChanged: (String? newValue) {
                       setState(() {
                         _selectedEventType = newValue!;
@@ -236,18 +242,16 @@ class _EventsReportScreenState extends State<EventsReportScreen> {
                                   children: [
                                     Text(
                                       '${'positionEvent'.tr}: ${translatedEventKey.tr}',
-                                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                                      style: TextStyle(
+                                        fontSize: 18, 
+                                        fontWeight: FontWeight.bold,
+                                        color: Theme.of(context).colorScheme.onSurface,
+                                      ),
                                     ),
                                     const Divider(),
-                                    ListTile(
-                                      title: Text('positionServerTime'.tr),
-                                      trailing: Text(DateFormat('yyyy-MM-dd HH:mm').format(event.eventTime.toLocal())),
-                                    ),
+                                    _buildEventDetailRow('positionServerTime'.tr, DateFormat('yyyy-MM-dd HH:mm').format(event.eventTime.toLocal())),
                                     ...event.attributes.entries.map((entry) {
-                                      return ListTile(
-                                        title: Text(entry.key),
-                                        trailing: Text(entry.value.toString()),
-                                      );
+                                      return _buildEventDetailRow(entry.key, entry.value.toString());
                                     }).toList(),
                                   ],
                                 ),
@@ -258,6 +262,22 @@ class _EventsReportScreenState extends State<EventsReportScreen> {
                 ),
               ],
             ),
+    );
+  }
+
+  Widget _buildEventDetailRow(String title, String value) {
+    return ListTile(
+      title: Text(
+        title,
+        style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+      ),
+      trailing: Text(
+        value,
+        style: TextStyle(
+          fontWeight: FontWeight.bold,
+          color: Theme.of(context).colorScheme.onSurface,
+        ),
+      ),
     );
   }
 }
