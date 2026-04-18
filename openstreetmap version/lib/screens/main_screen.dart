@@ -7,6 +7,7 @@ import 'package:trabcdefg/screens/reports/reports_screen.dart'; // Import the ne
 import 'package:trabcdefg/screens/settings/settings_screen.dart';
 import 'package:trabcdefg/screens/home/dashboard_screen.dart';
 import 'package:get/get.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:ui';
 
 class MainScreen extends StatefulWidget {
@@ -26,10 +27,30 @@ class _MainScreenState extends State<MainScreen> {
     SettingsScreen(),
   ];
 
-  void _onTabTapped(int index) {
+  @override
+  void initState() {
+    super.initState();
+    _loadLastTab();
+  }
+
+  Future<void> _loadLastTab() async {
+    final prefs = await SharedPreferences.getInstance();
+    final lastTab = prefs.getInt('last_main_tab_index');
+    if (lastTab != null && lastTab < _screens.length) {
+      if (mounted) {
+        setState(() {
+          _currentIndex = lastTab;
+        });
+      }
+    }
+  }
+
+  void _onTabTapped(int index) async {
     setState(() {
       _currentIndex = index;
     });
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('last_main_tab_index', index);
   }
 
   @override
