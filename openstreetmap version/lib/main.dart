@@ -30,27 +30,26 @@ import 'package:trabcdefg/providers/theme_provider.dart';
 import 'package:trabcdefg/theme/app_theme.dart';
 import 'package:trabcdefg/providers/settings_provider.dart';
 
-
-
-
 void main() async {
   // Ensure that Flutter is initialized before running the app.
   WidgetsFlutterBinding.ensureInitialized();
-  
-  // Initialize Hive for local data storage.
-  await Hive.initFlutter();
-  Hive.registerAdapter(ReportSummaryHiveAdapter());
 
-  Hive.registerAdapter(RoutePositionsHiveAdapter());
-  
-  // Open the UI settings box for persisting local UI states (e.g. Map Controls toggle)
-  await Hive.openBox('ui_settings');
-  
-  // Load the saved Traccar server URL and the language code from shared preferences.
-  final prefs = await SharedPreferences.getInstance();
+  // Group initialization tasks into Future.wait for parallel execution.
+  // This reduces the time before runApp is called.
+  final results = await Future.wait([
+    () async {
+      await Hive.initFlutter();
+      Hive.registerAdapter(ReportSummaryHiveAdapter());
+      Hive.registerAdapter(RoutePositionsHiveAdapter());
+      await Hive.openBox('ui_settings');
+    }(),
+    SharedPreferences.getInstance(),
+    initializeDateFormatting(),
+  ]);
+
+  final prefs = results[1] as SharedPreferences;
   final savedUrl = prefs.getString('traccarServerUrl');
   final savedLanguageCode = prefs.getString('saved_language_code');
-  await initializeDateFormatting();
   
   runApp(TraccarApp(
     initialUrl: savedUrl,

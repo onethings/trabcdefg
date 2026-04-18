@@ -287,10 +287,17 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
 
         return Container(
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24.0)),
-            boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 20)],
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24.0)),
+            boxShadow: [
+              BoxShadow(
+                color: Theme.of(context).brightness == Brightness.dark 
+                    ? Colors.black.withOpacity(0.4) 
+                    : Colors.black12, 
+                blurRadius: 20
+              )
+            ],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -319,9 +326,10 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
                             Expanded(
                               child: Text(
                                 widget.selectedDevice.name ?? 'Unknown',
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 20,
                                   fontWeight: FontWeight.bold,
+                                  color: Theme.of(context).colorScheme.onSurface,
                                 ),
                               ),
                             ),
@@ -340,13 +348,13 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
                         ),
                         const SizedBox(height: 4),
                         // Display either API or Offline street name
-                        Text(
-                          _currentStreetName,
-                          style: TextStyle(
-                            color: Colors.grey[700],
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                          ),
+                          Text(
+                            _currentStreetName,
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                            ),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -401,27 +409,44 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
                       Icons.battery_std,
                       '${attributes['batteryLevel']}%',
                       'Battery',
-                    ),
-                ],
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
+                  ),
+              ],
+            ),
+          ],
+        ),
+      );
+    },
+  );
+}
 
-  Widget _buildInfoItem(IconData icon, String value, String label) => Column(
+Widget _buildInfoItem(IconData icon, String value, String label) {
+  final isDark = Theme.of(Get.context!).brightness == Brightness.dark;
+  return Column(
     children: [
-      Icon(icon, color: Colors.blueGrey[400], size: 20),
+      Icon(
+        icon, 
+        color: isDark ? Colors.blueGrey[200] : Colors.blueGrey[400], 
+        size: 20
+      ),
       const SizedBox(height: 8),
       Text(
         value,
-        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+        style: TextStyle(
+          fontWeight: FontWeight.bold, 
+          fontSize: 15,
+          color: Theme.of(Get.context!).colorScheme.onSurface,
+        ),
       ),
-      Text(label, style: TextStyle(color: Colors.grey[500], fontSize: 11)),
+      Text(
+        label, 
+        style: TextStyle(
+          color: isDark ? Colors.white60 : Colors.grey[500], 
+          fontSize: 11
+        )
+      ),
     ],
   );
+}
 
   void _onSymbolTapped(Symbol symbol) {
     if (mounted) {
