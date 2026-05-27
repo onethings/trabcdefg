@@ -1,18 +1,17 @@
 // lib/screens/edit_user_screen.dart
 // A screen to edit user information in the TracDefg app.
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import 'package:trabcdefg/src/generated_api/api.dart' as api;
-import 'package:trabcdefg/providers/traccar_provider.dart';
-import 'package:http/http.dart' as http;
 import 'package:get/get.dart';
+import 'package:http/http.dart' as http;
+import 'package:provider/provider.dart';
+import 'package:trabcdefg/providers/traccar_provider.dart';
+import 'package:trabcdefg/src/generated_api/api.dart' as api;
 
 class EditUserScreen extends StatefulWidget {
   const EditUserScreen({super.key});
 
   @override
-  _EditUserScreenState createState() => _EditUserScreenState();
+  State<EditUserScreen> createState() => _EditUserScreenState();
 }
 
 class _EditUserScreenState extends State<EditUserScreen> {
@@ -60,11 +59,9 @@ class _EditUserScreenState extends State<EditUserScreen> {
           setState(() {
             _isLoading = false;
           });
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('userLoadInfoFailed'.tr),
-            ),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('userLoadInfoFailed'.tr)));
         }
       }
     } on http.ClientException catch (e) {
@@ -72,17 +69,21 @@ class _EditUserScreenState extends State<EditUserScreen> {
         setState(() {
           _isLoading = false;
         });
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('errorNetwork'.trParams({'error': e.message}))));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('errorNetwork'.trParams({'error': e.message})),
+          ),
+        );
       }
     } on api.ApiException catch (e) {
       if (mounted) {
         setState(() {
           _isLoading = false;
         });
-        String errorMessage =
-            'errorApi'.trParams({'statusCode': e.code.toString(), 'details': e.toString()});
+        String errorMessage = 'errorApi'.trParams({
+          'statusCode': e.code.toString(),
+          'details': e.toString(),
+        });
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text(errorMessage)));
@@ -93,7 +94,9 @@ class _EditUserScreenState extends State<EditUserScreen> {
           _isLoading = false;
         });
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('errorUnexpected'.trParams({'error': e.toString()}))),
+          SnackBar(
+            content: Text('errorUnexpected'.trParams({'error': e.toString()})),
+          ),
         );
       }
     }
@@ -102,10 +105,7 @@ class _EditUserScreenState extends State<EditUserScreen> {
   void _logout() {
     final traccarProvider = context.read<TraccarProvider>();
     traccarProvider.clearSessionAndData();
-    Navigator.of(context).pushNamedAndRemoveUntil(
-      '/login',
-      (route) => false,
-    );
+    Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
   }
 
   Future<void> _updateUser() async {
@@ -145,8 +145,12 @@ class _EditUserScreenState extends State<EditUserScreen> {
 
         final userPath = '/users/${updatedUser.id}';
 
-        print('tracmi-Updating user info at URL: ${apiClient.basePath}$userPath');
-        print('tracmi-Updating user info with body: ${updatedUser.toJson()}');
+        debugPrint(
+          'tracmi-Updating user info at URL: ${apiClient.basePath}$userPath',
+        );
+        debugPrint(
+          'tracmi-Updating user info with body: ${updatedUser.toJson()}',
+        );
 
         final userResponse = await apiClient.invokeAPI(
           userPath,
@@ -158,18 +162,20 @@ class _EditUserScreenState extends State<EditUserScreen> {
           'application/json',
         );
 
-        print('tracmi-User info update status code: ${userResponse.statusCode}');
-        print('tracmi-User info update response body: ${userResponse.body}');
+        debugPrint(
+          'tracmi-User info update status code: ${userResponse.statusCode}',
+        );
+        debugPrint(
+          'tracmi-User info update response body: ${userResponse.body}',
+        );
 
         if (mounted) {
           final emailChanged = _emailController.text != _currentUser!.email;
           final passwordChanged = _passwordController.text.isNotEmpty;
 
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('userUpdateSuccess'.tr),
-            ),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('userUpdateSuccess'.tr)));
 
           if (emailChanged || passwordChanged) {
             _logout();
@@ -179,25 +185,31 @@ class _EditUserScreenState extends State<EditUserScreen> {
         }
       } on api.ApiException catch (e) {
         if (mounted) {
-          String errorMessage =
-              'errorApi'.trParams({'statusCode': e.code.toString(), 'details': e.toString()});
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(errorMessage),
-            ),
-          );
+          String errorMessage = 'errorApi'.trParams({
+            'statusCode': e.code.toString(),
+            'details': e.toString(),
+          });
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(errorMessage)));
         }
       } on http.ClientException catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('errorNetwork'.trParams({'error': e.message}))),
+            SnackBar(
+              content: Text('errorNetwork'.trParams({'error': e.message})),
+            ),
           );
         }
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text('userUpdateFailed'.trParams({'error': e.toString()}))));
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'userUpdateFailed'.trParams({'error': e.toString()}),
+              ),
+            ),
+          );
         }
       } finally {
         if (mounted) {
@@ -217,9 +229,7 @@ class _EditUserScreenState extends State<EditUserScreen> {
       final apiClient = context.read<TraccarProvider>().apiClient;
       final userId = _currentUser!.id;
       final userPath = '/users/$userId';
-      final headerParams = <String, String>{
-        'Content-Type': 'application/json',
-      };
+      final headerParams = <String, String>{'Content-Type': 'application/json'};
 
       final userResponse = await apiClient.invokeAPI(
         userPath,
@@ -232,41 +242,45 @@ class _EditUserScreenState extends State<EditUserScreen> {
       );
 
       if (mounted) {
-        if (userResponse.statusCode == 204) { // No Content
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('userDeleteSuccess'.tr),
-            ),
-          );
+        if (userResponse.statusCode == 204) {
+          // No Content
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('userDeleteSuccess'.tr)));
           _logout(); // Log out and navigate to login screen
         } else {
-          String errorMessage = 'userDeleteFailed'.trParams({'statusCode': userResponse.statusCode.toString()});
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(errorMessage),
-            ),
-          );
+          String errorMessage = 'userDeleteFailed'.trParams({
+            'statusCode': userResponse.statusCode.toString(),
+          });
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(errorMessage)));
         }
       }
     } on api.ApiException catch (e) {
       if (mounted) {
-        String errorMessage = 'errorApi'.trParams({'statusCode': e.code.toString(), 'details': e.toString()});
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(errorMessage),
-          ),
-        );
+        String errorMessage = 'errorApi'.trParams({
+          'statusCode': e.code.toString(),
+          'details': e.toString(),
+        });
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(errorMessage)));
       }
     } on http.ClientException catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('errorNetwork'.trParams({'error': e.message}))),
+          SnackBar(
+            content: Text('errorNetwork'.trParams({'error': e.message})),
+          ),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('userDeleteFailed'.trParams({'error': e.toString()}))),
+          SnackBar(
+            content: Text('userDeleteFailed'.trParams({'error': e.toString()})),
+          ),
         );
       }
     } finally {
@@ -279,7 +293,8 @@ class _EditUserScreenState extends State<EditUserScreen> {
   }
 
   Future<void> _showDeleteConfirmationDialog() async {
-    final TextEditingController confirmEmailController = TextEditingController();
+    final TextEditingController confirmEmailController =
+        TextEditingController();
     return showDialog<void>(
       context: context,
       barrierDismissible: false,
@@ -289,7 +304,7 @@ class _EditUserScreenState extends State<EditUserScreen> {
           content: SingleChildScrollView(
             child: ListBody(
               children: <Widget>[
-               // Text('userConfirmDeletePrompt'.tr),
+                // Text('userConfirmDeletePrompt'.tr),
                 const SizedBox(height: 16),
                 TextField(
                   controller: confirmEmailController,
@@ -306,12 +321,14 @@ class _EditUserScreenState extends State<EditUserScreen> {
               child: Text('sharedCancel'.tr),
               onPressed: () {
                 Navigator.of(context).pop();
-                // confirmEmailController.dispose();
               },
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-              child: Text('sharedRemove'.tr, style: const TextStyle(color: Colors.white)),
+              child: Text(
+                'sharedRemove'.tr,
+                style: const TextStyle(color: Colors.white),
+              ),
               onPressed: () {
                 if (confirmEmailController.text == _currentUser?.email) {
                   Navigator.of(context).pop();
@@ -321,7 +338,6 @@ class _EditUserScreenState extends State<EditUserScreen> {
                     SnackBar(content: Text('userEmailMismatch'.tr)),
                   );
                 }
-                // confirmEmailController.dispose();
               },
             ),
           ],
@@ -401,7 +417,10 @@ class _EditUserScreenState extends State<EditUserScreen> {
                         backgroundColor: Colors.red,
                         minimumSize: const Size.fromHeight(50),
                       ),
-                      child: Text('userDeleteAccount'.tr, style: const TextStyle(color: Colors.white)),
+                      child: Text(
+                        'userDeleteAccount'.tr,
+                        style: const TextStyle(color: Colors.white),
+                      ),
                     ),
                   ],
                 ),

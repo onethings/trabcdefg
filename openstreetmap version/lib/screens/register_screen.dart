@@ -4,8 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
-import 'package:trabcdefg/constants.dart';
-import 'package:get/get.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -56,19 +54,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
       }
     } on api.ApiException catch (e) {
       if (mounted) {
-        String errorMessage = 'API error: Status Code ${e.code}, Details: ${e.toString()}';
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(errorMessage),
-          ),
-        );
+        String errorMessage =
+            'API error: Status Code ${e.code}, Details: ${e.toString()}';
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(errorMessage)));
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('An unexpected error occurred: $e'),
-          ),
+          SnackBar(content: Text('An unexpected error occurred: $e')),
         );
       }
     } finally {

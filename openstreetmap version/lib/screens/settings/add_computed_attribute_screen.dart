@@ -1,19 +1,22 @@
 // add_computed_attribute_screen.dart
 //  A screen to add a new computed attribute in the TracDefg app.
 import 'package:flutter/material.dart';
-import 'package:trabcdefg/src/generated_api/api.dart' as api;
-import 'package:trabcdefg/providers/traccar_provider.dart';
-import 'package:provider/provider.dart';
 import 'package:get/get.dart';
+import 'package:provider/provider.dart';
+import 'package:trabcdefg/providers/traccar_provider.dart';
+import 'package:trabcdefg/src/generated_api/api.dart' as api;
 
 class AddComputedAttributeScreen extends StatefulWidget {
   const AddComputedAttributeScreen({super.key});
 
   @override
-  _AddComputedAttributeScreenState createState() => _AddComputedAttributeScreenState();
+  State<AddComputedAttributeScreen> createState() =>
+      _AddComputedAttributeScreenState();
 }
 
-class _AddComputedAttributeScreenState extends State<AddComputedAttributeScreen> {
+// ignore: library_private_types_in_public_api
+class _AddComputedAttributeScreenState
+    extends State<AddComputedAttributeScreen> {
   final _formKey = GlobalKey<FormState>();
   String? _description;
   String? _attribute;
@@ -32,18 +35,31 @@ class _AddComputedAttributeScreenState extends State<AddComputedAttributeScreen>
       );
 
       try {
-        final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
+        final traccarProvider = Provider.of<TraccarProvider>(
+          context,
+          listen: false,
+        );
         // Correct way to instantiate AttributesApi with the authenticated client
         final attributesApi = api.AttributesApi(traccarProvider.apiClient);
         await attributesApi.attributesComputedPost(newAttribute);
+
+        // Fix: check if widget is still in the tree across async gaps
+        if (!mounted) return;
+
         Navigator.of(context).pop(true);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('sharedComputedAttribute'.tr + ' ' + 'sharedSaved'.tr)),
+          SnackBar(
+            content: Text(
+              '${'sharedComputedAttribute'.tr} ${'sharedSaved'.tr}',
+            ),
+          ),
         );
       } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('errorGeneral'.tr + ': $e')),
-        );
+        if (!mounted) return;
+
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('${'errorGeneral'.tr}: $e')));
       }
     }
   }
@@ -52,7 +68,7 @@ class _AddComputedAttributeScreenState extends State<AddComputedAttributeScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('sharedAdd'.tr + ' ' + 'sharedComputedAttribute'.tr),
+        title: Text('${'sharedAdd'.tr} ${'sharedComputedAttribute'.tr}'),
       ),
       body: SafeArea(
         child: Padding(
@@ -62,16 +78,21 @@ class _AddComputedAttributeScreenState extends State<AddComputedAttributeScreen>
             child: ListView(
               children: [
                 TextFormField(
-                  decoration: InputDecoration(labelText: 'sharedDescription'.tr),
+                  decoration: InputDecoration(
+                    labelText: 'sharedDescription'.tr,
+                  ),
                   onSaved: (value) {
                     _description = value;
                   },
                 ),
                 TextFormField(
-                  decoration: InputDecoration(labelText: 'sharedAttribute'.tr + ' (' + 'sharedRequired'.tr + ')'),
+                  decoration: InputDecoration(
+                    labelText:
+                        '${'sharedAttribute'.tr} (${'sharedRequired'.tr})',
+                  ),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
-                      return 'sharedAttribute'.tr + ' ' + 'sharedRequired'.tr;
+                      return '${'sharedAttribute'.tr} ${'sharedRequired'.tr}';
                     }
                     return null;
                   },
@@ -80,10 +101,13 @@ class _AddComputedAttributeScreenState extends State<AddComputedAttributeScreen>
                   },
                 ),
                 TextFormField(
-                  decoration: InputDecoration(labelText: 'sharedExpression'.tr + ' (' + 'sharedRequired'.tr + ')'),
+                  decoration: InputDecoration(
+                    labelText:
+                        '${'sharedExpression'.tr} (${'sharedRequired'.tr})',
+                  ),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
-                      return 'sharedExpression'.tr + ' ' + 'sharedRequired'.tr;
+                      return '${'sharedExpression'.tr} ${'sharedRequired'.tr}';
                     }
                     return null;
                   },
@@ -94,8 +118,11 @@ class _AddComputedAttributeScreenState extends State<AddComputedAttributeScreen>
                 const SizedBox(height: 20),
                 Text('sharedType'.tr),
                 DropdownButtonFormField<String>(
-                  value: _type,
-                  items: <String>['String', 'Number', 'Boolean'].map((String value) {
+                  // Fix: changed deprecated 'value' to 'initialValue'
+                  initialValue: _type,
+                  items: <String>['String', 'Number', 'Boolean'].map((
+                    String value,
+                  ) {
                     String translatedValue;
                     if (value == 'String') {
                       translatedValue = 'sharedTypeString'.tr;

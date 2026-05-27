@@ -1,15 +1,16 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:trabcdefg/src/generated_api/api.dart' as api;
-import 'package:provider/provider.dart';
-import 'package:trabcdefg/providers/traccar_provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:hive_flutter/hive_flutter.dart';
-import 'package:trabcdefg/screens/monthly_mileage_screen.dart';
+import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:trabcdefg/providers/traccar_provider.dart';
 import 'package:trabcdefg/screens/command_screen.dart';
-import 'package:trabcdefg/screens/settings/add_device_screen.dart';
 import 'package:trabcdefg/screens/device_details_screen.dart';
-import 'dart:ui';
+import 'package:trabcdefg/screens/monthly_mileage_screen.dart';
+import 'package:trabcdefg/screens/settings/add_device_screen.dart';
+import 'package:trabcdefg/src/generated_api/api.dart' as api;
 
 class DeviceDetailPanel extends StatefulWidget {
   final api.Device device;
@@ -79,9 +80,9 @@ class _DeviceDetailPanelState extends State<DeviceDetailPanel> {
     if (_isLoadingPreference) {
       return const SizedBox.shrink(); // Prevent visual jumping before preference loads
     }
-    
+
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
       child: ClipRRect(
@@ -90,10 +91,14 @@ class _DeviceDetailPanelState extends State<DeviceDetailPanel> {
           filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
           child: Container(
             decoration: BoxDecoration(
-              color: (isDark ? Colors.black : Colors.white).withOpacity(0.7),
+              color: (isDark ? Colors.black : Colors.white).withValues(
+                alpha: 0.7,
+              ),
               borderRadius: BorderRadius.circular(24),
               border: Border.all(
-                color: (isDark ? Colors.white : Colors.black).withOpacity(0.1),
+                color: (isDark ? Colors.white : Colors.black).withValues(
+                  alpha: 0.1,
+                ),
                 width: 0.5,
               ),
             ),
@@ -106,12 +111,14 @@ class _DeviceDetailPanelState extends State<DeviceDetailPanel> {
                   height: 4,
                   width: 36,
                   decoration: BoxDecoration(
-                    color: (isDark ? Colors.white : Colors.black).withOpacity(0.12),
+                    color: (isDark ? Colors.white : Colors.black).withValues(
+                      alpha: 0.12,
+                    ),
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
                 const SizedBox(height: 12),
-                
+
                 // Header (Name, Info, Status Tags)
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -135,7 +142,9 @@ class _DeviceDetailPanelState extends State<DeviceDetailPanel> {
                               widget.formattedDate,
                               style: TextStyle(
                                 fontSize: 11,
-                                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurfaceVariant,
                               ),
                             ),
                           ],
@@ -145,16 +154,18 @@ class _DeviceDetailPanelState extends State<DeviceDetailPanel> {
                     ],
                   ),
                 ),
-                
+
                 const SizedBox(height: 12),
-                
+
                 // Status Row (Speed, Battery, Ignition)
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: (isDark ? Colors.white : Colors.black).withOpacity(0.05),
+                      color: (isDark ? Colors.white : Colors.black).withValues(
+                        alpha: 0.05,
+                      ),
                       borderRadius: BorderRadius.circular(16),
                     ),
                     child: Row(
@@ -174,9 +185,9 @@ class _DeviceDetailPanelState extends State<DeviceDetailPanel> {
                     ),
                   ),
                 ),
-                
+
                 const SizedBox(height: 12),
-                
+
                 // Address Row
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -185,7 +196,9 @@ class _DeviceDetailPanelState extends State<DeviceDetailPanel> {
                       Icon(
                         Icons.location_on_rounded,
                         size: 14,
-                        color: Theme.of(context).colorScheme.primary.withOpacity(0.7),
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.primary.withValues(alpha: 0.7),
                       ),
                       const SizedBox(width: 6),
                       Expanded(
@@ -193,7 +206,9 @@ class _DeviceDetailPanelState extends State<DeviceDetailPanel> {
                           widget.address,
                           style: TextStyle(
                             fontSize: 12,
-                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onSurfaceVariant,
                           ),
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -201,8 +216,7 @@ class _DeviceDetailPanelState extends State<DeviceDetailPanel> {
                     ],
                   ),
                 ),
-                
-                
+
                 // Action Buttons (Conditionally Visible)
                 if (_isExpanded) ...[
                   const SizedBox(height: 16),
@@ -221,11 +235,16 @@ class _DeviceDetailPanelState extends State<DeviceDetailPanel> {
     return Container(
       height: 24,
       width: 0.5,
-      color: (isDark ? Colors.white : Colors.black).withOpacity(0.1),
+      color: (isDark ? Colors.white : Colors.black).withValues(alpha: 0.1),
     );
   }
 
-  Widget _buildStatusItem(BuildContext context, IconData icon, String value, String label) {
+  Widget _buildStatusItem(
+    BuildContext context,
+    IconData icon,
+    String value,
+    String label,
+  ) {
     return Column(
       children: [
         Row(
@@ -244,7 +263,9 @@ class _DeviceDetailPanelState extends State<DeviceDetailPanel> {
           label,
           style: TextStyle(
             fontSize: 9,
-            color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.7),
+            color: Theme.of(
+              context,
+            ).colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
           ),
         ),
       ],
@@ -253,7 +274,6 @@ class _DeviceDetailPanelState extends State<DeviceDetailPanel> {
 
   Widget _buildBatteryItem(BuildContext context) {
     final battery = _getAttribute(widget.position, 'batteryLevel') as num?;
-    final val = battery?.toDouble() ?? 0.0;
     return _buildStatusItem(
       context,
       Icons.battery_charging_full_rounded,
@@ -281,11 +301,7 @@ class _DeviceDetailPanelState extends State<DeviceDetailPanel> {
           () => _navigateToMileage(context),
         ),
         const SizedBox(width: 8),
-        _buildCircleIcon(
-          context,
-          Icons.refresh_rounded,
-          widget.onRefresh,
-        ),
+        _buildCircleIcon(context, Icons.refresh_rounded, widget.onRefresh),
         const SizedBox(width: 8),
         Consumer<TraccarProvider>(
           builder: (context, provider, child) {
@@ -301,24 +317,35 @@ class _DeviceDetailPanelState extends State<DeviceDetailPanel> {
         const SizedBox(width: 8),
         _buildCircleIcon(
           context,
-          _isExpanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
+          _isExpanded
+              ? Icons.keyboard_arrow_up_rounded
+              : Icons.keyboard_arrow_down_rounded,
           _toggleExpanded,
         ),
       ],
     );
   }
 
-  Widget _buildCircleIcon(BuildContext context, IconData icon, VoidCallback onTap, {Color? color}) {
+  Widget _buildCircleIcon(
+    BuildContext context,
+    IconData icon,
+    VoidCallback onTap, {
+    Color? color,
+  }) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
-          color: (isDark ? Colors.white : Colors.black).withOpacity(0.08),
+          color: (isDark ? Colors.white : Colors.black).withValues(alpha: 0.08),
           shape: BoxShape.circle,
         ),
-        child: Icon(icon, size: 18, color: color ?? Theme.of(context).colorScheme.onSurface),
+        child: Icon(
+          icon,
+          size: 18,
+          color: color ?? Theme.of(context).colorScheme.onSurface,
+        ),
       ),
     );
   }
@@ -340,25 +367,61 @@ class _DeviceDetailPanelState extends State<DeviceDetailPanel> {
       margin: const EdgeInsets.symmetric(horizontal: 16),
       padding: const EdgeInsets.symmetric(vertical: 4),
       decoration: BoxDecoration(
-        color: (Theme.of(context).brightness == Brightness.dark ? Colors.white : Colors.black).withOpacity(0.05),
+        color:
+            (Theme.of(context).brightness == Brightness.dark
+                    ? Colors.white
+                    : Colors.black)
+                .withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(16),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
-          _buildActionItem(context, Icons.info_outline_rounded, () => _navigateToDetails(context)),
-          _buildActionItem(context, Icons.send_rounded, () => _navigateToCommand(context)),
-          _buildActionItem(context, Icons.more_horiz_rounded, widget.onMoreOptionsPressed),
-          _buildActionItem(context, Icons.edit_outlined, () => _navigateToEdit(context)),
-          _buildActionItem(context, Icons.delete_outline_rounded, widget.onDeletePressed, color: Colors.red),
+          _buildActionItem(
+            context,
+            Icons.info_outline_rounded,
+            () => _navigateToDetails(context),
+          ),
+          _buildActionItem(
+            context,
+            Icons.send_rounded,
+            () => _navigateToCommand(context),
+          ),
+          _buildActionItem(
+            context,
+            Icons.more_horiz_rounded,
+            widget.onMoreOptionsPressed,
+          ),
+          _buildActionItem(
+            context,
+            Icons.edit_outlined,
+            () => _navigateToEdit(context),
+          ),
+          _buildActionItem(
+            context,
+            Icons.delete_outline_rounded,
+            widget.onDeletePressed,
+            color: Colors.red,
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildActionItem(BuildContext context, IconData icon, VoidCallback onTap, {Color? color}) {
+  Widget _buildActionItem(
+    BuildContext context,
+    IconData icon,
+    VoidCallback onTap, {
+    Color? color,
+  }) {
     return IconButton(
-      icon: Icon(icon, size: 22, color: color ?? Theme.of(context).colorScheme.onSurface.withOpacity(0.8)),
+      icon: Icon(
+        icon,
+        size: 22,
+        color:
+            color ??
+            Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.8),
+      ),
       onPressed: onTap,
     );
   }
@@ -368,45 +431,31 @@ class _DeviceDetailPanelState extends State<DeviceDetailPanel> {
     await prefs.setInt('selectedDeviceId', widget.device.id!);
     await prefs.setString('selectedDeviceName', widget.device.name!);
     if (context.mounted) {
-      Navigator.push(context, MaterialPageRoute(builder: (context) => MonthlyMileageScreen()));
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => const MonthlyMileageScreen()),
+      );
     }
   }
 
   void _navigateToCommand(BuildContext context) {
-    Navigator.push(context, MaterialPageRoute(builder: (context) => const CommandScreen()));
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const CommandScreen()),
+    );
   }
 
   void _navigateToEdit(BuildContext context) async {
     final result = await Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => AddDeviceScreen(device: widget.device)),
+      MaterialPageRoute(
+        builder: (context) => AddDeviceScreen(device: widget.device),
+      ),
     );
     if (result != null) widget.onRefresh();
   }
 
-  double _getDistance(api.Position pos) {
-    return (_getAttribute(pos, 'distance') as num?)?.toDouble() ?? 0.0;
-  }
-
   dynamic _getAttribute(api.Position pos, String key) {
     return (pos.attributes as Map<String, dynamic>?)?[key];
-  }
-
-  Color _getBatteryColor(double batteryLevel) {
-    if (batteryLevel > 75) return Colors.green;
-    if (batteryLevel > 25) return Colors.orange;
-    return Colors.red;
-  }
-
-  Widget _buildDetailsSection(BuildContext context) {
-    return const SizedBox.shrink(); // Integrated into status row
-  }
-
-  Widget _buildInfoRow(BuildContext context, String label, String value) {
-    return const SizedBox.shrink();
-  }
-
-  Widget _buildActionButtons(BuildContext context) {
-    return const SizedBox.shrink();
   }
 }

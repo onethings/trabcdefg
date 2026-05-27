@@ -2,14 +2,15 @@
 // A screen to display events report in the TracDefg app.
 import 'dart:async';
 import 'dart:convert';
+
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import 'package:trabcdefg/src/generated_api/api.dart' as api;
-import 'package:trabcdefg/providers/traccar_provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:intl/intl.dart';
-import 'package:http/http.dart' as http;
 import 'package:get/get.dart';
+import 'package:http/http.dart' as http;
+import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:trabcdefg/providers/traccar_provider.dart';
+import 'package:trabcdefg/src/generated_api/api.dart' as api;
 
 class EventReport {
   final int id;
@@ -103,13 +104,15 @@ class _EventsReportScreenState extends State<EventsReportScreen> {
     final deviceId = prefs.getInt('selectedDeviceId');
     final fromDateString = prefs.getString('historyFrom');
     final toDateString = prefs.getString('historyTo');
-    print('Fetched from SharedPreferences: deviceId=$deviceId, fromDate=$fromDateString, toDate=$toDateString');
+    debugPrint(
+      'Fetched from SharedPreferences: deviceId=$deviceId, fromDate=$fromDateString, toDate=$toDateString',
+    );
 
     if (deviceId == null || fromDateString == null || toDateString == null) {
       setState(() {
         _isLoading = false;
       });
-      print('Missing device ID or date range from SharedPreferences.');
+      debugPrint('Missing device ID or date range from SharedPreferences.');
       return;
     }
 
@@ -120,18 +123,18 @@ class _EventsReportScreenState extends State<EventsReportScreen> {
       setState(() {
         _isLoading = false;
       });
-      print('Failed to parse date strings.');
+      debugPrint('Failed to parse date strings.');
       return;
     }
 
     try {
       final apiClient = traccarProvider.apiClient;
       final queryParams = [
-          api.QueryParam('from', fromDate.toIso8601String()),
-          api.QueryParam('to', toDate.toIso8601String()),
-          api.QueryParam('deviceId', deviceId.toString()),
+        api.QueryParam('from', fromDate.toIso8601String()),
+        api.QueryParam('to', toDate.toIso8601String()),
+        api.QueryParam('deviceId', deviceId.toString()),
       ];
-      
+
       if (_selectedEventType != 'eventAll') {
         queryParams.add(api.QueryParam('type', _selectedEventType));
       }
@@ -168,14 +171,23 @@ class _EventsReportScreenState extends State<EventsReportScreen> {
             }
           }
         } else {
-          print('Warning: Expected JSON, but received content type: $contentType');
+          debugPrint(
+            'Warning: Expected JSON, but received content type: $contentType',
+          );
+          if (!mounted) return; // Added mounted check guard
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed to load events report. The server returned a file instead of JSON.'.tr)),
+            SnackBar(
+              content: Text(
+                'Failed to load events report. The server returned a file instead of JSON.'
+                    .tr,
+              ),
+            ),
           );
         }
       }
     } catch (e) {
-      print('Error fetching events report: $e');
+      debugPrint('Error fetching events report: $e');
+      if (!mounted) return; // Added mounted check guard
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to load events report.'.tr)),
       );
@@ -189,9 +201,7 @@ class _EventsReportScreenState extends State<EventsReportScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text('${'reportEvents'.tr}: ${_deviceName ?? ''}'),
-      ),
+      appBar: AppBar(title: Text('${'reportEvents'.tr}: ${_deviceName ?? ''}')),
       body: _isLoading
           ? Center(
               child: CircularProgressIndicator(
@@ -201,12 +211,17 @@ class _EventsReportScreenState extends State<EventsReportScreen> {
           : Column(
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16.0,
+                    vertical: 8.0,
+                  ),
                   child: DropdownButton<String>(
                     isExpanded: true,
                     value: _selectedEventType,
                     dropdownColor: Theme.of(context).colorScheme.surface,
-                    style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
                     onChanged: (String? newValue) {
                       setState(() {
                         _selectedEventType = newValue!;
@@ -214,10 +229,12 @@ class _EventsReportScreenState extends State<EventsReportScreen> {
                       });
                     },
                     items: _eventTypes
-                        .map((type) => DropdownMenuItem(
-                              value: type,
-                              child: Text(type.tr),
-                            ))
+                        .map(
+                          (type) => DropdownMenuItem(
+                            value: type,
+                            child: Text(type.tr),
+                          ),
+                        )
                         .toList(),
                   ),
                 ),
@@ -229,9 +246,9 @@ class _EventsReportScreenState extends State<EventsReportScreen> {
                           itemCount: _eventsReport.length,
                           itemBuilder: (context, index) {
                             final event = _eventsReport[index];
-                            final translatedEventKey = 'event' +
-                                event.type[0].toUpperCase() +
-                                event.type.substring(1);
+                            // Swapped string concatenation for standard string interpolation
+                            final translatedEventKey =
+                                'event${event.type[0].toUpperCase()}${event.type.substring(1)}';
                             return Card(
                               elevation: 4,
                               margin: const EdgeInsets.only(bottom: 16.0),
@@ -243,16 +260,27 @@ class _EventsReportScreenState extends State<EventsReportScreen> {
                                     Text(
                                       '${'positionEvent'.tr}: ${translatedEventKey.tr}',
                                       style: TextStyle(
-                                        fontSize: 18, 
+                                        fontSize: 18,
                                         fontWeight: FontWeight.bold,
-                                        color: Theme.of(context).colorScheme.onSurface,
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.onSurface,
                                       ),
                                     ),
                                     const Divider(),
-                                    _buildEventDetailRow('positionServerTime'.tr, DateFormat('yyyy-MM-dd HH:mm').format(event.eventTime.toLocal())),
+                                    _buildEventDetailRow(
+                                      'positionServerTime'.tr,
+                                      DateFormat(
+                                        'yyyy-MM-dd HH:mm',
+                                      ).format(event.eventTime.toLocal()),
+                                    ),
+                                    // Removed redundant '.toList()' call from inside the spread array context
                                     ...event.attributes.entries.map((entry) {
-                                      return _buildEventDetailRow(entry.key, entry.value.toString());
-                                    }).toList(),
+                                      return _buildEventDetailRow(
+                                        entry.key,
+                                        entry.value.toString(),
+                                      );
+                                    }),
                                   ],
                                 ),
                               ),

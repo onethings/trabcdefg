@@ -1,16 +1,17 @@
 import 'dart:ui';
+
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
-import 'package:trabcdefg/providers/traccar_provider.dart';
-import 'package:trabcdefg/services/auth_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:trabcdefg/constants.dart';
-import 'package:trabcdefg/src/generated_api/api.dart' as api;
-import 'package:trabcdefg/screens/qr_scanner_screen.dart';
-import 'package:get/get.dart';
-import 'package:trabcdefg/services/localization_service.dart';
-import 'package:package_info_plus/package_info_plus.dart';
 import 'package:trabcdefg/providers/theme_provider.dart';
+import 'package:trabcdefg/providers/traccar_provider.dart';
+import 'package:trabcdefg/screens/qr_scanner_screen.dart';
+import 'package:trabcdefg/services/auth_service.dart';
+import 'package:trabcdefg/services/localization_service.dart';
+import 'package:trabcdefg/src/generated_api/api.dart' as api;
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -62,11 +63,6 @@ class _LoginScreenState extends State<LoginScreen>
     super.dispose();
   }
 
-  // ... (保留原本的 _login, _handleQrScan, _showServerDialog 等邏輯不變) ...
-  // 注意：這裡為了簡潔省略重複的邏輯方法，請保留你原本的實作
-
-  // === 這是修復錯誤所需的功能邏輯 ===
-
   Future<void> _login() async {
     setState(() => _isLoading = true);
     try {
@@ -74,25 +70,30 @@ class _LoginScreenState extends State<LoginScreen>
       if (serverUrl.isEmpty) {
         throw Exception('Please enter a server URL'.tr);
       }
-      
+
       // Auto-append scheme if missing
-      if (!serverUrl.startsWith('http://') && !serverUrl.startsWith('https://')) {
+      if (!serverUrl.startsWith('http://') &&
+          !serverUrl.startsWith('https://')) {
         // If it looks like a local IP or localhost, default to http, else https
-        final isLocal = RegExp(r'^(localhost|127\.|192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)').hasMatch(serverUrl);
+        final isLocal = RegExp(
+          r'^(localhost|127\.|192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)',
+        ).hasMatch(serverUrl);
         serverUrl = (isLocal ? 'http://' : 'https://') + serverUrl;
       }
-      
+
       // Remove trailing slash
       while (serverUrl.endsWith('/')) {
         serverUrl = serverUrl.substring(0, serverUrl.length - 1);
       }
-      
+
       _serverUrlController.text = serverUrl;
       final newApiClient = api.ApiClient(basePath: '$serverUrl/api');
 
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('traccarServerUrl', serverUrl);
 
+      // Guard checking asynchronous gap before utilizing BuildContext
+      if (!mounted) return;
       final authService = context.read<AuthService>();
       final traccarProvider = context.read<TraccarProvider>();
 
@@ -111,8 +112,10 @@ class _LoginScreenState extends State<LoginScreen>
       if (mounted) {
         Get.snackbar(
           'Error'.tr,
-          e.toString().contains('Failed host lookup') || e.toString().contains('Exception occurred:')
-              ? 'Could not connect to server. Please check the URL and your network.'.tr
+          e.toString().contains('Failed host lookup') ||
+                  e.toString().contains('Exception occurred:')
+              ? 'Could not connect to server. Please check the URL and your network.'
+                    .tr
               : e.toString(),
           snackPosition: SnackPosition.BOTTOM,
         );
@@ -164,8 +167,6 @@ class _LoginScreenState extends State<LoginScreen>
     );
   }
 
-  // === 功能邏輯結束 ===
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -183,7 +184,6 @@ class _LoginScreenState extends State<LoginScreen>
               child: Center(
                 child: SingleChildScrollView(
                   physics: const BouncingScrollPhysics(),
-                  //  padding: const EdgeInsets.symmetric(horizontal: 28),
                   child: Column(
                     children: [
                       // 3. 主要登入卡片 (Glassmorphism)
@@ -216,7 +216,7 @@ class _LoginScreenState extends State<LoginScreen>
             right: -50,
             child: CircleAvatar(
               radius: 150,
-              backgroundColor: theme.colorScheme.primary.withOpacity(0.1),
+              backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.1),
             ),
           ),
           Positioned(
@@ -224,7 +224,9 @@ class _LoginScreenState extends State<LoginScreen>
             left: -50,
             child: CircleAvatar(
               radius: 120,
-              backgroundColor: theme.colorScheme.secondary.withOpacity(0.08),
+              backgroundColor: theme.colorScheme.secondary.withValues(
+                alpha: 0.08,
+              ),
             ),
           ),
           BackdropFilter(
@@ -319,7 +321,7 @@ class _LoginScreenState extends State<LoginScreen>
             prefixIcon: Icon(icon, size: 20),
             suffixIcon: suffix,
             filled: true,
-            fillColor: theme.colorScheme.onSurface.withOpacity(0.03),
+            fillColor: theme.colorScheme.onSurface.withValues(alpha: 0.03),
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 16,
               vertical: 16,
@@ -331,7 +333,7 @@ class _LoginScreenState extends State<LoginScreen>
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16),
               borderSide: BorderSide(
-                color: theme.colorScheme.outlineVariant.withOpacity(0.3),
+                color: theme.colorScheme.outlineVariant.withValues(alpha: 0.3),
               ),
             ),
             focusedBorder: OutlineInputBorder(
@@ -422,7 +424,7 @@ class _LoginScreenState extends State<LoginScreen>
           Text(
             'v $_version',
             style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurface.withOpacity(0.4),
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
             ),
           ),
           Row(
@@ -472,7 +474,7 @@ class _LoginScreenState extends State<LoginScreen>
           boxShadow: isSelected
               ? [
                   BoxShadow(
-                    color: color.withOpacity(0.5),
+                    color: color.withValues(alpha: 0.5),
                     blurRadius: 10,
                     spreadRadius: 1,
                   ),
@@ -484,7 +486,6 @@ class _LoginScreenState extends State<LoginScreen>
   }
 }
 
-// === 伺服器選擇彈窗組件 ===
 class _ServerPickerSheet extends StatefulWidget {
   final Function(String) onSelected;
   const _ServerPickerSheet({required this.onSelected});
@@ -507,23 +508,23 @@ class _ServerPickerSheetState extends State<_ServerPickerSheet> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final allServers = AppConstants.officialServers;
-    
-    // 過濾列表
+
     final filteredServers = allServers
         .where((s) => s.toLowerCase().contains(_inputQuery.toLowerCase()))
         .toList();
 
-    // 判斷是否顯示「手動輸入」選項
-    // 如果輸入框不為空，且不完全等於預設列表中的某一項，就顯示手動輸入按鈕
-    bool showCustomOption = _inputQuery.isNotEmpty && !allServers.contains(_inputQuery);
+    bool showCustomOption =
+        _inputQuery.isNotEmpty && !allServers.contains(_inputQuery);
 
     return BackdropFilter(
       filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
       child: Container(
         height: MediaQuery.of(context).size.height * 0.75,
-        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom), // 確保鍵盤不遮擋
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom,
+        ),
         decoration: BoxDecoration(
-          color: theme.colorScheme.surface.withOpacity(0.9),
+          color: theme.colorScheme.surface.withValues(alpha: 0.9),
           borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
         ),
         child: SafeArea(
@@ -531,12 +532,17 @@ class _ServerPickerSheetState extends State<_ServerPickerSheet> {
           child: Column(
             children: [
               const SizedBox(height: 12),
-              _buildHandle(), // 頂部灰色橫條
+              _buildHandle(),
               const SizedBox(height: 16),
-              Text('ServerUrl'.tr, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+              Text(
+                'ServerUrl'.tr,
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
               const SizedBox(height: 12),
-              
-              // 搜尋與輸入框
+
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20.0),
                 child: TextField(
@@ -545,18 +551,26 @@ class _ServerPickerSheetState extends State<_ServerPickerSheet> {
                   decoration: InputDecoration(
                     hintText: 'http://your-server-ip:8082',
                     prefixIcon: const Icon(Icons.edit_note_rounded),
-                    suffixIcon: _inputQuery.isNotEmpty 
-                      ? IconButton(
-                          icon: const Icon(Icons.check_circle, color: Colors.green),
-                          onPressed: () {
-                            widget.onSelected(_inputQuery);
-                            Navigator.pop(context);
-                          },
-                        )
-                      : null,
+                    suffixIcon: _inputQuery.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(
+                              Icons.check_circle,
+                              color: Colors.green,
+                            ),
+                            onPressed: () {
+                              widget.onSelected(_inputQuery);
+                              Navigator.pop(context);
+                            },
+                          )
+                        : null,
                     filled: true,
-                    fillColor: theme.colorScheme.onSurface.withOpacity(0.05),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                    fillColor: theme.colorScheme.onSurface.withValues(
+                      alpha: 0.05,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide.none,
+                    ),
                   ),
                 ),
               ),
@@ -566,7 +580,6 @@ class _ServerPickerSheetState extends State<_ServerPickerSheet> {
                 child: ListView(
                   padding: const EdgeInsets.symmetric(horizontal: 10),
                   children: [
-                    // 如果有手動輸入內容，顯示一個特殊的「使用自定義」項目
                     if (showCustomOption)
                       ListTile(
                         leading: const Icon(Icons.add_link, color: Colors.blue),
@@ -577,18 +590,19 @@ class _ServerPickerSheetState extends State<_ServerPickerSheet> {
                           Navigator.pop(context);
                         },
                       ),
-                    
+
                     if (showCustomOption) const Divider(),
 
-                    // 原始列表
-                    ...filteredServers.map((url) => ListTile(
-                      title: Text(url, style: const TextStyle(fontSize: 14)),
-                      leading: const Icon(Icons.dns_outlined, size: 18),
-                      onTap: () {
-                        widget.onSelected(url);
-                        Navigator.pop(context);
-                      },
-                    )).toList(),
+                    ...filteredServers.map(
+                      (url) => ListTile(
+                        title: Text(url, style: const TextStyle(fontSize: 14)),
+                        leading: const Icon(Icons.dns_outlined, size: 18),
+                        onTap: () {
+                          widget.onSelected(url);
+                          Navigator.pop(context);
+                        },
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -601,13 +615,16 @@ class _ServerPickerSheetState extends State<_ServerPickerSheet> {
 
   Widget _buildHandle() {
     return Container(
-      width: 40, height: 4,
-      decoration: BoxDecoration(color: Colors.grey[400], borderRadius: BorderRadius.circular(2)),
+      width: 40,
+      height: 4,
+      decoration: BoxDecoration(
+        color: Colors.grey[400],
+        borderRadius: BorderRadius.circular(2),
+      ),
     );
   }
 }
 
-// === 語言選擇彈窗組件 ===
 class _LanguagePickerSheet extends StatefulWidget {
   const _LanguagePickerSheet();
 
@@ -643,7 +660,7 @@ class _LanguagePickerSheetState extends State<_LanguagePickerSheet> {
       child: Container(
         height: MediaQuery.of(context).size.height * 0.75,
         decoration: BoxDecoration(
-          color: theme.colorScheme.surface.withOpacity(0.9),
+          color: theme.colorScheme.surface.withValues(alpha: 0.9),
           borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
         ),
         child: SafeArea(
@@ -677,7 +694,9 @@ class _LanguagePickerSheetState extends State<_LanguagePickerSheet> {
                     hintText: 'sharedSearch'.tr,
                     prefixIcon: const Icon(Icons.search),
                     filled: true,
-                    fillColor: theme.colorScheme.onSurface.withOpacity(0.05),
+                    fillColor: theme.colorScheme.onSurface.withValues(
+                      alpha: 0.05,
+                    ),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(16),
                       borderSide: BorderSide.none,
@@ -691,7 +710,9 @@ class _LanguagePickerSheetState extends State<_LanguagePickerSheet> {
                   padding: const EdgeInsets.symmetric(horizontal: 10),
                   itemCount: filteredIndices.length,
                   separatorBuilder: (context, index) => Divider(
-                    color: theme.colorScheme.outlineVariant.withOpacity(0.3),
+                    color: theme.colorScheme.outlineVariant.withValues(
+                      alpha: 0.3,
+                    ),
                   ),
                   itemBuilder: (context, index) {
                     final idx = filteredIndices[index];
@@ -700,7 +721,11 @@ class _LanguagePickerSheetState extends State<_LanguagePickerSheet> {
                       onTap: () async {
                         await LocalizationService.saveLocale(allLocales[idx]);
                         Get.updateLocale(allLocales[idx]);
-                        if (mounted) Navigator.pop(context);
+
+                        // ✅ 修正：檢查即將使用的這個 context 是否 mounted
+                        if (context.mounted) {
+                          Navigator.pop(context);
+                        }
                       },
                     );
                   },

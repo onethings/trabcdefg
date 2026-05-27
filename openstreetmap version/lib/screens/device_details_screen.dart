@@ -2,12 +2,12 @@
 // DeviceDetailsScreen displaying detailed device info and latest position
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // <-- ADD THIS IMPORT for Clipboard
+import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
-import 'package:get/get.dart';
 
 // 1. Create a container class for all necessary future data
 class DeviceData {
@@ -22,15 +22,20 @@ class DeviceDetailsScreen extends StatelessWidget {
 
   // 2. Define a function to fetch all required data
   Future<DeviceData> _fetchDeviceAndPositions(
-      BuildContext context, int deviceId) async {
-    final traccarProvider =
-        Provider.of<TraccarProvider>(context, listen: false);
+    BuildContext context,
+    int deviceId,
+  ) async {
+    final traccarProvider = Provider.of<TraccarProvider>(
+      context,
+      listen: false,
+    );
     final devicesApi = api.DevicesApi(traccarProvider.apiClient);
     final positionsApi = api.PositionsApi(traccarProvider.apiClient);
 
     // Fetch the device details
     final deviceList = await devicesApi.devicesGet(id: deviceId);
-    final device = deviceList!.first; // Assuming the ID is unique and returns one device
+    final device =
+        deviceList!.first; // Assuming the ID is unique and returns one device
 
     // Fetch the latest position
     final positions = await positionsApi.positionsGet(deviceId: deviceId);
@@ -40,7 +45,10 @@ class DeviceDetailsScreen extends StatelessWidget {
 
   // 3. A dedicated row for copyable content (the phone number)
   Widget _buildCopyableDetailRow(
-      BuildContext context, String label, String value) {
+    BuildContext context,
+    String label,
+    String value,
+  ) {
     // Only allow copying if the value is meaningful (not the 'sharedNoData' string)
     final bool isCopyable = value.isNotEmpty && value != 'sharedNoData'.tr;
 
@@ -73,15 +81,18 @@ class DeviceDetailsScreen extends StatelessWidget {
                   // The copy icon wrapped in a tap detector
                   InkWell(
                     onTap: () async {
+                      // Capture the messenger state BEFORE the async gap
+                      final messenger = ScaffoldMessenger.of(context);
+
                       await Clipboard.setData(ClipboardData(text: value));
-                      
+
                       // FIX APPLIED HERE in previous step: calculate the dynamic string first
                       final String confirmationText =
                           // Assuming 'copiedToClipboard' is a translation key
                           '$label ${'copiedToClipboard'.tr}';
 
-                      // Show confirmation message
-                      ScaffoldMessenger.of(context).showSnackBar(
+                      // Show confirmation message safely using the captured messenger
+                      messenger.showSnackBar(
                         SnackBar(
                           content: Text(confirmationText),
                           duration: const Duration(seconds: 1),
@@ -90,11 +101,7 @@ class DeviceDetailsScreen extends StatelessWidget {
                     },
                     child: const Padding(
                       padding: EdgeInsets.only(left: 8.0),
-                      child: Icon(
-                        Icons.copy,
-                        size: 16,
-                        color: Colors.grey,
-                      ),
+                      child: Icon(Icons.copy, size: 16, color: Colors.grey),
                     ),
                   ),
               ],
@@ -134,7 +141,8 @@ class DeviceDetailsScreen extends StatelessWidget {
           // 3. Use the new function to fetch combined data
           return Scaffold(
             appBar: AppBar(
-              title: Text(deviceName! + ' - ' + 'deviceSecondaryInfo'.tr),
+              // FIX: Removed unnecessary non-null assertion '!' and replaced '+' with interpolation
+              title: Text('$deviceName - ${'deviceSecondaryInfo'.tr}'),
               actions: [
                 Consumer<TraccarProvider>(
                   builder: (context, provider, child) {
@@ -168,19 +176,21 @@ class DeviceDetailsScreen extends StatelessWidget {
 
                   String formatDate(DateTime? date) {
                     if (date == null) return 'sharedNoData'.tr;
-                    return DateFormat('MM/dd/yyyy, hh:mm:ss a')
-                        .format(date.toLocal());
+                    return DateFormat(
+                      'MM/dd/yyyy, hh:mm:ss a',
+                    ).format(date.toLocal());
                   }
 
                   String formatDistance(num? distance) {
                     if (distance == null) return 'sharedNoData'.tr;
-                    return '${(distance / 1000).toStringAsFixed(2)} ' +
-                        'sharedKm'.tr;
+                    // FIX: Replaced '+' concatenation with string interpolation
+                    return '${(distance / 1000).toStringAsFixed(2)} ${'sharedKm'.tr}';
                   }
 
                   String formatSpeed(num? speed) {
                     if (speed == null) return 'sharedNoData'.tr;
-                    return '${speed.toStringAsFixed(2)} ' + 'sharedKn'.tr;
+                    // FIX: Replaced '+' concatenation with string interpolation
+                    return '${speed.toStringAsFixed(2)} ${'sharedKn'.tr}';
                   }
 
                   String formatCourse(num? course) {
@@ -200,7 +210,6 @@ class DeviceDetailsScreen extends StatelessWidget {
 
                   // Check if position data is available to display
                   if (position == null) {
-                    // FIX: Remove 'const' here
                     return Center(child: Text('sharedNoData'.tr));
                   }
 
@@ -211,101 +220,152 @@ class DeviceDetailsScreen extends StatelessWidget {
                       children: [
                         // USE NEW WIDGET HERE for copyable phone number
                         _buildCopyableDetailRow(
-                            context,
-                            'sharedPhone'.tr,
-                            device.phone ?? 'sharedNoData'.tr),
+                          context,
+                          'sharedPhone'.tr,
+                          device.phone ?? 'sharedNoData'.tr,
+                        ),
                         const Divider(height: 25), // Separator
-
                         // Latest Position Details
                         Text(
                           'reportPositions'.tr,
-                          style: TextStyle(
-                              fontSize: 18, fontWeight: FontWeight.bold),
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                         const Divider(),
-                        _buildDetailRow('deviceIdentifier'.tr,
-                            position.id?.toString() ?? 'sharedNoData'.tr),
-                        _buildDetailRow('Device ID',
-                            position.deviceId?.toString() ?? 'sharedNoData'.tr),
-                        _buildDetailRow('positionProtocol'.tr,
-                            position.protocol ?? 'sharedNoData'.tr),
-                        _buildDetailRow('positionServerTime'.tr,
-                            formatDate(position.serverTime)),
-                        _buildDetailRow('positionDeviceTime'.tr,
-                            formatDate(position.deviceTime)),
                         _buildDetailRow(
-                            'positionFixTime'.tr, formatDate(position.fixTime)),
+                          'deviceIdentifier'.tr,
+                          position.id?.toString() ?? 'sharedNoData'.tr,
+                        ),
                         _buildDetailRow(
-                            'positionValid'.tr, formatBoolValue(position.valid)),
+                          'Device ID',
+                          position.deviceId?.toString() ?? 'sharedNoData'.tr,
+                        ),
                         _buildDetailRow(
-                            'positionLatitude'.tr,
-                            position.latitude != null
-                                ? '${position.latitude!.toStringAsFixed(6)}°'
-                                : 'sharedNoData'.tr),
+                          'positionProtocol'.tr,
+                          position.protocol ?? 'sharedNoData'.tr,
+                        ),
                         _buildDetailRow(
-                            'positionLongitude'.tr,
-                            position.longitude != null
-                                ? '${position.longitude!.toStringAsFixed(6)}°'
-                                : 'sharedNoData'.tr),
+                          'positionServerTime'.tr,
+                          formatDate(position.serverTime),
+                        ),
                         _buildDetailRow(
-                            'positionAltitude'.tr,
-                            position.altitude != null
-                                ? '${position.altitude!.toStringAsFixed(2)} ' +
-                                    'sharedMeters'.tr
-                                : 'sharedNoData'.tr),
+                          'positionDeviceTime'.tr,
+                          formatDate(position.deviceTime),
+                        ),
                         _buildDetailRow(
-                            'positionSpeed'.tr, formatSpeed(position.speed)),
+                          'positionFixTime'.tr,
+                          formatDate(position.fixTime),
+                        ),
                         _buildDetailRow(
-                            'positionCourse'.tr, formatCourse(position.course)),
-                        _buildDetailRow('positionAddress'.tr,
-                            position.address ?? 'sharedNoData'.tr),
-                        _buildDetailRow('positionAccuracy'.tr,
-                            position.accuracy?.toString() ?? 'sharedNoData'.tr),
-                        _buildDetailRow('Network'.tr,
-                            position.network?.toString() ?? 'sharedNoData'.tr),
-                        _buildDetailRow('sharedGeofences'.tr,
-                            position.geofenceIds?.toString() ?? 'sharedNoData'.tr),
+                          'positionValid'.tr,
+                          formatBoolValue(position.valid),
+                        ),
+                        _buildDetailRow(
+                          'positionLatitude'.tr,
+                          position.latitude != null
+                              ? '${position.latitude!.toStringAsFixed(6)}°'
+                              : 'sharedNoData'.tr,
+                        ),
+                        _buildDetailRow(
+                          'positionLongitude'.tr,
+                          position.longitude != null
+                              ? '${position.longitude!.toStringAsFixed(6)}°'
+                              : 'sharedNoData'.tr,
+                        ),
+                        _buildDetailRow(
+                          'positionAltitude'.tr,
+                          position.altitude != null
+                              // FIX: Replaced '+' concatenation with string interpolation
+                              ? '${position.altitude!.toStringAsFixed(2)} ${'sharedMeters'.tr}'
+                              : 'sharedNoData'.tr,
+                        ),
+                        _buildDetailRow(
+                          'positionSpeed'.tr,
+                          formatSpeed(position.speed),
+                        ),
+                        _buildDetailRow(
+                          'positionCourse'.tr,
+                          formatCourse(position.course),
+                        ),
+                        _buildDetailRow(
+                          'positionAddress'.tr,
+                          position.address ?? 'sharedNoData'.tr,
+                        ),
+                        _buildDetailRow(
+                          'positionAccuracy'.tr,
+                          position.accuracy?.toString() ?? 'sharedNoData'.tr,
+                        ),
+                        _buildDetailRow(
+                          'Network'.tr,
+                          position.network?.toString() ?? 'sharedNoData'.tr,
+                        ),
+                        _buildDetailRow(
+                          'sharedGeofences'.tr,
+                          position.geofenceIds.toString(),
+                        ),
                         const SizedBox(height: 20),
                         Text(
                           'sharedAttributes'.tr,
-                          style: TextStyle(
-                              fontSize: 18, fontWeight: FontWeight.bold),
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                         const Divider(),
-                        _buildDetailRow('sharedType'.tr,
-                            attributes?['type']?.toString() ?? 'sharedNoData'.tr),
                         _buildDetailRow(
-                            'deviceStatus'.tr,
-                            attributes?['status']?.toString() ??
-                                'sharedNoData'.tr),
-                        _buildDetailRow('positionIgnition'.tr,
-                            formatBoolValue(attributes?['ignition'])),
-                        _buildDetailRow('positionCharge'.tr,
-                            formatBoolValue(attributes?['charge'])),
-                        _buildDetailRow('positionBlocked'.tr,
-                            formatBoolValue(attributes?['blocked'])),
+                          'sharedType'.tr,
+                          attributes?['type']?.toString() ?? 'sharedNoData'.tr,
+                        ),
                         _buildDetailRow(
-                            'positionBatteryLevel'.tr,
-                            attributes?['batteryLevel'] != null
-                                ? '${attributes!['batteryLevel']}%'
-                                : 'sharedNoData'.tr),
+                          'deviceStatus'.tr,
+                          attributes?['status']?.toString() ??
+                              'sharedNoData'.tr,
+                        ),
                         _buildDetailRow(
-                            'positionRssi'.tr,
-                            attributes?['rssi']?.toString() ??
-                                'sharedNoData'.tr),
-                        _buildDetailRow('positionDistance'.tr,
-                            formatDistance(attributes?['distance'])),
-                        _buildDetailRow('deviceTotalDistance'.tr,
-                            formatDistance(attributes?['totalDistance'])),
+                          'positionIgnition'.tr,
+                          formatBoolValue(attributes?['ignition']),
+                        ),
                         _buildDetailRow(
-                            'reportEngineHours'.tr, formatHours(attributes?['hours'])),
-                        _buildDetailRow('positionMotion'.tr,
-                            formatBoolValue(attributes?['motion'])),
+                          'positionCharge'.tr,
+                          formatBoolValue(attributes?['charge']),
+                        ),
+                        _buildDetailRow(
+                          'positionBlocked'.tr,
+                          formatBoolValue(attributes?['blocked']),
+                        ),
+                        _buildDetailRow(
+                          'positionBatteryLevel'.tr,
+                          attributes?['batteryLevel'] != null
+                              // FIX: Removed unnecessary '!' bang operator
+                              ? '${attributes?['batteryLevel']}%'
+                              : 'sharedNoData'.tr,
+                        ),
+                        _buildDetailRow(
+                          'positionRssi'.tr,
+                          attributes?['rssi']?.toString() ?? 'sharedNoData'.tr,
+                        ),
+                        _buildDetailRow(
+                          'positionDistance'.tr,
+                          formatDistance(attributes?['distance']),
+                        ),
+                        _buildDetailRow(
+                          'deviceTotalDistance'.tr,
+                          formatDistance(attributes?['totalDistance']),
+                        ),
+                        _buildDetailRow(
+                          'reportEngineHours'.tr,
+                          formatHours(attributes?['hours']),
+                        ),
+                        _buildDetailRow(
+                          'positionMotion'.tr,
+                          formatBoolValue(attributes?['motion']),
+                        ),
                       ],
                     ),
                   );
                 }
-                // FIX: Remove 'const' here
                 return Center(child: Text('sharedNoData'.tr));
               },
             ),

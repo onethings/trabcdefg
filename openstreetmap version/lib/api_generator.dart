@@ -2,7 +2,6 @@
 // lib/api_generator.dart
 // API generator configuration for the TracDefg app.
 import 'package:openapi_generator_annotations/openapi_generator_annotations.dart';
-import 'package:openapi_generator/openapi_generator.dart';
 
 @Openapi(
   additionalProperties: DioProperties(),

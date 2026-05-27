@@ -2,16 +2,16 @@
 
 import 'dart:async';
 import 'dart:convert';
+import 'dart:developer' as developer; // 1. Add this import
 import 'dart:math';
+
 import 'package:web_socket_channel/io.dart';
-import 'package:web_socket_channel/status.dart' as status;
-import 'package:get/get.dart';
 
 class WebSocketService {
   IOWebSocketChannel? _channel;
   final _controller = StreamController<dynamic>.broadcast();
-  bool _isConnectAttempted = false; // Add this line
-  Timer? _reconnectTimer; // Add this line
+  bool _isConnectAttempted = false;
+  Timer? _reconnectTimer;
 
   int _reconnectAttempts = 0;
   String? _lastUrl;
@@ -25,7 +25,11 @@ class WebSocketService {
     _isConnectAttempted = true;
 
     try {
-      print('Connecting to WebSocket at: $wsUrl');
+      // 2. Replaced print with developer.log
+      developer.log(
+        'Connecting to WebSocket at: $wsUrl',
+        name: 'WebSocketService',
+      );
       _reconnectTimer?.cancel();
 
       _channel = IOWebSocketChannel.connect(
@@ -35,24 +39,35 @@ class WebSocketService {
 
       _channel!.stream.listen(
         (message) {
-          _reconnectAttempts = 0; // Reset on successful message
+          _reconnectAttempts = 0;
           if (!_controller.isClosed) {
             _controller.add(json.decode(message));
           }
         },
         onError: (error) {
-          print('WebSocket error: $error');
+          // 3. Replaced print with developer.log
+          developer.log(
+            'WebSocket error: $error',
+            name: 'WebSocketService',
+            error: error,
+          );
           _scheduleReconnect();
         },
         onDone: () {
-          print('WebSocket closed');
+          // 4. Replaced print with developer.log
+          developer.log('WebSocket closed', name: 'WebSocketService');
           if (_isConnectAttempted) {
             _scheduleReconnect();
           }
         },
       );
     } catch (e) {
-      print('WebSocket connection failed: $e');
+      // 5. Replaced print with developer.log
+      developer.log(
+        'WebSocket connection failed: $e',
+        name: 'WebSocketService',
+        error: e,
+      );
       _scheduleReconnect();
     }
   }
@@ -61,8 +76,15 @@ class WebSocketService {
     if (!_isConnectAttempted || _reconnectTimer?.isActive == true) return;
 
     _reconnectAttempts++;
-    final delay = Duration(seconds: min(pow(2, _reconnectAttempts).toInt(), 30));
-    print('Scheduling WebSocket reconnect in ${delay.inSeconds}s (Attempt $_reconnectAttempts)');
+    final delay = Duration(
+      seconds: min(pow(2, _reconnectAttempts).toInt(), 30),
+    );
+
+    // 6. Replaced print with developer.log
+    developer.log(
+      'Scheduling WebSocket reconnect in ${delay.inSeconds}s (Attempt $_reconnectAttempts)',
+      name: 'WebSocketService',
+    );
 
     _reconnectTimer = Timer(delay, () {
       if (_lastUrl != null && _lastSessionId != null) {

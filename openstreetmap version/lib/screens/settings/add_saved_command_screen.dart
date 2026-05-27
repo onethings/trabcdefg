@@ -1,19 +1,19 @@
 // add_saved_command_screen.dart
 // A screen to add a new saved command in the TracDefg app.
 import 'package:flutter/material.dart';
-import 'package:trabcdefg/src/generated_api/api.dart' as api;
-import 'package:trabcdefg/providers/traccar_provider.dart';
-import 'package:provider/provider.dart';
 import 'package:get/get.dart';
+import 'package:provider/provider.dart';
+import 'package:trabcdefg/providers/traccar_provider.dart';
+import 'package:trabcdefg/src/generated_api/api.dart' as api;
 
 class AddSavedCommandScreen extends StatefulWidget {
   const AddSavedCommandScreen({super.key});
 
   @override
-  _AddSavedCommandScreenState createState() => _AddSavedCommandScreenState();
+  AddSavedCommandScreenState createState() => AddSavedCommandScreenState();
 }
 
-class _AddSavedCommandScreenState extends State<AddSavedCommandScreen> {
+class AddSavedCommandScreenState extends State<AddSavedCommandScreen> {
   final _formKey = GlobalKey<FormState>();
   String? _description;
   String? _selectedType;
@@ -52,16 +52,23 @@ class _AddSavedCommandScreenState extends State<AddSavedCommandScreen> {
         // Correct way to instantiate CommandsApi with the authenticated client
         final commandsApi = api.CommandsApi(traccarProvider.apiClient);
         await commandsApi.commandsPost(newCommand);
+
+        // Guard against using BuildContext across async gaps
+        if (!mounted) return;
+
         Navigator.of(context).pop(true);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('sharedSavedCommand'.tr + ' ' + 'sharedSaved'.tr),
+            content: Text('${'sharedSavedCommand'.tr} ${'sharedSaved'.tr}'),
           ),
         );
       } catch (e) {
+        // Guard against using BuildContext across async gaps
+        if (!mounted) return;
+
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('errorGeneral'.tr + ': $e')));
+        ).showSnackBar(SnackBar(content: Text('${'errorGeneral'.tr}: $e')));
       }
     }
   }
@@ -70,7 +77,7 @@ class _AddSavedCommandScreenState extends State<AddSavedCommandScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('sharedAdd'.tr + ' ' + 'sharedSavedCommand'.tr),
+        title: Text('${'sharedAdd'.tr} ${'sharedSavedCommand'.tr}'),
       ),
       body: SafeArea(
         child: Padding(
@@ -82,10 +89,7 @@ class _AddSavedCommandScreenState extends State<AddSavedCommandScreen> {
                 TextFormField(
                   decoration: InputDecoration(
                     labelText:
-                        'sharedDescription'.tr +
-                        ' (' +
-                        'sharedRequired'.tr +
-                        ')',
+                        '${'sharedDescription'.tr} (${'sharedRequired'.tr})',
                   ),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
@@ -104,7 +108,7 @@ class _AddSavedCommandScreenState extends State<AddSavedCommandScreen> {
                     if (snapshot.connectionState == ConnectionState.waiting) {
                       return Center(child: Text('sharedLoading'.tr));
                     } else if (snapshot.hasError) {
-                      return Text('errorGeneral'.tr + ': ${snapshot.error}');
+                      return Text('${'errorGeneral'.tr}: ${snapshot.error}');
                     } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
                       return Center(child: Text('sharedNoData'.tr));
                     } else {
@@ -114,7 +118,7 @@ class _AddSavedCommandScreenState extends State<AddSavedCommandScreen> {
                       _selectedType ??= commandTypes.first;
                       return DropdownButtonFormField<String>(
                         decoration: InputDecoration(labelText: 'sharedType'.tr),
-                        value: _selectedType,
+                        initialValue: _selectedType, // Fixed deprecation
                         items: commandTypes.map((String value) {
                           return DropdownMenuItem<String>(
                             value: value,

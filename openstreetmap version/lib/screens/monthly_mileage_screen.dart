@@ -1,17 +1,20 @@
 // lib/screens/monthly_mileage_screen.dart
 // A screen that displays the monthly mileage of a selected device.
+import 'dart:developer' as developer;
+
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
+import 'package:hive_flutter/hive_flutter.dart';
+import 'package:intl/date_symbol_data_local.dart'; // Import for locale data
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:table_calendar/table_calendar.dart';
+import 'package:trabcdefg/models/report_summary_hive.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
+
 import 'history_route_screen.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:hive_flutter/hive_flutter.dart';
-import 'package:trabcdefg/models/report_summary_hive.dart';
-import 'package:get/get.dart';
-import 'package:intl/date_symbol_data_local.dart'; // Import for locale data
 
 class MonthlyMileageScreen extends StatefulWidget {
   const MonthlyMileageScreen({super.key});
@@ -44,18 +47,17 @@ class _MonthlyMileageScreenState extends State<MonthlyMileageScreen> {
     });
 
     final currentLocale = Get.locale;
-  if (currentLocale != null) {
-    // Use the full locale code (e.g., 'en_US') for initialization
-    final localeString = currentLocale.toString();
-    // The initializeDateFormatting function is a Future and needs to be awaited
-    try {
-      await initializeDateFormatting(localeString, null);
-    } catch (e) {
-      // Fallback or ignore if initialization fails for some reason
-      print('Failed to initialize date formatting for $localeString: $e');
+    if (currentLocale != null) {
+      final localeString = currentLocale.toString();
+      try {
+        await initializeDateFormatting(localeString, null);
+      } catch (e) {
+        developer.log(
+          'Failed to initialize date formatting for $localeString: $e',
+          name: 'MonthlyMileageScreen',
+        );
+      }
     }
-  }
-
 
     // Call the cleanup method before fetching new data
     await _deleteOldMileageData();
@@ -94,7 +96,8 @@ class _MonthlyMileageScreenState extends State<MonthlyMileageScreen> {
       date = date.add(const Duration(days: 1))
     ) {
       final dayUtc = DateTime.utc(date.year, date.month, date.day);
-      final String hiveKey = '$_selectedDeviceId\_${DateFormat('yyyy-MM-dd').format(dayUtc)}';
+      final String hiveKey =
+          '${_selectedDeviceId}_${DateFormat('yyyy-MM-dd').format(dayUtc)}';
       final cachedSummary = dailyBox.get(hiveKey);
 
       if (cachedSummary != null) {
@@ -103,9 +106,7 @@ class _MonthlyMileageScreenState extends State<MonthlyMileageScreen> {
           averageSpeed: cachedSummary.averageSpeed,
           maxSpeed: cachedSummary.maxSpeed,
           spentFuel: cachedSummary.spentFuel,
-          // START OF CHANGE: Include engineHours from the cached ReportSummaryHive
           engineHours: cachedSummary.engineHours,
-          // END OF CHANGE
         );
       }
     }
@@ -127,7 +128,7 @@ class _MonthlyMileageScreenState extends State<MonthlyMileageScreen> {
       final from = DateTime(date.year, date.month, date.day, 0, 0, 0).toUtc();
       final to = DateTime(date.year, date.month, date.day, 23, 59, 59).toUtc();
       final String hiveKey =
-          '$_selectedDeviceId\_${DateFormat('yyyy-MM-dd').format(dayUtc)}';
+          '${_selectedDeviceId}_${DateFormat('yyyy-MM-dd').format(dayUtc)}';
 
       fetchTasks.add(() async {
         try {
@@ -138,16 +139,17 @@ class _MonthlyMileageScreenState extends State<MonthlyMileageScreen> {
           );
           if (summary != null && summary.isNotEmpty) {
             final dailySummary = summary.first;
-            
-            // Dart maps are safe to mutate concurrently in async functions that don't switch isolates,
-            // effectively making them safe here because the JS loop yields.
+
             _dailySummaries[dayUtc] = dailySummary;
 
             final newSummaryHive = ReportSummaryHive.fromApi(dailySummary);
             await dailyBox.put(hiveKey, newSummaryHive);
           }
         } catch (e) {
-          print('Failed to fetch data for day $date: $e');
+          developer.log(
+            'Failed to fetch data for day $date: $e',
+            name: 'MonthlyMileageScreen',
+          );
         }
       }());
     }
@@ -194,12 +196,13 @@ class _MonthlyMileageScreenState extends State<MonthlyMileageScreen> {
     final dailyBox = await Hive.openBox<ReportSummaryHive>('daily_summaries');
     final sixMonthsAgo = DateTime.now().subtract(const Duration(days: 180));
 
-    // Create a list of keys to delete
     final keysToDelete = <String>[];
     for (var key in dailyBox.keys) {
       if (key is String) {
-        final parts = key.split('-');
-        if (parts.length > 2) {
+        final parts = key.split(
+          '_',
+        ); // Fixed pattern split based on Hive key definitions
+        if (parts.length > 1) {
           final dateString = parts[1];
           try {
             final date = DateFormat('yyyy-MM-dd').parse(dateString);
@@ -207,16 +210,20 @@ class _MonthlyMileageScreenState extends State<MonthlyMileageScreen> {
               keysToDelete.add(key);
             }
           } catch (e) {
-            // Handle cases where the key format is not as expected
-            print('Invalid key format: $key');
+            developer.log(
+              'Invalid key format: $key',
+              name: 'MonthlyMileageScreen',
+            );
           }
         }
       }
     }
 
-    // Delete the old data
     await dailyBox.deleteAll(keysToDelete);
-    print('Deleted ${keysToDelete.length} old entries from Hive.');
+    developer.log(
+      'Deleted ${keysToDelete.length} old entries from Hive.',
+      name: 'MonthlyMileageScreen',
+    );
   }
 
   void _onPlayTapped() async {
@@ -243,36 +250,34 @@ class _MonthlyMileageScreenState extends State<MonthlyMileageScreen> {
     await prefs.setString('historyFrom', fromDate.toUtc().toIso8601String());
     await prefs.setString('historyTo', toDate.toUtc().toIso8601String());
 
+    if (!mounted) return; // Guard cross-async context navigation
+
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) =>  HistoryRouteScreen()),
+      MaterialPageRoute(builder: (context) => HistoryRouteScreen()),
     );
   }
 
   // Helper method to format milliseconds into "Hh Mm" string
   String _formatDuration(int? milliseconds) {
+    final hourAbbr = 'sharedHourAbbreviation'.tr;
+    final minAbbr = 'sharedMinuteAbbreviation'.tr;
+
     if (milliseconds == null || milliseconds <= 0) {
-      return '0'+'sharedHourAbbreviation'.tr+' '+'0'+'sharedMinuteAbbreviation'.tr;
+      return '0$hourAbbr 0$minAbbr';
     }
 
     final duration = Duration(milliseconds: milliseconds);
     final hours = duration.inHours;
-    // Calculate remaining minutes after whole hours have been accounted for
     final minutes = duration.inMinutes.remainder(60);
 
-    return '${hours}'+'sharedHourAbbreviation'.tr+' '+'${minutes}'+'sharedMinuteAbbreviation'.tr;
+    return '$hours$hourAbbr $minutes$minAbbr';
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          _selectedDeviceName != null
-              ? '$_selectedDeviceName'
-              : 'Monthly Mileage',
-        ), // Display device ID or fallback title
-      ),
+      appBar: AppBar(title: Text(_selectedDeviceName ?? 'Monthly Mileage')),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _selectedDeviceId == null
@@ -323,17 +328,15 @@ class _MonthlyMileageScreenState extends State<MonthlyMileageScreen> {
                               final summary = _dailySummaries[dayUtc]!;
                               final distanceInKm =
                                   (summary.distance ?? 0.0) / 1000;
-                              // Convert engineHours (in milliseconds) to hours for calendar marker display
                               final engineHoursInHours =
                                   (summary.engineHours ?? 0) / 3600000;
 
                               return Positioned(
-                                bottom: -3.1, // Adjust position as needed
+                                bottom: -3.1,
                                 child: Column(
                                   mainAxisSize: MainAxisSize.min,
                                   crossAxisAlignment: CrossAxisAlignment.center,
                                   children: [
-                                    // Distance in ble
                                     Text(
                                       '${distanceInKm.toStringAsFixed(0)}km',
                                       style: const TextStyle(
@@ -341,7 +344,6 @@ class _MonthlyMileageScreenState extends State<MonthlyMileageScreen> {
                                         color: Colors.blue,
                                       ),
                                     ),
-                                    // Engine Hours in red
                                     Text(
                                       '${engineHoursInHours.toStringAsFixed(1)}h',
                                       style: const TextStyle(
@@ -367,7 +369,7 @@ class _MonthlyMileageScreenState extends State<MonthlyMileageScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  'Date'.tr+': ${DateFormat('yyyy-MM-dd').format(_selectedDay!)}',
+                                  '${'Date'.tr}: ${DateFormat('yyyy-MM-dd').format(_selectedDay!)}',
                                   style: const TextStyle(
                                     fontSize: 18,
                                     fontWeight: FontWeight.bold,
@@ -375,27 +377,20 @@ class _MonthlyMileageScreenState extends State<MonthlyMileageScreen> {
                                 ),
                                 const SizedBox(height: 8),
                                 Text(
-                                  'sharedDistance'.tr +
-                                      ': ${((_selectedDaySummary!.distance ?? 0.0) / 1000).toStringAsFixed(2)}'+' '+ 'sharedKm'.tr,
-                                ),
-                                // Display Engine Hours in Hh Mm format
-                                Text(
-                                  'reportEngineHours'.tr +
-                                      ': ${_formatDuration(_selectedDaySummary!.engineHours)}',
+                                  '${'sharedDistance'.tr}: ${((_selectedDaySummary!.distance ?? 0.0) / 1000).toStringAsFixed(2)} ${'sharedKm'.tr}',
                                 ),
                                 Text(
-                                  'reportAverageSpeed'.tr +
-                                      ': ${(_selectedDaySummary!.averageSpeed ?? 0.0).toStringAsFixed(2)}'+' '+ 'sharedKmh'.tr,
+                                  '${'reportEngineHours'.tr}: ${_formatDuration(_selectedDaySummary!.engineHours)}',
                                 ),
                                 Text(
-                                  'reportMaximumSpeed'.tr +
-                                      ': ${(_selectedDaySummary!.maxSpeed ?? 0.0).toStringAsFixed(2)}'+' '+ 'sharedKmh'.tr,
+                                  '${'reportAverageSpeed'.tr}: ${(_selectedDaySummary!.averageSpeed ?? 0.0).toStringAsFixed(2)} ${'sharedKmh'.tr}',
                                 ),
                                 Text(
-                                  'reportSpentFuel'.tr +
-                                      ': ${(_selectedDaySummary!.spentFuel ?? 0.0).toStringAsFixed(2)}'+' '+ 'sharedLiter'.tr,
+                                  '${'reportMaximumSpeed'.tr}: ${(_selectedDaySummary!.maxSpeed ?? 0.0).toStringAsFixed(2)} ${'sharedKmh'.tr}',
                                 ),
-                                // const Spacer(),
+                                Text(
+                                  '${'reportSpentFuel'.tr}: ${(_selectedDaySummary!.spentFuel ?? 0.0).toStringAsFixed(2)} ${'sharedLiter'.tr}',
+                                ),
                                 const SizedBox(height: 50),
                                 ElevatedButton.icon(
                                   onPressed: _onPlayTapped,
@@ -407,11 +402,7 @@ class _MonthlyMileageScreenState extends State<MonthlyMileageScreen> {
                           ),
                         ),
                       if (_selectedDaySummary == null)
-                         Expanded(
-                          child: Center(
-                            child: Text('sharedNoData'.tr),
-                          ),
-                        ),
+                        Expanded(child: Center(child: Text('sharedNoData'.tr))),
                     ],
                   ),
                 ),

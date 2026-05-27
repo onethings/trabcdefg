@@ -1,26 +1,23 @@
 // settings_screen.dart
 // A settings screen for the TracDefg app, allowing users to modify preferences and log out.
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
+import 'package:trabcdefg/providers/settings_provider.dart';
+import 'package:trabcdefg/providers/theme_provider.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
-import 'package:trabcdefg/services/auth_service.dart';
-import 'package:trabcdefg/screens/settings/notification_page.dart';
-import 'package:trabcdefg/screens/settings/edit_user_screen.dart';
-import 'package:trabcdefg/screens/settings/geofences_screen.dart';
-import 'package:trabcdefg/screens/settings/devices_screen.dart';
-import 'package:trabcdefg/screens/settings/groups_screen.dart';
-import 'package:trabcdefg/screens/settings/drivers_screen.dart';
 import 'package:trabcdefg/screens/settings/calendars_screen.dart';
 import 'package:trabcdefg/screens/settings/computed_attributes_screen.dart';
+import 'package:trabcdefg/screens/settings/devices_screen.dart';
+import 'package:trabcdefg/screens/settings/drivers_screen.dart';
+import 'package:trabcdefg/screens/settings/edit_user_screen.dart';
+import 'package:trabcdefg/screens/settings/geofences_screen.dart';
+import 'package:trabcdefg/screens/settings/groups_screen.dart';
 import 'package:trabcdefg/screens/settings/maintenance_screen.dart';
+import 'package:trabcdefg/screens/settings/notification_page.dart';
 import 'package:trabcdefg/screens/settings/saved_commands_screen.dart';
-import 'package:package_info_plus/package_info_plus.dart';
-import 'package:get/get.dart';
 import 'package:trabcdefg/services/localization_service.dart';
-import 'package:trabcdefg/providers/theme_provider.dart';
-import 'package:trabcdefg/providers/settings_provider.dart';
-
-
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -45,7 +42,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       'de': 'Deutsch',
       'el': 'Ελληνικά',
       'en_US': 'English (US)',
-   //   'en': 'English',
       'es': 'Español',
       'et': 'Eesti',
       'fa': 'فارسی',
@@ -112,7 +108,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       const Locale('de'),
       const Locale('el'),
       const Locale('en', 'US'),
-   //   const Locale('en'),
       const Locale('es'),
       const Locale('et'),
       const Locale('fa'),
@@ -175,14 +170,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: supportedLocales.map((locale) {
-                final String localeCode = locale.languageCode + (locale.countryCode != null ? '_${locale.countryCode}' : '');
+                final String localeCode =
+                    locale.languageCode +
+                    (locale.countryCode != null
+                        ? '_${locale.countryCode}'
+                        : '');
                 final String? languageName = languageNames[localeCode];
                 return ListTile(
                   title: Text(languageName ?? localeCode),
                   onTap: () async {
                     await LocalizationService.saveLocale(locale);
+                    if (!mounted) {
+                      return;
+                    }
                     Get.updateLocale(locale);
-                    Navigator.of(context).pop();
+                    if (context.mounted) {
+                      Navigator.of(context).pop();
+                    }
                   },
                 );
               }).toList(),
@@ -200,55 +204,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
       builder: (context) {
         return AlertDialog(
           title: Text('settingsTheme'.tr),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                title: Text('themeSystem'.tr),
-                leading: Radio<ThemeMode>(
+          content: RadioGroup<ThemeMode>(
+            groupValue: themeProvider.themeMode,
+            onChanged: (ThemeMode? value) {
+              if (value != null) {
+                themeProvider.setThemeMode(value);
+              }
+              Navigator.of(context).pop();
+            },
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                RadioListTile<ThemeMode>(
+                  title: Text('themeSystem'.tr),
                   value: ThemeMode.system,
-                  groupValue: themeProvider.themeMode,
-                  onChanged: (ThemeMode? value) {
-                    if (value != null) themeProvider.setThemeMode(value);
-                    Navigator.of(context).pop();
-                  },
                 ),
-                onTap: () {
-                  themeProvider.setThemeMode(ThemeMode.system);
-                  Navigator.of(context).pop();
-                },
-              ),
-              ListTile(
-                title: Text('themeLight'.tr),
-                leading: Radio<ThemeMode>(
+                RadioListTile<ThemeMode>(
+                  title: Text('themeLight'.tr),
                   value: ThemeMode.light,
-                  groupValue: themeProvider.themeMode,
-                  onChanged: (ThemeMode? value) {
-                    if (value != null) themeProvider.setThemeMode(value);
-                    Navigator.of(context).pop();
-                  },
                 ),
-                onTap: () {
-                  themeProvider.setThemeMode(ThemeMode.light);
-                  Navigator.of(context).pop();
-                },
-              ),
-              ListTile(
-                title: Text('themeDark'.tr),
-                leading: Radio<ThemeMode>(
+                RadioListTile<ThemeMode>(
+                  title: Text('themeDark'.tr),
                   value: ThemeMode.dark,
-                  groupValue: themeProvider.themeMode,
-                  onChanged: (ThemeMode? value) {
-                    if (value != null) themeProvider.setThemeMode(value);
-                    Navigator.of(context).pop();
-                  },
                 ),
-                onTap: () {
-                  themeProvider.setThemeMode(ThemeMode.dark);
-                  Navigator.of(context).pop();
-                },
-              ),
-            ],
+              ],
+            ),
           ),
         );
       },
@@ -262,55 +242,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
       builder: (context) {
         return AlertDialog(
           title: Text('settingsFontSize'.tr),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                title: Text('settingsNormal'.tr),
-                leading: Radio<double>(
+          content: RadioGroup<double>(
+            groupValue: settingsProvider.fontSizeScale,
+            onChanged: (double? value) {
+              if (value != null) {
+                settingsProvider.setFontSizeScale(value);
+              }
+              Navigator.of(context).pop();
+            },
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                RadioListTile<double>(
+                  title: Text('settingsNormal'.tr),
                   value: 1.0,
-                  groupValue: settingsProvider.fontSizeScale,
-                  onChanged: (double? value) {
-                    if (value != null) settingsProvider.setFontSizeScale(value);
-                    Navigator.of(context).pop();
-                  },
                 ),
-                onTap: () {
-                  settingsProvider.setFontSizeScale(1.0);
-                  Navigator.of(context).pop();
-                },
-              ),
-              ListTile(
-                title: Text('settingsLarge'.tr),
-                leading: Radio<double>(
+                RadioListTile<double>(
+                  title: Text('settingsLarge'.tr),
                   value: 1.2,
-                  groupValue: settingsProvider.fontSizeScale,
-                  onChanged: (double? value) {
-                    if (value != null) settingsProvider.setFontSizeScale(value);
-                    Navigator.of(context).pop();
-                  },
                 ),
-                onTap: () {
-                  settingsProvider.setFontSizeScale(1.2);
-                  Navigator.of(context).pop();
-                },
-              ),
-              ListTile(
-                title: Text('settingsExtraLarge'.tr),
-                leading: Radio<double>(
+                RadioListTile<double>(
+                  title: Text('settingsExtraLarge'.tr),
                   value: 1.4,
-                  groupValue: settingsProvider.fontSizeScale,
-                  onChanged: (double? value) {
-                    if (value != null) settingsProvider.setFontSizeScale(value);
-                    Navigator.of(context).pop();
-                  },
                 ),
-                onTap: () {
-                  settingsProvider.setFontSizeScale(1.4);
-                  Navigator.of(context).pop();
-                },
-              ),
-            ],
+              ],
+            ),
           ),
         );
       },
@@ -324,55 +280,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
       builder: (context) {
         return AlertDialog(
           title: Text('settingsMarkerSize'.tr),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                title: Text('settingsNormal'.tr),
-                leading: Radio<double>(
+          content: RadioGroup<double>(
+            groupValue: settingsProvider.markerSizeScale,
+            onChanged: (double? value) {
+              if (value != null) {
+                settingsProvider.setMarkerSizeScale(value);
+              }
+              Navigator.of(context).pop();
+            },
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                RadioListTile<double>(
+                  title: Text('settingsNormal'.tr),
                   value: 1.0,
-                  groupValue: settingsProvider.markerSizeScale,
-                  onChanged: (double? value) {
-                    if (value != null) settingsProvider.setMarkerSizeScale(value);
-                    Navigator.of(context).pop();
-                  },
                 ),
-                onTap: () {
-                  settingsProvider.setMarkerSizeScale(1.0);
-                  Navigator.of(context).pop();
-                },
-              ),
-              ListTile(
-                title: Text('settingsLarge'.tr),
-                leading: Radio<double>(
+                RadioListTile<double>(
+                  title: Text('settingsLarge'.tr),
                   value: 1.5,
-                  groupValue: settingsProvider.markerSizeScale,
-                  onChanged: (double? value) {
-                    if (value != null) settingsProvider.setMarkerSizeScale(value);
-                    Navigator.of(context).pop();
-                  },
                 ),
-                onTap: () {
-                  settingsProvider.setMarkerSizeScale(1.5);
-                  Navigator.of(context).pop();
-                },
-              ),
-              ListTile(
-                title: Text('settingsExtraLarge'.tr),
-                leading: Radio<double>(
+                RadioListTile<double>(
+                  title: Text('settingsExtraLarge'.tr),
                   value: 2.0,
-                  groupValue: settingsProvider.markerSizeScale,
-                  onChanged: (double? value) {
-                    if (value != null) settingsProvider.setMarkerSizeScale(value);
-                    Navigator.of(context).pop();
-                  },
                 ),
-                onTap: () {
-                  settingsProvider.setMarkerSizeScale(2.0);
-                  Navigator.of(context).pop();
-                },
-              ),
-            ],
+              ],
+            ),
           ),
         );
       },
@@ -382,7 +314,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final traccarProvider = context.read<TraccarProvider>();
-    final authService = context.read<AuthService>();
 
     return Scaffold(
       appBar: AppBar(
@@ -431,7 +362,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     leading: const Icon(Icons.account_circle),
                     title: Text('settingsUser'.tr),
                     onTap: () {
-                     Navigator.push(
+                      Navigator.push(
                         context,
                         MaterialPageRoute(
                           builder: (context) => const EditUserScreen(),
@@ -506,7 +437,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => const ComputedAttributesScreen(),
+                          builder: (context) =>
+                              const ComputedAttributesScreen(),
                         ),
                       );
                     },
@@ -544,15 +476,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 onPressed: () {
                   // Clear session data and disconnect WebSocket
                   traccarProvider.clearSessionAndData();
-                  
+
                   // Navigate back to the login screen and clear the navigation stack
-                  Navigator.of(context).pushNamedAndRemoveUntil(
-                    '/login',
-                    (route) => false,
-                  );
+                  Navigator.of(
+                    context,
+                  ).pushNamedAndRemoveUntil('/login', (route) => false);
                 },
                 style: ElevatedButton.styleFrom(
-                  minimumSize: const Size.fromHeight(50), // Make the button full-width
+                  minimumSize: const Size.fromHeight(
+                    50,
+                  ), // Make the button full-width
                   backgroundColor: Theme.of(context).colorScheme.error,
                   foregroundColor: Theme.of(context).colorScheme.onError,
                 ),
@@ -568,7 +501,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     return Text(
                       '${'appVersion'.tr}: ${snapshot.data!.version}+${snapshot.data!.buildNumber}',
                       style: TextStyle(
-                        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withValues(alpha: 0.5),
                         fontSize: 12,
                       ),
                     );

@@ -1,22 +1,21 @@
 // add_group_screen.dart
 // A screen to add a new group in the TracDefg app.
 import 'package:flutter/material.dart';
-import 'package:trabcdefg/src/generated_api/api.dart' as api;
-import 'package:trabcdefg/providers/traccar_provider.dart';
-import 'package:provider/provider.dart';
 import 'package:get/get.dart';
+import 'package:provider/provider.dart';
+import 'package:trabcdefg/providers/traccar_provider.dart';
+import 'package:trabcdefg/src/generated_api/api.dart' as api;
 
 class AddGroupScreen extends StatefulWidget {
   const AddGroupScreen({super.key});
 
   @override
-  _AddGroupScreenState createState() => _AddGroupScreenState();
+  State<AddGroupScreen> createState() => _AddGroupScreenState();
 }
 
 class _AddGroupScreenState extends State<AddGroupScreen> {
   final _formKey = GlobalKey<FormState>();
   String? _groupName;
-  String? _groupExtra;
   final List<Map<String, dynamic>> _attributes = [];
 
   void _addAttribute() {
@@ -62,11 +61,14 @@ class _AddGroupScreenState extends State<AddGroupScreen> {
         // Correct way to instantiate GroupsApi with the authenticated client
         final groupsApi = api.GroupsApi(traccarProvider.apiClient);
         await groupsApi.groupsPost(newGroup);
+
+        if (!mounted) return;
         Navigator.of(context).pop(true);
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('sharedSaved'.tr)));
       } catch (e) {
+        if (!mounted) return;
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('Failed to add group: $e')));
@@ -77,7 +79,7 @@ class _AddGroupScreenState extends State<AddGroupScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('sharedAdd'.tr + ' ' + 'groupDialog'.tr)),
+      appBar: AppBar(title: Text('${'sharedAdd'.tr} ${'groupDialog'.tr}')),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(16.0),
@@ -87,8 +89,7 @@ class _AddGroupScreenState extends State<AddGroupScreen> {
               children: [
                 TextFormField(
                   decoration: InputDecoration(
-                    labelText:
-                        'sharedName'.tr + ' (' + 'sharedRequired'.tr + ')',
+                    labelText: '${'sharedName'.tr} (${'sharedRequired'.tr})',
                   ),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
@@ -103,7 +104,8 @@ class _AddGroupScreenState extends State<AddGroupScreen> {
                 TextFormField(
                   decoration: InputDecoration(labelText: 'sharedExtra'.tr),
                   onSaved: (value) {
-                    _groupExtra = value;
+                    // Kept form field operational, but variable _groupExtra removed
+                    // since it was listed as an unused field.
                   },
                 ),
                 const SizedBox(height: 20),
@@ -129,9 +131,7 @@ class _AddGroupScreenState extends State<AddGroupScreen> {
                                 child: TextFormField(
                                   decoration: InputDecoration(
                                     labelText:
-                                        'sharedAttribute'.tr +
-                                        ' ' +
-                                        'sharedName'.tr,
+                                        '${'sharedAttribute'.tr} ${'sharedName'.tr}',
                                   ),
                                   initialValue: attribute['name'],
                                   onSaved: (value) {
@@ -194,11 +194,11 @@ class _AddGroupScreenState extends State<AddGroupScreen> {
                       ),
                     ),
                   );
-                }).toList(),
+                }), // Removed unnecessary .toList() from here
                 ElevatedButton.icon(
                   onPressed: _addAttribute,
                   icon: const Icon(Icons.add),
-                  label: Text('sharedAdd'.tr + ' ' + 'sharedAttribute'.tr),
+                  label: Text('${'sharedAdd'.tr} ${'sharedAttribute'.tr}'),
                 ),
               ],
             ),

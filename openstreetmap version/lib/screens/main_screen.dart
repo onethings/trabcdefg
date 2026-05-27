@@ -1,14 +1,15 @@
 // lib/screens/main_screen.dart
 // The main screen with bottom navigation to different sections: Device List, Map, Reports, and Settings.
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:trabcdefg/screens/device_list_screen.dart';
+import 'package:trabcdefg/screens/home/dashboard_screen.dart';
 import 'package:trabcdefg/screens/map_screen.dart';
 import 'package:trabcdefg/screens/reports/reports_screen.dart'; // Import the new ReportsScreen
 import 'package:trabcdefg/screens/settings/settings_screen.dart';
-import 'package:trabcdefg/screens/home/dashboard_screen.dart';
-import 'package:get/get.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:ui';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -62,14 +63,16 @@ class _MainScreenState extends State<MainScreen> {
           filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
           child: BottomNavigationBar(
             backgroundColor: Theme.of(context).brightness == Brightness.dark
-                ? Colors.black.withOpacity(0.5)
-                : Colors.white.withOpacity(0.5),
+                ? Colors.black.withValues(alpha: 0.5)
+                : Colors.white.withValues(alpha: 0.5),
             elevation: 0,
             type: BottomNavigationBarType.fixed,
             currentIndex: _currentIndex,
             onTap: _onTabTapped,
             selectedItemColor: Theme.of(context).colorScheme.primary,
-            unselectedItemColor: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+            unselectedItemColor: Theme.of(
+              context,
+            ).colorScheme.onSurface.withValues(alpha: 0.6),
             items: [
               BottomNavigationBarItem(
                 icon: const Icon(Icons.dashboard_rounded),

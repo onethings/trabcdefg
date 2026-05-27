@@ -1,5 +1,5 @@
 // lib/screens/splash_screen.dart
-// This screen handles checking the stored session ID and routing the user to either the main app or the login screen. 
+// This screen handles checking the stored session ID and routing the user to either the main app or the login screen.
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -25,31 +25,29 @@ class _SplashScreenState extends State<SplashScreen> {
     final prefs = await SharedPreferences.getInstance();
     final jSessionId = prefs.getString('jSessionId');
 
+    // ✨ 修正點 1：在 await 之後、使用 context 之前，先檢查 mounted
+    if (!mounted) return;
+
     if (jSessionId != null) {
-      // Session ID found, try to use it to get devices
+      // 現在可以安全地使用 context 了
       final traccarProvider = context.read<TraccarProvider>();
       try {
-        // We use fetchInitialData as a way to validate the session.
-        // We add a timeout to ensure the user isn't stuck on the splash screen forever.
         traccarProvider.setSessionId(jSessionId);
-        await traccarProvider.fetchInitialData().timeout(const Duration(seconds: 10));
-        
-        // If fetchInitialData succeeds, the session is valid. Navigate to main screen.
+        await traccarProvider.fetchInitialData().timeout(
+          const Duration(seconds: 10),
+        );
+
         if (mounted) {
           Navigator.of(context).pushReplacementNamed('/main');
         }
       } catch (e) {
-        // If it's a timeout or any other error, we still try to go to the main screen
-        // as long as we have a session ID, or go to login if the session is clearly invalid.
         if (mounted) {
-          // If the error is likely due to invalid session (e.g. 401), go to login.
-          // Otherwise (like a timeout), go to main and let it try to refresh later.
           debugPrint('Splash screen fetch error: $e');
           Navigator.of(context).pushReplacementNamed('/main');
         }
       }
     } else {
-      // No session ID found, navigate to login screen.
+      // 這裡本來就有寫，沒問題！
       if (mounted) {
         Navigator.of(context).pushReplacementNamed('/login');
       }

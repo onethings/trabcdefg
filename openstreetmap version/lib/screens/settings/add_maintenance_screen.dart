@@ -1,16 +1,16 @@
 // add_maintenance_screen.dart
 // A screen to add a new maintenance entry in the TracDefg app.
 import 'package:flutter/material.dart';
-import 'package:trabcdefg/src/generated_api/api.dart' as api;
-import 'package:trabcdefg/providers/traccar_provider.dart';
-import 'package:provider/provider.dart';
 import 'package:get/get.dart';
+import 'package:provider/provider.dart';
+import 'package:trabcdefg/providers/traccar_provider.dart';
+import 'package:trabcdefg/src/generated_api/api.dart' as api;
 
 class AddMaintenanceScreen extends StatefulWidget {
   const AddMaintenanceScreen({super.key});
 
   @override
-  _AddMaintenanceScreenState createState() => _AddMaintenanceScreenState();
+  State<AddMaintenanceScreen> createState() => _AddMaintenanceScreenState();
 }
 
 class _AddMaintenanceScreenState extends State<AddMaintenanceScreen> {
@@ -20,12 +20,15 @@ class _AddMaintenanceScreenState extends State<AddMaintenanceScreen> {
   num? _start;
   num? _period;
   final Map<String, dynamic> _attributes = {};
-  final TextEditingController _attributeNameController = TextEditingController();
-  final TextEditingController _attributeValueController = TextEditingController();
+  final TextEditingController _attributeNameController =
+      TextEditingController();
+  final TextEditingController _attributeValueController =
+      TextEditingController();
   String _attributeType = 'String';
 
   void _addAttribute() {
-    if (_attributeNameController.text.isNotEmpty && _attributeValueController.text.isNotEmpty) {
+    if (_attributeNameController.text.isNotEmpty &&
+        _attributeValueController.text.isNotEmpty) {
       setState(() {
         dynamic value;
         switch (_attributeType) {
@@ -58,18 +61,29 @@ class _AddMaintenanceScreenState extends State<AddMaintenanceScreen> {
       );
 
       try {
-        final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
+        final traccarProvider = Provider.of<TraccarProvider>(
+          context,
+          listen: false,
+        );
         // Correct way to instantiate MaintenanceApi with the authenticated client
         final maintenanceApi = api.MaintenanceApi(traccarProvider.apiClient);
         await maintenanceApi.maintenancePost(newMaintenance);
+
+        // Guard checking if the widget is still in the tree after the async gap
+        if (!mounted) return;
+
         Navigator.of(context).pop(true);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('sharedMaintenance'.tr + ' ' + 'sharedSaved'.tr)),
+          SnackBar(
+            content: Text('${'sharedMaintenance'.tr} ${'sharedSaved'.tr}'),
+          ),
         );
       } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('errorGeneral'.tr + ': $e')),
-        );
+        if (!mounted) return;
+
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('${'errorGeneral'.tr}: $e')));
       }
     }
   }
@@ -78,7 +92,7 @@ class _AddMaintenanceScreenState extends State<AddMaintenanceScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('sharedAdd'.tr + ' ' + 'sharedMaintenance'.tr),
+        title: Text('${'sharedAdd'.tr} ${'sharedMaintenance'.tr}'),
       ),
       body: SafeArea(
         child: Padding(
@@ -88,10 +102,12 @@ class _AddMaintenanceScreenState extends State<AddMaintenanceScreen> {
             child: ListView(
               children: [
                 TextFormField(
-                  decoration: InputDecoration(labelText: 'sharedName'.tr + ' (' + 'sharedRequired'.tr + ')'),
+                  decoration: InputDecoration(
+                    labelText: '${'sharedName'.tr} (${'sharedRequired'.tr})',
+                  ),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
-                      return 'sharedName'.tr + ' ' + 'sharedRequired'.tr;
+                      return '${'sharedName'.tr} ${'sharedRequired'.tr}';
                     }
                     return null;
                   },
@@ -113,7 +129,9 @@ class _AddMaintenanceScreenState extends State<AddMaintenanceScreen> {
                   },
                 ),
                 TextFormField(
-                  decoration: InputDecoration(labelText: 'maintenancePeriod'.tr),
+                  decoration: InputDecoration(
+                    labelText: 'maintenancePeriod'.tr,
+                  ),
                   keyboardType: TextInputType.number,
                   onSaved: (value) {
                     _period = num.tryParse(value!);
@@ -139,20 +157,28 @@ class _AddMaintenanceScreenState extends State<AddMaintenanceScreen> {
                     Expanded(
                       child: TextFormField(
                         controller: _attributeNameController,
-                        decoration: InputDecoration(labelText: 'sharedAttribute'.tr + ' ' + 'sharedName'.tr),
+                        decoration: InputDecoration(
+                          labelText:
+                              '${'sharedAttribute'.tr} ${'sharedName'.tr}',
+                        ),
                       ),
                     ),
                     const SizedBox(width: 10),
                     Expanded(
                       child: TextFormField(
                         controller: _attributeValueController,
-                        decoration: InputDecoration(labelText: 'sharedAttribute'.tr + ' ' + 'stateValue'.tr),
+                        decoration: InputDecoration(
+                          labelText:
+                              '${'sharedAttribute'.tr} ${'stateValue'.tr}',
+                        ),
                       ),
                     ),
                     const SizedBox(width: 10),
                     DropdownButton<String>(
                       value: _attributeType,
-                      items: <String>['String', 'Number', 'Boolean'].map((String value) {
+                      items: <String>['String', 'Number', 'Boolean'].map((
+                        String value,
+                      ) {
                         String translatedValue;
                         if (value == 'String') {
                           translatedValue = 'sharedTypeString'.tr;

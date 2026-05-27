@@ -3,138 +3,22 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import 'package:trabcdefg/src/generated_api/api.dart' as api;
-import 'package:trabcdefg/providers/traccar_provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:intl/intl.dart';
-// import 'package:google_maps_flutter/google_maps_flutter.dart'; // REMOVED
-import 'package:maplibre_gl/maplibre_gl.dart' as maplibre;
-import 'package:trabcdefg/providers/map_style_provider.dart';
-import 'package:flutter/services.dart';
 import 'dart:math';
-import 'package:trabcdefg/widgets/OfflineAddressService.dart';
-import 'package:hive_flutter/hive_flutter.dart';
+
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
-import 'dart:ui' as ui;
+import 'package:intl/intl.dart';
+import 'package:maplibre_gl/maplibre_gl.dart' as maplibre;
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:get/get.dart';
-import 'package:flutter_map/flutter_map.dart' hide LatLng, LatLngBounds;
-import 'package:flutter/foundation.dart';
-
-// --- Tile Caching Implementation using Hive (Copied from map_screen.dart) ---
-
-class _TileCacheService {
-  late Box<Uint8List> _tileBox;
-  static const String boxName = 'mapTilesCache';
-
-  Future<void> init() async {
-    _tileBox = await Hive.openBox<Uint8List>(boxName);
-  }
-
-  String _generateKey(String url) {
-    return url.hashCode.toString();
-  }
-
-  Future<Uint8List?> getTile(String url) async {
-    return _tileBox.get(_generateKey(url));
-  }
-
-  Future<void> saveTile(String url, Uint8List tileData) async {
-    await _tileBox.put(_generateKey(url), tileData);
-  }
-}
-
-class CachedNetworkImageProvider extends ImageProvider<CachedNetworkImageProvider> {
-  final String url;
-  final _TileCacheService cacheService;
-  final http.Client httpClient;
-
-  CachedNetworkImageProvider(
-    this.url, {
-    required this.cacheService,
-    required this.httpClient,
-  });
-
-  @override
-  ImageStreamCompleter loadImage(
-    CachedNetworkImageProvider key,
-    ImageDecoderCallback decode,
-  ) {
-    return MultiFrameImageStreamCompleter(
-      codec: _loadAsync(key, decode),
-      scale: 1.0,
-      informationCollector: () => <DiagnosticsNode>[
-        DiagnosticsProperty<ImageProvider>('Image provider', this),
-        DiagnosticsProperty<CachedNetworkImageProvider>('Original key', key),
-      ],
-    );
-  }
-
-  @override
-  Future<CachedNetworkImageProvider> obtainKey(
-    ImageConfiguration configuration, 
-  ) {
-    return Future<CachedNetworkImageProvider>.value(this);
-  }
-
-  Future<ui.Codec> _loadAsync(
-    CachedNetworkImageProvider key,
-    ImageDecoderCallback decode,
-  ) async {
-    assert(key == this);
-
-    final cachedData = await cacheService.getTile(url);
-
-    if (cachedData != null) {
-      return decode(await ui.ImmutableBuffer.fromUint8List(cachedData)); 
-    }
-
-    try {
-      final response = await httpClient.get(Uri.parse(url));
-
-      if (response.statusCode == 200) {
-        final Uint8List bytes = response.bodyBytes;
-        
-        await cacheService.saveTile(url, bytes);
-
-        return decode(await ui.ImmutableBuffer.fromUint8List(bytes)); 
-      } else {
-        throw Exception('Failed to load tile from network: ${response.statusCode}');
-      }
-    } catch (e) {
-      rethrow;
-    }
-  }
-}
-
-class _HiveTileProvider extends TileProvider {
-  final _TileCacheService cacheService;
-  final http.Client httpClient;
-
-  _HiveTileProvider({
-    required this.cacheService,
-    required this.httpClient,
-  });
-
-  @override
-  ImageProvider getImage(
-    TileCoordinates coordinates,
-    TileLayer options,
-  ) {
-    return CachedNetworkImageProvider(
-      getTileUrl(coordinates, options),
-      cacheService: cacheService,
-      httpClient: httpClient,
-    );
-  }
-}
-
-// Enum moved to provider
-
-// --- End of Map Caching & FlutterMap Imports/Definitions ---
+import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:trabcdefg/providers/map_style_provider.dart';
+import 'package:trabcdefg/providers/traccar_provider.dart';
+import 'package:trabcdefg/src/generated_api/api.dart' as api;
+import 'package:trabcdefg/widgets/offline_address_service.dart';
 
 class RouteReport {
   final int id;
@@ -183,8 +67,8 @@ class RouteReport {
       serverTime: DateTime.parse(json['serverTime'] as String),
       deviceTime: DateTime.parse(json['deviceTime'] as String),
       fixTime: DateTime.parse(json['fixTime'] as String),
-      outdated: (json['outdated'] ?? false) as bool, // FIX applied
-      valid: (json['valid'] ?? false) as bool,      // FIX applied
+      outdated: (json['outdated'] ?? false) as bool,
+      valid: (json['valid'] ?? false) as bool,
       latitude: (json['latitude'] as num).toDouble(),
       longitude: (json['longitude'] as num).toDouble(),
       altitude: (json['altitude'] as num).toDouble(),
@@ -213,22 +97,13 @@ class _RouteReportScreenState extends State<RouteReportScreen> {
   final Set<String> _loadedIcons = {};
   bool _isStyleLoaded = false;
   final http.Client _httpClient = http.Client();
-  bool _isCacheInitialized = false;
-
-  // Tile URLs
-  static const String _osmUrlTemplate = 
-      'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
-  static const String _satelliteUrlTemplate = 
-      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
-  static const List<String> _osmSubdomains = ['a', 'b', 'c'];
-
 
   @override
   void initState() {
     super.initState();
     _fetchRouteReport();
   }
-  
+
   @override
   void dispose() {
     _httpClient.close();
@@ -249,13 +124,16 @@ class _RouteReportScreenState extends State<RouteReportScreen> {
     final deviceId = prefs.getInt('selectedDeviceId');
     final fromDateString = prefs.getString('historyFrom');
     final toDateString = prefs.getString('historyTo');
-    print('Fetched from SharedPreferences: deviceId=$deviceId, fromDate=$fromDateString, toDate=$toDateString');
+    debugPrint(
+      'Fetched from SharedPreferences: deviceId=$deviceId, fromDate=$fromDateString, toDate=$toDateString',
+    );
 
     if (deviceId == null || fromDateString == null || toDateString == null) {
+      if (!mounted) return;
       setState(() {
         _isLoading = false;
       });
-      print('Missing device ID or date range from SharedPreferences.');
+      debugPrint('Missing device ID or date range from SharedPreferences.');
       return;
     }
 
@@ -263,25 +141,25 @@ class _RouteReportScreenState extends State<RouteReportScreen> {
     final toDate = DateTime.tryParse(toDateString);
 
     if (fromDate == null || toDate == null) {
+      if (!mounted) return;
       setState(() {
         _isLoading = false;
       });
-      print('Failed to parse date strings.');
+      debugPrint('Failed to parse date strings.');
       return;
     }
 
     try {
       final apiClient = traccarProvider.apiClient;
       final queryParams = [
-          api.QueryParam('from', fromDate.toIso8601String()),
-          api.QueryParam('to', toDate.toIso8601String()),
-          api.QueryParam('deviceId', deviceId.toString()),
+        api.QueryParam('from', fromDate.toIso8601String()),
+        api.QueryParam('to', toDate.toIso8601String()),
+        api.QueryParam('deviceId', deviceId.toString()),
       ];
       final path = '/reports/route';
       final headerParams = {'Accept': 'application/json'};
 
-      // final http.Response response = await apiClient.invokeAPI(
-            final response = await apiClient.invokeAPI(
+      final response = await apiClient.invokeAPI(
         path,
         'GET',
         queryParams,
@@ -311,21 +189,32 @@ class _RouteReportScreenState extends State<RouteReportScreen> {
             }
           }
         } else {
-          print('Warning: Expected JSON, but received content type: $contentType');
+          debugPrint(
+            'Warning: Expected JSON, but received content type: $contentType',
+          );
+          if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed to load route report. The server returned a file instead of JSON.'.tr)),
+            SnackBar(
+              content: Text(
+                'Failed to load route report. The server returned a file instead of JSON.'
+                    .tr,
+              ),
+            ),
           );
         }
       }
     } catch (e) {
-      print('Error fetching route report: $e');
+      debugPrint('Error fetching route report: $e');
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to load route report.'.tr)),
       );
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -337,8 +226,10 @@ class _RouteReportScreenState extends State<RouteReportScreen> {
   }
 
   Future<void> _createMapElements() async {
-    if (_mapController == null || !_isStyleLoaded || _routeReport.isEmpty) return;
-    
+    if (_mapController == null || !_isStyleLoaded || _routeReport.isEmpty) {
+      return;
+    }
+
     await _mapController!.clearSymbols();
     await _mapController!.clearLines();
 
@@ -357,19 +248,23 @@ class _RouteReportScreenState extends State<RouteReportScreen> {
 
       await _addMarker(points.first, "start_pin", "assets/images/start.png");
       await _addMarker(points.last, "end_pin", "assets/images/destination.png");
-      
+
       _zoomToFit(points);
     }
   }
 
-  Future<void> _addMarker(maplibre.LatLng point, String iconId, String assetPath) async {
+  Future<void> _addMarker(
+    maplibre.LatLng point,
+    String iconId,
+    String assetPath,
+  ) async {
     if (!_loadedIcons.contains(iconId)) {
       final ByteData bytes = await rootBundle.load(assetPath);
       final Uint8List list = bytes.buffer.asUint8List();
       await _mapController!.addImage(iconId, list);
       _loadedIcons.add(iconId);
     }
-    
+
     await _mapController!.addSymbol(
       maplibre.SymbolOptions(
         geometry: point,
@@ -393,7 +288,10 @@ class _RouteReportScreenState extends State<RouteReportScreen> {
           southwest: maplibre.LatLng(minLat, minLng),
           northeast: maplibre.LatLng(maxLat, maxLng),
         ),
-        left: 50, right: 50, top: 50, bottom: 50,
+        left: 50,
+        right: 50,
+        top: 50,
+        bottom: 50,
       ),
     );
   }
@@ -409,46 +307,54 @@ class _RouteReportScreenState extends State<RouteReportScreen> {
   String _formatSpeed(double speed) {
     return '${(speed * 1.852).toStringAsFixed(2)} ${'sharedKmh'.tr}';
   }
-  
-  // Future<void> _exportToKML() async { ... } 
+
   Future<void> _exportToCsv() async {
     final status = await Permission.storage.request();
     if (!status.isGranted) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Storage permission is required to save the file.'.tr)),
+        SnackBar(
+          content: Text('Storage permission is required to save the file.'.tr),
+        ),
       );
       return;
     }
 
     if (_routeReport.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No data to export.'.tr)),
-      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('No data to export.'.tr)));
       return;
     }
 
     final csvHeader =
         'id,deviceId,deviceTime,latitude,longitude,speed,address,protocol,serverTime,fixTime,outdated,valid,altitude,course,accuracy,network,attributes\n';
-    final csvRows = _routeReport.map((position) {
-      final attributesJson = json.encode(position.attributes);
-      return '${position.id},${position.deviceId},"${_formatDateTime(position.deviceTime)}",${position.latitude},${position.longitude},${position.speed},"${position.address ?? ''}",${position.protocol},"${_formatDateTime(position.serverTime)}","${_formatDateTime(position.fixTime)}",${position.outdated},${position.valid},${position.altitude},${position.course},${position.accuracy},${position.network ?? ''},"$attributesJson"';
-    }).join('\n');
+    final csvRows = _routeReport
+        .map((position) {
+          final attributesJson = json.encode(position.attributes);
+          return '${position.id},${position.deviceId},"${_formatDateTime(position.deviceTime)}",${position.latitude},${position.longitude},${position.speed},"${position.address ?? ''}",${position.protocol},"${_formatDateTime(position.serverTime)}","${_formatDateTime(position.fixTime)}",${position.outdated},${position.valid},${position.altitude},${position.course},${position.accuracy},${position.network ?? ''},"$attributesJson"';
+        })
+        .join('\n');
 
     final csvContent = csvHeader + csvRows;
     final directory = await getExternalStorageDirectory();
-    final fileName = 'route_report_${_deviceName ?? 'vehicle'}_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.csv';
+    final fileName =
+        'route_report_${_deviceName ?? 'vehicle'}_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.csv';
     final file = File('${directory!.path}/$fileName');
 
     try {
       await file.writeAsString(csvContent);
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('${'Report exported to'.tr} ${file.path}')),
       );
     } catch (e) {
-      print('Error exporting CSV: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to export report.'.tr)),
-      );
+      debugPrint('Error exporting CSV: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to export report.'.tr)));
     }
   }
 
@@ -467,17 +373,17 @@ class _RouteReportScreenState extends State<RouteReportScreen> {
 
     final mapProvider = Provider.of<MapStyleProvider>(context);
     final initialCenter = _routeReport.isNotEmpty
-        ? maplibre.LatLng(_routeReport.first.latitude, _routeReport.first.longitude)
+        ? maplibre.LatLng(
+            _routeReport.first.latitude,
+            _routeReport.first.longitude,
+          )
         : const maplibre.LatLng(21.9162, 95.9560);
 
     return Scaffold(
       appBar: AppBar(
         title: Text('${'reportReplay'.tr}: ${_deviceName ?? ''}'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.download),
-            onPressed: _exportToCsv,
-          ),
+          IconButton(icon: const Icon(Icons.download), onPressed: _exportToCsv),
         ],
       ),
       body: Column(
@@ -502,7 +408,9 @@ class _RouteReportScreenState extends State<RouteReportScreen> {
                     mini: true,
                     onPressed: () => mapProvider.toggleMapType(),
                     child: Icon(
-                      mapProvider.isSatelliteMode ? Icons.map : Icons.satellite_alt,
+                      mapProvider.isSatelliteMode
+                          ? Icons.map
+                          : Icons.satellite_alt,
                     ),
                   ),
                 ),
@@ -517,7 +425,9 @@ class _RouteReportScreenState extends State<RouteReportScreen> {
               itemBuilder: (context, index) {
                 final position = _routeReport[index];
                 return GestureDetector(
-                  onTap: () => _animateToPosition(maplibre.LatLng(position.latitude, position.longitude)),
+                  onTap: () => _animateToPosition(
+                    maplibre.LatLng(position.latitude, position.longitude),
+                  ),
                   child: Card(
                     elevation: 4,
                     margin: const EdgeInsets.only(bottom: 16.0),
@@ -528,12 +438,17 @@ class _RouteReportScreenState extends State<RouteReportScreen> {
                         children: [
                           Text(
                             '${'reportPositions'.tr} ${index + 1}',
-                            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                           const Divider(),
                           ListTile(
                             title: Text('positionDeviceTime'.tr),
-                            trailing: Text(_formatDateTime(position.deviceTime)),
+                            trailing: Text(
+                              _formatDateTime(position.deviceTime),
+                            ),
                           ),
                           ListTile(
                             title: Text('positionSpeed'.tr),
@@ -542,9 +457,14 @@ class _RouteReportScreenState extends State<RouteReportScreen> {
                           ListTile(
                             title: Text('positionAddress'.tr),
                             trailing: FutureBuilder<String>(
-                              future: position.address != null && position.address!.isNotEmpty
+                              future:
+                                  position.address != null &&
+                                      position.address!.isNotEmpty
                                   ? Future.value(position.address)
-                                  : OfflineAddressService.getAddress(position.latitude, position.longitude),
+                                  : OfflineAddressService.getAddress(
+                                      position.latitude,
+                                      position.longitude,
+                                    ),
                               builder: (context, snapshot) {
                                 return Text(snapshot.data ?? '...');
                               },

@@ -3,11 +3,10 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
 // Import all the language files.
 import 'package:trabcdefg/l10n/af.dart';
-import 'package:trabcdefg/l10n/ar_SA.dart';
 import 'package:trabcdefg/l10n/ar.dart';
+import 'package:trabcdefg/l10n/ar_sa.dart';
 import 'package:trabcdefg/l10n/az.dart';
 import 'package:trabcdefg/l10n/bg.dart';
 import 'package:trabcdefg/l10n/bn.dart';
@@ -16,8 +15,7 @@ import 'package:trabcdefg/l10n/cs.dart';
 import 'package:trabcdefg/l10n/da.dart';
 import 'package:trabcdefg/l10n/de.dart';
 import 'package:trabcdefg/l10n/el.dart';
-import 'package:trabcdefg/l10n/en_US.dart';
-import 'package:trabcdefg/l10n/en.dart';
+import 'package:trabcdefg/l10n/en_us.dart';
 import 'package:trabcdefg/l10n/es.dart';
 import 'package:trabcdefg/l10n/et.dart';
 import 'package:trabcdefg/l10n/fa.dart';
@@ -43,13 +41,14 @@ import 'package:trabcdefg/l10n/mk.dart';
 import 'package:trabcdefg/l10n/ml.dart';
 import 'package:trabcdefg/l10n/mn.dart';
 import 'package:trabcdefg/l10n/ms.dart';
+import 'package:trabcdefg/l10n/my.dart';
 import 'package:trabcdefg/l10n/nb.dart';
 import 'package:trabcdefg/l10n/ne.dart';
 import 'package:trabcdefg/l10n/nl.dart';
 import 'package:trabcdefg/l10n/nn.dart';
 import 'package:trabcdefg/l10n/pl.dart';
-import 'package:trabcdefg/l10n/pt_BR.dart';
 import 'package:trabcdefg/l10n/pt.dart';
+import 'package:trabcdefg/l10n/pt_br.dart';
 import 'package:trabcdefg/l10n/ro.dart';
 import 'package:trabcdefg/l10n/ru.dart';
 import 'package:trabcdefg/l10n/si.dart';
@@ -67,8 +66,7 @@ import 'package:trabcdefg/l10n/uk.dart';
 import 'package:trabcdefg/l10n/uz.dart';
 import 'package:trabcdefg/l10n/vi.dart';
 import 'package:trabcdefg/l10n/zh.dart';
-import 'package:trabcdefg/l10n/zh_TW.dart';
-import 'package:trabcdefg/l10n/my.dart';
+import 'package:trabcdefg/l10n/zh_tw.dart';
 
 class LocalizationService extends Translations {
   static const fallbackLocale = Locale('en', 'US');
@@ -206,71 +204,71 @@ class LocalizationService extends Translations {
 
   @override
   Map<String, Map<String, String>> get keys => {
-        'af_ZA': af,
-        'ar_SA': arSA,
-        'ar': ar,
-        'az': az,
-        'bg': bg,
-        'bn': bn,
-        'ca': ca,
-        'cs': cs,
-        'da': da,
-        'de': de,
-        'el': el,
-        'en_US': en_US,
-        // 'en': enUS,
-        'es': es,
-        'et': et,
-        'fa': fa,
-        'fi': fi,
-        'fr': fr,
-        'gl': gl,
-        'he': he,
-        'hi': hi,
-        'hr': hr,
-        'hu': hu,
-        'hy': hy,
-        'id': id,
-        'it': it,
-        'ja': ja,
-        'ka': ka,
-        'kk': kk,
-        'km': km,
-        'ko': ko,
-        'lo': lo,
-        'lt': lt,
-        'lv': lv,
-        'mk': mk,
-        'ml': ml,
-        'mn': mn,
-        'ms': ms,
-        'nb': nb,
-        'ne': ne,
-        'nl': nl,
-        'nn': nn,
-        'pl': pl,
-        'pt_BR': ptBR,
-        'pt': pt,
-        'ro': ro,
-        'ru': ru,
-        'si': si,
-        'sk': sk,
-        'sl': sl,
-        'sq': sq,
-        'sr': sr,
-        'sv': sv,
-        'sw': sw,
-        'ta': ta,
-        'th': th,
-        'tk': tk,
-        'tr': tr,
-        'uk': uk,
-        'uz': uz,
-        'vi': vi,
-        'zh_TW': zhTW,
-        'zh': zhCN,
-        'my': my,
-      };
+    'af_ZA': af,
+    'ar_SA': arSA,
+    'ar': ar,
+    'az': az,
+    'bg': bg,
+    'bn': bn,
+    'ca': ca,
+    'cs': cs,
+    'da': da,
+    'de': de,
+    'el': el,
+    'en_US': enUs,
+    // 'en': enUS,
+    'es': es,
+    'et': et,
+    'fa': fa,
+    'fi': fi,
+    'fr': fr,
+    'gl': gl,
+    'he': he,
+    'hi': hi,
+    'hr': hr,
+    'hu': hu,
+    'hy': hy,
+    'id': id,
+    'it': it,
+    'ja': ja,
+    'ka': ka,
+    'kk': kk,
+    'km': km,
+    'ko': ko,
+    'lo': lo,
+    'lt': lt,
+    'lv': lv,
+    'mk': mk,
+    'ml': ml,
+    'mn': mn,
+    'ms': ms,
+    'nb': nb,
+    'ne': ne,
+    'nl': nl,
+    'nn': nn,
+    'pl': pl,
+    'pt_BR': ptBr,
+    'pt': pt,
+    'ro': ro,
+    'ru': ru,
+    'si': si,
+    'sk': sk,
+    'sl': sl,
+    'sq': sq,
+    'sr': sr,
+    'sv': sv,
+    'sw': sw,
+    'ta': ta,
+    'th': th,
+    'tk': tk,
+    'tr': tr,
+    'uk': uk,
+    'uz': uz,
+    'vi': vi,
+    'zh_TW': zhTw,
+    'zh': zhCN,
+    'my': my,
+  };
 
   // Method to save the selected locale to SharedPreferences
   static Future<void> saveLocale(Locale locale) async {
@@ -287,7 +285,7 @@ class LocalizationService extends Translations {
     }
     return null;
   }
-  
+
   // Method to convert a language code string to a Locale object
   static Locale getLocaleFromLang(String lang) {
     // This logic maps the language code to the correct Locale object.

@@ -1,16 +1,16 @@
 // lib/screens/share_device_screen.dart
 //This screen provides a clean interface for generating a temporary, shareable access link for a specific GPS device tracked by a Traccar server.
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:trabcdefg/constants.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
-import 'package:get/get.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:io';
-import 'dart:convert';
 
 class ShareDeviceScreen extends StatefulWidget {
   const ShareDeviceScreen({super.key});
@@ -121,8 +121,10 @@ class _ShareDeviceScreenState extends State<ShareDeviceScreen> {
         });
         Get.snackbar('Success', 'Device shared successfully!');
       } else {
-        Get.snackbar('Error',
-            'Failed to share device. Status: ${response.statusCode}');
+        Get.snackbar(
+          'Error',
+          'Failed to share device. Status: ${response.statusCode}',
+        );
       }
     } catch (e) {
       Get.snackbar('Error', 'An error occurred: $e');
@@ -143,9 +145,7 @@ class _ShareDeviceScreenState extends State<ShareDeviceScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Share $_deviceName'.tr),
-      ),
+      appBar: AppBar(title: Text('Share $_deviceName'.tr)),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(

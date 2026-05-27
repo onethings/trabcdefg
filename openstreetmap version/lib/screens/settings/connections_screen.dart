@@ -1,12 +1,13 @@
 // connections_screen.dart
 // A screen to manage connections between devices and other entities in the TracDefg app.
-import 'package:flutter/material.dart';
-import 'package:trabcdefg/src/generated_api/api.dart' as api;
-import 'package:trabcdefg/providers/traccar_provider.dart';
-import 'package:provider/provider.dart';
-import 'package:get/get.dart';
 import 'dart:convert';
+
+import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
+import 'package:provider/provider.dart';
+import 'package:trabcdefg/providers/traccar_provider.dart';
+import 'package:trabcdefg/src/generated_api/api.dart' as api;
 
 class ConnectionsScreen extends StatefulWidget {
   final int deviceId;
@@ -14,10 +15,10 @@ class ConnectionsScreen extends StatefulWidget {
   const ConnectionsScreen({super.key, required this.deviceId});
 
   @override
-  _ConnectionsScreenState createState() => _ConnectionsScreenState();
+  ConnectionsScreenState createState() => ConnectionsScreenState();
 }
 
-class _ConnectionsScreenState extends State<ConnectionsScreen> {
+class ConnectionsScreenState extends State<ConnectionsScreen> {
   final Map<String, List<int>> _selectedItems = {
     'geofences': [],
     'notifications': [],
@@ -51,27 +52,29 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
       final linkedGeofences = await geofencesApi.geofencesGet(
         deviceId: widget.deviceId,
       );
-      print('Linked Geofences: ${linkedGeofences?.map((g) => g.id)}');
+      debugPrint('Linked Geofences: ${linkedGeofences?.map((g) => g.id)}');
       _selectedItems['geofences'] =
           linkedGeofences?.map((g) => g.id!).toList() ?? [];
 
       final linkedNotifications = await notificationsApi.notificationsGet(
         deviceId: widget.deviceId,
       );
-      print('Linked Notifications: ${linkedNotifications?.map((n) => n.id)}');
+      debugPrint(
+        'Linked Notifications: ${linkedNotifications?.map((n) => n.id)}',
+      );
       _selectedItems['notifications'] =
           linkedNotifications?.map((n) => n.id!).toList() ?? [];
 
       final linkedDrivers = await driversApi.driversGet(
         deviceId: widget.deviceId,
       );
-      print('Linked Drivers: ${linkedDrivers?.map((d) => d.id)}');
+      debugPrint('Linked Drivers: ${linkedDrivers?.map((d) => d.id)}');
       _selectedItems['drivers'] =
           linkedDrivers?.map((d) => d.id!).toList() ?? [];
 
       final linkedComputedAttributes = await computedAttributesApi
           .attributesComputedGet(deviceId: widget.deviceId);
-      print(
+      debugPrint(
         'Linked Computed Attributes: ${linkedComputedAttributes?.map((ca) => ca.id)}',
       );
       _selectedItems['computedAttributes'] =
@@ -80,20 +83,21 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
       final linkedCommands = await commandsApi.commandsGet(
         deviceId: widget.deviceId,
       );
-      print('Linked Commands: ${linkedCommands?.map((c) => c.id)}');
+      debugPrint('Linked Commands: ${linkedCommands?.map((c) => c.id)}');
       _selectedItems['savedCommands'] =
           linkedCommands?.map((c) => c.id!).toList() ?? [];
 
       final linkedMaintenance = await maintenanceApi.maintenanceGet(
         deviceId: widget.deviceId,
       );
-      print('Linked Maintenance: ${linkedMaintenance?.map((m) => m.id)}');
+      debugPrint('Linked Maintenance: ${linkedMaintenance?.map((m) => m.id)}');
       _selectedItems['maintenance'] =
           linkedMaintenance?.map((m) => m.id!).toList() ?? [];
 
+      if (!mounted) return;
       setState(() {});
     } catch (e) {
-      print("Error fetching linked items: $e");
+      debugPrint("Error fetching linked items: $e");
     }
   }
 
@@ -151,16 +155,16 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
     return await maintenanceApi.maintenanceGet();
   }
 
-  // connections_screen.dart
-
-  // connections_screen.dart
-
-void _updatePermission(String category, int itemId, bool isSelected) async {
-    final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
+  void _updatePermission(String category, int itemId, bool isSelected) async {
+    final traccarProvider = Provider.of<TraccarProvider>(
+      context,
+      listen: false,
+    );
     final apiClient = traccarProvider.apiClient;
     final sessionId = traccarProvider.sessionId;
 
     if (sessionId == null) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Authentication session not found')),
       );
@@ -174,7 +178,6 @@ void _updatePermission(String category, int itemId, bool isSelected) async {
 
     try {
       if (isSelected) {
-        // Handle POST request (Add permission)
         final response = await apiClient.invokeAPI(
           '/permissions',
           'POST',
@@ -185,17 +188,19 @@ void _updatePermission(String category, int itemId, bool isSelected) async {
           'application/json',
         );
 
+        if (!mounted) return;
         if (response.statusCode == 204 || response.statusCode == 200) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Permission added successfully')),
+            const SnackBar(content: Text('Permission added successfully')),
           );
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed to add permission: ${response.statusCode}')),
+            SnackBar(
+              content: Text('Failed to add permission: ${response.statusCode}'),
+            ),
           );
         }
       } else {
-        // Handle DELETE request (Delete permission)
         final uri = Uri.parse('https://demo3.traccar.org/api/permissions');
         final response = await http.delete(
           uri,
@@ -207,20 +212,25 @@ void _updatePermission(String category, int itemId, bool isSelected) async {
           body: jsonEncode(payload),
         );
 
+        if (!mounted) return;
         if (response.statusCode == 204 || response.statusCode == 200) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Permission deleted successfully')),
+            const SnackBar(content: Text('Permission deleted successfully')),
           );
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed to delete permission: ${response.statusCode}')),
+            SnackBar(
+              content: Text(
+                'Failed to delete permission: ${response.statusCode}',
+              ),
+            ),
           );
         }
       }
-      
-      _fetchLinkedItems();
 
+      _fetchLinkedItems();
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to update permission: ${e.toString()}')),
       );
@@ -278,7 +288,7 @@ void _updatePermission(String category, int itemId, bool isSelected) async {
             } else if (snapshot.hasError) {
               return Center(child: Text('Error: ${snapshot.error}'));
             } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
-              return Center(child: Text('No items found.'));
+              return const Center(child: Text('No items found.'));
             } else {
               return Column(
                 children: snapshot.data!.map((item) {

@@ -1,10 +1,12 @@
 import 'dart:ui';
+
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import 'package:trabcdefg/providers/traccar_provider.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
+import 'package:trabcdefg/providers/traccar_provider.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
+
 import '../notifications_screen.dart';
 
 class DashboardScreen extends StatelessWidget {
@@ -16,9 +18,15 @@ class DashboardScreen extends StatelessWidget {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    final onlineCount = provider.devices.where((d) => d.status == 'online').length;
-    final movingCount = provider.positions.where((p) => (p.speed ?? 0.0) > 1.0).length;
-    final offlineCount = provider.devices.where((d) => d.status == 'offline').length;
+    final onlineCount = provider.devices
+        .where((d) => d.status == 'online')
+        .length;
+    final movingCount = provider.positions
+        .where((p) => (p.speed ?? 0.0) > 1.0)
+        .length;
+    final offlineCount = provider.devices
+        .where((d) => d.status == 'offline')
+        .length;
     final totalCount = provider.devices.length;
 
     // Calculate total distance for today (ideally from reports, but using current totalDistance for display)
@@ -40,13 +48,18 @@ class DashboardScreen extends StatelessWidget {
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
             child: Container(
-              color: (isDark ? Colors.black : Colors.white).withOpacity(0.1),
+              color: (isDark ? Colors.black : Colors.white).withValues(
+                alpha: 0.1,
+              ),
             ),
           ),
         ),
         title: Text(
           'dashboardTitle'.tr,
-          style: const TextStyle(fontWeight: FontWeight.w800, letterSpacing: -0.5),
+          style: const TextStyle(
+            fontWeight: FontWeight.w800,
+            letterSpacing: -0.5,
+          ),
         ),
         actions: [
           IconButton(
@@ -63,13 +76,22 @@ class DashboardScreen extends StatelessWidget {
               onRefresh: () => provider.fetchInitialData(),
               child: SingleChildScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 12,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _buildGreeting(provider, theme),
                     const SizedBox(height: 24),
-                    _buildStatusSection(context, onlineCount, movingCount, offlineCount, totalCount),
+                    _buildStatusSection(
+                      context,
+                      onlineCount,
+                      movingCount,
+                      offlineCount,
+                      totalCount,
+                    ),
                     const SizedBox(height: 24),
                     _buildSummaryCard(
                       context,
@@ -81,7 +103,10 @@ class DashboardScreen extends StatelessWidget {
                     const SizedBox(height: 24),
                     Text(
                       'dashboardRecentActivity'.tr,
-                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     const SizedBox(height: 12),
                     _buildRecentEventsList(context, provider.events),
@@ -102,9 +127,9 @@ class DashboardScreen extends StatelessWidget {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            theme.colorScheme.primary.withOpacity(0.08),
+            theme.colorScheme.primary.withValues(alpha: 0.08),
             theme.colorScheme.surface,
-            theme.colorScheme.secondary.withOpacity(0.05),
+            theme.colorScheme.secondary.withValues(alpha: 0.05),
           ],
         ),
       ),
@@ -118,7 +143,11 @@ class DashboardScreen extends StatelessWidget {
       children: [
         Text(
           '${'dashboardHello'.tr}, $name 👋',
-          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, letterSpacing: -1),
+          style: const TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.w800,
+            letterSpacing: -1,
+          ),
         ),
         Text(
           'dashboardWelcomeBack'.tr,
@@ -128,32 +157,71 @@ class DashboardScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildStatusSection(BuildContext context, int online, int moving, int offline, int total) {
+  Widget _buildStatusSection(
+    BuildContext context,
+    int online,
+    int moving,
+    int offline,
+    int total,
+  ) {
     return Row(
       children: [
-        Expanded(child: _buildSmallStatusCard(context, 'dashboardOnline'.tr, online.toString(), Colors.green)),
+        Expanded(
+          child: _buildSmallStatusCard(
+            context,
+            'dashboardOnline'.tr,
+            online.toString(),
+            Colors.green,
+          ),
+        ),
         const SizedBox(width: 12),
-        Expanded(child: _buildSmallStatusCard(context, 'dashboardMoving'.tr, moving.toString(), Colors.blue)),
+        Expanded(
+          child: _buildSmallStatusCard(
+            context,
+            'dashboardMoving'.tr,
+            moving.toString(),
+            Colors.blue,
+          ),
+        ),
         const SizedBox(width: 12),
-        Expanded(child: _buildSmallStatusCard(context, 'dashboardOffline'.tr, offline.toString(), Colors.grey)),
+        Expanded(
+          child: _buildSmallStatusCard(
+            context,
+            'dashboardOffline'.tr,
+            offline.toString(),
+            Colors.grey,
+          ),
+        ),
       ],
     );
   }
 
-  Widget _buildSmallStatusCard(BuildContext context, String title, String value, Color color) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+  Widget _buildSmallStatusCard(
+    BuildContext context,
+    String title,
+    String value,
+    Color color,
+  ) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: (isDark ? Colors.white : Colors.black).withOpacity(0.05),
+        color:
+            (Theme.of(context).brightness == Brightness.dark
+                    ? Colors.white
+                    : Colors.black)
+                .withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withOpacity(0.2), width: 1.5),
+        border: Border.all(color: color.withValues(alpha: 0.2), width: 1.5),
       ),
       child: Column(
         children: [
           Text(
             value,
-            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: color),
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w900,
+              color: color,
+            ),
           ),
           const SizedBox(height: 4),
           Text(
@@ -167,21 +235,26 @@ class DashboardScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildSummaryCard(BuildContext context, String title, String value, IconData icon, Color color) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+  Widget _buildSummaryCard(
+    BuildContext context,
+    String title,
+    String value,
+    IconData icon,
+    Color color,
+  ) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [color.withOpacity(0.8), color],
+          colors: [color.withValues(alpha: 0.8), color],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: color.withOpacity(0.3),
+            color: color.withValues(alpha: 0.3),
             blurRadius: 15,
             offset: const Offset(0, 8),
           ),
@@ -192,7 +265,7 @@ class DashboardScreen extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
+              color: Colors.white.withValues(alpha: 0.2),
               shape: BoxShape.circle,
             ),
             child: Icon(icon, color: Colors.white, size: 30),
@@ -226,7 +299,10 @@ class DashboardScreen extends StatelessWidget {
       return Container(
         height: 100,
         alignment: Alignment.center,
-        child: Text('dashboardNoEvents'.tr, style: const TextStyle(color: Colors.grey)),
+        child: Text(
+          'dashboardNoEvents'.tr,
+          style: const TextStyle(color: Colors.grey),
+        ),
       );
     }
 
@@ -241,13 +317,17 @@ class DashboardScreen extends StatelessWidget {
           margin: const EdgeInsets.only(bottom: 12),
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface.withOpacity(0.5),
+            color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.5),
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.grey.withOpacity(0.1)),
+            border: Border.all(color: Colors.grey.withValues(alpha: 0.1)),
           ),
           child: Row(
             children: [
-              Icon(_getEventIcon(event.type), size: 18, color: Theme.of(context).colorScheme.primary),
+              Icon(
+                _getEventIcon(event.type),
+                size: 18,
+                color: Theme.of(context).colorScheme.primary,
+              ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -255,10 +335,15 @@ class DashboardScreen extends StatelessWidget {
                   children: [
                     Text(
                       (event.type ?? 'unknownEvent').tr,
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                      ),
                     ),
                     Text(
-                      DateFormat.yMMMd().add_jm().format(event.eventTime?.toLocal() ?? DateTime.now()),
+                      DateFormat.yMMMd().add_jm().format(
+                        event.eventTime?.toLocal() ?? DateTime.now(),
+                      ),
                       style: const TextStyle(fontSize: 11, color: Colors.grey),
                     ),
                   ],
@@ -273,14 +358,22 @@ class DashboardScreen extends StatelessWidget {
 
   IconData _getEventIcon(String? type) {
     switch (type) {
-      case 'deviceOnline': return Icons.cloud_done_rounded;
-      case 'deviceOffline': return Icons.cloud_off_rounded;
-      case 'deviceMoving': return Icons.directions_car_rounded;
-      case 'deviceStopped': return Icons.stop_circle_rounded;
-      case 'geofenceEnter': return Icons.login_rounded;
-      case 'geofenceExit': return Icons.logout_rounded;
-      case 'alarm': return Icons.warning_amber_rounded;
-      default: return Icons.event_note_rounded;
+      case 'deviceOnline':
+        return Icons.cloud_done_rounded;
+      case 'deviceOffline':
+        return Icons.cloud_off_rounded;
+      case 'deviceMoving':
+        return Icons.directions_car_rounded;
+      case 'deviceStopped':
+        return Icons.stop_circle_rounded;
+      case 'geofenceEnter':
+        return Icons.login_rounded;
+      case 'geofenceExit':
+        return Icons.logout_rounded;
+      case 'alarm':
+        return Icons.warning_amber_rounded;
+      default:
+        return Icons.event_note_rounded;
     }
   }
 }

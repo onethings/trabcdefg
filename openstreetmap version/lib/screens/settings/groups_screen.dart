@@ -1,17 +1,17 @@
 // groups_screen.dart
 // A screen to display and manage groups in the TracDefg app.
 import 'package:flutter/material.dart';
-import 'package:trabcdefg/src/generated_api/api.dart' as api;
-import 'package:trabcdefg/screens/settings/add_group_screen.dart';
-import 'package:trabcdefg/providers/traccar_provider.dart';
-import 'package:provider/provider.dart';
 import 'package:get/get.dart';
+import 'package:provider/provider.dart';
+import 'package:trabcdefg/providers/traccar_provider.dart';
+import 'package:trabcdefg/screens/settings/add_group_screen.dart';
+import 'package:trabcdefg/src/generated_api/api.dart' as api;
 
 class GroupsScreen extends StatefulWidget {
   const GroupsScreen({super.key});
 
   @override
-  _GroupsScreenState createState() => _GroupsScreenState();
+  State<GroupsScreen> createState() => _GroupsScreenState(); // <-- Changed return type here
 }
 
 class _GroupsScreenState extends State<GroupsScreen> {
@@ -24,7 +24,10 @@ class _GroupsScreenState extends State<GroupsScreen> {
   }
 
   void _fetchGroups() {
-    final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
+    final traccarProvider = Provider.of<TraccarProvider>(
+      context,
+      listen: false,
+    );
     // Correct way to instantiate GroupsApi with the authenticated client
     final groupsApi = api.GroupsApi(traccarProvider.apiClient);
     setState(() {
@@ -35,16 +38,16 @@ class _GroupsScreenState extends State<GroupsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text('groupDialog'.tr),
-      ),
+      appBar: AppBar(title: Text('groupDialog'.tr)),
       body: FutureBuilder<List<api.Group>?>(
         future: _groupsFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           } else if (snapshot.hasError) {
-            return Center(child: Text('${'errorGeneral'.tr}: ${snapshot.error}'));
+            return Center(
+              child: Text('${'errorGeneral'.tr}: ${snapshot.error}'),
+            );
           } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
             return Center(child: Text('sharedNoData'.tr));
           } else {
@@ -65,9 +68,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
         onPressed: () async {
           final newGroup = await Navigator.push(
             context,
-            MaterialPageRoute(
-              builder: (context) => const AddGroupScreen(),
-            ),
+            MaterialPageRoute(builder: (context) => const AddGroupScreen()),
           );
           if (newGroup != null) {
             _fetchGroups();

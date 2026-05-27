@@ -1,46 +1,30 @@
-import 'package:flutter/material.dart';
-import 'package:collection/collection.dart';
-// import 'package:flutter_map/flutter_map.dart'; // Primary map package for OpenStreetMap
-import 'package:maplibre_gl/maplibre_gl.dart' as maplibre;
-import 'package:flutter_map/flutter_map.dart' hide LatLng, LatLngBounds;
-import 'package:latlong2/latlong.dart'
-    as latlong; // LatLong for FlutterMap coordinates
-// ALIAS: Required for Satellite view, Marker, BitmapDescriptor - REMOVED: google_maps_flutter is gone
-import 'package:provider/provider.dart';
-import 'package:trabcdefg/providers/traccar_provider.dart';
-import 'package:trabcdefg/providers/settings_provider.dart';
-import 'package:trabcdefg/src/generated_api/api.dart' as api;
 import 'dart:async';
-import 'package:flutter/services.dart';
+import 'dart:math';
 import 'dart:ui' as ui;
-import 'package:shared_preferences/shared_preferences.dart';
-import 'monthly_mileage_screen.dart';
-import 'device_list_screen.dart';
-import 'package:get/get.dart';
-import 'package:intl/intl.dart';
-import 'device_details_screen.dart';
-import 'package:url_launcher/url_launcher.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
-import 'package:trabcdefg/screens/settings/geofences_screen.dart'
-    hide AppMapType;
-import 'package:trabcdefg/constants.dart';
-import 'dart:io';
-import 'share_device_screen.dart';
-import 'command_screen.dart';
-import 'package:trabcdefg/screens/settings/devices_screen.dart';
-import 'package:trabcdefg/screens/settings/add_device_screen.dart';
-import 'dart:math'; // Required for math operations like pi/radians in marker rotation
-import 'package:hive/hive.dart';
-import 'dart:typed_data';
-import 'package:flutter_map/flutter_map.dart'; // Ensure this is imported for TileProvider
-import 'package:flutter/foundation.dart'; // Required for DiagnosticsProperty
-import 'package:trabcdefg/widgets/OfflineAddressService.dart';
-import 'package:trabcdefg/providers/map_style_provider.dart';
 
-import '../services/tile_cache_service.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:get/get.dart';
+import 'package:hive/hive.dart';
+import 'package:http/http.dart' as http;
+import 'package:intl/intl.dart';
+import 'package:latlong2/latlong.dart' as latlong;
+import 'package:maplibre_gl/maplibre_gl.dart' as maplibre;
+import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:trabcdefg/providers/map_style_provider.dart';
+import 'package:trabcdefg/providers/settings_provider.dart';
+import 'package:trabcdefg/providers/traccar_provider.dart';
+import 'package:trabcdefg/screens/settings/geofences_screen.dart'
+    hide AppMapType, TileCacheService;
+import 'package:trabcdefg/src/generated_api/api.dart' as api;
+import 'package:trabcdefg/widgets/offline_address_service.dart';
+import 'package:url_launcher/url_launcher.dart';
+
 import '../services/marker_icon_service.dart';
+import '../services/tile_cache_service.dart';
 import '../widgets/device_detail_panel.dart';
+import 'share_device_screen.dart';
 
 class MapScreen extends StatefulWidget {
   final api.Device? selectedDevice;
@@ -53,88 +37,49 @@ class MapScreen extends StatefulWidget {
 
 class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   Key _mapKey = UniqueKey();
-  bool _isSatelliteMode = false;
-
-  static const String _satelliteStyle = "assets/styles/aws-hybrid.json";
-
-  static const String _brightStyle = "assets/styles/streets-v4.json";
-
-  // 1. Positron (簡潔淺色模式) - 非常適合用來凸顯彩色車輛圖標
 
   maplibre.MapLibreMapController? _mapController;
   maplibre.CameraPosition? _lastCameraPosition;
   bool _isStyleLoaded = false;
   bool _hasInitialZoomed = false;
   final Set<String> _loadedIcons = {};
-  // REMOVED: final Map<String, gmap.BitmapDescriptor> _markerIcons = {};
   bool _markersLoaded = false;
-  // MapType moved to provider
-  MapController flutterMapController = MapController();
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   api.Device? _currentDevice;
-  double _currentZoom = 16.0;
   final TileCacheService _cacheService = TileCacheService();
   late MarkerIconService _iconService;
   final http.Client _httpClient = http.Client();
   bool _isControlsExpanded = true;
   bool _showGeofences = true;
   final String _controlsExpandedKey = 'isMapControlsExpanded';
-  double _mapCenterOffset = 0.001;
-  // final OfflineGeocoder _geocoder = OfflineGeocoder();
   bool _isPanelOpen = false;
   bool _isFollowingDevice = false;
-  String _currentAddress = "";
 
   // Reactive notifiers for seamless detail panel updates
-  final ValueNotifier<api.Device?> _selectedDeviceNotifier = ValueNotifier(null);
-  final ValueNotifier<api.Position?> _selectedPositionNotifier = ValueNotifier(null);
+  final ValueNotifier<api.Device?> _selectedDeviceNotifier = ValueNotifier(
+    null,
+  );
+  final ValueNotifier<api.Position?> _selectedPositionNotifier = ValueNotifier(
+    null,
+  );
   final ValueNotifier<String> _selectedAddressNotifier = ValueNotifier("");
 
-  String _getStyleString(AppMapType type) {
-    switch (type) {
-      case AppMapType.bright:
-        return _brightStyle;
-      case AppMapType.satellite:
-        return _satelliteStyle;
-      default:
-        return _brightStyle;
-    }
-  }
-
-  // --- Tile URLs for different map types ---
-  static const String _osmUrlTemplate =
-      'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
-  static const String _satelliteUrlTemplate =
-      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
-  static const List<String> _osmSubdomains = ['a', 'b', 'c'];
-
-  // Custom Tile Provider
-  late HiveTileProvider _tileProvider;
-  bool _isCacheInitialized =
-      false; // State to track cache/provider initialization
+  bool _isCacheInitialized = false;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
 
-    // Initial preference loading from Hive
     _loadUIPreferences();
-    // Initialize cache service and then the tile provider
     _iconService = MarkerIconService(loadedIcons: _loadedIcons);
     _cacheService.init().then((_) {
-      _tileProvider = HiveTileProvider(
-        cacheService: _cacheService,
-        httpClient: _httpClient,
-      );
-      
       // OPTIMIZATION: Warm up OfflineAddressService early on map screen arrival
       OfflineAddressService.initDatabase();
 
       if (mounted) {
         setState(() {
-          _isCacheInitialized =
-              true; // Set flag when initialization is complete
+          _isCacheInitialized = true;
         });
       }
     });
@@ -142,11 +87,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     _loadMarkerIcons();
     _currentDevice = widget.selectedDevice;
 
-    if (_currentDevice != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        // Your logic for initial state handling
-      });
-    } else {
+    if (_currentDevice == null) {
       _loadLastSelectedDevice();
     }
   }
@@ -154,16 +95,13 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   Future<void> _loadLastSelectedDevice() async {
     final prefs = await SharedPreferences.getInstance();
     final lastDeviceId = prefs.getInt('selectedDeviceId');
-    final lastZoom = prefs.getDouble('map_zoom_level');
-    
-    if (lastZoom != null) {
-      _currentZoom = lastZoom;
-    }
 
-    if (lastDeviceId != null) {
+    if (lastDeviceId != null && mounted) {
       final provider = Provider.of<TraccarProvider>(context, listen: false);
       if (provider.devices.isNotEmpty) {
-        final device = provider.devices.firstWhereOrNull((d) => d.id == lastDeviceId);
+        final device = provider.devices.firstWhereOrNull(
+          (d) => d.id == lastDeviceId,
+        );
         if (device != null) {
           setState(() {
             _currentDevice = device;
@@ -201,40 +139,25 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       if (mounted) {
-        // Capture current camera position before rebuilding to preserve view
         if (_mapController != null) {
           _lastCameraPosition = _mapController!.cameraPosition;
         }
 
         setState(() {
-          _mapKey = UniqueKey(); // Force MapLibre GL to re-create to prevent blank screen
+          _mapKey = UniqueKey();
         });
-        
-        // Refresh data to ensure WebSocket connection and session are alive
-        final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
+
+        final traccarProvider = Provider.of<TraccarProvider>(
+          context,
+          listen: false,
+        );
         traccarProvider.fetchInitialData().catchError((error) {
-           debugPrint("Session validation failed on resume: $error");
-           if (mounted) {
-             Get.offAllNamed('/login'); 
-           }
+          debugPrint("Session validation failed on resume: $error");
+          if (mounted) {
+            Get.offAllNamed('/login');
+          }
         });
       }
-    }
-  }
-
-  void _updateMapStyle(AppMapType type) async {
-    final styleProvider = Provider.of<MapStyleProvider>(context, listen: false);
-    await styleProvider.setMapType(type);
-
-    setState(() {
-      _isStyleLoaded = false;
-      _isSatelliteMode = (type == AppMapType.satellite);
-    });
-
-    try {
-      _mapController?.setStyle(styleProvider.styleString);
-    } catch (e) {
-      debugPrint("setStyle failed: $e");
     }
   }
 
@@ -243,6 +166,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       _isStyleLoaded = true;
     });
     _loadedIcons.clear();
+
+    if (!mounted) return;
     final traccarProvider = Provider.of<TraccarProvider>(
       context,
       listen: false,
@@ -251,16 +176,17 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     await _mapController!.setSymbolIconIgnorePlacement(true);
     await _mapController!.setSymbolTextAllowOverlap(true);
     await _mapController!.setSymbolTextIgnorePlacement(true);
-    
+
     await _updateAllMarkers(traccarProvider);
 
-    // Auto zoom to fit all markers if no specific device was requested on load
     if (widget.selectedDevice == null && !_hasInitialZoomed) {
       final prefs = await SharedPreferences.getInstance();
       final lastDeviceId = prefs.getInt('selectedDeviceId');
-      
+
       if (lastDeviceId != null) {
-        final device = traccarProvider.devices.firstWhereOrNull((d) => d.id == lastDeviceId);
+        final device = traccarProvider.devices.firstWhereOrNull(
+          (d) => d.id == lastDeviceId,
+        );
         if (device != null) {
           _onDeviceSelected(device, traccarProvider.positions);
         } else {
@@ -288,14 +214,14 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       if (minLng == null || lng < minLng) minLng = lng;
       if (maxLng == null || lng > maxLng) maxLng = lng;
     }
-    
+
     if (minLat != null && maxLat != null && minLng != null && maxLng != null) {
-      // Handle edge case where there is only one position or bounds are too small
-      if ((maxLat - minLat).abs() < 0.0001 && (maxLng - minLng).abs() < 0.0001) {
+      if ((maxLat - minLat).abs() < 0.0001 &&
+          (maxLng - minLng).abs() < 0.0001) {
         _mapController!.animateCamera(
           maplibre.CameraUpdate.newLatLngZoom(
             maplibre.LatLng(minLat, minLng),
-            14.0, // Default zoom for single marker
+            14.0,
           ),
         );
       } else {
@@ -318,10 +244,20 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   Future<void> _updateAllMarkers(TraccarProvider provider) async {
     if (_mapController == null || !_isStyleLoaded) return;
 
-    // Smart Auto-Follow: 只有在啟用跟隨且有選中車輛時才自動移動相機
+    // 💡 優化：在任何 await 異步操作之前，先安全地讀取變數並存為區域變數
+    // 這樣可以完美避開「跨異步間隙使用 BuildContext」的 linter 報錯
+    final double scale = Provider.of<SettingsProvider>(
+      context,
+      listen: false,
+    ).markerSizeScale;
+
     if (_currentDevice != null && _isFollowingDevice) {
-      final currentPos = provider.positions.firstWhereOrNull((p) => p.deviceId == _currentDevice!.id);
-      if (currentPos != null && currentPos.latitude != null && currentPos.longitude != null) {
+      final currentPos = provider.positions.firstWhereOrNull(
+        (p) => p.deviceId == _currentDevice!.id,
+      );
+      if (currentPos != null &&
+          currentPos.latitude != null &&
+          currentPos.longitude != null) {
         _mapController?.animateCamera(
           maplibre.CameraUpdate.newLatLng(
             maplibre.LatLng(
@@ -347,11 +283,12 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       final String plate = device.name ?? '';
       final String customLabelId = "label_$plate";
 
-      // 1. 確保基礎圖標已加載
       await _iconService.ensureIconLoaded(_mapController, baseIconKey);
-      
-      // 2. 確保獨立車牌標籤已加載 (帶有白色窄背景)
-      await _iconService.ensureLabelIconLoaded(_mapController, plate, customLabelId);
+      await _iconService.ensureLabelIconLoaded(
+        _mapController,
+        plate,
+        customLabelId,
+      );
 
       final latLng = maplibre.LatLng(
         pos.latitude!.toDouble(),
@@ -360,48 +297,31 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
       final deviceData = {'deviceId': device.id.toString()};
 
-      // 3. 添加車輛符號 (會旋轉)
       await _mapController!.addSymbol(
         maplibre.SymbolOptions(
           geometry: latLng,
           iconImage: baseIconKey,
           iconRotate: pos.course?.toDouble() ?? 0.0,
-          // 大幅增加車輛圖標尺寸倍率 (從 3.0 -> 4.0)，確保比標籤大且清晰
-          iconSize: 4.0 * context.read<SettingsProvider>().markerSizeScale,
+          iconSize: 4.0 * scale, // 💡 這裡直接使用剛剛存好的 scale 變數
           iconAnchor: 'center',
           zIndex: 10,
         ),
         deviceData,
       );
 
-      // 4. 添加標籤符號 (始終垂直，不旋轉)
       await _mapController!.addSymbol(
         maplibre.SymbolOptions(
           geometry: latLng,
           iconImage: customLabelId,
           iconRotate: 0.0,
-          // 縮小偏移量 (從 26 -> 15) 讓車牌更靠近車體，增加整體感
-          iconOffset: const Offset(0, 15), 
-          iconSize: 1.2, // 配合 18 號字體
-          iconAnchor: 'top', 
+          iconOffset: const Offset(0, 15),
+          iconSize: 1.2,
+          iconAnchor: 'top',
           zIndex: 5,
         ),
         deviceData,
       );
     }
-  }
-
-  Future<void> _ensureCustomIconLoaded(
-    String baseIconKey,
-    String plate,
-    String customIconId,
-  ) async {
-    await _iconService.ensureCustomIconLoaded(
-      _mapController,
-      baseIconKey,
-      plate,
-      customIconId,
-    );
   }
 
   Future<void> _loadMarkerIcons() async {
@@ -456,6 +376,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _deleteDevice(int deviceId) async {
+    if (!mounted) return;
     final traccarProvider = Provider.of<TraccarProvider>(
       context,
       listen: false,
@@ -509,7 +430,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     final nextDevice = devices[nextIndex];
     setState(() {
       _currentDevice = nextDevice;
-      _isFollowingDevice = true; // Enable follow mode on navigation
+      _isFollowingDevice = true;
     });
 
     _onDeviceSelected(nextDevice, positions, forceShowPanel: false);
@@ -538,25 +459,20 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
         position.longitude!.toDouble(),
       );
     }
-    setState(() {
-      _currentAddress = immediateAddress ?? "Loading...";
-    });
 
-    // Update reactive notifiers
     _selectedDeviceNotifier.value = device;
     _selectedPositionNotifier.value = position;
     _selectedAddressNotifier.value = immediateAddress ?? "Loading...";
 
     if (forceShowPanel) {
-      _isFollowingDevice = true; // Enable follow mode on explicit map interaction (marker tap)
+      _isFollowingDevice = true;
     }
 
-    // Only show panel if forced (tap) or already open (habit)
     if (forceShowPanel || _isPanelOpen) {
       _showDeviceDetailPanel(device, position);
     }
 
-    if (device.id != null) {
+    if (device.id != null && mounted) {
       Provider.of<TraccarProvider>(
         context,
         listen: false,
@@ -566,7 +482,6 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     if (position.latitude != null &&
         position.longitude != null &&
         position.latitude != 0.0) {
-      
       _mapController!.animateCamera(
         maplibre.CameraUpdate.newLatLng(
           maplibre.LatLng(
@@ -584,11 +499,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
           );
 
           if (mounted) {
-            setState(() {
-              _currentAddress = addr;
-            });
             _selectedAddressNotifier.value = addr;
-            
+
             if (forceShowPanel || _isPanelOpen) {
               _showDeviceDetailPanel(device, position);
             }
@@ -596,19 +508,14 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
         } catch (e) {
           debugPrint("Geocoder error: $e");
           if (mounted) {
-            setState(
-              () => _currentAddress =
-                  "Location: ${position.latitude!.toStringAsFixed(4)}, ${position.longitude!.toStringAsFixed(4)}",
-            );
+            _selectedAddressNotifier.value =
+                "Location: ${position.latitude!.toStringAsFixed(4)}, ${position.longitude!.toStringAsFixed(4)}";
             _showDeviceDetailPanel(device, position);
           }
         }
       }
     } else {
       if (mounted) {
-        setState(() {
-          _currentAddress = "No GPS Signal";
-        });
         _selectedAddressNotifier.value = "No GPS Signal";
         if (forceShowPanel || _isPanelOpen) {
           _showDeviceDetailPanel(device, position);
@@ -689,12 +596,19 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                 ListTile(
                   title: Text('deviceShare'.tr),
                   onTap: () async {
+                    // 1. 在非同步操作前，先把 Navigator 存起來（最推薦的做法）
+                    final navigator = Navigator.of(context);
+
                     Navigator.of(context).pop();
                     final prefs = await SharedPreferences.getInstance();
                     await prefs.setInt('sharedDeviceId', device.id!);
                     await prefs.setString('sharedDeviceName', device.name!);
-                    Navigator.push(
-                      context,
+
+                    // 2. 檢查目前 State 是否還活在樹中
+                    if (!mounted) return;
+
+                    // 3. 使用安全存下來的 navigator 導頁
+                    navigator.push(
                       MaterialPageRoute(
                         builder: (context) => const ShareDeviceScreen(),
                       ),
@@ -713,10 +627,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     api.Device device,
     api.Position? currentPosition,
   ) {
-    // If panel is already open, the ValueNotifiers will update the content reactively.
-    // We only need to call showBottomSheet if it's currently closed.
     if (_isPanelOpen && _bottomSheetController != null) {
-      return; 
+      return;
     }
 
     _isPanelOpen = true;
@@ -733,13 +645,14 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                 valueListenable: _selectedAddressNotifier,
                 builder: (context, currentAddr, _) {
                   if (currentDev == null) return const SizedBox.shrink();
-                  
+
                   return DeviceDetailPanel(
                     device: currentDev,
                     position: currentPos ?? api.Position(),
                     address: currentAddr,
                     formattedDate: _formatDate(currentPos?.fixTime),
-                    onMoreOptionsPressed: () => _showMoreOptionsDialog(currentDev, currentPos),
+                    onMoreOptionsPressed: () =>
+                        _showMoreOptionsDialog(currentDev, currentPos),
                     onDeletePressed: () {
                       _bottomSheetController?.close();
                       _showDeleteConfirmationDialog(currentDev);
@@ -835,14 +748,13 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                   style: TextStyle(
                     color: Theme.of(
                       context,
-                    ).colorScheme.onPrimary.withOpacity(0.8),
+                    ).colorScheme.onPrimary.withValues(alpha: 0.8),
                     fontSize: 14,
                   ),
                 ),
               ],
             ),
           ),
-          // Device List
           Expanded(
             child: ListView.builder(
               itemCount: devices.length,
@@ -853,7 +765,6 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                   device.id,
                 );
 
-                // Get status details
                 final speed = (position?.speed ?? 0.0).toStringAsFixed(1);
                 final isIgnitionOn =
                     (position?.attributes
@@ -863,9 +774,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                 return ListTile(
                   leading: Icon(
                     Icons.circle,
-                    color: _getStatusColor(
-                      device.status,
-                    ), // Online/Offline status
+                    color: _getStatusColor(device.status),
                     size: 10,
                   ),
                   title: Text(
@@ -878,7 +787,6 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                     children: [
                       if (double.parse(speed) > 0.0) Text('$speed km/h'),
                       const SizedBox(width: 12),
-
                       Icon(
                         Icons.key,
                         color: isIgnitionOn ? Colors.green : Colors.red,
@@ -892,7 +800,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
                     if (position != null) {
                       _onDeviceSelected(
-                        device, 
+                        device,
                         traccarProvider.positions,
                         forceShowPanel: true,
                       );
@@ -925,7 +833,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
         final flutterMarkers = <Marker>{};
 
-        latlong.LatLng initialFlutterLatLng = latlong.LatLng(0, 0);
+        latlong.LatLng initialFlutterLatLng = const latlong.LatLng(0, 0);
         double initialZoom = 2.0;
 
         if (_markersLoaded) {
@@ -1003,25 +911,17 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
             extendBodyBehindAppBar: true,
             key: _scaffoldKey,
             appBar: AppBar(
-              // 1. 基本背景設為透明
               backgroundColor: Colors.transparent,
               elevation: 0,
               surfaceTintColor: Colors.transparent,
-
-              // 2. 移除 title 屬性
               title: null,
-
-              // 3. 移除之前的毛玻璃與顏色填充，改為 null 或空的實體
               flexibleSpace: null,
-
-              // 4. 確保圖標顏色在您的背景上清晰可見
               iconTheme: IconThemeData(
                 color: Theme.of(context).brightness == Brightness.dark
                     ? Colors.white
                     : Colors.black,
               ),
             ),
-
             drawer: _buildDeviceListDrawer(context, traccarProvider),
             body: Stack(
               children: [
@@ -1036,66 +936,60 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                   },
                   child: maplibre.MapLibreMap(
                     key: _mapKey,
-                  initialCameraPosition: _lastCameraPosition ?? maplibre.CameraPosition(
-                    target: maplibre.LatLng(
-                      initialFlutterLatLng.latitude,
-                      initialFlutterLatLng.longitude,
-                    ),
-                    zoom: initialZoom,
-                  ),
-                  styleString: Provider.of<MapStyleProvider>(
-                    context,
-                  ).styleString,
-                  onCameraMove: (position) {
-                    _currentZoom = position.zoom;
-                    SharedPreferences.getInstance().then((prefs) {
-                      prefs.setDouble('map_zoom_level', position.zoom);
-                    });
-                  },
-                  onStyleLoadedCallback: _onStyleLoaded,
-                  onMapCreated: (controller) {
-                    _mapController = controller;
-
-                    // Map style is strictly controlled by explicit user toggle now
-                    // (Bright or Satellite only)
-
-                    _mapController!.onSymbolTapped.add((symbol) {
-                      final deviceIdString = symbol.data?['deviceId'];
-                      final deviceId = int.tryParse(deviceIdString ?? '');
-
-                      if (deviceId != null) {
-                        final traccarProvider = Provider.of<TraccarProvider>(
-                          context,
-                          listen: false,
-                        );
-                        _onDeviceSelected(
-                          traccarProvider.devices.firstWhere(
-                            (d) => d.id == deviceId,
+                    initialCameraPosition:
+                        _lastCameraPosition ??
+                        maplibre.CameraPosition(
+                          target: maplibre.LatLng(
+                            initialFlutterLatLng.latitude,
+                            initialFlutterLatLng.longitude,
                           ),
-                          traccarProvider.positions,
-                          forceShowPanel: true,
-                        );
-                      }
-                    });
-                  },
-                  onMapClick: (point, latLng) {
-                    // Hide the detail panel when clicking on the map (empty space)
-                    if (_bottomSheetController != null) {
-                      _bottomSheetController!.close();
-                      _bottomSheetController = null;
-                      _isFollowingDevice = false; // Stop following on empty map click
-                    }
-                  },
-                ),
-              ),
+                          zoom: initialZoom,
+                        ),
+                    styleString: Provider.of<MapStyleProvider>(
+                      context,
+                    ).styleString,
+                    onCameraMove: (position) {
+                      SharedPreferences.getInstance().then((prefs) {
+                        prefs.setDouble('map_zoom_level', position.zoom);
+                      });
+                    },
+                    onStyleLoadedCallback: _onStyleLoaded,
+                    onMapCreated: (controller) {
+                      _mapController = controller;
 
-                // Map Controls (Right Side)
+                      _mapController!.onSymbolTapped.add((symbol) {
+                        final deviceIdString = symbol.data?['deviceId'];
+                        final deviceId = int.tryParse(deviceIdString ?? '');
+
+                        if (deviceId != null && mounted) {
+                          final traccarProvider = Provider.of<TraccarProvider>(
+                            context,
+                            listen: false,
+                          );
+                          _onDeviceSelected(
+                            traccarProvider.devices.firstWhere(
+                              (d) => d.id == deviceId,
+                            ),
+                            traccarProvider.positions,
+                            forceShowPanel: true,
+                          );
+                        }
+                      });
+                    },
+                    onMapClick: (point, latLng) {
+                      if (_bottomSheetController != null) {
+                        _bottomSheetController!.close();
+                        _bottomSheetController = null;
+                        _isFollowingDevice = false;
+                      }
+                    },
+                  ),
+                ),
                 Positioned(
-                  top: MediaQuery.of(context).padding.top + 70, // Avoid overlap with AppBar hit area
+                  top: MediaQuery.of(context).padding.top + 70,
                   right: 16,
                   child: Column(
                     children: [
-                      // Toggle Button (Hive Persisted)
                       _buildMapControl(
                         _isControlsExpanded
                             ? Icons.keyboard_arrow_up_rounded
@@ -1106,8 +1000,6 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                         isToggle: true,
                       ),
                       const SizedBox(height: 12),
-
-                      // Primary Controls
                       _buildMapControl(
                         Icons.explore_rounded,
                         () => _mapController?.animateCamera(
@@ -1121,12 +1013,13 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                           final pos = traccarProvider.getPosition(
                             _currentDevice!.id!,
                           );
-                          if (pos != null)
+                          if (pos != null) {
                             _onDeviceSelected(
                               _currentDevice!,
                               traccarProvider.positions,
                               forceShowPanel: true,
                             );
+                          }
                         }
                       }, "btn_myloc"),
                       const SizedBox(height: 12),
@@ -1135,8 +1028,6 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                         () => _zoomToFitAll(traccarProvider),
                         "btn_zoom",
                       ),
-
-                      // Secondary Controls (Collapsible)
                       if (_isControlsExpanded) ...[
                         const SizedBox(height: 12),
                         _buildMapControl(
@@ -1183,13 +1074,11 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                     ],
                   ),
                 ),
-
                 if (_isStyleLoaded)
                   _DataUpdateListener(
                     data: traccarProvider.positions,
                     onUpdate: () => _updateAllMarkers(traccarProvider),
                   ),
-
                 if (traccarProvider.isLoading &&
                     traccarProvider.devices.isEmpty)
                   const Center(child: CircularProgressIndicator()),
@@ -1220,15 +1109,15 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
           height: 44,
           decoration: BoxDecoration(
             color: isActive
-                ? colorScheme.primary.withOpacity(0.85)
+                ? colorScheme.primary.withValues(alpha: 0.85)
                 : (isDark
-                    ? Colors.black.withOpacity(0.4)
-                    : Colors.white.withOpacity(0.7)),
+                      ? Colors.black.withValues(alpha: 0.4)
+                      : Colors.white.withValues(alpha: 0.7)),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
               color: isDark
-                  ? Colors.white.withOpacity(0.1)
-                  : Colors.black.withOpacity(0.05),
+                  ? Colors.white.withValues(alpha: 0.1)
+                  : Colors.black.withValues(alpha: 0.05),
               width: 0.5,
             ),
           ),
@@ -1237,8 +1126,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
             child: InkWell(
               onTap: onTap,
               borderRadius: BorderRadius.circular(12),
-              splashColor: colorScheme.primary.withOpacity(0.1),
-              highlightColor: colorScheme.primary.withOpacity(0.05),
+              splashColor: colorScheme.primary.withValues(alpha: 0.1),
+              highlightColor: colorScheme.primary.withValues(alpha: 0.05),
               child: Center(
                 child: Hero(
                   tag: heroTag,

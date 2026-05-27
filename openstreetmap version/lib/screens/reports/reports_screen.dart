@@ -1,12 +1,12 @@
 // lib/screens/reports/reports_screen.dart
 //  A screen to select and configure reports in the TracDefg app.
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
-import 'package:get/get.dart';
-import 'package:intl/intl.dart';
 
 class ReportsScreen extends StatefulWidget {
   const ReportsScreen({super.key});
@@ -30,8 +30,13 @@ class _ReportsScreenState extends State<ReportsScreen> {
     final lastDeviceId = prefs.getInt('selectedDeviceId');
     if (lastDeviceId != null && lastDeviceId != 0) {
       if (!mounted) return;
-      final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
-      final device = traccarProvider.devices.firstWhereOrNull((d) => d.id == lastDeviceId);
+      final traccarProvider = Provider.of<TraccarProvider>(
+        context,
+        listen: false,
+      );
+      final device = traccarProvider.devices.firstWhereOrNull(
+        (d) => d.id == lastDeviceId,
+      );
       if (device != null) {
         setState(() {
           _selectedDevice = device;
@@ -56,7 +61,10 @@ class _ReportsScreenState extends State<ReportsScreen> {
   }
 
   void _showDeviceSelectionDialog(BuildContext context) {
-    final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
+    final traccarProvider = Provider.of<TraccarProvider>(
+      context,
+      listen: false,
+    );
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -72,10 +80,15 @@ class _ReportsScreenState extends State<ReportsScreen> {
                     setState(() {
                       _selectedDevice = device;
                     });
+
+                    // FIXED: Capture the navigator state before entering the async gap
+                    final navigator = Navigator.of(context);
+
                     final prefs = await SharedPreferences.getInstance();
                     await prefs.setInt('selectedDeviceId', device.id ?? 0);
-                    if (!mounted) return;
-                    Navigator.of(context).pop();
+
+                    // FIXED: Use the captured navigator safely
+                    navigator.pop();
                   },
                 );
               }).toList(),
@@ -101,14 +114,19 @@ class _ReportsScreenState extends State<ReportsScreen> {
     );
 
     // Create a DateTime for the end of the selected day in UTC
-    final toDate = fromDate.add(const Duration(days: 1)).subtract(
-          const Duration(milliseconds: 1),
-        );
+    final toDate = fromDate
+        .add(const Duration(days: 1))
+        .subtract(const Duration(milliseconds: 1));
     await prefs.setInt('selectedDeviceId', _selectedDevice?.id ?? 0);
     await prefs.setString('historyFrom', fromDate.toIso8601String());
     await prefs.setString('historyTo', toDate.toIso8601String());
-    await prefs.setString('selectedDeviceName', _selectedDevice!.name.toString());
+    await prefs.setString(
+      'selectedDeviceName',
+      _selectedDevice!.name.toString(),
+    );
 
+    // FIXED: Added a mounted check to ensure context is still active
+    if (!mounted) return;
     Navigator.pushNamed(context, '/reports/$reportType');
   }
 
@@ -128,29 +146,38 @@ class _ReportsScreenState extends State<ReportsScreen> {
               children: [
                 Text(
                   'reportConfigure'.tr,
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
                 const SizedBox(height: 16),
                 Card(
                   elevation: 2,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                   child: ListTile(
                     leading: Icon(
                       Icons.directions_car,
-                      color: _selectedDevice != null 
-                          ? Theme.of(context).colorScheme.primary 
+                      color: _selectedDevice != null
+                          ? Theme.of(context).colorScheme.primary
                           : Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
                     title: Text(
                       _selectedDevice?.name ?? 'reportDevice'.tr,
                       style: TextStyle(
-                        fontWeight: _selectedDevice != null ? FontWeight.bold : FontWeight.normal,
-                        color: _selectedDevice != null 
-                            ? Theme.of(context).colorScheme.onSurface 
+                        fontWeight: _selectedDevice != null
+                            ? FontWeight.bold
+                            : FontWeight.normal,
+                        color: _selectedDevice != null
+                            ? Theme.of(context).colorScheme.onSurface
                             : Theme.of(context).colorScheme.error,
                       ),
                     ),
-                    subtitle: _selectedDevice == null ? Text('pleaseSelectDevice'.tr) : null,
+                    subtitle: _selectedDevice == null
+                        ? Text('pleaseSelectDevice'.tr)
+                        : null,
                     trailing: const Icon(Icons.arrow_forward_ios, size: 16),
                     onTap: () => _showDeviceSelectionDialog(context),
                   ),
@@ -158,14 +185,25 @@ class _ReportsScreenState extends State<ReportsScreen> {
                 const SizedBox(height: 8),
                 Card(
                   elevation: 2,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                   child: ListTile(
-                    leading: Icon(Icons.calendar_today, color: Theme.of(context).colorScheme.primary),
+                    leading: Icon(
+                      Icons.calendar_today,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
                     title: Text(
                       '${'reportFrom'.tr}: ${DateFormat('yyyy-MM-dd').format(_selectedDate)}',
-                      style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
                     ),
-                    trailing: Icon(Icons.arrow_forward_ios, size: 16, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                    trailing: Icon(
+                      Icons.arrow_forward_ios,
+                      size: 16,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
                     onTap: () => _selectDate(context),
                   ),
                 ),
@@ -175,7 +213,11 @@ class _ReportsScreenState extends State<ReportsScreen> {
           const Divider(),
           _buildReportItem('reportCombined'.tr, 'combined', Icons.show_chart),
           _buildReportItem('reportSummary'.tr, 'summary', Icons.summarize),
-          _buildReportItem('reportStops'.tr, 'stops', Icons.pause_circle_outline),
+          _buildReportItem(
+            'reportStops'.tr,
+            'stops',
+            Icons.pause_circle_outline,
+          ),
           _buildReportItem('reportReplay'.tr, 'route', Icons.replay),
           _buildReportItem('reportTrips'.tr, 'trips', Icons.route),
           _buildReportItem('reportEvents'.tr, 'events', Icons.event_note),
@@ -191,7 +233,10 @@ class _ReportsScreenState extends State<ReportsScreen> {
         title,
         style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
       ),
-      trailing: Icon(Icons.chevron_right, color: Theme.of(context).colorScheme.onSurfaceVariant),
+      trailing: Icon(
+        Icons.chevron_right,
+        color: Theme.of(context).colorScheme.onSurfaceVariant,
+      ),
       onTap: () => _navigateToReport(type),
     );
   }

@@ -1,26 +1,25 @@
 // geofences_screen.dart (Refactored to use FlutterMap, Hive Caching, and simplified latlong2 import)
 // A screen to display and manage geofences in the TracDefg app.
-import 'package:flutter/material.dart';
 import 'dart:collection';
-import 'package:trabcdefg/src/generated_api/api.dart' as api;
-import 'package:trabcdefg/providers/traccar_provider.dart';
-import 'package:provider/provider.dart';
 import 'dart:math';
-import 'package:get/get.dart';
+import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 // --- Imports and Definitions for FlutterMap and Caching (from map_screen.dart) ---
 
 import 'package:flutter_map/flutter_map.dart'; // Primary map package
-import 'package:latlong2/latlong.dart'; // <-- FIXED: Removed 'as latlong;' alias
-import 'package:http/http.dart' as http;
-import 'dart:typed_data';
+import 'package:get/get.dart';
 import 'package:hive/hive.dart';
-import 'dart:ui' as ui; 
-import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
+import 'package:latlong2/latlong.dart'; // <-- FIXED: Removed 'as latlong;' alias
+import 'package:provider/provider.dart';
+import 'package:trabcdefg/providers/traccar_provider.dart';
+import 'package:trabcdefg/src/generated_api/api.dart' as api;
 
 // --- Tile Caching Implementation using Hive (Copied from map_screen.dart) ---
 
-class _TileCacheService {
+class TileCacheService {
   late Box<Uint8List> _tileBox;
   static const String boxName = 'mapTilesCache';
 
@@ -41,9 +40,10 @@ class _TileCacheService {
   }
 }
 
-class CachedNetworkImageProvider extends ImageProvider<CachedNetworkImageProvider> {
+class CachedNetworkImageProvider
+    extends ImageProvider<CachedNetworkImageProvider> {
   final String url;
-  final _TileCacheService cacheService;
+  final TileCacheService cacheService;
   final http.Client httpClient;
 
   CachedNetworkImageProvider(
@@ -69,7 +69,7 @@ class CachedNetworkImageProvider extends ImageProvider<CachedNetworkImageProvide
 
   @override
   Future<CachedNetworkImageProvider> obtainKey(
-    ImageConfiguration configuration, 
+    ImageConfiguration configuration,
   ) {
     return Future<CachedNetworkImageProvider>.value(this);
   }
@@ -83,7 +83,7 @@ class CachedNetworkImageProvider extends ImageProvider<CachedNetworkImageProvide
     final cachedData = await cacheService.getTile(url);
 
     if (cachedData != null) {
-      return decode(await ui.ImmutableBuffer.fromUint8List(cachedData)); 
+      return decode(await ui.ImmutableBuffer.fromUint8List(cachedData));
     }
 
     try {
@@ -91,12 +91,14 @@ class CachedNetworkImageProvider extends ImageProvider<CachedNetworkImageProvide
 
       if (response.statusCode == 200) {
         final Uint8List bytes = response.bodyBytes;
-        
+
         await cacheService.saveTile(url, bytes);
 
-        return decode(await ui.ImmutableBuffer.fromUint8List(bytes)); 
+        return decode(await ui.ImmutableBuffer.fromUint8List(bytes));
       } else {
-        throw Exception('Failed to load tile from network: ${response.statusCode}');
+        throw Exception(
+          'Failed to load tile from network: ${response.statusCode}',
+        );
       }
     } catch (e) {
       rethrow;
@@ -104,20 +106,14 @@ class CachedNetworkImageProvider extends ImageProvider<CachedNetworkImageProvide
   }
 }
 
-class _HiveTileProvider extends TileProvider {
-  final _TileCacheService cacheService;
+class HiveTileProvider extends TileProvider {
+  final TileCacheService cacheService;
   final http.Client httpClient;
 
-  _HiveTileProvider({
-    required this.cacheService,
-    required this.httpClient,
-  });
+  HiveTileProvider({required this.cacheService, required this.httpClient});
 
   @override
-  ImageProvider getImage(
-    TileCoordinates coordinates,
-    TileLayer options,
-  ) {
+  ImageProvider getImage(TileCoordinates coordinates, TileLayer options) {
     return CachedNetworkImageProvider(
       getTileUrl(coordinates, options),
       cacheService: cacheService,
@@ -126,10 +122,7 @@ class _HiveTileProvider extends TileProvider {
   }
 }
 
-enum AppMapType {
-  openStreetMap,
-  satellite,
-}
+enum AppMapType { openStreetMap, satellite }
 
 // --- End of Map Caching & FlutterMap Imports/Definitions ---
 
@@ -137,10 +130,10 @@ class GeofencesScreen extends StatefulWidget {
   const GeofencesScreen({super.key});
 
   @override
-  _GeofencesScreenState createState() => _GeofencesScreenState();
+  GeofencesScreenState createState() => GeofencesScreenState();
 }
 
-class _GeofencesScreenState extends State<GeofencesScreen> {
+class GeofencesScreenState extends State<GeofencesScreen> {
   late Future<List<api.Geofence>> _geofencesFuture;
 
   @override
@@ -167,6 +160,10 @@ class _GeofencesScreenState extends State<GeofencesScreen> {
       );
       final geofencesApi = api.GeofencesApi(traccarProvider.apiClient);
       await geofencesApi.geofencesIdDelete(geofenceId);
+
+      if (!mounted) {
+        return;
+      }
       setState(() {
         _geofencesFuture = _fetchGeofences();
       });
@@ -174,6 +171,9 @@ class _GeofencesScreenState extends State<GeofencesScreen> {
         context,
       ).showSnackBar(SnackBar(content: Text('sharedRemoveConfirm'.tr)));
     } catch (e) {
+      if (!mounted) {
+        return;
+      }
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Failed to delete geofence: $e')));
@@ -189,14 +189,20 @@ class _GeofencesScreenState extends State<GeofencesScreen> {
     );
 
     if (updatedGeofence != null) {
+      if (!mounted) {
+        return;
+      }
       try {
         final traccarProvider = Provider.of<TraccarProvider>(
           context,
           listen: false,
         );
         final geofencesApi = api.GeofencesApi(traccarProvider.apiClient);
-        // Correct API method is PUT for update
-        await geofencesApi.geofencesIdPut(updatedGeofence.id!, updatedGeofence); 
+        await geofencesApi.geofencesIdPut(updatedGeofence.id!, updatedGeofence);
+
+        if (!mounted) {
+          return;
+        }
         setState(() {
           _geofencesFuture = _fetchGeofences();
         });
@@ -204,6 +210,9 @@ class _GeofencesScreenState extends State<GeofencesScreen> {
           context,
         ).showSnackBar(SnackBar(content: Text('sharedSaved'.tr)));
       } catch (e) {
+        if (!mounted) {
+          return;
+        }
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Failed to update geofence: $e')),
         );
@@ -236,7 +245,7 @@ class _GeofencesScreenState extends State<GeofencesScreen> {
         return 'Polygon: Invalid format';
       }
     }
-    return 'sharedType'.tr + ' ' + 'Unknown Type';
+    return '${'sharedType'.tr} Unknown Type';
   }
 
   @override
@@ -250,7 +259,7 @@ class _GeofencesScreenState extends State<GeofencesScreen> {
             return const Center(child: CircularProgressIndicator());
           } else if (snapshot.hasError) {
             return Center(
-              child: Text('errorGeneral'.tr + ': ${snapshot.error}'),
+              child: Text('${'errorGeneral'.tr}: ${snapshot.error}'),
             );
           } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
             return Center(child: Text('sharedNoData'.tr));
@@ -285,27 +294,41 @@ class _GeofencesScreenState extends State<GeofencesScreen> {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () async {
-          final newGeofence = await Navigator.push(
+          // 【核心修正】在任何 await 發生之前（完全同步的當下），把所有需要 context 的東西通通準備好！
+          final navigator = Navigator.of(context);
+          final traccarProvider = Provider.of<TraccarProvider>(
             context,
+            listen: false,
+          );
+          final messenger = ScaffoldMessenger.of(context);
+
+          // 1. 進入第一個非同步：等待頁面回傳結果
+          final newGeofence = await navigator.push(
             MaterialPageRoute(builder: (context) => const AddGeofenceScreen()),
           );
 
           if (newGeofence != null) {
+            // 2. 異步回來後，檢查組件是否還掛載著
+            if (!mounted) return;
+
             try {
-              final traccarProvider = Provider.of<TraccarProvider>(
-                context,
-                listen: false,
-              );
               final geofencesApi = api.GeofencesApi(traccarProvider.apiClient);
+
+              // 3. 進入第二個非同步：打 API
               await geofencesApi.geofencesPost(newGeofence);
+
+              if (!mounted) return;
               setState(() {
                 _geofencesFuture = _fetchGeofences();
               });
-              ScaffoldMessenger.of(
-                context,
-              ).showSnackBar(SnackBar(content: Text('sharedSaved'.tr)));
+
+              // 4. 這裡直接使用最前面存好的 messenger，它完全不需要再存取 context 了
+              messenger.showSnackBar(SnackBar(content: Text('sharedSaved'.tr)));
             } catch (e) {
-              ScaffoldMessenger.of(context).showSnackBar(
+              if (!mounted) return;
+
+              // 5. 失敗時同理
+              messenger.showSnackBar(
                 SnackBar(content: Text('Failed to add geofence: $e')),
               );
             }
@@ -323,46 +346,44 @@ class AddGeofenceScreen extends StatefulWidget {
   const AddGeofenceScreen({super.key, this.geofence});
 
   @override
-  _AddGeofenceScreenState createState() => _AddGeofenceScreenState();
+  AddGeofenceScreenState createState() => AddGeofenceScreenState();
 }
 
-class _AddGeofenceScreenState extends State<AddGeofenceScreen> {
+class AddGeofenceScreenState extends State<AddGeofenceScreen> {
   final _formKey = GlobalKey<FormState>();
   late String _name;
   late double _radius;
   late String _geofenceType;
-  LatLng? _circleCenter; // <-- FIXED: Changed to LatLng
-  List<LatLng> _polygonPoints = []; // <-- FIXED: Changed to LatLng
-  AppMapType _mapType = AppMapType.openStreetMap; // Default to OSM
+  LatLng? _circleCenter;
+  List<LatLng> _polygonPoints = [];
+  AppMapType _mapType = AppMapType.openStreetMap;
 
   final List<CircleMarker> _circles = [];
   final List<Polygon> _polygons = [];
   final List<Marker> _polygonMarkers = [];
 
   late MapController _mapController;
-  static final LatLng _center = LatLng(37.7749, -122.4194); // <-- FIXED: Changed to LatLng
+  static final LatLng _center = LatLng(37.7749, -122.4194);
 
-  final _TileCacheService _cacheService = _TileCacheService();
+  final TileCacheService _cacheService = TileCacheService();
   final http.Client _httpClient = http.Client();
-  late _HiveTileProvider _tileProvider;
+  late HiveTileProvider _tileProvider;
   bool _isCacheInitialized = false;
 
   // --- Tile URLs from map_screen.dart ---
-  static const String _osmUrlTemplate = 
+  static const String _osmUrlTemplate =
       'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
-  static const String _satelliteUrlTemplate = 
+  static const String _satelliteUrlTemplate =
       'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
   static const List<String> _osmSubdomains = ['a', 'b', 'c'];
-
 
   @override
   void initState() {
     super.initState();
     _mapController = MapController();
 
-    // Initialize cache service and then the tile provider
     _cacheService.init().then((_) {
-      _tileProvider = _HiveTileProvider(
+      _tileProvider = HiveTileProvider(
         cacheService: _cacheService,
         httpClient: _httpClient,
       );
@@ -380,11 +401,10 @@ class _AddGeofenceScreenState extends State<AddGeofenceScreen> {
         if (area.startsWith('CIRCLE')) {
           _geofenceType = 'CIRCLE';
           try {
-            // Parses "CIRCLE(lat lon radius)"
             final parts = area
                 .substring(area.indexOf('(') + 1, area.indexOf(')'))
                 .split(' ');
-            _circleCenter = LatLng( // <-- FIXED: Changed to LatLng
+            _circleCenter = LatLng(
               double.tryParse(parts[0]) ?? 0.0,
               double.tryParse(parts[1]) ?? 0.0,
             );
@@ -404,14 +424,13 @@ class _AddGeofenceScreenState extends State<AddGeofenceScreen> {
           _geofenceType = 'POLYGON';
           _radius = 0.0;
           try {
-            // Parses "POLYGON((lat lon, lat lon, ...))"
             final content = area.substring(
               area.indexOf('((') + 2,
               area.lastIndexOf('))'),
             );
             final points = content.split(',').map((p) {
               final coords = p.trim().split(' ');
-              return LatLng( // <-- FIXED: Changed to LatLng
+              return LatLng(
                 double.tryParse(coords[0]) ?? 0.0,
                 double.tryParse(coords[1]) ?? 0.0,
               );
@@ -440,44 +459,37 @@ class _AddGeofenceScreenState extends State<AddGeofenceScreen> {
   }
 
   void _onMapReady() {
-    // Ensure the camera moves to the geofence location after map is ready.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_geofenceType == 'CIRCLE' && _circleCenter != null) {
         _mapController.move(_circleCenter!, 14.0);
       } else if (_geofenceType == 'POLYGON' && _polygonPoints.isNotEmpty) {
-        
-        // Calculate bounds for polygon zoom
         double minLat = _polygonPoints[0].latitude;
         double maxLat = _polygonPoints[0].latitude;
         double minLng = _polygonPoints[0].longitude;
         double maxLng = _polygonPoints[0].longitude;
-        
+
         for (final point in _polygonPoints) {
           minLat = min(minLat, point.latitude);
           maxLat = max(maxLat, point.latitude);
           minLng = min(minLng, point.longitude);
           maxLng = max(maxLng, point.longitude);
         }
-        
-        final bounds = LatLngBounds( // <-- FIXED: Changed to LatLngBounds
-          LatLng(minLat, minLng), // <-- FIXED: Changed to LatLng
-          LatLng(maxLat, maxLng), // <-- FIXED: Changed to LatLng
-        );
-        
-        // Fit bounds with a bit of padding (zoom level will be calculated)
-        _mapController.fitCamera(CameraFit.bounds(
-          bounds: bounds,
-          padding: const EdgeInsets.all(50),
-        ));
 
+        final bounds = LatLngBounds(
+          LatLng(minLat, minLng),
+          LatLng(maxLat, maxLng),
+        );
+
+        _mapController.fitCamera(
+          CameraFit.bounds(bounds: bounds, padding: const EdgeInsets.all(50)),
+        );
       } else {
-        // Fallback to center
         _mapController.move(_center, 14.0);
       }
     });
   }
 
-  void _onTap(TapPosition tapPosition, LatLng point) { // <-- FIXED: Changed to LatLng
+  void _onTap(TapPosition tapPosition, LatLng point) {
     setState(() {
       if (_geofenceType == 'CIRCLE') {
         _circleCenter = point;
@@ -498,7 +510,7 @@ class _AddGeofenceScreenState extends State<AddGeofenceScreen> {
         CircleMarker(
           point: _circleCenter!,
           radius: _radius,
-          color: Colors.blue.withOpacity(0.3),
+          color: Colors.blue.withValues(alpha: 0.3),
           borderColor: Colors.blue,
           borderStrokeWidth: 2,
         ),
@@ -507,7 +519,7 @@ class _AddGeofenceScreenState extends State<AddGeofenceScreen> {
       _polygons.add(
         Polygon(
           points: _polygonPoints,
-          color: Colors.green.withOpacity(0.3),
+          color: Colors.green.withValues(alpha: 0.3),
           borderColor: Colors.green,
           borderStrokeWidth: 2,
         ),
@@ -527,7 +539,6 @@ class _AddGeofenceScreenState extends State<AddGeofenceScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Wait for the cache and tile provider to initialize
     if (!_isCacheInitialized) {
       return Scaffold(
         appBar: AppBar(title: Text('Loading Map...'.tr)),
@@ -540,30 +551,31 @@ class _AddGeofenceScreenState extends State<AddGeofenceScreen> {
         title: Text(
           widget.geofence == null
               ? 'sharedCreateGeofence'.tr
-              : 'sharedEdit'.tr + ' ' + 'sharedGeofence'.tr,
+              : '${'sharedEdit'.tr} ${'sharedGeofence'.tr}',
         ),
         actions: [
-          // Map type toggle logic
           IconButton(
             icon: Icon(
-              _mapType == AppMapType.satellite ? Icons.map : Icons.satellite
+              _mapType == AppMapType.satellite ? Icons.map : Icons.satellite,
             ),
             onPressed: () {
               setState(() {
                 _mapType = _mapType == AppMapType.satellite
-                    ? AppMapType.openStreetMap // Switch to OSM (normal)
-                    : AppMapType.satellite; // Switch to Satellite
+                    ? AppMapType.openStreetMap
+                    : AppMapType.satellite;
               });
             },
           ),
           IconButton(
             icon: const Icon(Icons.save),
-            onPressed: () {
+            onPressed: () async {
+              // <-- 注意：這裡改成了 async 函式
               if (_formKey.currentState!.validate() &&
                   ((_geofenceType == 'CIRCLE' && _circleCenter != null) ||
                       (_geofenceType == 'POLYGON' &&
                           _polygonPoints.length >= 3))) {
                 _formKey.currentState!.save();
+
                 final String area;
                 if (_geofenceType == 'CIRCLE') {
                   area =
@@ -572,8 +584,8 @@ class _AddGeofenceScreenState extends State<AddGeofenceScreen> {
                   final pointsString = _polygonPoints
                       .map((p) => '${p.latitude} ${p.longitude}')
                       .join(', ');
-                  // Traccar requires the polygon to be closed, so the first point must be repeated at the end.
-                  final closedPointsString = '$pointsString, ${_polygonPoints.first.latitude} ${_polygonPoints.first.longitude}'; 
+                  final closedPointsString =
+                      '$pointsString, ${_polygonPoints.first.latitude} ${_polygonPoints.first.longitude}';
 
                   area = 'POLYGON(($closedPointsString))';
                 }
@@ -583,8 +595,14 @@ class _AddGeofenceScreenState extends State<AddGeofenceScreen> {
                   name: _name,
                   area: area,
                 );
+
+                // 【修正 1】在異步（Navigator.pop）之前先檢查 mounted
+                if (!mounted) return;
                 Navigator.pop(context, geofence);
               } else {
+                // 【修正 2】在異步或可能出錯的地方，直接使用 State 自身的 context
+                // 並且 Linter 建議移除 'this.' 關鍵字，確保 mounted 性能優化追踪
+                if (!mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text(
@@ -624,7 +642,7 @@ class _AddGeofenceScreenState extends State<AddGeofenceScreen> {
                 ),
                 const SizedBox(height: 20),
                 DropdownButtonFormField<String>(
-                  value: _geofenceType,
+                  initialValue: _geofenceType,
                   decoration: InputDecoration(labelText: 'sharedType'.tr),
                   items: [
                     DropdownMenuItem(
@@ -639,8 +657,8 @@ class _AddGeofenceScreenState extends State<AddGeofenceScreen> {
                   onChanged: (value) {
                     setState(() {
                       _geofenceType = value!;
-                      _polygonPoints.clear(); // Clear points when changing type
-                      _circleCenter = null; 
+                      _polygonPoints.clear();
+                      _circleCenter = null;
                       _updateShapes();
                     });
                   },
@@ -667,14 +685,18 @@ class _AddGeofenceScreenState extends State<AddGeofenceScreen> {
                         },
                       ),
                       const SizedBox(height: 20),
-                      Text('mapShapeCircle'.tr + (_circleCenter == null ? ' (Tap map to select center)' : '')),
+                      Text(
+                        '${'mapShapeCircle'.tr}${_circleCenter == null ? ' (Tap map to select center)' : ''}',
+                      ),
                     ],
                   ),
                 if (_geofenceType == 'POLYGON')
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Text('mapShapePolygon'.tr + ': ${_polygonPoints.length} points'),
+                      Text(
+                        '${'mapShapePolygon'.tr}: ${_polygonPoints.length} points',
+                      ),
                       const SizedBox(height: 10),
                       Text('TapMapAddPolygon'.tr),
                       if (_polygonPoints.isNotEmpty)
@@ -694,22 +716,23 @@ class _AddGeofenceScreenState extends State<AddGeofenceScreen> {
                     ],
                   ),
                 const SizedBox(height: 10),
-                // --- FlutterMap Implementation ---
                 SizedBox(
                   height: 400,
                   child: FlutterMap(
                     mapController: _mapController,
                     options: MapOptions(
-                      // Use a safe initial center for MapOptions
-                      initialCenter: _circleCenter ?? _polygonPoints.firstOrNull ?? _center,
+                      initialCenter:
+                          _circleCenter ??
+                          _polygonPoints.firstOrNull ??
+                          _center,
                       initialZoom: 14.0,
                       interactionOptions: const InteractionOptions(
-                          flags: InteractiveFlag.all & ~InteractiveFlag.rotate),
+                        flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
+                      ),
                       onTap: _onTap,
-                      onMapReady: _onMapReady, // Custom callback for initial positioning
+                      onMapReady: _onMapReady,
                     ),
                     children: [
-                      // Tile Layer: Conditional based on map type (OSM/Satellite)
                       TileLayer(
                         urlTemplate: _mapType == AppMapType.openStreetMap
                             ? _osmUrlTemplate
@@ -718,16 +741,10 @@ class _AddGeofenceScreenState extends State<AddGeofenceScreen> {
                             ? _osmSubdomains
                             : const [],
                         userAgentPackageName: 'com.trabcdefg.app',
-                        tileProvider: _tileProvider, // Hive Caching
+                        tileProvider: _tileProvider,
                       ),
-                      
-                      // Circle Layer (Equivalent to GoogleMap Circle)
                       CircleLayer(circles: _circles),
-                      
-                      // Polygon Layer (Equivalent to GoogleMap Polygon)
                       PolygonLayer(polygons: _polygons),
-
-                      // Marker Layer (For polygon points)
                       MarkerLayer(markers: _polygonMarkers),
                     ],
                   ),

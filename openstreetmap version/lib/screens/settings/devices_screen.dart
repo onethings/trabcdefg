@@ -1,24 +1,26 @@
 // devices_screen.dart
 // A screen to display and manage devices in the TracDefg app.
-import 'package:flutter/material.dart';
-import 'package:trabcdefg/src/generated_api/api.dart' as api;
-import 'package:trabcdefg/screens/settings/add_device_screen.dart';
-import 'package:csv/csv.dart';
-import 'package:flutter/services.dart';
-import 'package:path_provider/path_provider.dart';
+import 'dart:developer' as developer; // For production-safe logging
 import 'dart:io';
-import 'package:trabcdefg/providers/traccar_provider.dart';
-import 'package:provider/provider.dart';
+
+import 'package:csv/csv.dart';
+import 'package:excel/excel.dart'
+    as excel_lib; // FIX: camelCase to lower_case_with_underscores
+import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:trabcdefg/providers/traccar_provider.dart';
+import 'package:trabcdefg/screens/settings/add_device_screen.dart';
 import 'package:trabcdefg/screens/settings/connections_screen.dart';
-import 'package:excel/excel.dart' as ExcelLib; // <-- New import for Excel
-import 'package:share_plus/share_plus.dart'; // <-- REQUIRED IMPORT
+import 'package:trabcdefg/src/generated_api/api.dart' as api;
 
 class DevicesScreen extends StatefulWidget {
   const DevicesScreen({super.key});
 
   @override
-  _DevicesScreenState createState() => _DevicesScreenState();
+  State<DevicesScreen> createState() => _DevicesScreenState(); // FIX: Removed private type exposure
 }
 
 class _DevicesScreenState extends State<DevicesScreen> {
@@ -38,7 +40,6 @@ class _DevicesScreenState extends State<DevicesScreen> {
       context,
       listen: false,
     );
-    // Correct way to instantiate GeofencesApi with the authenticated client
     final devicesApi = api.DevicesApi(traccarProvider.apiClient);
     setState(() {
       _devicesFuture = devicesApi.devicesGet().then((devices) {
@@ -69,28 +70,35 @@ class _DevicesScreenState extends State<DevicesScreen> {
       );
       final apiClient = traccarProvider.apiClient;
 
-      // Manually construct the DELETE request
       final path = '/devices/$deviceId';
       final response = await apiClient.invokeAPI(
         path,
         'DELETE',
-        [], // queryParams - empty
-        {}, // postBody - send an empty body as an object
-        <String, String>{}, // headerParams - empty
-        <String, String>{}, // formParams - empty
-        'application/json', // contentType - send this to match the body
+        [],
+        {},
+        <String, String>{},
+        <String, String>{},
+        'application/json',
       );
 
+      // FIX: Guard BuildContext usage across an async gap using mounted check
+      if (!mounted) return;
+
       if (response.statusCode == 204) {
-        // 204 No Content is the correct response for a successful DELETE
         _fetchDevices();
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('deviceDeleteSuccess'.tr)));
       } else {
-        // Any other status code indicates a failure
-        print('Server responded with status code: ${response.statusCode}');
-        print('Server response body: ${response.body}');
+        // FIX: Replaced print() with production-safe developer.log()
+        developer.log(
+          'Server responded with status code: ${response.statusCode}',
+          name: 'DevicesScreen',
+        );
+        developer.log(
+          'Server response body: ${response.body}',
+          name: 'DevicesScreen',
+        );
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
@@ -103,7 +111,9 @@ class _DevicesScreenState extends State<DevicesScreen> {
         );
       }
     } catch (e) {
-      print('Caught an exception: $e');
+      // FIX: Replaced print() with developer.log()
+      developer.log('Caught an exception: $e', name: 'DevicesScreen', error: e);
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('deviceDeleteFailed'.trParams({'error': e.toString()})),
@@ -115,10 +125,11 @@ class _DevicesScreenState extends State<DevicesScreen> {
   void _editDevice(api.Device device) async {
     final updatedDevice = await Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (context) => AddDeviceScreen(device: device),
-      ),
+      MaterialPageRoute(builder: (context) => AddDeviceScreen(device: device)),
     );
+
+    // FIX: Guard BuildContext usage across async gap
+    if (!mounted) return;
 
     if (updatedDevice != null) {
       try {
@@ -128,25 +139,32 @@ class _DevicesScreenState extends State<DevicesScreen> {
         );
         final devicesApi = api.DevicesApi(traccarProvider.apiClient);
         await devicesApi.devicesIdPut(updatedDevice.id!, updatedDevice);
+
+        if (!mounted) return;
         _fetchDevices();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('deviceUpdateSuccess'.tr)),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('deviceUpdateSuccess'.tr)));
       } catch (e) {
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('deviceUpdateFailed'.trParams({'error': e.toString()}))),
+          SnackBar(
+            content: Text(
+              'deviceUpdateFailed'.trParams({'error': e.toString()}),
+            ),
+          ),
         );
       }
     }
   }
-  
+
   // --- Export Functions ---
 
   void _exportDevicesToCsv() async {
     if (_allDevices.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('sharedNoData'.tr))
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('sharedNoData'.tr)));
       return;
     }
 
@@ -158,67 +176,77 @@ class _DevicesScreenState extends State<DevicesScreen> {
     }
 
     String csv = const ListToCsvConverter().convert(rows);
-    
-    // 1. Save file to temporary directory
+
     final directory = await getTemporaryDirectory();
     final path = '${directory.path}/devices.csv';
     final file = File(path);
     await file.writeAsString(csv);
 
-    // 2. Share the file instead of just showing 'saved' toast
     final xFile = XFile(path, mimeType: 'text/csv');
-    await Share.shareXFiles([xFile], text: 'Device list export'); 
+
+    // FIX: Replaced deprecated static Share class call with updated instanced SharePlus signature
+    await SharePlus.instance.share(
+      ShareParams(files: [xFile], text: 'Device list export'),
+    );
   }
 
   void _exportDevicesToXlsx() async {
     if (_allDevices.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('sharedNoData'.tr))
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('sharedNoData'.tr)));
       return;
     }
 
-    // FIX: Helper function now correctly uses TextCellValue and ExcelLib prefix
-    ExcelLib.CellValue? cellFromDynamic(dynamic value) {
+    excel_lib.CellValue? cellFromDynamic(dynamic value) {
       if (value == null) {
-        return null; 
+        return null;
       }
-      return ExcelLib.TextCellValue(value.toString()); 
+      return excel_lib.TextCellValue(value.toString());
     }
 
-    // FIX: Use ExcelLib.Excel
-    final excel = ExcelLib.Excel.createExcel();
+    final excel = excel_lib.Excel.createExcel();
     final sheet = excel[excel.getDefaultSheet()!];
-    
-    // Set up the header row
+
     final header = ['ID', 'sharedName'.tr, 'deviceIdentifier'.tr];
     sheet.appendRow(header.map((e) => cellFromDynamic(e)).toList());
 
-    // Add device data rows
     for (var device in _allDevices) {
       final row = [device.id, device.name, device.uniqueId];
       sheet.appendRow(row.map((e) => cellFromDynamic(e)).toList());
     }
 
-    // 1. Save file to temporary directory
     final directory = await getTemporaryDirectory();
     final path = '${directory.path}/devices.xlsx';
     final file = File(path);
-    
-    // Save the Excel file
+
     final bytes = excel.encode();
+
+    if (!mounted) return;
+
     if (bytes == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('errorGeneral'.trParams({'error': 'Failed to encode Excel file'}))),
+        SnackBar(
+          content: Text(
+            'errorGeneral'.trParams({'error': 'Failed to encode Excel file'}),
+          ),
+        ),
       );
       return;
     }
-    
+
     await file.writeAsBytes(bytes);
 
-    // 2. Share the file instead of just showing 'saved' toast
-    final xFile = XFile(path, mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    await Share.shareXFiles([xFile], text: 'Device list export');
+    final xFile = XFile(
+      path,
+      mimeType:
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+
+    // FIX: Replaced deprecated static Share class call with updated instanced SharePlus signature
+    await SharePlus.instance.share(
+      ShareParams(files: [xFile], text: 'Device list export'),
+    );
   }
 
   void _showExportFormatSelectionDialog() {
@@ -226,14 +254,13 @@ class _DevicesScreenState extends State<DevicesScreen> {
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: Text('Export Format'.tr), 
+          title: Text('Export Format'.tr),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
               ListTile(
                 leading: const Icon(Icons.description),
-                // UPDATE: Changed text to reflect 'Share/Save' action
-                title: const Text('CSV (.csv) - Share/Save'), 
+                title: const Text('CSV (.csv) - Share/Save'),
                 onTap: () {
                   Navigator.pop(context);
                   _exportDevicesToCsv();
@@ -241,7 +268,6 @@ class _DevicesScreenState extends State<DevicesScreen> {
               ),
               ListTile(
                 leading: const Icon(Icons.table_chart),
-                // UPDATE: Changed text to reflect 'Share/Save' action
                 title: const Text('Excel (.xlsx) - Share/Save'),
                 onTap: () {
                   Navigator.pop(context);
@@ -283,7 +309,7 @@ class _DevicesScreenState extends State<DevicesScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.download),
-            onPressed: _showExportFormatSelectionDialog, // <-- Updated action
+            onPressed: _showExportFormatSelectionDialog,
           ),
         ],
       ),
@@ -325,7 +351,8 @@ class _DevicesScreenState extends State<DevicesScreen> {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (context) => ConnectionsScreen(deviceId: device.id!),
+                              builder: (context) =>
+                                  ConnectionsScreen(deviceId: device.id!),
                             ),
                           );
                         },

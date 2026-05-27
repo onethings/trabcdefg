@@ -1,16 +1,13 @@
 // lib/services/traccar_service.dart
 
-import 'package:dio/dio.dart';
-import 'package:trabcdefg/src/generated_api/api.dart'; // Correctly import the main library file
-import 'websocket_service.dart';
-import 'package:get/get.dart';
+import 'dart:developer' as developer; // 1. Import the developer library
+
+import 'package:trabcdefg/src/generated_api/api.dart';
 
 class TraccarService {
-
-  final ApiClient apiClient; // No longer `late final`, as it's passed in
+  final ApiClient apiClient;
   late final DevicesApi api;
 
-  // Accept ApiClient as a constructor parameter
   TraccarService({required this.apiClient}) {
     api = DevicesApi(apiClient);
   }
@@ -21,11 +18,20 @@ class TraccarService {
       final devices = response;
       if (devices != null) {
         for (var device in devices) {
-          print('Device Name: ${device.name}, Status: ${device.status}');
+          // 2. Replace print with developer.log
+          developer.log(
+            'Device Name: ${device.name}, Status: ${device.status}',
+            name: 'TraccarService',
+          );
         }
       }
     } catch (e) {
-      print('Failed to fetch devices: $e');
+      // 3. Pass the error object directly into the error parameter
+      developer.log(
+        'Failed to fetch devices',
+        error: e,
+        name: 'TraccarService',
+      );
     }
   }
 }

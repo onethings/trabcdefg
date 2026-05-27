@@ -1,4 +1,5 @@
 import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:maplibre_gl/maplibre_gl.dart' as maplibre;
@@ -19,7 +20,7 @@ class MarkerIconService {
       final ByteData bytes = await rootBundle.load(assetPath);
       final Uint8List list = bytes.buffer.asUint8List();
 
-      await mapController!.addImage(iconKey, list);
+      await mapController.addImage(iconKey, list);
       loadedIcons.add(iconKey);
 
       // Small delay to ensure the engine registers the new sprite
@@ -27,7 +28,10 @@ class MarkerIconService {
     } catch (e) {
       debugPrint("❌ Failed to load icon '$iconKey': $e");
       if (iconKey != 'marker_default_unknown') {
-        await _ensureIconLoadedInternal(mapController, 'marker_default_unknown');
+        await _ensureIconLoadedInternal(
+          mapController,
+          'marker_default_unknown',
+        );
       }
     }
   }
@@ -72,13 +76,19 @@ class MarkerIconService {
       // 3. 建立畫布並繪製
       final recorder = ui.PictureRecorder();
       final canvas = Canvas(recorder);
-      
+
       // 繪製陰影 (讓標籤更立體)
       final shadowPaint = Paint()
-        ..color = Colors.black.withOpacity(0.3)
+        ..color = Colors.black.withValues(alpha: 0.3)
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4); // 增加陰影模糊度
       canvas.drawRRect(
-        RRect.fromLTRBR(2, 2, boxWidth + 2, boxHeight + 2, const Radius.circular(8)),
+        RRect.fromLTRBR(
+          2,
+          2,
+          boxWidth + 2,
+          boxHeight + 2,
+          const Radius.circular(8),
+        ),
         shadowPaint,
       );
 
@@ -89,12 +99,21 @@ class MarkerIconService {
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1.0; // 稍微加粗邊框
 
-      final rRect = RRect.fromLTRBR(0, 0, boxWidth, boxHeight, const Radius.circular(8));
+      final rRect = RRect.fromLTRBR(
+        0,
+        0,
+        boxWidth,
+        boxHeight,
+        const Radius.circular(8),
+      );
       canvas.drawRRect(rRect, bgPaint);
       canvas.drawRRect(rRect, borderPaint); // 加入細黑邊框增加對比
 
       // 繪製文字
-      textPainter.paint(canvas, const Offset(horizontalPadding, verticalPadding));
+      textPainter.paint(
+        canvas,
+        const Offset(horizontalPadding, verticalPadding),
+      );
 
       // 4. 轉換為圖片格式
       final picture = recorder.endRecording();
@@ -105,8 +124,8 @@ class MarkerIconService {
       );
       final pngBytes = await img.toByteData(format: ui.ImageByteFormat.png);
 
-      if (pngBytes != null && mapController != null) {
-        await mapController!.addImage(
+      if (pngBytes != null) {
+        await mapController.addImage(
           customLabelId,
           pngBytes.buffer.asUint8List(),
         );

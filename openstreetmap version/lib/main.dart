@@ -2,33 +2,32 @@
 // Main entry point for the TracDefg Flutter application.
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:provider/provider.dart';
-import 'package:trabcdefg/src/generated_api/api.dart' as api;
-import 'package:trabcdefg/providers/traccar_provider.dart';
-import 'package:trabcdefg/services/auth_service.dart';
-import 'package:trabcdefg/services/websocket_service.dart';
-import 'package:trabcdefg/screens/login_screen.dart';
-import 'package:trabcdefg/screens/main_screen.dart';
-import 'package:trabcdefg/constants.dart';
-import 'package:trabcdefg/screens/splash_screen.dart';
-import 'package:trabcdefg/screens/reports/combined_report_screen.dart';
-import 'package:trabcdefg/screens/reports/summary_report_screen.dart';
-import 'package:trabcdefg/screens/reports/stops_report_screen.dart';
-import 'package:trabcdefg/screens/reports/route_report_screen.dart';
-import 'package:trabcdefg/screens/reports/trips_report_screen.dart';
-import 'package:trabcdefg/screens/reports/events_report_screen.dart';
 import 'package:hive_flutter/hive_flutter.dart';
-import 'package:trabcdefg/models/report_summary_hive.dart';
-import 'package:trabcdefg/screens/register_screen.dart';
-import 'package:trabcdefg/screens/reset_password_screen.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:trabcdefg/services/localization_service.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:trabcdefg/constants.dart';
+import 'package:trabcdefg/models/report_summary_hive.dart';
 import 'package:trabcdefg/models/route_positions_hive.dart';
 import 'package:trabcdefg/providers/map_style_provider.dart';
-import 'package:trabcdefg/providers/theme_provider.dart';
-import 'package:trabcdefg/theme/app_theme.dart';
 import 'package:trabcdefg/providers/settings_provider.dart';
+import 'package:trabcdefg/providers/theme_provider.dart';
+import 'package:trabcdefg/providers/traccar_provider.dart';
+import 'package:trabcdefg/screens/login_screen.dart';
+import 'package:trabcdefg/screens/main_screen.dart';
+import 'package:trabcdefg/screens/register_screen.dart';
+import 'package:trabcdefg/screens/reports/combined_report_screen.dart';
+import 'package:trabcdefg/screens/reports/events_report_screen.dart';
+import 'package:trabcdefg/screens/reports/route_report_screen.dart';
+import 'package:trabcdefg/screens/reports/stops_report_screen.dart';
+import 'package:trabcdefg/screens/reports/summary_report_screen.dart';
+import 'package:trabcdefg/screens/reports/trips_report_screen.dart';
+import 'package:trabcdefg/screens/reset_password_screen.dart';
+import 'package:trabcdefg/screens/splash_screen.dart';
+import 'package:trabcdefg/services/auth_service.dart';
+import 'package:trabcdefg/services/localization_service.dart';
+import 'package:trabcdefg/services/websocket_service.dart';
+import 'package:trabcdefg/src/generated_api/api.dart' as api;
 
 void main() async {
   // Ensure that Flutter is initialized before running the app.
@@ -50,22 +49,17 @@ void main() async {
   final prefs = results[1] as SharedPreferences;
   final savedUrl = prefs.getString('traccarServerUrl');
   final savedLanguageCode = prefs.getString('saved_language_code');
-  
-  runApp(TraccarApp(
-    initialUrl: savedUrl,
-    initialLanguageCode: savedLanguageCode,
-  ));
+
+  runApp(
+    TraccarApp(initialUrl: savedUrl, initialLanguageCode: savedLanguageCode),
+  );
 }
 
 class TraccarApp extends StatelessWidget {
   final String? initialUrl;
   final String? initialLanguageCode;
 
-  const TraccarApp({
-    super.key,
-    this.initialUrl,
-    this.initialLanguageCode,
-  });
+  const TraccarApp({super.key, this.initialUrl, this.initialLanguageCode});
 
   @override
   Widget build(BuildContext context) {
@@ -74,30 +68,27 @@ class TraccarApp extends StatelessWidget {
       providers: [
         // Provide the API client with the initial server URL.
         Provider<api.ApiClient>(
-  create: (_) {
-    final client = api.ApiClient(
-      basePath: initialUrl != null
-          ? '$initialUrl/api'
-          : AppConstants.traccarApiUrl, // Use constant default
-    );
-    
-    // CRITICAL FIX: Add the Accept header here to force JSON response from the server.
-    // This resolves the 'PK' (ZIP file) error.
-    client.addDefaultHeader('Accept', 'application/json'); 
-    
-    return client;
-  },
-),
+          create: (_) {
+            final client = api.ApiClient(
+              basePath: initialUrl != null
+                  ? '$initialUrl/api'
+                  : AppConstants.traccarApiUrl, // Use constant default
+            );
+
+            // CRITICAL FIX: Add the Accept header here to force JSON response from the server.
+            // This resolves the 'PK' (ZIP file) error.
+            client.addDefaultHeader('Accept', 'application/json');
+
+            return client;
+          },
+        ),
         // Provide the authentication service.
         Provider<AuthService>(
-          create: (context) => AuthService(
-            apiClient: context.read<api.ApiClient>(),
-          ),
+          create: (context) =>
+              AuthService(apiClient: context.read<api.ApiClient>()),
         ),
         // Provide the WebSocket service.
-        Provider<WebSocketService>(
-          create: (_) => WebSocketService(),
-        ),
+        Provider<WebSocketService>(create: (_) => WebSocketService()),
         // Provide the main TraccarProvider for state management.
         ChangeNotifierProvider<TraccarProvider>(
           create: (context) => TraccarProvider(
@@ -109,9 +100,7 @@ class TraccarApp extends StatelessWidget {
         ChangeNotifierProvider<MapStyleProvider>(
           create: (_) => MapStyleProvider(),
         ),
-        ChangeNotifierProvider<ThemeProvider>(
-          create: (_) => ThemeProvider(),
-        ),
+        ChangeNotifierProvider<ThemeProvider>(create: (_) => ThemeProvider()),
         ChangeNotifierProvider<SettingsProvider>(
           create: (_) => SettingsProvider(),
         ),
@@ -128,35 +117,37 @@ class TraccarApp extends StatelessWidget {
             builder: (context, child) {
               final data = MediaQuery.of(context);
               return MediaQuery(
-                data: data.copyWith(textScaler: TextScaler.linear(settingsProvider.fontSizeScale)),
+                data: data.copyWith(
+                  textScaler: TextScaler.linear(settingsProvider.fontSizeScale),
+                ),
                 child: child!,
               );
             },
             // Configure localization for the app using GetX properties.
             translations: LocalizationService(),
-        locale: initialLanguageCode != null
-            ? LocalizationService.getLocaleFromLang(initialLanguageCode!)
-            : Get.deviceLocale ?? LocalizationService.fallbackLocale,
-        fallbackLocale: LocalizationService.fallbackLocale,
-        
-        // Define all the application routes.
-        initialRoute: '/',
-        routes: {
-          '/': (context) => const SplashScreen(),
-          '/login': (context) => const LoginScreen(),
-          '/main': (context) => const MainScreen(),
-          '/register': (context) => const RegisterScreen(),
-          '/reset-password': (context) => const ResetPasswordScreen(),
-          '/reports/combined': (context) => const CombinedReportScreen(),
-          '/reports/summary': (context) => const SummaryReportScreen(),
-          '/reports/stops': (context) => const StopsReportScreen(),
-          '/reports/route': (context) => const RouteReportScreen(),
-          '/reports/trips': (context) => const TripsReportScreen(),
-          '/reports/events': (context) => const EventsReportScreen(),
+            locale: initialLanguageCode != null
+                ? LocalizationService.getLocaleFromLang(initialLanguageCode!)
+                : Get.deviceLocale ?? LocalizationService.fallbackLocale,
+            fallbackLocale: LocalizationService.fallbackLocale,
+
+            // Define all the application routes.
+            initialRoute: '/',
+            routes: {
+              '/': (context) => const SplashScreen(),
+              '/login': (context) => const LoginScreen(),
+              '/main': (context) => const MainScreen(),
+              '/register': (context) => const RegisterScreen(),
+              '/reset-password': (context) => const ResetPasswordScreen(),
+              '/reports/combined': (context) => const CombinedReportScreen(),
+              '/reports/summary': (context) => const SummaryReportScreen(),
+              '/reports/stops': (context) => const StopsReportScreen(),
+              '/reports/route': (context) => const RouteReportScreen(),
+              '/reports/trips': (context) => const TripsReportScreen(),
+              '/reports/events': (context) => const EventsReportScreen(),
+            },
+          );
         },
-      );
-    },
-  ),
-);
-}
+      ),
+    );
+  }
 }

@@ -1,9 +1,10 @@
 import 'dart:ui';
+
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import 'package:trabcdefg/providers/traccar_provider.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
+import 'package:trabcdefg/providers/traccar_provider.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
 
 class NotificationsScreen extends StatelessWidget {
@@ -20,7 +21,10 @@ class NotificationsScreen extends StatelessWidget {
       appBar: AppBar(
         title: Text(
           'notificationsTitle'.tr,
-          style: const TextStyle(fontWeight: FontWeight.w800, letterSpacing: -0.5),
+          style: const TextStyle(
+            fontWeight: FontWeight.w800,
+            letterSpacing: -0.5,
+          ),
         ),
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -29,7 +33,10 @@ class NotificationsScreen extends StatelessWidget {
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
             child: Container(
-              color: (isDark ? Colors.black : Colors.white).withOpacity(0.1),
+              // FIXED: Deprecation 1
+              color: (isDark ? Colors.black : Colors.white).withValues(
+                alpha: 0.1,
+              ),
             ),
           ),
         ),
@@ -42,9 +49,10 @@ class NotificationsScreen extends StatelessWidget {
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  theme.colorScheme.primary.withOpacity(0.08),
+                  // FIXED: Deprecations 2 & 3
+                  theme.colorScheme.primary.withValues(alpha: 0.08),
                   theme.colorScheme.surface,
-                  theme.colorScheme.secondary.withOpacity(0.05),
+                  theme.colorScheme.secondary.withValues(alpha: 0.05),
                 ],
               ),
             ),
@@ -55,20 +63,30 @@ class NotificationsScreen extends StatelessWidget {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.notifications_none_rounded, 
-                            size: 64, color: Colors.grey.withOpacity(0.5)),
+                        // FIXED: Deprecation 4
+                        Icon(
+                          Icons.notifications_none_rounded,
+                          size: 64,
+                          color: Colors.grey.withValues(alpha: 0.5),
+                        ),
                         const SizedBox(height: 16),
-                        Text('dashboardNoEvents'.tr, 
-                            style: const TextStyle(color: Colors.grey)),
+                        Text(
+                          'dashboardNoEvents'.tr,
+                          style: const TextStyle(color: Colors.grey),
+                        ),
                       ],
                     ),
                   )
                 : ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 12,
+                    ),
                     itemCount: provider.events.length,
                     itemBuilder: (context, index) {
                       // Show latest events first
-                      final event = provider.events[provider.events.length - 1 - index];
+                      final event =
+                          provider.events[provider.events.length - 1 - index];
                       return _buildEventItem(context, event);
                     },
                   ),
@@ -86,16 +104,19 @@ class NotificationsScreen extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: (isDark ? Colors.white : Colors.black).withOpacity(0.05),
+        // FIXED: Deprecation 5
+        color: (isDark ? Colors.white : Colors.black).withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.grey.withOpacity(0.1)),
+        // FIXED: Deprecation 6
+        border: Border.all(color: Colors.grey.withValues(alpha: 0.1)),
       ),
       child: Row(
         children: [
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: theme.colorScheme.primary.withOpacity(0.1),
+              // FIXED: Deprecation 7
+              color: theme.colorScheme.primary.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(16),
             ),
             child: Icon(
@@ -120,8 +141,8 @@ class NotificationsScreen extends StatelessWidget {
                 const SizedBox(height: 4),
                 Text(
                   DateFormat.yMMMd().add_jm().format(
-                        event.eventTime?.toLocal() ?? DateTime.now(),
-                      ),
+                    event.eventTime?.toLocal() ?? DateTime.now(),
+                  ),
                   style: TextStyle(
                     fontSize: 12,
                     color: theme.colorScheme.onSurfaceVariant,

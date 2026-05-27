@@ -1,16 +1,16 @@
 // lib/screens/device_list_screen.dart
 import 'dart:async';
+
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import 'package:trabcdefg/providers/traccar_provider.dart';
-import 'package:trabcdefg/src/generated_api/api.dart' as api;
-import 'package:trabcdefg/screens/livetracking_map_screen.dart';
 import 'package:get/get.dart';
-import 'package:timeago/timeago.dart' as timeago;
-import 'package:trabcdefg/widgets/OfflineAddressService.dart';
-import 'package:collection/collection.dart';
+import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart'; //
+import 'package:timeago/timeago.dart' as timeago;
 import 'package:trabcdefg/l10n/timeago_my.dart'; // 新增 Myanmar TimeAgo
+import 'package:trabcdefg/providers/traccar_provider.dart';
+import 'package:trabcdefg/screens/livetracking_map_screen.dart';
+import 'package:trabcdefg/src/generated_api/api.dart' as api;
+import 'package:trabcdefg/widgets/offline_address_service.dart';
 
 class DeviceListScreen extends StatefulWidget {
   const DeviceListScreen({super.key});
@@ -120,12 +120,16 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
     }
     return FutureBuilder<String>(
       future: _getAddressAsync(lat, lon, cacheKey),
-      builder: (context, snapshot) => _addressText(snapshot.data ?? '...', isCompact),
+      builder: (context, snapshot) =>
+          _addressText(snapshot.data ?? '...', isCompact),
     );
   }
 
   Future<String> _getAddressAsync(num lat, num lon, String cacheKey) async {
-    final address = await OfflineAddressService.getAddress(lat.toDouble(), lon.toDouble());
+    final address = await OfflineAddressService.getAddress(
+      lat.toDouble(),
+      lon.toDouble(),
+    );
     if (mounted) {
       setState(() {
         _addressCache[cacheKey] = address;
@@ -212,7 +216,8 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
           : (device.status ?? 'unknown');
 
       final String? filterStatus = _getStatusText(_selectedStatus);
-      final bool matchesFilter = (_selectedStatus == 0) ||
+      final bool matchesFilter =
+          (_selectedStatus == 0) ||
           (_selectedStatus == 4 && provider.isFavorite(device.id!)) ||
           (filterStatus == effectiveStatus);
       return matchesQuery && matchesFilter;
@@ -248,7 +253,11 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
   }
 
   // --- 樣式 A: 標準大卡片 ---
-  Widget _buildStandardCard(api.Device device, api.Position? position, TraccarProvider provider) {
+  Widget _buildStandardCard(
+    api.Device device,
+    api.Position? position,
+    TraccarProvider provider,
+  ) {
     bool isFavorite = provider.isFavorite(device.id!);
     final Map<String, dynamic> attributes =
         (position?.attributes as Map<String, dynamic>?) ?? {};
@@ -267,7 +276,9 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.5),
+        color: Theme.of(
+          context,
+        ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(16),
       ),
       child: InkWell(
@@ -279,35 +290,38 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
             children: [
               Row(
                 children: [
-                   Icon(Icons.directions_car, color: statusColor),
-                   const SizedBox(width: 12),
-                   Expanded(
-                     child: Column(
-                       crossAxisAlignment: CrossAxisAlignment.start,
-                       children: [
-                         Row(
-                           children: [
-                             Expanded(
-                               child: Text(
-                                 device.name ?? '...',
-                                 style: const TextStyle(
-                                   fontWeight: FontWeight.bold,
-                                   fontSize: 14,//16
-                                 ),
-                               ),
-                             ),
-                             IconButton(
-                               icon: Icon(
-                                 isFavorite ? Icons.favorite : Icons.favorite_border,
-                                 color: isFavorite ? Colors.red : Colors.grey,
-                                 size: 20,
-                               ),
-                               padding: EdgeInsets.zero,
-                               constraints: const BoxConstraints(),
-                               onPressed: () => provider.toggleFavorite(device.id!),
-                             ),
-                           ],
-                         ),
+                  Icon(Icons.directions_car, color: statusColor),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                device.name ?? '...',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14, //16
+                                ),
+                              ),
+                            ),
+                            IconButton(
+                              icon: Icon(
+                                isFavorite
+                                    ? Icons.favorite
+                                    : Icons.favorite_border,
+                                color: isFavorite ? Colors.red : Colors.grey,
+                                size: 20,
+                              ),
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(),
+                              onPressed: () =>
+                                  provider.toggleFavorite(device.id!),
+                            ),
+                          ],
+                        ),
                         Text(
                           lastUpdate != null
                               ? timeago.format(
@@ -336,7 +350,11 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
                 ],
               ),
               const Divider(height: 20),
-              _buildAddressWidget(position?.latitude, position?.longitude, isCompact: false),
+              _buildAddressWidget(
+                position?.latitude,
+                position?.longitude,
+                isCompact: false,
+              ),
             ],
           ),
         ),
@@ -345,7 +363,11 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
   }
 
   // --- 樣式 B: 緊湊列表 (一頁 9 台) ---
-  Widget _buildCompactListItem(api.Device device, api.Position? position, TraccarProvider provider) {
+  Widget _buildCompactListItem(
+    api.Device device,
+    api.Position? position,
+    TraccarProvider provider,
+  ) {
     bool isFavorite = provider.isFavorite(device.id!);
     final Map<String, dynamic> attributes =
         (position?.attributes as Map<String, dynamic>?) ?? {};
@@ -365,7 +387,9 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
       height: 72,
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
+        color: Theme.of(
+          context,
+        ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
         borderRadius: BorderRadius.circular(8),
       ),
       child: InkWell(
@@ -427,7 +451,11 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
             ),
             Expanded(
               flex: 4,
-              child: _buildAddressWidget(position?.latitude, position?.longitude, isCompact: true),
+              child: _buildAddressWidget(
+                position?.latitude,
+                position?.longitude,
+                isCompact: true,
+              ),
             ),
             _AccTimerBadge(
               speed: speedKmH,
@@ -475,9 +503,13 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
                   ),
                   selected: _selectedStatus == i,
                   selectedColor: Theme.of(context).colorScheme.primary,
-                  backgroundColor: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.5),
+                  backgroundColor: Theme.of(
+                    context,
+                  ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
                   side: BorderSide.none,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                  ),
                   onSelected: (_) => setState(() => _selectedStatus = i),
                 ),
               ),
@@ -510,7 +542,7 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
             hintText: 'sharedSearchDevices'.tr,
             prefixIcon: const Icon(Icons.search, size: 20),
             filled: true,
-            fillColor: Theme.of(context).colorScheme.surfaceVariant,
+            fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
               borderSide: BorderSide.none,
@@ -535,14 +567,13 @@ class _AccTimerBadge extends StatefulWidget {
   final bool isCompact;
 
   const _AccTimerBadge({
-    Key? key,
     required this.speed,
     required this.isStale,
     required this.isOn,
     required this.lastUpdate,
     required this.baseColor,
     required this.isCompact,
-  }) : super(key: key);
+  });
 
   @override
   _AccTimerBadgeState createState() => _AccTimerBadgeState();
@@ -590,7 +621,10 @@ class _AccTimerBadgeState extends State<_AccTimerBadge> {
   Widget _buildStandard() {
     bool isMoving = !widget.isStale && widget.speed > 2;
     String timerText = "";
-    if (!widget.isStale && widget.isOn && widget.lastUpdate != null && !isMoving) {
+    if (!widget.isStale &&
+        widget.isOn &&
+        widget.lastUpdate != null &&
+        !isMoving) {
       final now = DateTime.now().toUtc();
       final d = now.difference(widget.lastUpdate!);
       timerText = " ${d.inMinutes} m ${d.inSeconds % 60}s";
@@ -599,13 +633,17 @@ class _AccTimerBadgeState extends State<_AccTimerBadge> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: (isMoving ? Colors.green : widget.baseColor).withOpacity(0.1),
+        color: (isMoving ? Colors.green : widget.baseColor).withValues(
+          alpha: 0.1,
+        ),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Text(
         isMoving
             ? "${widget.speed.toStringAsFixed(0)} ${'sharedKmh'.tr}"
-            : (widget.isStale ? 'deviceStatusOfflineUpper'.tr : "${'deviceStatusAccOn'.tr}$timerText"),
+            : (widget.isStale
+                  ? 'deviceStatusOfflineUpper'.tr
+                  : "${'deviceStatusAccOn'.tr}$timerText"),
         style: TextStyle(
           color: isMoving ? Colors.green : widget.baseColor,
           fontWeight: FontWeight.bold,
@@ -618,10 +656,10 @@ class _AccTimerBadgeState extends State<_AccTimerBadge> {
   Widget _buildCompact() {
     if (widget.isStale) {
       return Padding(
-        padding: EdgeInsets.only(right: 8),
+        padding: const EdgeInsets.only(right: 8),
         child: Text(
           'deviceStatusOfflineUpper'.tr,
-          style: TextStyle(
+          style: const TextStyle(
             fontSize: 10,
             color: Colors.grey,
             fontWeight: FontWeight.bold,

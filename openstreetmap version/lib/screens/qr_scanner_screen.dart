@@ -3,7 +3,6 @@
 
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
-import 'package:get/get.dart';
 
 class QrScannerScreen extends StatefulWidget {
   const QrScannerScreen({super.key});
@@ -25,9 +24,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Scan Server URL'),
-      ),
+      appBar: AppBar(title: const Text('Scan Server URL')),
       body: MobileScanner(
         controller: _scannerController,
         onDetect: (capture) {

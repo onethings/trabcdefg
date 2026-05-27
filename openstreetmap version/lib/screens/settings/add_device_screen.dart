@@ -1,10 +1,10 @@
 // add_device_screen.dart
 // A screen to add a new driver in the TracDefg app.
 import 'package:flutter/material.dart';
-import 'package:trabcdefg/src/generated_api/api.dart' as api;
-import 'package:trabcdefg/providers/traccar_provider.dart';
-import 'package:provider/provider.dart';
 import 'package:get/get.dart';
+import 'package:provider/provider.dart';
+import 'package:trabcdefg/providers/traccar_provider.dart';
+import 'package:trabcdefg/src/generated_api/api.dart' as api;
 
 class AddDeviceScreen extends StatefulWidget {
   final api.Device? device;
@@ -12,7 +12,8 @@ class AddDeviceScreen extends StatefulWidget {
   const AddDeviceScreen({super.key, this.device});
 
   @override
-  _AddDeviceScreenState createState() => _AddDeviceScreenState();
+  State<AddDeviceScreen> createState() => _AddDeviceScreenState();
+  // Changed _AddDeviceScreenState to State<AddDeviceScreen> above ^
 }
 
 class _AddDeviceScreenState extends State<AddDeviceScreen> {
@@ -74,61 +75,64 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
   // }
   // Conceptual code for AddDeviceScreen.dart
 
-void _saveDevice() async {
-  if (_formKey.currentState!.validate()) {
-    _formKey.currentState!.save();
-    
-    // Create the device object from the form data
-    final newDevice = api.Device(
-      id: widget.device?.id,
-      name: _name,
-      uniqueId: _uniqueId,
-    );
+  void _saveDevice() async {
+    if (_formKey.currentState!.validate()) {
+      _formKey.currentState!.save();
 
-    try {
-      final traccarProvider = Provider.of<TraccarProvider>(
-        context,
-        listen: false,
+      // Create the device object from the form data
+      final newDevice = api.Device(
+        id: widget.device?.id,
+        name: _name,
+        uniqueId: _uniqueId,
       );
-      final devicesApi = api.DevicesApi(traccarProvider.apiClient);
-      
-      if (widget.device == null) {
-        // Add new device
-        await devicesApi.devicesPost(newDevice);
-        // Return the new device object
-        if (mounted) {
-          Navigator.of(context).pop(newDevice);
-        }
-      } else {
-        // Update existing device
-        await devicesApi.devicesIdPut(newDevice.id!, newDevice);
-        // Return the updated device object
-        if (mounted) {
-          Navigator.of(context).pop(newDevice);
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('deviceSaveFailed'.trParams({'error': e.toString()})),
-          ),
+
+      try {
+        final traccarProvider = Provider.of<TraccarProvider>(
+          context,
+          listen: false,
         );
+        final devicesApi = api.DevicesApi(traccarProvider.apiClient);
+
+        if (widget.device == null) {
+          // Add new device
+          await devicesApi.devicesPost(newDevice);
+          // Return the new device object
+          if (mounted) {
+            Navigator.of(context).pop(newDevice);
+          }
+        } else {
+          // Update existing device
+          await devicesApi.devicesIdPut(newDevice.id!, newDevice);
+          // Return the updated device object
+          if (mounted) {
+            Navigator.of(context).pop(newDevice);
+          }
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'deviceSaveFailed'.trParams({'error': e.toString()}),
+              ),
+            ),
+          );
+        }
       }
     }
   }
-}
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.device == null ? 'sharedAdd'.tr+'sharedDevice'.tr : 'sharedEdit'.tr+'sharedDevice'.tr),
+        title: Text(
+          widget.device == null
+              ? 'sharedAdd'.tr + 'sharedDevice'.tr
+              : 'sharedEdit'.tr + 'sharedDevice'.tr,
+        ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.save),
-            onPressed: _saveDevice,
-          ),
+          IconButton(icon: const Icon(Icons.save), onPressed: _saveDevice),
         ],
       ),
       body: SafeArea(

@@ -1,6 +1,6 @@
 // lib/l10n/en_US.dart
 
-const Map<String, String> en_US = {
+const Map<String, String> enUs = {
   "sharedLoading": "Loading...",
   "sharedHide": "Hide",
   "sharedSave": "Save",
@@ -628,10 +628,10 @@ const Map<String, String> en_US = {
   "categoryScooter": "Scooter",
   "maintenanceStart": "Start",
   "maintenancePeriod": "Period",
-  "deviceStatusAll":"All",
-  "deviceStatusFavorite":"Favorite",
-  "CustomServerURL":"Custom Server URL",
-  "TapMapAddPolygon":"Tap on the map to add points for the polygon.",
+  "deviceStatusAll": "All",
+  "deviceStatusFavorite": "Favorite",
+  "CustomServerURL": "Custom Server URL",
+  "TapMapAddPolygon": "Tap on the map to add points for the polygon.",
   "pleaseSelectDevice": "Please select a device",
   "settingsTheme": "Theme Mode",
   "themeSystem": "System Default",

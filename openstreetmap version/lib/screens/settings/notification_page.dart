@@ -1,13 +1,12 @@
 // notification_page.dart
 // A page to create or edit notifications in the TracDefg app.
-import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'package:provider/provider.dart';
 import 'dart:convert';
-import 'package:trabcdefg/constants.dart';
-import 'package:trabcdefg/services/auth_service.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+
+import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:trabcdefg/constants.dart';
 
 class NotificationPage extends StatefulWidget {
   final int? notificationId;
@@ -42,7 +41,7 @@ class _NotificationPageState extends State<NotificationPage> {
     'mail': 'notificatorMail',
     'sms': 'notificatorSms',
     'web': 'notificatorWeb',
-    'command':'notificatorCommand'
+    'command': 'notificatorCommand',
   };
 
   // Define a new mapping for notification types
@@ -127,7 +126,9 @@ class _NotificationPageState extends State<NotificationPage> {
 
       if (widget.notificationId != null) {
         final notificationResponse = await http.get(
-          Uri.parse('${AppConstants.traccarApiUrl}/notifications/${widget.notificationId}'),
+          Uri.parse(
+            '${AppConstants.traccarApiUrl}/notifications/${widget.notificationId}',
+          ),
           headers: headers,
         );
         if (notificationResponse.statusCode == 200) {
@@ -144,9 +145,11 @@ class _NotificationPageState extends State<NotificationPage> {
     } catch (e) {
       debugPrint('Failed to fetch initial data: $e');
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -179,11 +182,15 @@ class _NotificationPageState extends State<NotificationPage> {
           );
         } else {
           response = await http.put(
-            Uri.parse('${AppConstants.traccarApiUrl}/notifications/${widget.notificationId}'),
+            Uri.parse(
+              '${AppConstants.traccarApiUrl}/notifications/${widget.notificationId}',
+            ),
             headers: headers,
             body: json.encode(body),
           );
         }
+
+        if (!mounted) return;
 
         if (response.statusCode >= 200 && response.statusCode < 300) {
           Navigator.pop(context);
@@ -214,19 +221,22 @@ class _NotificationPageState extends State<NotificationPage> {
         body: json.encode(body),
       );
 
+      if (!mounted) return;
+
       if (response.statusCode == 204) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('testNotificationSuccess'.tr)),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('testNotificationSuccess'.tr)));
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('testNotificationFailed'.tr)),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('testNotificationFailed'.tr)));
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('testNotificatorsError'.tr)),
-      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('testNotificatorsError'.tr)));
     }
   }
 
@@ -241,9 +251,14 @@ class _NotificationPageState extends State<NotificationPage> {
               content: SingleChildScrollView(
                 child: ListBody(
                   children: _notificatorTypes.map((notificator) {
-                    final isSelected = _selectedNotificators.contains(notificator['type']);
-                    final String? localizationKey = notificatorKeys[notificator['type']];
-                    final String displayValue = localizationKey != null ? localizationKey.tr : notificator['type'];
+                    final isSelected = _selectedNotificators.contains(
+                      notificator['type'],
+                    );
+                    final String? localizationKey =
+                        notificatorKeys[notificator['type']];
+                    final String displayValue = localizationKey != null
+                        ? localizationKey.tr
+                        : notificator['type'];
                     return CheckboxListTile(
                       value: isSelected,
                       title: Text(displayValue),
@@ -284,9 +299,7 @@ class _NotificationPageState extends State<NotificationPage> {
     }
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text('sharedNotification'.tr),
-      ),
+      appBar: AppBar(title: Text('sharedNotification'.tr)),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
         child: Form(
@@ -301,10 +314,15 @@ class _NotificationPageState extends State<NotificationPage> {
                 children: [
                   DropdownButtonFormField<String>(
                     decoration: InputDecoration(labelText: 'sharedType'.tr),
-                    value: _selectedNotificationType,
-                    items: _notificationTypes.map<DropdownMenuItem<String>>((type) {
-                      final String? localizationKey = notificationTypeKeys[type['type']];
-                      final String displayValue = localizationKey != null ? localizationKey.tr : type['type'];
+                    initialValue: _selectedNotificationType,
+                    items: _notificationTypes.map<DropdownMenuItem<String>>((
+                      type,
+                    ) {
+                      final String? localizationKey =
+                          notificationTypeKeys[type['type']];
+                      final String displayValue = localizationKey != null
+                          ? localizationKey.tr
+                          : type['type'];
                       return DropdownMenuItem<String>(
                         value: type['type'],
                         child: Text(displayValue),
@@ -315,14 +333,19 @@ class _NotificationPageState extends State<NotificationPage> {
                         _selectedNotificationType = value;
                       });
                     },
-                    validator: (value) => value == null ? 'sharedRequired'.tr : null,
+                    validator: (value) =>
+                        value == null ? 'sharedRequired'.tr : null,
                   ),
                   const SizedBox(height: 16),
                   ListTile(
                     title: Text('sharedNotifications'.tr),
                     subtitle: Text(
                       _selectedNotificators
-                          .map((type) => notificatorKeys[type] != null ? notificatorKeys[type]!.tr : type)
+                          .map(
+                            (type) => notificatorKeys[type] != null
+                                ? notificatorKeys[type]!.tr
+                                : type,
+                          )
                           .join(', '),
                     ),
                     trailing: const Icon(Icons.arrow_drop_down),
@@ -330,12 +353,16 @@ class _NotificationPageState extends State<NotificationPage> {
                   ),
                   if (_selectedNotificators.contains('command'))
                     DropdownButtonFormField<int>(
-                      decoration: InputDecoration(labelText: 'sharedSavedCommand'.tr),
-                      value: _selectedCommandId,
+                      decoration: InputDecoration(
+                        labelText: 'sharedSavedCommand'.tr,
+                      ),
+                      initialValue: _selectedCommandId,
                       items: _commands.map<DropdownMenuItem<int>>((command) {
                         return DropdownMenuItem<int>(
                           value: command['id'],
-                          child: Text(command['description'] ?? 'unnamedCommand'.tr),
+                          child: Text(
+                            command['description'] ?? 'unnamedCommand'.tr,
+                          ),
                         );
                       }).toList(),
                       onChanged: (value) {
@@ -343,7 +370,8 @@ class _NotificationPageState extends State<NotificationPage> {
                           _selectedCommandId = value;
                         });
                       },
-                      validator: (value) => value == null ? 'requiredForCommand'.tr : null,
+                      validator: (value) =>
+                          value == null ? 'requiredForCommand'.tr : null,
                     ),
                   const SizedBox(height: 16),
                   ElevatedButton(
@@ -370,12 +398,14 @@ class _NotificationPageState extends State<NotificationPage> {
                 children: [
                   TextFormField(
                     controller: _descriptionController,
-                    decoration: InputDecoration(labelText: 'sharedDescription'.tr),
+                    decoration: InputDecoration(
+                      labelText: 'sharedDescription'.tr,
+                    ),
                   ),
                   const SizedBox(height: 16),
                   DropdownButtonFormField<int>(
                     decoration: InputDecoration(labelText: 'sharedCalendar'.tr),
-                    value: _selectedCalendarId,
+                    initialValue: _selectedCalendarId,
                     items: _calendars.map<DropdownMenuItem<int>>((calendar) {
                       return DropdownMenuItem<int>(
                         value: calendar['id'],

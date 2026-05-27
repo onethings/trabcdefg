@@ -1,10 +1,9 @@
 // lib/providers/traccar_provider.dart
 // Provider to manage Traccar API interactions and WebSocket connections.
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:trabcdefg/src/generated_api/api.dart' as api;
-import 'package:trabcdefg/services/websocket_service.dart';
 import 'package:trabcdefg/services/auth_service.dart';
+import 'package:trabcdefg/services/websocket_service.dart';
+import 'package:trabcdefg/src/generated_api/api.dart' as api;
 import 'package:trabcdefg/storage/user_database_helper.dart';
 
 class TraccarProvider with ChangeNotifier {
@@ -55,7 +54,7 @@ class TraccarProvider with ChangeNotifier {
     }
     notifyListeners();
   }
-  
+
   // FIX: Method to replace the entire ApiClient instance
   void updateApiClient(api.ApiClient newClient) {
     apiClient = newClient;
@@ -92,7 +91,7 @@ class TraccarProvider with ChangeNotifier {
 
           if (newPosition != null && newPosition.deviceId != null) {
             _positionMap[newPosition.deviceId!] = newPosition;
-            
+
             final existingPositionIndex = _positions.indexWhere(
               (pos) => pos.deviceId == newPosition.deviceId,
             );
@@ -113,19 +112,19 @@ class TraccarProvider with ChangeNotifier {
             .whereType<api.Event>()
             .toList();
 
-        eventList.forEach((api.Event newEvent) {
+        for (var newEvent in eventList) {
           if (newEvent.deviceId != null) {
             _latestDeviceEvent.putIfAbsent(newEvent.deviceId!, () => newEvent);
             _latestDeviceEvent.update(newEvent.deviceId!, (value) => newEvent);
             _events.add(newEvent);
           }
-        });
-        
+        }
+
         // Prevent Out of Memory (OOM) by limiting events array size
         if (_events.length > 1000) {
           _events.removeRange(0, _events.length - 1000);
         }
-        
+
         notifyListeners();
       }
     });
@@ -142,11 +141,11 @@ class TraccarProvider with ChangeNotifier {
 
   void setSessionId(String sessionId) {
     _sessionId = sessionId;
-    
+
     // Use the apiClient's basePath to construct the WebSocket URL dynamically
     final uri = Uri.parse(apiClient.basePath);
     final wsUrl = uri.replace(
-      scheme: uri.scheme == 'https' ? 'wss' : 'ws', 
+      scheme: uri.scheme == 'https' ? 'wss' : 'ws',
       path: '/api/socket',
     );
 
@@ -168,7 +167,8 @@ class TraccarProvider with ChangeNotifier {
         null,
       );
     } catch (e) {
-      print('Failed to delete session on the server: $e');
+      // FIX: Changed print to debugPrint to comply with production rules
+      debugPrint('Failed to delete session on the server: $e');
     }
 
     await authService.logout();
@@ -183,7 +183,8 @@ class TraccarProvider with ChangeNotifier {
     try {
       webSocketService.disconnect();
     } catch (e) {
-      print('Error disconnecting WebSocket: $e');
+      // FIX: Changed print to debugPrint to comply with production rules
+      debugPrint('Error disconnecting WebSocket: $e');
     }
 
     notifyListeners();
@@ -236,18 +237,21 @@ class TraccarProvider with ChangeNotifier {
     final from = to.subtract(const Duration(hours: 1));
 
     try {
-      debugPrint('Pre-fetching 1h history for device: ');
+      debugPrint('Pre-fetching 1h history for device: $deviceId');
       final positionsApi = api.PositionsApi(apiClient);
-      final history = await positionsApi.positionsGet(
-        deviceId: deviceId,
-        from: from.toUtc(),
-        to: to.toUtc(),
-      ) ?? [];
-      
+      final history =
+          await positionsApi.positionsGet(
+            deviceId: deviceId,
+            from: from.toUtc(),
+            to: to.toUtc(),
+          ) ??
+          [];
+
       _prefetchedHistory[deviceId] = history;
       notifyListeners();
     } catch (e) {
-      debugPrint("Pre-fetch failed: ");
+      // FIX: Enhanced the catch clause to output the actual error using debugPrint
+      debugPrint("Pre-fetch failed for device $deviceId: $e");
     }
   }
 }
