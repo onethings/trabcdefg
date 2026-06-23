@@ -24,6 +24,10 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
   String _searchQuery = '';
   int _selectedStatus = 0;
   bool _isCompactView = false; // 控制樣式切換的變數
+  bool _showMileage = false;
+  int _mileageDays = 1; // 1 = today, 3 = last 3 days
+  final Map<int, double> _mileageMap = {}; // deviceId -> distance in km
+  bool _isLoadingMileage = false;
   // final OfflineGeocoder _geocoder = OfflineGeocoder();
 
   // 演算法優化：快取地址減少重複計算
@@ -34,6 +38,7 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
   void initState() {
     super.initState();
     _loadViewPreference(); // 初始化時讀取樣式設定
+    _loadMileagePreference();
     _setupTimeagoLocales();
     _searchController.addListener(() {
       setState(() => _searchQuery = _searchController.text);
@@ -60,6 +65,86 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
       _isCompactView = !_isCompactView;
       prefs.setBool('isCompactView', _isCompactView);
     });
+  }
+
+  // 讀取里程偏好
+  Future<void> _loadMileagePreference() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _showMileage = prefs.getBool('showMileage') ?? false;
+      _mileageDays = prefs.getInt('mileageDays') ?? 1;
+    });
+    if (_showMileage) {
+      _fetchMileageData();
+    }
+  }
+
+  // 切換里程顯示
+  Future<void> _toggleMileage() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _showMileage = !_showMileage;
+      prefs.setBool('showMileage', _showMileage);
+      if (_showMileage) {
+        _mileageMap.clear();
+        _fetchMileageData();
+      }
+    });
+  }
+
+  // 設定里程天數 (1=今天, 3=最近3天)
+  Future<void> _setMileageDays(int days) async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _mileageDays = days;
+      prefs.setInt('mileageDays', days);
+      _mileageMap.clear();
+      if (_showMileage) {
+        _fetchMileageData();
+      }
+    });
+  }
+
+  // 取得今天 (或最近3天) 的里程
+  Future<void> _fetchMileageData() async {
+    final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
+    if (traccarProvider.devices.isEmpty) return;
+
+    setState(() => _isLoadingMileage = true);
+
+    try {
+      final reportsApi = api.ReportsApi(traccarProvider.apiClient);
+      final deviceIds = traccarProvider.devices.map((d) => d.id!).toList();
+
+      if (deviceIds.isEmpty) return;
+
+      final now = DateTime.now().toUtc();
+      final from = _mileageDays == 1 ? DateTime(now.year, now.month, now.day).toUtc() : DateTime(now.year, now.month, now.day - 2).toUtc();
+      final to = DateTime(now.year, now.month, now.day, 23, 59, 59).toUtc();
+
+      final summaries = await reportsApi.getReportsSummary(from, to, deviceId: deviceIds);
+
+      if (summaries != null) {
+        final newMap = <int, double>{};
+        for (var s in summaries) {
+          if (s.deviceId != null && s.distance != null) {
+            newMap[s.deviceId!] = (s.distance! / 1000); // meters -> km
+          }
+        }
+        if (mounted) {
+          setState(() {
+            _mileageMap.clear();
+            _mileageMap.addAll(newMap);
+            _isLoadingMileage = false;
+          });
+        }
+      } else {
+        if (mounted) setState(() => _isLoadingMileage = false);
+      }
+    } catch (e) {
+      debugPrint('Failed to fetch mileage: $e');
+      if (mounted) setState(() => _isLoadingMileage = false);
+    }
   }
 
   @override
@@ -118,18 +203,11 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
     if (_addressCache.containsKey(cacheKey)) {
       return _addressText(_addressCache[cacheKey]!, isCompact);
     }
-    return FutureBuilder<String>(
-      future: _getAddressAsync(lat, lon, cacheKey),
-      builder: (context, snapshot) =>
-          _addressText(snapshot.data ?? '...', isCompact),
-    );
+    return FutureBuilder<String>(future: _getAddressAsync(lat, lon, cacheKey), builder: (context, snapshot) => _addressText(snapshot.data ?? '...', isCompact));
   }
 
   Future<String> _getAddressAsync(num lat, num lon, String cacheKey) async {
-    final address = await OfflineAddressService.getAddress(
-      lat.toDouble(),
-      lon.toDouble(),
-    );
+    final address = await OfflineAddressService.getAddress(lat.toDouble(), lon.toDouble());
     if (mounted) {
       setState(() {
         _addressCache[cacheKey] = address;
@@ -142,29 +220,19 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
     if (isCompact) {
       return Text(
         text,
-        style: TextStyle(
-          fontSize: 10,
-          color: Theme.of(context).colorScheme.secondary,
-        ),
+        style: TextStyle(fontSize: 10, color: Theme.of(context).colorScheme.secondary),
         maxLines: 2,
         overflow: TextOverflow.ellipsis,
       );
     } else {
       return Row(
         children: [
-          Icon(
-            Icons.location_on,
-            size: 14,
-            color: Theme.of(context).colorScheme.outline,
-          ),
+          Icon(Icons.location_on, size: 14, color: Theme.of(context).colorScheme.outline),
           const SizedBox(width: 6),
           Expanded(
             child: Text(
               text,
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-                fontSize: 12,
-              ),
+              style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12),
               overflow: TextOverflow.ellipsis,
             ),
           ),
@@ -201,25 +269,16 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
     final now = DateTime.now().toUtc();
 
     final filteredDevices = provider.devices.where((device) {
-      final matchesQuery = (device.name ?? '').toLowerCase().contains(
-        _searchQuery.toLowerCase(),
-      );
+      final matchesQuery = (device.name ?? '').toLowerCase().contains(_searchQuery.toLowerCase());
       final position = provider.getPosition(device.id!);
-      final DateTime? lastUpdate =
-          position?.fixTime?.toUtc() ?? device.lastUpdate?.toUtc();
+      final DateTime? lastUpdate = position?.fixTime?.toUtc() ?? device.lastUpdate?.toUtc();
 
       // 10 分鐘離線演算法機制
-      final bool isStale =
-          lastUpdate == null || now.difference(lastUpdate).inMinutes >= 10;
-      String effectiveStatus = isStale
-          ? 'offline'
-          : (device.status ?? 'unknown');
+      final bool isStale = lastUpdate == null || now.difference(lastUpdate).inMinutes >= 10;
+      String effectiveStatus = isStale ? 'offline' : (device.status ?? 'unknown');
 
       final String? filterStatus = _getStatusText(_selectedStatus);
-      final bool matchesFilter =
-          (_selectedStatus == 0) ||
-          (_selectedStatus == 4 && provider.isFavorite(device.id!)) ||
-          (filterStatus == effectiveStatus);
+      final bool matchesFilter = (_selectedStatus == 0) || (_selectedStatus == 4 && provider.isFavorite(device.id!)) || (filterStatus == effectiveStatus);
       return matchesQuery && matchesFilter;
     }).toList();
 
@@ -235,7 +294,13 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
     if (filteredDevices.isEmpty) return Center(child: Text('sharedNoData'.tr));
 
     return RefreshIndicator(
-      onRefresh: () async => await provider.fetchInitialData(),
+      onRefresh: () async {
+        await provider.fetchInitialData();
+        if (_showMileage) {
+          _mileageMap.clear();
+          await _fetchMileageData();
+        }
+      },
       child: ListView.builder(
         padding: const EdgeInsets.symmetric(vertical: 4),
         itemCount: filteredDevices.length,
@@ -244,46 +309,29 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
           final position = provider.getPosition(device.id!);
 
           // 根據切換狀態決定顯示哪種卡片
-          return _isCompactView
-              ? _buildCompactListItem(device, position, provider)
-              : _buildStandardCard(device, position, provider);
+          return _isCompactView ? _buildCompactListItem(device, position, provider) : _buildStandardCard(device, position, provider);
         },
       ),
     );
   }
 
   // --- 樣式 A: 標準大卡片 ---
-  Widget _buildStandardCard(
-    api.Device device,
-    api.Position? position,
-    TraccarProvider provider,
-  ) {
+  Widget _buildStandardCard(api.Device device, api.Position? position, TraccarProvider provider) {
     bool isFavorite = provider.isFavorite(device.id!);
-    final Map<String, dynamic> attributes =
-        (position?.attributes as Map<String, dynamic>?) ?? {};
+    final Map<String, dynamic> attributes = (position?.attributes as Map<String, dynamic>?) ?? {};
     final bool isIgnitionOn = attributes['ignition'] == true;
     final double speedKmH = (position?.speed ?? 0.0) * 1.852;
     final DateTime now = DateTime.now().toUtc();
-    final DateTime? lastUpdate =
-        position?.fixTime?.toUtc() ?? device.lastUpdate?.toUtc();
-    final bool isStale =
-        lastUpdate == null || now.difference(lastUpdate).inMinutes >= 10;
+    final DateTime? lastUpdate = position?.fixTime?.toUtc() ?? device.lastUpdate?.toUtc();
+    final bool isStale = lastUpdate == null || now.difference(lastUpdate).inMinutes >= 10;
 
-    Color statusColor = isStale
-        ? Colors.blueGrey.shade300
-        : (isIgnitionOn ? const Color(0xFF10B981) : Colors.amber.shade700);
+    Color statusColor = isStale ? Colors.blueGrey.shade300 : (isIgnitionOn ? const Color(0xFF10B981) : Colors.amber.shade700);
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        color: Theme.of(
-          context,
-        ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
-        borderRadius: BorderRadius.circular(16),
-      ),
+      decoration: BoxDecoration(color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5), borderRadius: BorderRadius.circular(16)),
       child: InkWell(
-        onTap: () =>
-            Get.to(() => LiveTrackingMapScreen(selectedDevice: device)),
+        onTap: () => Get.to(() => LiveTrackingMapScreen(selectedDevice: device)),
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
@@ -308,17 +356,10 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
                               ),
                             ),
                             IconButton(
-                              icon: Icon(
-                                isFavorite
-                                    ? Icons.favorite
-                                    : Icons.favorite_border,
-                                color: isFavorite ? Colors.red : Colors.grey,
-                                size: 20,
-                              ),
+                              icon: Icon(isFavorite ? Icons.favorite : Icons.favorite_border, color: isFavorite ? Colors.red : Colors.grey, size: 20),
                               padding: EdgeInsets.zero,
                               constraints: const BoxConstraints(),
-                              onPressed: () =>
-                                  provider.toggleFavorite(device.id!),
+                              onPressed: () => provider.toggleFavorite(device.id!),
                             ),
                           ],
                         ),
@@ -326,35 +367,20 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
                           lastUpdate != null
                               ? timeago.format(
                                   lastUpdate,
-                                  locale:
-                                      Get.locale?.languageCode ??
-                                      'zh', // 改為讀取 GetX 當前語系
+                                  locale: Get.locale?.languageCode ?? 'zh', // 改為讀取 GetX 當前語系
                                 )
                               : '--',
-                          style: TextStyle(
-                            fontSize: 9,
-                            color: Theme.of(context).colorScheme.outline,
-                          ),
+                          style: TextStyle(fontSize: 9, color: Theme.of(context).colorScheme.outline),
                         ),
                       ],
                     ),
                   ),
-                  _AccTimerBadge(
-                    speed: speedKmH,
-                    isStale: isStale,
-                    isOn: isIgnitionOn,
-                    lastUpdate: lastUpdate,
-                    baseColor: statusColor,
-                    isCompact: false,
-                  ),
+                  _AccTimerBadge(speed: speedKmH, isStale: isStale, isOn: isIgnitionOn, lastUpdate: lastUpdate, baseColor: statusColor, isCompact: false),
                 ],
               ),
               const Divider(height: 20),
-              _buildAddressWidget(
-                position?.latitude,
-                position?.longitude,
-                isCompact: false,
-              ),
+              _buildAddressWidget(position?.latitude, position?.longitude, isCompact: false),
+              if (_showMileage) ...[const SizedBox(height: 4), _buildMileageWidget(device.id!)],
             ],
           ),
         ),
@@ -363,56 +389,35 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
   }
 
   // --- 樣式 B: 緊湊列表 (一頁 9 台) ---
-  Widget _buildCompactListItem(
-    api.Device device,
-    api.Position? position,
-    TraccarProvider provider,
-  ) {
+  Widget _buildCompactListItem(api.Device device, api.Position? position, TraccarProvider provider) {
     bool isFavorite = provider.isFavorite(device.id!);
-    final Map<String, dynamic> attributes =
-        (position?.attributes as Map<String, dynamic>?) ?? {};
+    final Map<String, dynamic> attributes = (position?.attributes as Map<String, dynamic>?) ?? {};
     final bool isIgnitionOn = attributes['ignition'] == true;
     final double speedKmH = (position?.speed ?? 0.0) * 1.852;
     final DateTime now = DateTime.now().toUtc();
-    final DateTime? lastUpdate =
-        position?.fixTime?.toUtc() ?? device.lastUpdate?.toUtc();
-    final bool isStale =
-        lastUpdate == null || now.difference(lastUpdate).inMinutes >= 10;
+    final DateTime? lastUpdate = position?.fixTime?.toUtc() ?? device.lastUpdate?.toUtc();
+    final bool isStale = lastUpdate == null || now.difference(lastUpdate).inMinutes >= 10;
 
-    Color statusColor = isStale
-        ? Colors.grey
-        : (isIgnitionOn ? const Color(0xFF10B981) : Colors.orange);
+    Color statusColor = isStale ? Colors.grey : (isIgnitionOn ? const Color(0xFF10B981) : Colors.orange);
 
     return Container(
-      height: 72,
+      height: _showMileage ? 88 : 72,
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
-      decoration: BoxDecoration(
-        color: Theme.of(
-          context,
-        ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
-        borderRadius: BorderRadius.circular(8),
-      ),
+      decoration: BoxDecoration(color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3), borderRadius: BorderRadius.circular(8)),
       child: InkWell(
-        onTap: () =>
-            Get.to(() => LiveTrackingMapScreen(selectedDevice: device)),
+        onTap: () => Get.to(() => LiveTrackingMapScreen(selectedDevice: device)),
         child: Row(
           children: [
             Container(
               width: 5,
               decoration: BoxDecoration(
                 color: statusColor,
-                borderRadius: const BorderRadius.horizontal(
-                  left: Radius.circular(8),
-                ),
+                borderRadius: const BorderRadius.horizontal(left: Radius.circular(8)),
               ),
             ),
             const SizedBox(width: 8),
             IconButton(
-              icon: Icon(
-                isFavorite ? Icons.favorite : Icons.favorite_border,
-                color: isFavorite ? Colors.red : Colors.grey,
-                size: 18,
-              ),
+              icon: Icon(isFavorite ? Icons.favorite : Icons.favorite_border, color: isFavorite ? Colors.red : Colors.grey, size: 18),
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(),
               onPressed: () => provider.toggleFavorite(device.id!),
@@ -436,50 +441,61 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
                     lastUpdate != null
                         ? timeago.format(
                             lastUpdate,
-                            locale:
-                                Get.locale?.languageCode ??
-                                'zh', // 改為讀取 GetX 當前語系
+                            locale: Get.locale?.languageCode ?? 'zh', // 改為讀取 GetX 當前語系
                           )
                         : '--',
-                    style: TextStyle(
-                      fontSize: 9,
-                      color: Theme.of(context).colorScheme.outline,
-                    ),
+                    style: TextStyle(fontSize: 9, color: Theme.of(context).colorScheme.outline),
                   ),
                 ],
               ),
             ),
             Expanded(
               flex: 4,
-              child: _buildAddressWidget(
-                position?.latitude,
-                position?.longitude,
-                isCompact: true,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildAddressWidget(position?.latitude, position?.longitude, isCompact: true),
+                  if (_showMileage) ...[const SizedBox(height: 2), _buildMileageWidget(device.id!, isCompact: true)],
+                ],
               ),
             ),
-            _AccTimerBadge(
-              speed: speedKmH,
-              isStale: isStale,
-              isOn: isIgnitionOn,
-              lastUpdate: lastUpdate,
-              baseColor: statusColor,
-              isCompact: true,
-            ),
+            _AccTimerBadge(speed: speedKmH, isStale: isStale, isOn: isIgnitionOn, lastUpdate: lastUpdate, baseColor: statusColor, isCompact: true),
           ],
         ),
       ),
     );
   }
 
+  // --- 里程顯示 Widget ---
+  Widget _buildMileageWidget(int deviceId, {bool isCompact = false}) {
+    final mileage = _mileageMap[deviceId];
+    if (mileage == null) return const SizedBox.shrink();
+
+    final mileageLabel = _mileageDays == 1 ? 'dashboardTotalDistance'.tr : '${'dashboardTotalDistance'.tr} (3 ${'sharedDays'.tr})';
+
+    if (isCompact) {
+      return Text(
+        '${mileage.toStringAsFixed(1)} ${'sharedKm'.tr}',
+        style: TextStyle(fontSize: 9, color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w500),
+      );
+    }
+
+    return Row(
+      children: [
+        Icon(Icons.route_outlined, size: 14, color: Theme.of(context).colorScheme.primary),
+        const SizedBox(width: 4),
+        Text(
+          '$mileageLabel: ${mileage.toStringAsFixed(1)} ${'sharedKm'.tr}',
+          style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w500),
+        ),
+      ],
+    );
+  }
+
   // --- 輔助 Widget: 標籤與按鈕 ---
   Widget _buildFilterAndToggle() {
-    final labels = [
-      'deviceStatusAll'.tr,
-      'deviceStatusOnline'.tr,
-      'deviceStatusOffline'.tr,
-      'deviceStatusUnknown'.tr,
-      'deviceStatusFavorite'.tr,
-    ];
+    final labels = ['deviceStatusAll'.tr, 'deviceStatusOnline'.tr, 'deviceStatusOffline'.tr, 'deviceStatusUnknown'.tr, 'deviceStatusFavorite'.tr];
     return Row(
       children: [
         Expanded(
@@ -492,40 +508,60 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
               itemBuilder: (context, i) => Padding(
                 padding: const EdgeInsets.only(right: 6),
                 child: ChoiceChip(
-                  label: Text(
-                    labels[i],
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: _selectedStatus == i
-                          ? Theme.of(context).colorScheme.onPrimary
-                          : Theme.of(context).colorScheme.onSurface,
-                    ),
-                  ),
+                  label: Text(labels[i], style: TextStyle(fontSize: 11, color: _selectedStatus == i ? Theme.of(context).colorScheme.onPrimary : Theme.of(context).colorScheme.onSurface)),
                   selected: _selectedStatus == i,
                   selectedColor: Theme.of(context).colorScheme.primary,
-                  backgroundColor: Theme.of(
-                    context,
-                  ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                  backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
                   side: BorderSide.none,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
-                  ),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                   onSelected: (_) => setState(() => _selectedStatus = i),
                 ),
               ),
             ),
           ),
         ),
-        // 切換樣式按鈕
-        IconButton(
-          icon: Icon(
-            _isCompactView
-                ? Icons.view_agenda_outlined
-                : Icons.view_headline_rounded,
+        // 里程切換按鈕
+        if (_showMileage)
+          Padding(
+            padding: const EdgeInsets.only(right: 4),
+            child: _isLoadingMileage
+                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                : PopupMenuButton<int>(
+                    icon: Icon(Icons.route, color: Theme.of(context).colorScheme.primary, size: 22),
+                    tooltip: '里程天數設定',
+                    onSelected: _setMileageDays,
+                    itemBuilder: (_) => [
+                      PopupMenuItem(
+                        value: 1,
+                        child: Row(
+                          children: [
+                            Icon(Icons.check, size: 18, color: _mileageDays == 1 ? null : Colors.transparent),
+                            const SizedBox(width: 8),
+                            Text('dashboardTotalDistance'.tr),
+                          ],
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: 3,
+                        child: Row(
+                          children: [
+                            Icon(Icons.check, size: 18, color: _mileageDays == 3 ? null : Colors.transparent),
+                            const SizedBox(width: 8),
+                            Text('${'dashboardTotalDistance'.tr} (3 ${'sharedDays'.tr})'),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
           ),
-          onPressed: _toggleViewMode,
-          tooltip: "切換顯示樣式",
+        // 里程顯示開關按鈕
+        IconButton(
+          icon: Icon(_showMileage ? Icons.route : Icons.route_outlined, color: _showMileage ? Theme.of(context).colorScheme.primary : null),
+          onPressed: _toggleMileage,
+          tooltip: "切換里程顯示",
         ),
+        // 切換樣式按鈕
+        IconButton(icon: Icon(_isCompactView ? Icons.view_agenda_outlined : Icons.view_headline_rounded), onPressed: _toggleViewMode, tooltip: "切換顯示樣式"),
         const SizedBox(width: 8),
       ],
     );
@@ -543,18 +579,14 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
             prefixIcon: const Icon(Icons.search, size: 20),
             filled: true,
             fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: BorderSide.none,
-            ),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
           ),
         ),
       ),
     );
   }
 
-  String? _getStatusText(int index) =>
-      [null, 'online', 'offline', 'unknown', 'favorite'][index];
+  String? _getStatusText(int index) => [null, 'online', 'offline', 'unknown', 'favorite'][index];
 }
 
 // --- 獨立的 ACC 計時器 Widget，只有這個小區塊每秒更新 ---
@@ -566,14 +598,7 @@ class _AccTimerBadge extends StatefulWidget {
   final Color baseColor;
   final bool isCompact;
 
-  const _AccTimerBadge({
-    required this.speed,
-    required this.isStale,
-    required this.isOn,
-    required this.lastUpdate,
-    required this.baseColor,
-    required this.isCompact,
-  });
+  const _AccTimerBadge({required this.speed, required this.isStale, required this.isOn, required this.lastUpdate, required this.baseColor, required this.isCompact});
 
   @override
   _AccTimerBadgeState createState() => _AccTimerBadgeState();
@@ -621,10 +646,7 @@ class _AccTimerBadgeState extends State<_AccTimerBadge> {
   Widget _buildStandard() {
     bool isMoving = !widget.isStale && widget.speed > 2;
     String timerText = "";
-    if (!widget.isStale &&
-        widget.isOn &&
-        widget.lastUpdate != null &&
-        !isMoving) {
+    if (!widget.isStale && widget.isOn && widget.lastUpdate != null && !isMoving) {
       final now = DateTime.now().toUtc();
       final d = now.difference(widget.lastUpdate!);
       timerText = " ${d.inMinutes} m ${d.inSeconds % 60}s";
@@ -632,23 +654,10 @@ class _AccTimerBadgeState extends State<_AccTimerBadge> {
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: (isMoving ? Colors.green : widget.baseColor).withValues(
-          alpha: 0.1,
-        ),
-        borderRadius: BorderRadius.circular(8),
-      ),
+      decoration: BoxDecoration(color: (isMoving ? Colors.green : widget.baseColor).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
       child: Text(
-        isMoving
-            ? "${widget.speed.toStringAsFixed(0)} ${'sharedKmh'.tr}"
-            : (widget.isStale
-                  ? 'deviceStatusOfflineUpper'.tr
-                  : "${'deviceStatusAccOn'.tr}$timerText"),
-        style: TextStyle(
-          color: isMoving ? Colors.green : widget.baseColor,
-          fontWeight: FontWeight.bold,
-          fontSize: 11,
-        ),
+        isMoving ? "${widget.speed.toStringAsFixed(0)} ${'sharedKmh'.tr}" : (widget.isStale ? 'deviceStatusOfflineUpper'.tr : "${'deviceStatusAccOn'.tr}$timerText"),
+        style: TextStyle(color: isMoving ? Colors.green : widget.baseColor, fontWeight: FontWeight.bold, fontSize: 11),
       ),
     );
   }
@@ -659,11 +668,7 @@ class _AccTimerBadgeState extends State<_AccTimerBadge> {
         padding: const EdgeInsets.only(right: 8),
         child: Text(
           'deviceStatusOfflineUpper'.tr,
-          style: const TextStyle(
-            fontSize: 10,
-            color: Colors.grey,
-            fontWeight: FontWeight.bold,
-          ),
+          style: const TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.bold),
         ),
       );
     }
@@ -672,11 +677,7 @@ class _AccTimerBadgeState extends State<_AccTimerBadge> {
         padding: const EdgeInsets.only(right: 8),
         child: Text(
           "${widget.speed.toStringAsFixed(0)} ${'sharedKmh'.tr}",
-          style: const TextStyle(
-            fontSize: 10,
-            color: Colors.green,
-            fontWeight: FontWeight.bold,
-          ),
+          style: const TextStyle(fontSize: 10, color: Colors.green, fontWeight: FontWeight.bold),
         ),
       );
     }
@@ -692,11 +693,7 @@ class _AccTimerBadgeState extends State<_AccTimerBadge> {
       child: Text(
         "${'deviceStatusAccOn'.tr}$timeStr",
         textAlign: TextAlign.center,
-        style: TextStyle(
-          fontSize: 9,
-          color: widget.baseColor,
-          fontWeight: FontWeight.bold,
-        ),
+        style: TextStyle(fontSize: 9, color: widget.baseColor, fontWeight: FontWeight.bold),
       ),
     );
   }
