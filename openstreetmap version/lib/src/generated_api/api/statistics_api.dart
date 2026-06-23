@@ -16,7 +16,7 @@ class StatisticsApi {
 
   final ApiClient apiClient;
 
-  /// Fetch server Statistics
+  /// Fetch Server Statistics
   ///
   /// Note: This method returns the HTTP [Response].
   ///
@@ -27,7 +27,7 @@ class StatisticsApi {
   ///
   /// * [DateTime] to (required):
   ///   in ISO 8601 format. eg. `1963-11-22T18:30:00Z`
-  Future<Response> statisticsGetWithHttpInfo(
+  Future<Response> getStatisticsWithHttpInfo(
     DateTime from,
     DateTime to,
   ) async {
@@ -57,7 +57,7 @@ class StatisticsApi {
     );
   }
 
-  /// Fetch server Statistics
+  /// Fetch Server Statistics
   ///
   /// Parameters:
   ///
@@ -66,11 +66,11 @@ class StatisticsApi {
   ///
   /// * [DateTime] to (required):
   ///   in ISO 8601 format. eg. `1963-11-22T18:30:00Z`
-  Future<List<Statistics>?> statisticsGet(
+  Future<List<Statistics>?> getStatistics(
     DateTime from,
     DateTime to,
   ) async {
-    final response = await statisticsGetWithHttpInfo(
+    final response = await getStatisticsWithHttpInfo(
       from,
       to,
     );

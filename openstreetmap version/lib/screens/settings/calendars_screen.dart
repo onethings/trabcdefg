@@ -24,14 +24,11 @@ class _CalendarsScreenState extends State<CalendarsScreen> {
   }
 
   void _fetchCalendars() {
-    final traccarProvider = Provider.of<TraccarProvider>(
-      context,
-      listen: false,
-    );
+    final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
     // Correct way to instantiate CalendarsApi with the authenticated client
     final calendarsApi = api.CalendarsApi(traccarProvider.apiClient);
     setState(() {
-      _calendarsFuture = calendarsApi.calendarsGet();
+      _calendarsFuture = calendarsApi.getCalendars();
     });
   }
 
@@ -45,9 +42,7 @@ class _CalendarsScreenState extends State<CalendarsScreen> {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           } else if (snapshot.hasError) {
-            return Center(
-              child: Text('${'errorGeneral'.tr}: ${snapshot.error}'),
-            );
+            return Center(child: Text('${'errorGeneral'.tr}: ${snapshot.error}'));
           } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
             return Center(child: Text('sharedNoData'.tr));
           } else {
@@ -55,9 +50,7 @@ class _CalendarsScreenState extends State<CalendarsScreen> {
               itemCount: snapshot.data!.length,
               itemBuilder: (context, index) {
                 final calendar = snapshot.data![index];
-                return ListTile(
-                  title: Text(calendar.name ?? 'sharedNoData'.tr),
-                );
+                return ListTile(title: Text(calendar.name ?? 'sharedNoData'.tr));
               },
             );
           }
@@ -65,10 +58,7 @@ class _CalendarsScreenState extends State<CalendarsScreen> {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () async {
-          final newCalendar = await Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const AddCalendarScreen()),
-          );
+          final newCalendar = await Navigator.push(context, MaterialPageRoute(builder: (context) => const AddCalendarScreen()));
           if (newCalendar != null) {
             _fetchCalendars();
           }

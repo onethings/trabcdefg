@@ -40,44 +40,28 @@ class TileCacheService {
   }
 }
 
-class CachedNetworkImageProvider
-    extends ImageProvider<CachedNetworkImageProvider> {
+class CachedNetworkImageProvider extends ImageProvider<CachedNetworkImageProvider> {
   final String url;
   final TileCacheService cacheService;
   final http.Client httpClient;
 
-  CachedNetworkImageProvider(
-    this.url, {
-    required this.cacheService,
-    required this.httpClient,
-  });
+  CachedNetworkImageProvider(this.url, {required this.cacheService, required this.httpClient});
 
   @override
-  ImageStreamCompleter loadImage(
-    CachedNetworkImageProvider key,
-    ImageDecoderCallback decode,
-  ) {
+  ImageStreamCompleter loadImage(CachedNetworkImageProvider key, ImageDecoderCallback decode) {
     return MultiFrameImageStreamCompleter(
       codec: _loadAsync(key, decode),
       scale: 1.0,
-      informationCollector: () => <DiagnosticsNode>[
-        DiagnosticsProperty<ImageProvider>('Image provider', this),
-        DiagnosticsProperty<CachedNetworkImageProvider>('Original key', key),
-      ],
+      informationCollector: () => <DiagnosticsNode>[DiagnosticsProperty<ImageProvider>('Image provider', this), DiagnosticsProperty<CachedNetworkImageProvider>('Original key', key)],
     );
   }
 
   @override
-  Future<CachedNetworkImageProvider> obtainKey(
-    ImageConfiguration configuration,
-  ) {
+  Future<CachedNetworkImageProvider> obtainKey(ImageConfiguration configuration) {
     return Future<CachedNetworkImageProvider>.value(this);
   }
 
-  Future<ui.Codec> _loadAsync(
-    CachedNetworkImageProvider key,
-    ImageDecoderCallback decode,
-  ) async {
+  Future<ui.Codec> _loadAsync(CachedNetworkImageProvider key, ImageDecoderCallback decode) async {
     assert(key == this);
 
     final cachedData = await cacheService.getTile(url);
@@ -96,9 +80,7 @@ class CachedNetworkImageProvider
 
         return decode(await ui.ImmutableBuffer.fromUint8List(bytes));
       } else {
-        throw Exception(
-          'Failed to load tile from network: ${response.statusCode}',
-        );
+        throw Exception('Failed to load tile from network: ${response.statusCode}');
       }
     } catch (e) {
       rethrow;
@@ -114,11 +96,7 @@ class HiveTileProvider extends TileProvider {
 
   @override
   ImageProvider getImage(TileCoordinates coordinates, TileLayer options) {
-    return CachedNetworkImageProvider(
-      getTileUrl(coordinates, options),
-      cacheService: cacheService,
-      httpClient: httpClient,
-    );
+    return CachedNetworkImageProvider(getTileUrl(coordinates, options), cacheService: cacheService, httpClient: httpClient);
   }
 }
 
@@ -143,23 +121,17 @@ class GeofencesScreenState extends State<GeofencesScreen> {
   }
 
   Future<List<api.Geofence>> _fetchGeofences() async {
-    final traccarProvider = Provider.of<TraccarProvider>(
-      context,
-      listen: false,
-    );
+    final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
     final geofencesApi = api.GeofencesApi(traccarProvider.apiClient);
-    final geofences = await geofencesApi.geofencesGet();
+    final geofences = await geofencesApi.getGeofences();
     return geofences ?? [];
   }
 
   void _deleteGeofence(int geofenceId) async {
     try {
-      final traccarProvider = Provider.of<TraccarProvider>(
-        context,
-        listen: false,
-      );
+      final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
       final geofencesApi = api.GeofencesApi(traccarProvider.apiClient);
-      await geofencesApi.geofencesIdDelete(geofenceId);
+      await geofencesApi.deleteGeofencesId(geofenceId);
 
       if (!mounted) {
         return;
@@ -167,38 +139,26 @@ class GeofencesScreenState extends State<GeofencesScreen> {
       setState(() {
         _geofencesFuture = _fetchGeofences();
       });
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('sharedRemoveConfirm'.tr)));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('sharedRemoveConfirm'.tr)));
     } catch (e) {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Failed to delete geofence: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to delete geofence: $e')));
     }
   }
 
   void _editGeofence(api.Geofence geofence) async {
-    final updatedGeofence = await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => AddGeofenceScreen(geofence: geofence),
-      ),
-    );
+    final updatedGeofence = await Navigator.push(context, MaterialPageRoute(builder: (context) => AddGeofenceScreen(geofence: geofence)));
 
     if (updatedGeofence != null) {
       if (!mounted) {
         return;
       }
       try {
-        final traccarProvider = Provider.of<TraccarProvider>(
-          context,
-          listen: false,
-        );
+        final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
         final geofencesApi = api.GeofencesApi(traccarProvider.apiClient);
-        await geofencesApi.geofencesIdPut(updatedGeofence.id!, updatedGeofence);
+        await geofencesApi.putGeofencesId(updatedGeofence.id!, updatedGeofence);
 
         if (!mounted) {
           return;
@@ -206,16 +166,12 @@ class GeofencesScreenState extends State<GeofencesScreen> {
         setState(() {
           _geofencesFuture = _fetchGeofences();
         });
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('sharedSaved'.tr)));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('sharedSaved'.tr)));
       } catch (e) {
         if (!mounted) {
           return;
         }
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to update geofence: $e')),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to update geofence: $e')));
       }
     }
   }
@@ -225,9 +181,7 @@ class GeofencesScreenState extends State<GeofencesScreen> {
     if (area == null || area.isEmpty) return 'sharedNoData'.tr;
     if (area.startsWith('CIRCLE')) {
       try {
-        final parts = area
-            .substring(area.indexOf('(') + 1, area.indexOf(')'))
-            .split(' ');
+        final parts = area.substring(area.indexOf('(') + 1, area.indexOf(')')).split(' ');
         final radius = double.tryParse(parts[2]) ?? 0.0;
         return 'Circle: ${radius.round()}m';
       } catch (e) {
@@ -235,10 +189,7 @@ class GeofencesScreenState extends State<GeofencesScreen> {
       }
     } else if (area.startsWith('POLYGON')) {
       try {
-        final content = area.substring(
-          area.indexOf('((') + 2,
-          area.lastIndexOf('))'),
-        );
+        final content = area.substring(area.indexOf('((') + 2, area.lastIndexOf('))'));
         final points = content.split(',');
         return 'Polygon: ${points.length} points';
       } catch (e) {
@@ -258,9 +209,7 @@ class GeofencesScreenState extends State<GeofencesScreen> {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           } else if (snapshot.hasError) {
-            return Center(
-              child: Text('${'errorGeneral'.tr}: ${snapshot.error}'),
-            );
+            return Center(child: Text('${'errorGeneral'.tr}: ${snapshot.error}'));
           } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
             return Center(child: Text('sharedNoData'.tr));
           } else {
@@ -276,14 +225,8 @@ class GeofencesScreenState extends State<GeofencesScreen> {
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      IconButton(
-                        icon: const Icon(Icons.edit),
-                        onPressed: () => _editGeofence(geofence),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.delete),
-                        onPressed: () => _deleteGeofence(geofence.id!),
-                      ),
+                      IconButton(icon: const Icon(Icons.edit), onPressed: () => _editGeofence(geofence)),
+                      IconButton(icon: const Icon(Icons.delete), onPressed: () => _deleteGeofence(geofence.id!)),
                     ],
                   ),
                 );
@@ -296,16 +239,11 @@ class GeofencesScreenState extends State<GeofencesScreen> {
         onPressed: () async {
           // 【核心修正】在任何 await 發生之前（完全同步的當下），把所有需要 context 的東西通通準備好！
           final navigator = Navigator.of(context);
-          final traccarProvider = Provider.of<TraccarProvider>(
-            context,
-            listen: false,
-          );
+          final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
           final messenger = ScaffoldMessenger.of(context);
 
           // 1. 進入第一個非同步：等待頁面回傳結果
-          final newGeofence = await navigator.push(
-            MaterialPageRoute(builder: (context) => const AddGeofenceScreen()),
-          );
+          final newGeofence = await navigator.push(MaterialPageRoute(builder: (context) => const AddGeofenceScreen()));
 
           if (newGeofence != null) {
             // 2. 異步回來後，檢查組件是否還掛載著
@@ -315,7 +253,7 @@ class GeofencesScreenState extends State<GeofencesScreen> {
               final geofencesApi = api.GeofencesApi(traccarProvider.apiClient);
 
               // 3. 進入第二個非同步：打 API
-              await geofencesApi.geofencesPost(newGeofence);
+              await geofencesApi.postGeofences(newGeofence);
 
               if (!mounted) return;
               setState(() {
@@ -328,9 +266,7 @@ class GeofencesScreenState extends State<GeofencesScreen> {
               if (!mounted) return;
 
               // 5. 失敗時同理
-              messenger.showSnackBar(
-                SnackBar(content: Text('Failed to add geofence: $e')),
-              );
+              messenger.showSnackBar(SnackBar(content: Text('Failed to add geofence: $e')));
             }
           }
         },
@@ -371,10 +307,8 @@ class AddGeofenceScreenState extends State<AddGeofenceScreen> {
   bool _isCacheInitialized = false;
 
   // --- Tile URLs from map_screen.dart ---
-  static const String _osmUrlTemplate =
-      'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
-  static const String _satelliteUrlTemplate =
-      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+  static const String _osmUrlTemplate = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+  static const String _satelliteUrlTemplate = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
   static const List<String> _osmSubdomains = ['a', 'b', 'c'];
 
   @override
@@ -383,10 +317,7 @@ class AddGeofenceScreenState extends State<AddGeofenceScreen> {
     _mapController = MapController();
 
     _cacheService.init().then((_) {
-      _tileProvider = HiveTileProvider(
-        cacheService: _cacheService,
-        httpClient: _httpClient,
-      );
+      _tileProvider = HiveTileProvider(cacheService: _cacheService, httpClient: _httpClient);
       if (mounted) {
         setState(() {
           _isCacheInitialized = true;
@@ -401,17 +332,10 @@ class AddGeofenceScreenState extends State<AddGeofenceScreen> {
         if (area.startsWith('CIRCLE')) {
           _geofenceType = 'CIRCLE';
           try {
-            final parts = area
-                .substring(area.indexOf('(') + 1, area.indexOf(')'))
-                .split(' ');
-            _circleCenter = LatLng(
-              double.tryParse(parts[0]) ?? 0.0,
-              double.tryParse(parts[1]) ?? 0.0,
-            );
+            final parts = area.substring(area.indexOf('(') + 1, area.indexOf(')')).split(' ');
+            _circleCenter = LatLng(double.tryParse(parts[0]) ?? 0.0, double.tryParse(parts[1]) ?? 0.0);
             final parsedRadius = double.tryParse(parts[2]);
-            if (parsedRadius != null &&
-                parsedRadius >= 10 &&
-                parsedRadius <= 2000) {
+            if (parsedRadius != null && parsedRadius >= 10 && parsedRadius <= 2000) {
               _radius = parsedRadius;
             } else {
               _radius = 10.0;
@@ -424,16 +348,10 @@ class AddGeofenceScreenState extends State<AddGeofenceScreen> {
           _geofenceType = 'POLYGON';
           _radius = 0.0;
           try {
-            final content = area.substring(
-              area.indexOf('((') + 2,
-              area.lastIndexOf('))'),
-            );
+            final content = area.substring(area.indexOf('((') + 2, area.lastIndexOf('))'));
             final points = content.split(',').map((p) {
               final coords = p.trim().split(' ');
-              return LatLng(
-                double.tryParse(coords[0]) ?? 0.0,
-                double.tryParse(coords[1]) ?? 0.0,
-              );
+              return LatLng(double.tryParse(coords[0]) ?? 0.0, double.tryParse(coords[1]) ?? 0.0);
             }).toList();
             _polygonPoints = points;
           } catch (e) {
@@ -475,14 +393,9 @@ class AddGeofenceScreenState extends State<AddGeofenceScreen> {
           maxLng = max(maxLng, point.longitude);
         }
 
-        final bounds = LatLngBounds(
-          LatLng(minLat, minLng),
-          LatLng(maxLat, maxLng),
-        );
+        final bounds = LatLngBounds(LatLng(minLat, minLng), LatLng(maxLat, maxLng));
 
-        _mapController.fitCamera(
-          CameraFit.bounds(bounds: bounds, padding: const EdgeInsets.all(50)),
-        );
+        _mapController.fitCamera(CameraFit.bounds(bounds: bounds, padding: const EdgeInsets.all(50)));
       } else {
         _mapController.move(_center, 14.0);
       }
@@ -506,24 +419,9 @@ class AddGeofenceScreenState extends State<AddGeofenceScreen> {
     _polygonMarkers.clear();
 
     if (_geofenceType == 'CIRCLE' && _circleCenter != null) {
-      _circles.add(
-        CircleMarker(
-          point: _circleCenter!,
-          radius: _radius,
-          color: Colors.blue.withValues(alpha: 0.3),
-          borderColor: Colors.blue,
-          borderStrokeWidth: 2,
-        ),
-      );
+      _circles.add(CircleMarker(point: _circleCenter!, radius: _radius, color: Colors.blue.withValues(alpha: 0.3), borderColor: Colors.blue, borderStrokeWidth: 2));
     } else if (_geofenceType == 'POLYGON' && _polygonPoints.isNotEmpty) {
-      _polygons.add(
-        Polygon(
-          points: _polygonPoints,
-          color: Colors.green.withValues(alpha: 0.3),
-          borderColor: Colors.green,
-          borderStrokeWidth: 2,
-        ),
-      );
+      _polygons.add(Polygon(points: _polygonPoints, color: Colors.green.withValues(alpha: 0.3), borderColor: Colors.green, borderStrokeWidth: 2));
       for (int i = 0; i < _polygonPoints.length; i++) {
         _polygonMarkers.add(
           Marker(
@@ -548,21 +446,13 @@ class AddGeofenceScreenState extends State<AddGeofenceScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          widget.geofence == null
-              ? 'sharedCreateGeofence'.tr
-              : '${'sharedEdit'.tr} ${'sharedGeofence'.tr}',
-        ),
+        title: Text(widget.geofence == null ? 'sharedCreateGeofence'.tr : '${'sharedEdit'.tr} ${'sharedGeofence'.tr}'),
         actions: [
           IconButton(
-            icon: Icon(
-              _mapType == AppMapType.satellite ? Icons.map : Icons.satellite,
-            ),
+            icon: Icon(_mapType == AppMapType.satellite ? Icons.map : Icons.satellite),
             onPressed: () {
               setState(() {
-                _mapType = _mapType == AppMapType.satellite
-                    ? AppMapType.openStreetMap
-                    : AppMapType.satellite;
+                _mapType = _mapType == AppMapType.satellite ? AppMapType.openStreetMap : AppMapType.satellite;
               });
             },
           ),
@@ -570,31 +460,20 @@ class AddGeofenceScreenState extends State<AddGeofenceScreen> {
             icon: const Icon(Icons.save),
             onPressed: () async {
               // <-- 注意：這裡改成了 async 函式
-              if (_formKey.currentState!.validate() &&
-                  ((_geofenceType == 'CIRCLE' && _circleCenter != null) ||
-                      (_geofenceType == 'POLYGON' &&
-                          _polygonPoints.length >= 3))) {
+              if (_formKey.currentState!.validate() && ((_geofenceType == 'CIRCLE' && _circleCenter != null) || (_geofenceType == 'POLYGON' && _polygonPoints.length >= 3))) {
                 _formKey.currentState!.save();
 
                 final String area;
                 if (_geofenceType == 'CIRCLE') {
-                  area =
-                      'CIRCLE(${_circleCenter!.latitude} ${_circleCenter!.longitude} $_radius)';
+                  area = 'CIRCLE(${_circleCenter!.latitude} ${_circleCenter!.longitude} $_radius)';
                 } else {
-                  final pointsString = _polygonPoints
-                      .map((p) => '${p.latitude} ${p.longitude}')
-                      .join(', ');
-                  final closedPointsString =
-                      '$pointsString, ${_polygonPoints.first.latitude} ${_polygonPoints.first.longitude}';
+                  final pointsString = _polygonPoints.map((p) => '${p.latitude} ${p.longitude}').join(', ');
+                  final closedPointsString = '$pointsString, ${_polygonPoints.first.latitude} ${_polygonPoints.first.longitude}';
 
                   area = 'POLYGON(($closedPointsString))';
                 }
 
-                final geofence = api.Geofence(
-                  id: widget.geofence?.id,
-                  name: _name,
-                  area: area,
-                );
+                final geofence = api.Geofence(id: widget.geofence?.id, name: _name, area: area);
 
                 // 【修正 1】在異步（Navigator.pop）之前先檢查 mounted
                 if (!mounted) return;
@@ -603,17 +482,7 @@ class AddGeofenceScreenState extends State<AddGeofenceScreen> {
                 // 【修正 2】在異步或可能出錯的地方，直接使用 State 自身的 context
                 // 並且 Linter 建議移除 'this.' 關鍵字，確保 mounted 性能優化追踪
                 if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      _geofenceType == 'CIRCLE'
-                          ? 'Please enter a name and select a point on the map.'
-                                .tr
-                          : 'Please enter a name and draw a polygon with at least 3 points.'
-                                .tr,
-                    ),
-                  ),
-                );
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_geofenceType == 'CIRCLE' ? 'Please enter a name and select a point on the map.'.tr : 'Please enter a name and draw a polygon with at least 3 points.'.tr)));
               }
             },
           ),
@@ -645,14 +514,8 @@ class AddGeofenceScreenState extends State<AddGeofenceScreen> {
                   initialValue: _geofenceType,
                   decoration: InputDecoration(labelText: 'sharedType'.tr),
                   items: [
-                    DropdownMenuItem(
-                      value: 'CIRCLE',
-                      child: Text('mapShapeCircle'.tr),
-                    ),
-                    DropdownMenuItem(
-                      value: 'POLYGON',
-                      child: Text('mapShapePolygon'.tr),
-                    ),
+                    DropdownMenuItem(value: 'CIRCLE', child: Text('mapShapeCircle'.tr)),
+                    DropdownMenuItem(value: 'POLYGON', child: Text('mapShapePolygon'.tr)),
                   ],
                   onChanged: (value) {
                     setState(() {
@@ -668,9 +531,7 @@ class AddGeofenceScreenState extends State<AddGeofenceScreen> {
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Text(
-                        '${'commandRadius'.tr}: ${_radius.round()} ${'sharedMeters'.tr}',
-                      ),
+                      Text('${'commandRadius'.tr}: ${_radius.round()} ${'sharedMeters'.tr}'),
                       Slider(
                         value: _radius,
                         min: 10,
@@ -685,18 +546,14 @@ class AddGeofenceScreenState extends State<AddGeofenceScreen> {
                         },
                       ),
                       const SizedBox(height: 20),
-                      Text(
-                        '${'mapShapeCircle'.tr}${_circleCenter == null ? ' (Tap map to select center)' : ''}',
-                      ),
+                      Text('${'mapShapeCircle'.tr}${_circleCenter == null ? ' (Tap map to select center)' : ''}'),
                     ],
                   ),
                 if (_geofenceType == 'POLYGON')
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Text(
-                        '${'mapShapePolygon'.tr}: ${_polygonPoints.length} points',
-                      ),
+                      Text('${'mapShapePolygon'.tr}: ${_polygonPoints.length} points'),
                       const SizedBox(height: 10),
                       Text('TapMapAddPolygon'.tr),
                       if (_polygonPoints.isNotEmpty)
@@ -721,25 +578,16 @@ class AddGeofenceScreenState extends State<AddGeofenceScreen> {
                   child: FlutterMap(
                     mapController: _mapController,
                     options: MapOptions(
-                      initialCenter:
-                          _circleCenter ??
-                          _polygonPoints.firstOrNull ??
-                          _center,
+                      initialCenter: _circleCenter ?? _polygonPoints.firstOrNull ?? _center,
                       initialZoom: 14.0,
-                      interactionOptions: const InteractionOptions(
-                        flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
-                      ),
+                      interactionOptions: const InteractionOptions(flags: InteractiveFlag.all & ~InteractiveFlag.rotate),
                       onTap: _onTap,
                       onMapReady: _onMapReady,
                     ),
                     children: [
                       TileLayer(
-                        urlTemplate: _mapType == AppMapType.openStreetMap
-                            ? _osmUrlTemplate
-                            : _satelliteUrlTemplate,
-                        subdomains: _mapType == AppMapType.openStreetMap
-                            ? _osmSubdomains
-                            : const [],
+                        urlTemplate: _mapType == AppMapType.openStreetMap ? _osmUrlTemplate : _satelliteUrlTemplate,
+                        subdomains: _mapType == AppMapType.openStreetMap ? _osmSubdomains : const [],
                         userAgentPackageName: 'com.trabcdefg.app',
                         tileProvider: _tileProvider,
                       ),

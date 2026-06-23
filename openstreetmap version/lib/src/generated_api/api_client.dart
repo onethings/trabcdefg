@@ -229,10 +229,14 @@ class ApiClient {
           return valueString == 'true' || valueString == '1';
         case 'DateTime':
           return value is DateTime ? value : DateTime.tryParse(value);
+        case 'Action':
+          return Action.fromJson(value);
         case 'Attribute':
           return Attribute.fromJson(value);
         case 'Calendar':
           return Calendar.fromJson(value);
+        case 'CombinedReportItem':
+          return CombinedReportItem.fromJson(value);
         case 'Command':
           return Command.fromJson(value);
         case 'CommandType':
@@ -253,12 +257,22 @@ class ApiClient {
           return Maintenance.fromJson(value);
         case 'Notification':
           return Notification.fromJson(value);
+        case 'NotificationMessage':
+          return NotificationMessage.fromJson(value);
         case 'NotificationType':
           return NotificationType.fromJson(value);
+        case 'Order':
+          return Order.fromJson(value);
         case 'Permission':
           return Permission.fromJson(value);
         case 'Position':
           return Position.fromJson(value);
+        case 'PostCommandsSend202Response':
+          return PostCommandsSend202Response.fromJson(value);
+        case 'QueuedCommand':
+          return QueuedCommand.fromJson(value);
+        case 'ReportGeofences':
+          return ReportGeofences.fromJson(value);
         case 'ReportStops':
           return ReportStops.fromJson(value);
         case 'ReportSummary':

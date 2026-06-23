@@ -20,15 +20,12 @@ class _AddMaintenanceScreenState extends State<AddMaintenanceScreen> {
   num? _start;
   num? _period;
   final Map<String, dynamic> _attributes = {};
-  final TextEditingController _attributeNameController =
-      TextEditingController();
-  final TextEditingController _attributeValueController =
-      TextEditingController();
+  final TextEditingController _attributeNameController = TextEditingController();
+  final TextEditingController _attributeValueController = TextEditingController();
   String _attributeType = 'String';
 
   void _addAttribute() {
-    if (_attributeNameController.text.isNotEmpty &&
-        _attributeValueController.text.isNotEmpty) {
+    if (_attributeNameController.text.isNotEmpty && _attributeValueController.text.isNotEmpty) {
       setState(() {
         dynamic value;
         switch (_attributeType) {
@@ -52,38 +49,23 @@ class _AddMaintenanceScreenState extends State<AddMaintenanceScreen> {
     if (_formKey.currentState!.validate()) {
       _formKey.currentState!.save();
 
-      final newMaintenance = api.Maintenance(
-        name: _name,
-        type: _type,
-        start: _start,
-        period: _period,
-        attributes: _attributes,
-      );
+      final newMaintenance = api.Maintenance(name: _name, type: _type, start: _start, period: _period, attributes: _attributes);
 
       try {
-        final traccarProvider = Provider.of<TraccarProvider>(
-          context,
-          listen: false,
-        );
+        final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
         // Correct way to instantiate MaintenanceApi with the authenticated client
         final maintenanceApi = api.MaintenanceApi(traccarProvider.apiClient);
-        await maintenanceApi.maintenancePost(newMaintenance);
+        await maintenanceApi.postMaintenance(newMaintenance);
 
         // Guard checking if the widget is still in the tree after the async gap
         if (!mounted) return;
 
         Navigator.of(context).pop(true);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('${'sharedMaintenance'.tr} ${'sharedSaved'.tr}'),
-          ),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${'sharedMaintenance'.tr} ${'sharedSaved'.tr}')));
       } catch (e) {
         if (!mounted) return;
 
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('${'errorGeneral'.tr}: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${'errorGeneral'.tr}: $e')));
       }
     }
   }
@@ -91,9 +73,7 @@ class _AddMaintenanceScreenState extends State<AddMaintenanceScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text('${'sharedAdd'.tr} ${'sharedMaintenance'.tr}'),
-      ),
+      appBar: AppBar(title: Text('${'sharedAdd'.tr} ${'sharedMaintenance'.tr}')),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(16.0),
@@ -102,9 +82,7 @@ class _AddMaintenanceScreenState extends State<AddMaintenanceScreen> {
             child: ListView(
               children: [
                 TextFormField(
-                  decoration: InputDecoration(
-                    labelText: '${'sharedName'.tr} (${'sharedRequired'.tr})',
-                  ),
+                  decoration: InputDecoration(labelText: '${'sharedName'.tr} (${'sharedRequired'.tr})'),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
                       return '${'sharedName'.tr} ${'sharedRequired'.tr}';
@@ -129,9 +107,7 @@ class _AddMaintenanceScreenState extends State<AddMaintenanceScreen> {
                   },
                 ),
                 TextFormField(
-                  decoration: InputDecoration(
-                    labelText: 'maintenancePeriod'.tr,
-                  ),
+                  decoration: InputDecoration(labelText: 'maintenancePeriod'.tr),
                   keyboardType: TextInputType.number,
                   onSaved: (value) {
                     _period = num.tryParse(value!);
@@ -157,28 +133,20 @@ class _AddMaintenanceScreenState extends State<AddMaintenanceScreen> {
                     Expanded(
                       child: TextFormField(
                         controller: _attributeNameController,
-                        decoration: InputDecoration(
-                          labelText:
-                              '${'sharedAttribute'.tr} ${'sharedName'.tr}',
-                        ),
+                        decoration: InputDecoration(labelText: '${'sharedAttribute'.tr} ${'sharedName'.tr}'),
                       ),
                     ),
                     const SizedBox(width: 10),
                     Expanded(
                       child: TextFormField(
                         controller: _attributeValueController,
-                        decoration: InputDecoration(
-                          labelText:
-                              '${'sharedAttribute'.tr} ${'stateValue'.tr}',
-                        ),
+                        decoration: InputDecoration(labelText: '${'sharedAttribute'.tr} ${'stateValue'.tr}'),
                       ),
                     ),
                     const SizedBox(width: 10),
                     DropdownButton<String>(
                       value: _attributeType,
-                      items: <String>['String', 'Number', 'Boolean'].map((
-                        String value,
-                      ) {
+                      items: <String>['String', 'Number', 'Boolean'].map((String value) {
                         String translatedValue;
                         if (value == 'String') {
                           translatedValue = 'sharedTypeString'.tr;
@@ -187,10 +155,7 @@ class _AddMaintenanceScreenState extends State<AddMaintenanceScreen> {
                         } else {
                           translatedValue = 'sharedTypeBoolean'.tr;
                         }
-                        return DropdownMenuItem<String>(
-                          value: value,
-                          child: Text(translatedValue),
-                        );
+                        return DropdownMenuItem<String>(value: value, child: Text(translatedValue));
                       }).toList(),
                       onChanged: (String? newValue) {
                         setState(() {
@@ -198,10 +163,7 @@ class _AddMaintenanceScreenState extends State<AddMaintenanceScreen> {
                         });
                       },
                     ),
-                    IconButton(
-                      icon: const Icon(Icons.add),
-                      onPressed: _addAttribute,
-                    ),
+                    IconButton(icon: const Icon(Icons.add), onPressed: _addAttribute),
                   ],
                 ),
               ],
@@ -220,10 +182,7 @@ class _AddMaintenanceScreenState extends State<AddMaintenanceScreen> {
               },
               child: Text('sharedCancel'.tr),
             ),
-            ElevatedButton(
-              onPressed: _saveMaintenance,
-              child: Text('sharedSave'.tr),
-            ),
+            ElevatedButton(onPressed: _saveMaintenance, child: Text('sharedSave'.tr)),
           ],
         ),
       ),

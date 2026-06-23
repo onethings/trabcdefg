@@ -16,6 +16,55 @@ class DevicesApi {
 
   final ApiClient apiClient;
 
+  /// Delete a Device
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [int] id (required):
+  Future<Response> deleteDevicesIdWithHttpInfo(
+    int id,
+  ) async {
+    // ignore: prefer_const_declarations
+    final path = r'/devices/{id}'.replaceAll('{id}', id.toString());
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>[];
+
+    return apiClient.invokeAPI(
+      path,
+      'DELETE',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+    );
+  }
+
+  /// Delete a Device
+  ///
+  /// Parameters:
+  ///
+  /// * [int] id (required):
+  Future<void> deleteDevicesId(
+    int id,
+  ) async {
+    final response = await deleteDevicesIdWithHttpInfo(
+      id,
+    );
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+  }
+
   /// Fetch a list of Devices
   ///
   /// Without any params, returns a list of the user's devices
@@ -35,11 +84,27 @@ class DevicesApi {
   ///
   /// * [String] uniqueId:
   ///   To fetch one or more devices. Multiple params can be passed like `uniqueId=333331&uniqieId=44442`
-  Future<Response> devicesGetWithHttpInfo({
+  ///
+  /// * [bool] excludeAttributes:
+  ///   Exclude attributes field from device payload
+  ///
+  /// * [int] limit:
+  ///   Limit the number of returned results
+  ///
+  /// * [int] offset:
+  ///   Offset for pagination
+  ///
+  /// * [String] keyword:
+  ///   Search keyword filter (searches name, uniqueId, phone, model, contact)
+  Future<Response> getDevicesWithHttpInfo({
     bool? all,
     int? userId,
     int? id,
     String? uniqueId,
+    bool? excludeAttributes,
+    int? limit,
+    int? offset,
+    String? keyword,
   }) async {
     // ignore: prefer_const_declarations
     final path = r'/devices';
@@ -62,6 +127,19 @@ class DevicesApi {
     }
     if (uniqueId != null) {
       queryParams.addAll(_queryParams('', 'uniqueId', uniqueId));
+    }
+    if (excludeAttributes != null) {
+      queryParams
+          .addAll(_queryParams('', 'excludeAttributes', excludeAttributes));
+    }
+    if (limit != null) {
+      queryParams.addAll(_queryParams('', 'limit', limit));
+    }
+    if (offset != null) {
+      queryParams.addAll(_queryParams('', 'offset', offset));
+    }
+    if (keyword != null) {
+      queryParams.addAll(_queryParams('', 'keyword', keyword));
     }
 
     const contentTypes = <String>[];
@@ -94,17 +172,37 @@ class DevicesApi {
   ///
   /// * [String] uniqueId:
   ///   To fetch one or more devices. Multiple params can be passed like `uniqueId=333331&uniqieId=44442`
-  Future<List<Device>?> devicesGet({
+  ///
+  /// * [bool] excludeAttributes:
+  ///   Exclude attributes field from device payload
+  ///
+  /// * [int] limit:
+  ///   Limit the number of returned results
+  ///
+  /// * [int] offset:
+  ///   Offset for pagination
+  ///
+  /// * [String] keyword:
+  ///   Search keyword filter (searches name, uniqueId, phone, model, contact)
+  Future<List<Device>?> getDevices({
     bool? all,
     int? userId,
     int? id,
     String? uniqueId,
+    bool? excludeAttributes,
+    int? limit,
+    int? offset,
+    String? keyword,
   }) async {
-    final response = await devicesGetWithHttpInfo(
+    final response = await getDevicesWithHttpInfo(
       all: all,
       userId: userId,
       id: id,
       uniqueId: uniqueId,
+      excludeAttributes: excludeAttributes,
+      limit: limit,
+      offset: offset,
+      keyword: keyword,
     );
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
@@ -123,71 +221,14 @@ class DevicesApi {
     return null;
   }
 
-  /// Update total distance and hours of the Device
+  /// Fetch a Device
   ///
   /// Note: This method returns the HTTP [Response].
   ///
   /// Parameters:
   ///
   /// * [int] id (required):
-  ///
-  /// * [DeviceAccumulators] body (required):
-  Future<Response> devicesIdAccumulatorsPutWithHttpInfo(
-    int id,
-    DeviceAccumulators body,
-  ) async {
-    // ignore: prefer_const_declarations
-    final path =
-        r'/devices/{id}/accumulators'.replaceAll('{id}', id.toString());
-
-    // ignore: prefer_final_locals
-    Object? postBody = body;
-
-    final queryParams = <QueryParam>[];
-    final headerParams = <String, String>{};
-    final formParams = <String, String>{};
-
-    const contentTypes = <String>['application/json'];
-
-    return apiClient.invokeAPI(
-      path,
-      'PUT',
-      queryParams,
-      postBody,
-      headerParams,
-      formParams,
-      contentTypes.isEmpty ? null : contentTypes.first,
-    );
-  }
-
-  /// Update total distance and hours of the Device
-  ///
-  /// Parameters:
-  ///
-  /// * [int] id (required):
-  ///
-  /// * [DeviceAccumulators] body (required):
-  Future<void> devicesIdAccumulatorsPut(
-    int id,
-    DeviceAccumulators body,
-  ) async {
-    final response = await devicesIdAccumulatorsPutWithHttpInfo(
-      id,
-      body,
-    );
-    if (response.statusCode >= HttpStatus.badRequest) {
-      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
-    }
-  }
-
-  /// Delete a Device
-  ///
-  /// Note: This method returns the HTTP [Response].
-  ///
-  /// Parameters:
-  ///
-  /// * [int] id (required):
-  Future<Response> devicesIdDeleteWithHttpInfo(
+  Future<Response> getDevicesIdWithHttpInfo(
     int id,
   ) async {
     // ignore: prefer_const_declarations
@@ -204,7 +245,7 @@ class DevicesApi {
 
     return apiClient.invokeAPI(
       path,
-      'DELETE',
+      'GET',
       queryParams,
       postBody,
       headerParams,
@@ -213,72 +254,16 @@ class DevicesApi {
     );
   }
 
-  /// Delete a Device
+  /// Fetch a Device
   ///
   /// Parameters:
   ///
   /// * [int] id (required):
-  Future<void> devicesIdDelete(
+  Future<Device?> getDevicesId(
     int id,
   ) async {
-    final response = await devicesIdDeleteWithHttpInfo(
+    final response = await getDevicesIdWithHttpInfo(
       id,
-    );
-    if (response.statusCode >= HttpStatus.badRequest) {
-      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
-    }
-  }
-
-  /// Update a Device
-  ///
-  /// Note: This method returns the HTTP [Response].
-  ///
-  /// Parameters:
-  ///
-  /// * [int] id (required):
-  ///
-  /// * [Device] body (required):
-  Future<Response> devicesIdPutWithHttpInfo(
-    int id,
-    Device body,
-  ) async {
-    // ignore: prefer_const_declarations
-    final path = r'/devices/{id}'.replaceAll('{id}', id.toString());
-
-    // ignore: prefer_final_locals
-    Object? postBody = body;
-
-    final queryParams = <QueryParam>[];
-    final headerParams = <String, String>{};
-    final formParams = <String, String>{};
-
-    const contentTypes = <String>['application/json'];
-
-    return apiClient.invokeAPI(
-      path,
-      'PUT',
-      queryParams,
-      postBody,
-      headerParams,
-      formParams,
-      contentTypes.isEmpty ? null : contentTypes.first,
-    );
-  }
-
-  /// Update a Device
-  ///
-  /// Parameters:
-  ///
-  /// * [int] id (required):
-  ///
-  /// * [Device] body (required):
-  Future<Device?> devicesIdPut(
-    int id,
-    Device body,
-  ) async {
-    final response = await devicesIdPutWithHttpInfo(
-      id,
-      body,
     );
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
@@ -302,15 +287,15 @@ class DevicesApi {
   ///
   /// Parameters:
   ///
-  /// * [Device] body (required):
-  Future<Response> devicesPostWithHttpInfo(
-    Device body,
+  /// * [Device] device (required):
+  Future<Response> postDevicesWithHttpInfo(
+    Device device,
   ) async {
     // ignore: prefer_const_declarations
     final path = r'/devices';
 
     // ignore: prefer_final_locals
-    Object? postBody = body;
+    Object? postBody = device;
 
     final queryParams = <QueryParam>[];
     final headerParams = <String, String>{};
@@ -333,12 +318,12 @@ class DevicesApi {
   ///
   /// Parameters:
   ///
-  /// * [Device] body (required):
-  Future<Device?> devicesPost(
-    Device body,
+  /// * [Device] device (required):
+  Future<Device?> postDevices(
+    Device device,
   ) async {
-    final response = await devicesPostWithHttpInfo(
-      body,
+    final response = await postDevicesWithHttpInfo(
+      device,
     );
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
@@ -354,5 +339,196 @@ class DevicesApi {
       ) as Device;
     }
     return null;
+  }
+
+  /// Upload/Update Device image
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [int] id (required):
+  ///
+  /// * [MultipartFile] body (required):
+  Future<Response> postDevicesIdImageWithHttpInfo(
+    int id,
+    MultipartFile body,
+  ) async {
+    // ignore: prefer_const_declarations
+    final path = r'/devices/{id}/image'.replaceAll('{id}', id.toString());
+
+    // ignore: prefer_final_locals
+    Object? postBody = body;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>['image/*'];
+
+    return apiClient.invokeAPI(
+      path,
+      'POST',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+    );
+  }
+
+  /// Upload/Update Device image
+  ///
+  /// Parameters:
+  ///
+  /// * [int] id (required):
+  ///
+  /// * [MultipartFile] body (required):
+  Future<String?> postDevicesIdImage(
+    int id,
+    MultipartFile body,
+  ) async {
+    final response = await postDevicesIdImageWithHttpInfo(
+      id,
+      body,
+    );
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty &&
+        response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(
+        await _decodeBodyBytes(response),
+        'String',
+      ) as String;
+    }
+    return null;
+  }
+
+  /// Update a Device
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [int] id (required):
+  ///
+  /// * [Device] device (required):
+  Future<Response> putDevicesIdWithHttpInfo(
+    int id,
+    Device device,
+  ) async {
+    // ignore: prefer_const_declarations
+    final path = r'/devices/{id}'.replaceAll('{id}', id.toString());
+
+    // ignore: prefer_final_locals
+    Object? postBody = device;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>['application/json'];
+
+    return apiClient.invokeAPI(
+      path,
+      'PUT',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+    );
+  }
+
+  /// Update a Device
+  ///
+  /// Parameters:
+  ///
+  /// * [int] id (required):
+  ///
+  /// * [Device] device (required):
+  Future<Device?> putDevicesId(
+    int id,
+    Device device,
+  ) async {
+    final response = await putDevicesIdWithHttpInfo(
+      id,
+      device,
+    );
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty &&
+        response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(
+        await _decodeBodyBytes(response),
+        'Device',
+      ) as Device;
+    }
+    return null;
+  }
+
+  /// Update total distance and hours of the Device
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [int] id (required):
+  ///
+  /// * [DeviceAccumulators] deviceAccumulators (required):
+  Future<Response> putDevicesIdAccumulatorsWithHttpInfo(
+    int id,
+    DeviceAccumulators deviceAccumulators,
+  ) async {
+    // ignore: prefer_const_declarations
+    final path =
+        r'/devices/{id}/accumulators'.replaceAll('{id}', id.toString());
+
+    // ignore: prefer_final_locals
+    Object? postBody = deviceAccumulators;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>['application/json'];
+
+    return apiClient.invokeAPI(
+      path,
+      'PUT',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+    );
+  }
+
+  /// Update total distance and hours of the Device
+  ///
+  /// Parameters:
+  ///
+  /// * [int] id (required):
+  ///
+  /// * [DeviceAccumulators] deviceAccumulators (required):
+  Future<void> putDevicesIdAccumulators(
+    int id,
+    DeviceAccumulators deviceAccumulators,
+  ) async {
+    final response = await putDevicesIdAccumulatorsWithHttpInfo(
+      id,
+      deviceAccumulators,
+    );
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
   }
 }

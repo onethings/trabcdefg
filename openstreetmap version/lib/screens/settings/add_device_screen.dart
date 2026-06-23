@@ -80,29 +80,22 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
       _formKey.currentState!.save();
 
       // Create the device object from the form data
-      final newDevice = api.Device(
-        id: widget.device?.id,
-        name: _name,
-        uniqueId: _uniqueId,
-      );
+      final newDevice = api.Device(id: widget.device?.id, name: _name, uniqueId: _uniqueId);
 
       try {
-        final traccarProvider = Provider.of<TraccarProvider>(
-          context,
-          listen: false,
-        );
+        final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
         final devicesApi = api.DevicesApi(traccarProvider.apiClient);
 
         if (widget.device == null) {
           // Add new device
-          await devicesApi.devicesPost(newDevice);
+          await devicesApi.postDevices(newDevice);
           // Return the new device object
           if (mounted) {
             Navigator.of(context).pop(newDevice);
           }
         } else {
           // Update existing device
-          await devicesApi.devicesIdPut(newDevice.id!, newDevice);
+          await devicesApi.putDevicesId(newDevice.id!, newDevice);
           // Return the updated device object
           if (mounted) {
             Navigator.of(context).pop(newDevice);
@@ -110,13 +103,7 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
         }
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'deviceSaveFailed'.trParams({'error': e.toString()}),
-              ),
-            ),
-          );
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('deviceSaveFailed'.trParams({'error': e.toString()}))));
         }
       }
     }
@@ -126,14 +113,8 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          widget.device == null
-              ? 'sharedAdd'.tr + 'sharedDevice'.tr
-              : 'sharedEdit'.tr + 'sharedDevice'.tr,
-        ),
-        actions: [
-          IconButton(icon: const Icon(Icons.save), onPressed: _saveDevice),
-        ],
+        title: Text(widget.device == null ? 'sharedAdd'.tr + 'sharedDevice'.tr : 'sharedEdit'.tr + 'sharedDevice'.tr),
+        actions: [IconButton(icon: const Icon(Icons.save), onPressed: _saveDevice)],
       ),
       body: SafeArea(
         child: Padding(

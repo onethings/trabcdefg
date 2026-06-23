@@ -32,6 +32,7 @@ class Position {
     this.attributes,
   });
 
+  /// Unique position record identifier
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -40,6 +41,7 @@ class Position {
   ///
   int? id;
 
+  /// Identifier of the device that reported this position
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -48,6 +50,7 @@ class Position {
   ///
   int? deviceId;
 
+  /// Device protocol name that produced the message
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -83,6 +86,7 @@ class Position {
   ///
   DateTime? serverTime;
 
+  /// Indicates whether the position was marked as valid by the device
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -91,6 +95,7 @@ class Position {
   ///
   bool? valid;
 
+  /// Latitude in decimal degrees
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -99,6 +104,7 @@ class Position {
   ///
   num? latitude;
 
+  /// Longitude in decimal degrees
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -107,6 +113,7 @@ class Position {
   ///
   num? longitude;
 
+  /// Altitude above sea level in meters
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -124,6 +131,7 @@ class Position {
   ///
   num? speed;
 
+  /// Heading in degrees (0-360) where 0 is true north
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -132,6 +140,7 @@ class Position {
   ///
   num? course;
 
+  /// Resolved reverse-geocoded address if available
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -140,6 +149,7 @@ class Position {
   ///
   String? address;
 
+  /// Estimated positional accuracy in meters when provided
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -148,6 +158,7 @@ class Position {
   ///
   num? accuracy;
 
+  /// Network metadata (e.g. cell or Wi‑Fi data) supplied by the device
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -156,8 +167,10 @@ class Position {
   ///
   Object? network;
 
+  /// List of geofence ids applicable to this position
   List<int> geofenceIds;
 
+  /// Custom key-value attributes sent by the device or enrichments
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated

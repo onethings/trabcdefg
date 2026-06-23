@@ -23,6 +23,7 @@ class Notification {
     this.attributes,
   });
 
+  /// Unique identifier for the notification
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -31,6 +32,7 @@ class Notification {
   ///
   int? id;
 
+  /// Notification category such as geofenceEnter or ignitionOn
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -39,14 +41,10 @@ class Notification {
   ///
   String? type;
 
-  ///
-  /// Please note: This property should have been non-nullable! Since the specification file
-  /// does not include a default value (using the "default:" property), however, the generated
-  /// source code must fall back to having a nullable type.
-  /// Consider adding a "default:" property in the specification file to hide this note.
-  ///
+  /// User-defined text describing the notification
   String? description;
 
+  /// Whether the notification triggers regardless of schedule
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -55,6 +53,7 @@ class Notification {
   ///
   bool? always;
 
+  /// Identifier of the command to send when the notification triggers
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -63,6 +62,7 @@ class Notification {
   ///
   int? commandId;
 
+  /// Comma-separated delivery channels (for example, web, mail)
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -71,6 +71,7 @@ class Notification {
   ///
   String? notificators;
 
+  /// Calendar identifier restricting when the notification is active
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -79,6 +80,7 @@ class Notification {
   ///
   int? calendarId;
 
+  /// Additional custom attributes used by notificators or templates
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated

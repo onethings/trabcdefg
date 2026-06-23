@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
-// import 'package:trabcdefg/services/auth_service.dart';
-// import 'package:get/get.dart';
+import 'package:trabcdefg/services/auth_service.dart';
+import 'package:trabcdefg/src/generated_api/api.dart' as api;
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -25,29 +25,60 @@ class _SplashScreenState extends State<SplashScreen> {
     final prefs = await SharedPreferences.getInstance();
     final jSessionId = prefs.getString('jSessionId');
 
-    // ✨ 修正點 1：在 await 之後、使用 context 之前，先檢查 mounted
     if (!mounted) return;
 
     if (jSessionId != null) {
-      // 現在可以安全地使用 context 了
       final traccarProvider = context.read<TraccarProvider>();
       try {
         traccarProvider.setSessionId(jSessionId);
-        await traccarProvider.fetchInitialData().timeout(
-          const Duration(seconds: 10),
-        );
+        await traccarProvider.fetchInitialData().timeout(const Duration(seconds: 10));
 
         if (mounted) {
           Navigator.of(context).pushReplacementNamed('/main');
         }
       } catch (e) {
-        if (mounted) {
-          debugPrint('Splash screen fetch error: $e');
-          Navigator.of(context).pushReplacementNamed('/main');
+        if (!mounted) return;
+        debugPrint('Splash screen fetch error: $e');
+
+        // Session expired (401) — try auto-relogin with saved credentials
+        if (e is api.ApiException && e.code == 401) {
+          debugPrint('Session expired. Attempting auto-relogin...');
+
+          final authService = context.read<AuthService>();
+          final reloginOk = await authService.tryAutoRelogin();
+
+          if (reloginOk) {
+            // Relogin succeeded — we have a fresh session. Retry data fetch.
+            final freshSessionId = prefs.getString('jSessionId');
+            if (freshSessionId != null) {
+              traccarProvider.setSessionId(freshSessionId);
+              try {
+                await traccarProvider.fetchInitialData().timeout(const Duration(seconds: 10));
+                if (mounted) {
+                  Navigator.of(context).pushReplacementNamed('/main');
+                  return;
+                }
+              } catch (retryError) {
+                debugPrint('Retry after auto-relogin also failed: $retryError');
+              }
+            }
+          }
+        }
+
+        // Auto-relogin failed or it wasn't a 401 — go to login or main
+        if (e is api.ApiException && e.code == 401) {
+          // Auth error and auto-relogin failed → login screen
+          if (mounted) {
+            Navigator.of(context).pushReplacementNamed('/login');
+          }
+        } else {
+          // Network or other error → still try the main screen
+          if (mounted) {
+            Navigator.of(context).pushReplacementNamed('/main');
+          }
         }
       }
     } else {
-      // 這裡本來就有寫，沒問題！
       if (mounted) {
         Navigator.of(context).pushReplacementNamed('/login');
       }
@@ -56,11 +87,6 @@ class _SplashScreenState extends State<SplashScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(
-      body: Center(
-        // Show a loading indicator while the session status is being checked
-        child: CircularProgressIndicator(),
-      ),
-    );
+    return const Scaffold(body: Center(child: CircularProgressIndicator()));
   }
 }

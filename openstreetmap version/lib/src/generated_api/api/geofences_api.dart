@@ -16,6 +16,55 @@ class GeofencesApi {
 
   final ApiClient apiClient;
 
+  /// Delete a Geofence
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [int] id (required):
+  Future<Response> deleteGeofencesIdWithHttpInfo(
+    int id,
+  ) async {
+    // ignore: prefer_const_declarations
+    final path = r'/geofences/{id}'.replaceAll('{id}', id.toString());
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>[];
+
+    return apiClient.invokeAPI(
+      path,
+      'DELETE',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+    );
+  }
+
+  /// Delete a Geofence
+  ///
+  /// Parameters:
+  ///
+  /// * [int] id (required):
+  Future<void> deleteGeofencesId(
+    int id,
+  ) async {
+    final response = await deleteGeofencesIdWithHttpInfo(
+      id,
+    );
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+  }
+
   /// Fetch a list of Geofences
   ///
   /// Without params, it returns a list of Geofences the user has access to
@@ -37,12 +86,24 @@ class GeofencesApi {
   ///   Standard users can use this only with _groupId_s, they have access to
   ///
   /// * [bool] refresh:
-  Future<Response> geofencesGetWithHttpInfo({
+  ///
+  /// * [int] limit:
+  ///   Limit the number of returned results
+  ///
+  /// * [int] offset:
+  ///   Offset for pagination
+  ///
+  /// * [String] keyword:
+  ///   Search keyword filter
+  Future<Response> getGeofencesWithHttpInfo({
     bool? all,
     int? userId,
     int? deviceId,
     int? groupId,
     bool? refresh,
+    int? limit,
+    int? offset,
+    String? keyword,
   }) async {
     // ignore: prefer_const_declarations
     final path = r'/geofences';
@@ -68,6 +129,15 @@ class GeofencesApi {
     }
     if (refresh != null) {
       queryParams.addAll(_queryParams('', 'refresh', refresh));
+    }
+    if (limit != null) {
+      queryParams.addAll(_queryParams('', 'limit', limit));
+    }
+    if (offset != null) {
+      queryParams.addAll(_queryParams('', 'offset', offset));
+    }
+    if (keyword != null) {
+      queryParams.addAll(_queryParams('', 'keyword', keyword));
     }
 
     const contentTypes = <String>[];
@@ -102,19 +172,34 @@ class GeofencesApi {
   ///   Standard users can use this only with _groupId_s, they have access to
   ///
   /// * [bool] refresh:
-  Future<List<Geofence>?> geofencesGet({
+  ///
+  /// * [int] limit:
+  ///   Limit the number of returned results
+  ///
+  /// * [int] offset:
+  ///   Offset for pagination
+  ///
+  /// * [String] keyword:
+  ///   Search keyword filter
+  Future<List<Geofence>?> getGeofences({
     bool? all,
     int? userId,
     int? deviceId,
     int? groupId,
     bool? refresh,
+    int? limit,
+    int? offset,
+    String? keyword,
   }) async {
-    final response = await geofencesGetWithHttpInfo(
+    final response = await getGeofencesWithHttpInfo(
       all: all,
       userId: userId,
       deviceId: deviceId,
       groupId: groupId,
       refresh: refresh,
+      limit: limit,
+      offset: offset,
+      keyword: keyword,
     );
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
@@ -133,14 +218,14 @@ class GeofencesApi {
     return null;
   }
 
-  /// Delete a Geofence
+  /// Fetch a Geofence
   ///
   /// Note: This method returns the HTTP [Response].
   ///
   /// Parameters:
   ///
   /// * [int] id (required):
-  Future<Response> geofencesIdDeleteWithHttpInfo(
+  Future<Response> getGeofencesIdWithHttpInfo(
     int id,
   ) async {
     // ignore: prefer_const_declarations
@@ -157,7 +242,7 @@ class GeofencesApi {
 
     return apiClient.invokeAPI(
       path,
-      'DELETE',
+      'GET',
       queryParams,
       postBody,
       headerParams,
@@ -166,20 +251,91 @@ class GeofencesApi {
     );
   }
 
-  /// Delete a Geofence
+  /// Fetch a Geofence
   ///
   /// Parameters:
   ///
   /// * [int] id (required):
-  Future<void> geofencesIdDelete(
+  Future<Geofence?> getGeofencesId(
     int id,
   ) async {
-    final response = await geofencesIdDeleteWithHttpInfo(
+    final response = await getGeofencesIdWithHttpInfo(
       id,
     );
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty &&
+        response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(
+        await _decodeBodyBytes(response),
+        'Geofence',
+      ) as Geofence;
+    }
+    return null;
+  }
+
+  /// Create a Geofence
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [Geofence] geofence (required):
+  Future<Response> postGeofencesWithHttpInfo(
+    Geofence geofence,
+  ) async {
+    // ignore: prefer_const_declarations
+    final path = r'/geofences';
+
+    // ignore: prefer_final_locals
+    Object? postBody = geofence;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>['application/json'];
+
+    return apiClient.invokeAPI(
+      path,
+      'POST',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+    );
+  }
+
+  /// Create a Geofence
+  ///
+  /// Parameters:
+  ///
+  /// * [Geofence] geofence (required):
+  Future<Geofence?> postGeofences(
+    Geofence geofence,
+  ) async {
+    final response = await postGeofencesWithHttpInfo(
+      geofence,
+    );
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty &&
+        response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(
+        await _decodeBodyBytes(response),
+        'Geofence',
+      ) as Geofence;
+    }
+    return null;
   }
 
   /// Update a Geofence
@@ -190,16 +346,16 @@ class GeofencesApi {
   ///
   /// * [int] id (required):
   ///
-  /// * [Geofence] body (required):
-  Future<Response> geofencesIdPutWithHttpInfo(
+  /// * [Geofence] geofence (required):
+  Future<Response> putGeofencesIdWithHttpInfo(
     int id,
-    Geofence body,
+    Geofence geofence,
   ) async {
     // ignore: prefer_const_declarations
     final path = r'/geofences/{id}'.replaceAll('{id}', id.toString());
 
     // ignore: prefer_final_locals
-    Object? postBody = body;
+    Object? postBody = geofence;
 
     final queryParams = <QueryParam>[];
     final headerParams = <String, String>{};
@@ -224,74 +380,14 @@ class GeofencesApi {
   ///
   /// * [int] id (required):
   ///
-  /// * [Geofence] body (required):
-  Future<Geofence?> geofencesIdPut(
+  /// * [Geofence] geofence (required):
+  Future<Geofence?> putGeofencesId(
     int id,
-    Geofence body,
+    Geofence geofence,
   ) async {
-    final response = await geofencesIdPutWithHttpInfo(
+    final response = await putGeofencesIdWithHttpInfo(
       id,
-      body,
-    );
-    if (response.statusCode >= HttpStatus.badRequest) {
-      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
-    }
-    // When a remote server returns no body with a status of 204, we shall not decode it.
-    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
-    // FormatException when trying to decode an empty string.
-    if (response.body.isNotEmpty &&
-        response.statusCode != HttpStatus.noContent) {
-      return await apiClient.deserializeAsync(
-        await _decodeBodyBytes(response),
-        'Geofence',
-      ) as Geofence;
-    }
-    return null;
-  }
-
-  /// Create a Geofence
-  ///
-  /// Note: This method returns the HTTP [Response].
-  ///
-  /// Parameters:
-  ///
-  /// * [Geofence] body (required):
-  Future<Response> geofencesPostWithHttpInfo(
-    Geofence body,
-  ) async {
-    // ignore: prefer_const_declarations
-    final path = r'/geofences';
-
-    // ignore: prefer_final_locals
-    Object? postBody = body;
-
-    final queryParams = <QueryParam>[];
-    final headerParams = <String, String>{};
-    final formParams = <String, String>{};
-
-    const contentTypes = <String>['application/json'];
-
-    return apiClient.invokeAPI(
-      path,
-      'POST',
-      queryParams,
-      postBody,
-      headerParams,
-      formParams,
-      contentTypes.isEmpty ? null : contentTypes.first,
-    );
-  }
-
-  /// Create a Geofence
-  ///
-  /// Parameters:
-  ///
-  /// * [Geofence] body (required):
-  Future<Geofence?> geofencesPost(
-    Geofence body,
-  ) async {
-    final response = await geofencesPostWithHttpInfo(
-      body,
+      geofence,
     );
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));

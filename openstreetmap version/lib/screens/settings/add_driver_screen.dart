@@ -88,31 +88,24 @@ class _AddDriverScreenState extends State<AddDriverScreen> {
       );
 
       try {
-        final traccarProvider = Provider.of<TraccarProvider>(
-          context,
-          listen: false,
-        );
+        final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
         final driversApi = api.DriversApi(traccarProvider.apiClient);
 
         // 4. Branch logic: PUT to update, POST to create
         if (_isEditing) {
-          await driversApi.driversIdPut(widget.driver!.id!, driverData);
+          await driversApi.putDriversId(widget.driver!.id!, driverData);
         } else {
-          await driversApi.driversPost(driverData);
+          await driversApi.postDrivers(driverData);
         }
 
         if (!mounted) return;
 
         Navigator.of(context).pop(true);
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('sharedSaved'.tr)));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('sharedSaved'.tr)));
       } catch (e) {
         if (!mounted) return;
 
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Failed to save driver: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to save driver: $e')));
       }
     }
   }
@@ -135,9 +128,7 @@ class _AddDriverScreenState extends State<AddDriverScreen> {
               children: [
                 TextFormField(
                   initialValue: widget.driver?.name, // Pre-populates on edit
-                  decoration: InputDecoration(
-                    labelText: '${'sharedName'.tr} (${'sharedRequired'.tr})',
-                  ),
+                  decoration: InputDecoration(labelText: '${'sharedName'.tr} (${'sharedRequired'.tr})'),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
                       return 'Please enter a name.'.tr;
@@ -149,12 +140,8 @@ class _AddDriverScreenState extends State<AddDriverScreen> {
                   },
                 ),
                 TextFormField(
-                  initialValue:
-                      widget.driver?.uniqueId, // Pre-populates on edit
-                  decoration: InputDecoration(
-                    labelText:
-                        '${'positionDriverUniqueId'.tr} (${'sharedRequired'.tr})',
-                  ),
+                  initialValue: widget.driver?.uniqueId, // Pre-populates on edit
+                  decoration: InputDecoration(labelText: '${'positionDriverUniqueId'.tr} (${'sharedRequired'.tr})'),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
                       return 'Please enter an identifier.'.tr;
@@ -166,21 +153,13 @@ class _AddDriverScreenState extends State<AddDriverScreen> {
                   },
                 ),
                 const SizedBox(height: 20),
-                Text(
-                  'sharedAttributes'.tr,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+                Text('sharedAttributes'.tr, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 10),
                 ..._attributes.asMap().entries.map((entry) {
                   final index = entry.key;
                   final attribute = entry.value;
                   return Card(
-                    key: ValueKey(
-                      index,
-                    ), // Helps Flutter track dynamically drawn items cleanly
+                    key: ValueKey(index), // Helps Flutter track dynamically drawn items cleanly
                     child: Padding(
                       padding: const EdgeInsets.all(8.0),
                       child: Column(
@@ -189,10 +168,7 @@ class _AddDriverScreenState extends State<AddDriverScreen> {
                             children: [
                               Expanded(
                                 child: TextFormField(
-                                  decoration: InputDecoration(
-                                    labelText:
-                                        '${'sharedAttribute'.tr} ${'sharedName'.tr}',
-                                  ),
+                                  decoration: InputDecoration(labelText: '${'sharedAttribute'.tr} ${'sharedName'.tr}'),
                                   initialValue: attribute['name'],
                                   onSaved: (value) {
                                     attribute['name'] = value!;
@@ -207,44 +183,29 @@ class _AddDriverScreenState extends State<AddDriverScreen> {
                                     attribute['type'] = newValue!;
                                   });
                                 },
-                                items: <String>['String', 'Number', 'Boolean']
-                                    .map<DropdownMenuItem<String>>((
-                                      String value,
-                                    ) {
-                                      String translatedValue;
-                                      switch (value) {
-                                        case 'String':
-                                          translatedValue =
-                                              'sharedTypeString'.tr;
-                                          break;
-                                        case 'Number':
-                                          translatedValue =
-                                              'sharedTypeNumber'.tr;
-                                          break;
-                                        case 'Boolean':
-                                          translatedValue =
-                                              'sharedTypeBoolean'.tr;
-                                          break;
-                                        default:
-                                          translatedValue = value;
-                                      }
-                                      return DropdownMenuItem<String>(
-                                        value: value,
-                                        child: Text(translatedValue),
-                                      );
-                                    })
-                                    .toList(),
+                                items: <String>['String', 'Number', 'Boolean'].map<DropdownMenuItem<String>>((String value) {
+                                  String translatedValue;
+                                  switch (value) {
+                                    case 'String':
+                                      translatedValue = 'sharedTypeString'.tr;
+                                      break;
+                                    case 'Number':
+                                      translatedValue = 'sharedTypeNumber'.tr;
+                                      break;
+                                    case 'Boolean':
+                                      translatedValue = 'sharedTypeBoolean'.tr;
+                                      break;
+                                    default:
+                                      translatedValue = value;
+                                  }
+                                  return DropdownMenuItem<String>(value: value, child: Text(translatedValue));
+                                }).toList(),
                               ),
-                              IconButton(
-                                icon: const Icon(Icons.remove_circle),
-                                onPressed: () => _removeAttribute(index),
-                              ),
+                              IconButton(icon: const Icon(Icons.remove_circle), onPressed: () => _removeAttribute(index)),
                             ],
                           ),
                           TextFormField(
-                            decoration: InputDecoration(
-                              labelText: 'stateValue'.tr,
-                            ),
+                            decoration: InputDecoration(labelText: 'stateValue'.tr),
                             initialValue: attribute['value'],
                             onSaved: (value) {
                               attribute['value'] = value!;
@@ -255,11 +216,7 @@ class _AddDriverScreenState extends State<AddDriverScreen> {
                     ),
                   );
                 }),
-                ElevatedButton.icon(
-                  onPressed: _addAttribute,
-                  icon: const Icon(Icons.add),
-                  label: Text('${'sharedAdd'.tr} ${'sharedAttribute'.tr}'),
-                ),
+                ElevatedButton.icon(onPressed: _addAttribute, icon: const Icon(Icons.add), label: Text('${'sharedAdd'.tr} ${'sharedAttribute'.tr}')),
               ],
             ),
           ),
@@ -276,10 +233,7 @@ class _AddDriverScreenState extends State<AddDriverScreen> {
               },
               child: Text('sharedCancel'.tr),
             ),
-            ElevatedButton(
-              onPressed: _saveDriver,
-              child: Text('sharedSave'.tr),
-            ),
+            ElevatedButton(onPressed: _saveDriver, child: Text('sharedSave'.tr)),
           ],
         ),
       ),

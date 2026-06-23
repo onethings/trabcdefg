@@ -12,13 +12,13 @@ enum AppMapType {
 
 class MapStyleProvider with ChangeNotifier {
   static const String _prefKey = 'preferred_map_type';
-  
+
   AppMapType _mapType = AppMapType.bright;
   AppMapType get mapType => _mapType;
 
   // Style Strings/Assets
   static const String _streetStyle = "assets/styles/liberty.json";
-  static const String _brightStyle = "assets/styles/versatiles-style.json";//streets-v4.json";//"assets/styles/versatiles-style.json";
+  static const String _brightStyle = "assets/styles/liberty.json";
   static const String _darkStyle = "assets/styles/dark.json";
   static const String _terrainStyle = "assets/styles/fiord.json";
   static const String _hybridStyle = "assets/styles/positron.json";
@@ -45,14 +45,14 @@ class MapStyleProvider with ChangeNotifier {
     if (_mapType == type) return;
     _mapType = type;
     notifyListeners();
-    
+
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(_prefKey, type.index);
   }
 
   String getStyle(Brightness brightness) {
     bool isDark = brightness == Brightness.dark;
-    
+
     switch (_mapType) {
       case AppMapType.bright:
         return isDark ? _darkStyle : _brightStyle;

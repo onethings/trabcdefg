@@ -24,14 +24,11 @@ class _DriversScreenState extends State<DriversScreen> {
   }
 
   void _fetchDrivers() {
-    final traccarProvider = Provider.of<TraccarProvider>(
-      context,
-      listen: false,
-    );
+    final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
     // Correct way to instantiate DriversApi with the authenticated client
     final driversApi = api.DriversApi(traccarProvider.apiClient);
     setState(() {
-      _driversFuture = driversApi.driversGet();
+      _driversFuture = driversApi.getDrivers();
     });
   }
 
@@ -45,9 +42,7 @@ class _DriversScreenState extends State<DriversScreen> {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           } else if (snapshot.hasError) {
-            return Center(
-              child: Text('${'errorGeneral'.tr}: ${snapshot.error}'),
-            );
+            return Center(child: Text('${'errorGeneral'.tr}: ${snapshot.error}'));
           } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
             return Center(child: Text('sharedNoData'.tr));
           } else {
@@ -64,13 +59,7 @@ class _DriversScreenState extends State<DriversScreen> {
                       IconButton(
                         icon: const Icon(Icons.edit),
                         onPressed: () async {
-                          final updatedDriver = await Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) =>
-                                  AddDriverScreen(driver: driver),
-                            ),
-                          );
+                          final updatedDriver = await Navigator.push(context, MaterialPageRoute(builder: (context) => AddDriverScreen(driver: driver)));
 
                           if (updatedDriver != null && mounted) {
                             _fetchDrivers();
@@ -81,26 +70,15 @@ class _DriversScreenState extends State<DriversScreen> {
                         icon: const Icon(Icons.delete),
                         onPressed: () async {
                           // FIX: Capture dependencies from BuildContext BEFORE the async gaps
-                          final traccarProvider = Provider.of<TraccarProvider>(
-                            context,
-                            listen: false,
-                          );
+                          final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
 
                           final bool? confirm = await Get.dialog<bool>(
                             AlertDialog(
                               title: const Text('Delete Driver?'),
-                              content: Text(
-                                'Are you sure you want to delete ${driver.name}?',
-                              ),
+                              content: Text('Are you sure you want to delete ${driver.name}?'),
                               actions: [
-                                TextButton(
-                                  onPressed: () => Get.back(result: false),
-                                  child: Text('sharedCancel'.tr),
-                                ),
-                                TextButton(
-                                  onPressed: () => Get.back(result: true),
-                                  child: const Text('Delete'),
-                                ),
+                                TextButton(onPressed: () => Get.back(result: false), child: Text('sharedCancel'.tr)),
+                                TextButton(onPressed: () => Get.back(result: true), child: const Text('Delete')),
                               ],
                             ),
                           );
@@ -108,24 +86,16 @@ class _DriversScreenState extends State<DriversScreen> {
                           if (confirm == true && driver.id != null) {
                             try {
                               // Uses the safely predefined variable instead of 'context' across the gap
-                              final driversApi = api.DriversApi(
-                                traccarProvider.apiClient,
-                              );
-                              await driversApi.driversIdDelete(driver.id!);
+                              final driversApi = api.DriversApi(traccarProvider.apiClient);
+                              await driversApi.deleteDriversId(driver.id!);
 
                               // FIX: Ensure the widget is still in the tree before setting state/refreshing
                               if (!mounted) return;
                               _fetchDrivers();
 
-                              Get.snackbar(
-                                'Success',
-                                'Driver deleted successfully',
-                              );
+                              Get.snackbar('Success', 'Driver deleted successfully');
                             } catch (e) {
-                              Get.snackbar(
-                                'Error',
-                                'Failed to delete driver: $e',
-                              );
+                              Get.snackbar('Error', 'Failed to delete driver: $e');
                             }
                           }
                         },
@@ -140,10 +110,7 @@ class _DriversScreenState extends State<DriversScreen> {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () async {
-          final newDriver = await Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const AddDriverScreen()),
-          );
+          final newDriver = await Navigator.push(context, MaterialPageRoute(builder: (context) => const AddDriverScreen()));
           if (newDriver != null) {
             _fetchDrivers();
           }

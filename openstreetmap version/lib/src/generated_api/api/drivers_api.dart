@@ -16,6 +16,55 @@ class DriversApi {
 
   final ApiClient apiClient;
 
+  /// Delete a Driver
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [int] id (required):
+  Future<Response> deleteDriversIdWithHttpInfo(
+    int id,
+  ) async {
+    // ignore: prefer_const_declarations
+    final path = r'/drivers/{id}'.replaceAll('{id}', id.toString());
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>[];
+
+    return apiClient.invokeAPI(
+      path,
+      'DELETE',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+    );
+  }
+
+  /// Delete a Driver
+  ///
+  /// Parameters:
+  ///
+  /// * [int] id (required):
+  Future<void> deleteDriversId(
+    int id,
+  ) async {
+    final response = await deleteDriversIdWithHttpInfo(
+      id,
+    );
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+  }
+
   /// Fetch a list of Drivers
   ///
   /// Without params, it returns a list of Drivers the user has access to
@@ -37,12 +86,24 @@ class DriversApi {
   ///   Standard users can use this only with _groupId_s, they have access to
   ///
   /// * [bool] refresh:
-  Future<Response> driversGetWithHttpInfo({
+  ///
+  /// * [int] limit:
+  ///   Limit the number of returned results
+  ///
+  /// * [int] offset:
+  ///   Offset for pagination
+  ///
+  /// * [String] keyword:
+  ///   Search keyword filter
+  Future<Response> getDriversWithHttpInfo({
     bool? all,
     int? userId,
     int? deviceId,
     int? groupId,
     bool? refresh,
+    int? limit,
+    int? offset,
+    String? keyword,
   }) async {
     // ignore: prefer_const_declarations
     final path = r'/drivers';
@@ -68,6 +129,15 @@ class DriversApi {
     }
     if (refresh != null) {
       queryParams.addAll(_queryParams('', 'refresh', refresh));
+    }
+    if (limit != null) {
+      queryParams.addAll(_queryParams('', 'limit', limit));
+    }
+    if (offset != null) {
+      queryParams.addAll(_queryParams('', 'offset', offset));
+    }
+    if (keyword != null) {
+      queryParams.addAll(_queryParams('', 'keyword', keyword));
     }
 
     const contentTypes = <String>[];
@@ -102,19 +172,34 @@ class DriversApi {
   ///   Standard users can use this only with _groupId_s, they have access to
   ///
   /// * [bool] refresh:
-  Future<List<Driver>?> driversGet({
+  ///
+  /// * [int] limit:
+  ///   Limit the number of returned results
+  ///
+  /// * [int] offset:
+  ///   Offset for pagination
+  ///
+  /// * [String] keyword:
+  ///   Search keyword filter
+  Future<List<Driver>?> getDrivers({
     bool? all,
     int? userId,
     int? deviceId,
     int? groupId,
     bool? refresh,
+    int? limit,
+    int? offset,
+    String? keyword,
   }) async {
-    final response = await driversGetWithHttpInfo(
+    final response = await getDriversWithHttpInfo(
       all: all,
       userId: userId,
       deviceId: deviceId,
       groupId: groupId,
       refresh: refresh,
+      limit: limit,
+      offset: offset,
+      keyword: keyword,
     );
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
@@ -133,14 +218,14 @@ class DriversApi {
     return null;
   }
 
-  /// Delete a Driver
+  /// Fetch a Driver
   ///
   /// Note: This method returns the HTTP [Response].
   ///
   /// Parameters:
   ///
   /// * [int] id (required):
-  Future<Response> driversIdDeleteWithHttpInfo(
+  Future<Response> getDriversIdWithHttpInfo(
     int id,
   ) async {
     // ignore: prefer_const_declarations
@@ -157,7 +242,7 @@ class DriversApi {
 
     return apiClient.invokeAPI(
       path,
-      'DELETE',
+      'GET',
       queryParams,
       postBody,
       headerParams,
@@ -166,20 +251,91 @@ class DriversApi {
     );
   }
 
-  /// Delete a Driver
+  /// Fetch a Driver
   ///
   /// Parameters:
   ///
   /// * [int] id (required):
-  Future<void> driversIdDelete(
+  Future<Driver?> getDriversId(
     int id,
   ) async {
-    final response = await driversIdDeleteWithHttpInfo(
+    final response = await getDriversIdWithHttpInfo(
       id,
     );
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty &&
+        response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(
+        await _decodeBodyBytes(response),
+        'Driver',
+      ) as Driver;
+    }
+    return null;
+  }
+
+  /// Create a Driver
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [Driver] driver (required):
+  Future<Response> postDriversWithHttpInfo(
+    Driver driver,
+  ) async {
+    // ignore: prefer_const_declarations
+    final path = r'/drivers';
+
+    // ignore: prefer_final_locals
+    Object? postBody = driver;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>['application/json'];
+
+    return apiClient.invokeAPI(
+      path,
+      'POST',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+    );
+  }
+
+  /// Create a Driver
+  ///
+  /// Parameters:
+  ///
+  /// * [Driver] driver (required):
+  Future<Driver?> postDrivers(
+    Driver driver,
+  ) async {
+    final response = await postDriversWithHttpInfo(
+      driver,
+    );
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty &&
+        response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(
+        await _decodeBodyBytes(response),
+        'Driver',
+      ) as Driver;
+    }
+    return null;
   }
 
   /// Update a Driver
@@ -190,16 +346,16 @@ class DriversApi {
   ///
   /// * [int] id (required):
   ///
-  /// * [Driver] body (required):
-  Future<Response> driversIdPutWithHttpInfo(
+  /// * [Driver] driver (required):
+  Future<Response> putDriversIdWithHttpInfo(
     int id,
-    Driver body,
+    Driver driver,
   ) async {
     // ignore: prefer_const_declarations
     final path = r'/drivers/{id}'.replaceAll('{id}', id.toString());
 
     // ignore: prefer_final_locals
-    Object? postBody = body;
+    Object? postBody = driver;
 
     final queryParams = <QueryParam>[];
     final headerParams = <String, String>{};
@@ -224,74 +380,14 @@ class DriversApi {
   ///
   /// * [int] id (required):
   ///
-  /// * [Driver] body (required):
-  Future<Driver?> driversIdPut(
+  /// * [Driver] driver (required):
+  Future<Driver?> putDriversId(
     int id,
-    Driver body,
+    Driver driver,
   ) async {
-    final response = await driversIdPutWithHttpInfo(
+    final response = await putDriversIdWithHttpInfo(
       id,
-      body,
-    );
-    if (response.statusCode >= HttpStatus.badRequest) {
-      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
-    }
-    // When a remote server returns no body with a status of 204, we shall not decode it.
-    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
-    // FormatException when trying to decode an empty string.
-    if (response.body.isNotEmpty &&
-        response.statusCode != HttpStatus.noContent) {
-      return await apiClient.deserializeAsync(
-        await _decodeBodyBytes(response),
-        'Driver',
-      ) as Driver;
-    }
-    return null;
-  }
-
-  /// Create a Driver
-  ///
-  /// Note: This method returns the HTTP [Response].
-  ///
-  /// Parameters:
-  ///
-  /// * [Driver] body (required):
-  Future<Response> driversPostWithHttpInfo(
-    Driver body,
-  ) async {
-    // ignore: prefer_const_declarations
-    final path = r'/drivers';
-
-    // ignore: prefer_final_locals
-    Object? postBody = body;
-
-    final queryParams = <QueryParam>[];
-    final headerParams = <String, String>{};
-    final formParams = <String, String>{};
-
-    const contentTypes = <String>['application/json'];
-
-    return apiClient.invokeAPI(
-      path,
-      'POST',
-      queryParams,
-      postBody,
-      headerParams,
-      formParams,
-      contentTypes.isEmpty ? null : contentTypes.first,
-    );
-  }
-
-  /// Create a Driver
-  ///
-  /// Parameters:
-  ///
-  /// * [Driver] body (required):
-  Future<Driver?> driversPost(
-    Driver body,
-  ) async {
-    final response = await driversPostWithHttpInfo(
-      body,
+      driver,
     );
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));

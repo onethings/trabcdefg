@@ -24,14 +24,11 @@ class _SavedCommandsScreenState extends State<SavedCommandsScreen> {
   }
 
   void _fetchCommands() {
-    final traccarProvider = Provider.of<TraccarProvider>(
-      context,
-      listen: false,
-    );
+    final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
     // Correct way to instantiate CommandsApi with the authenticated client
     final commandsApi = api.CommandsApi(traccarProvider.apiClient);
     setState(() {
-      _commandsFuture = commandsApi.commandsGet();
+      _commandsFuture = commandsApi.getCommands();
     });
   }
 
@@ -45,9 +42,7 @@ class _SavedCommandsScreenState extends State<SavedCommandsScreen> {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return Center(child: Text('sharedLoading'.tr));
           } else if (snapshot.hasError) {
-            return Center(
-              child: Text('${'errorGeneral'.tr}: ${snapshot.error}'),
-            );
+            return Center(child: Text('${'errorGeneral'.tr}: ${snapshot.error}'));
           } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
             return Center(child: Text('sharedNoData'.tr));
           } else {
@@ -60,12 +55,7 @@ class _SavedCommandsScreenState extends State<SavedCommandsScreen> {
                 if (attributes != null && attributes is Map) {
                   isSms = attributes['sendSms'] == true;
                 }
-                return ListTile(
-                  title: Text(command.description ?? 'sharedNoDescription'.tr),
-                  subtitle: Text(
-                    '${'sharedType'.tr}: ${command.type ?? 'N/A'} | ${'sharedSendSms'.tr}: ${isSms ? 'sharedYes'.tr : 'sharedNo'.tr}',
-                  ),
-                );
+                return ListTile(title: Text(command.description ?? 'sharedNoDescription'.tr), subtitle: Text('${'sharedType'.tr}: ${command.type ?? 'N/A'} | ${'sharedSendSms'.tr}: ${isSms ? 'sharedYes'.tr : 'sharedNo'.tr}'));
               },
             );
           }
@@ -73,12 +63,7 @@ class _SavedCommandsScreenState extends State<SavedCommandsScreen> {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () async {
-          final newCommand = await Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => const AddSavedCommandScreen(),
-            ),
-          );
+          final newCommand = await Navigator.push(context, MaterialPageRoute(builder: (context) => const AddSavedCommandScreen()));
           if (newCommand != null) {
             _fetchCommands();
           }

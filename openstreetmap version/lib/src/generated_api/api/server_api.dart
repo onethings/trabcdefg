@@ -18,7 +18,7 @@ class ServerApi {
   /// Fetch Server information
   ///
   /// Note: This method returns the HTTP [Response].
-  Future<Response> serverGetWithHttpInfo() async {
+  Future<Response> getServerWithHttpInfo() async {
     // ignore: prefer_const_declarations
     final path = r'/server';
 
@@ -43,16 +43,15 @@ class ServerApi {
   }
 
   /// Fetch Server information
-  Future<Server?> serverGet() async {
-    final response = await serverGetWithHttpInfo();
+  Future<Server?> getServer() async {
+    final response = await getServerWithHttpInfo();
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
     // When a remote server returns no body with a status of 204, we shall not decode it.
     // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
     // FormatException when trying to decode an empty string.
-    if (response.body.isNotEmpty &&
-        response.statusCode != HttpStatus.noContent) {
+    if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
       return await apiClient.deserializeAsync(
         await _decodeBodyBytes(response),
         'Server',
@@ -61,21 +60,304 @@ class ServerApi {
     return null;
   }
 
+  /// Fetch cache diagnostics
+  ///
+  /// Note: This method returns the HTTP [Response].
+  Future<Response> getServerCacheWithHttpInfo() async {
+    // ignore: prefer_const_declarations
+    final path = r'/server/cache';
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>[];
+
+    return apiClient.invokeAPI(
+      path,
+      'GET',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+    );
+  }
+
+  /// Fetch cache diagnostics
+  Future<String?> getServerCache() async {
+    final response = await getServerCacheWithHttpInfo();
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(
+        await _decodeBodyBytes(response),
+        'String',
+      ) as String;
+    }
+    return null;
+  }
+
+  /// Trigger garbage collection
+  ///
+  /// Note: This method returns the HTTP [Response].
+  Future<Response> getServerGcWithHttpInfo() async {
+    // ignore: prefer_const_declarations
+    final path = r'/server/gc';
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>[];
+
+    return apiClient.invokeAPI(
+      path,
+      'GET',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+    );
+  }
+
+  /// Trigger garbage collection
+  Future<void> getServerGc() async {
+    final response = await getServerGcWithHttpInfo();
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+  }
+
+  /// Reverse geocode coordinates
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [double] latitude (required):
+  ///
+  /// * [double] longitude (required):
+  Future<Response> getServerGeocodeWithHttpInfo(
+    double latitude,
+    double longitude,
+  ) async {
+    // ignore: prefer_const_declarations
+    final path = r'/server/geocode';
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    queryParams.addAll(_queryParams('', 'latitude', latitude));
+    queryParams.addAll(_queryParams('', 'longitude', longitude));
+
+    const contentTypes = <String>[];
+
+    return apiClient.invokeAPI(
+      path,
+      'GET',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+    );
+  }
+
+  /// Reverse geocode coordinates
+  ///
+  /// Parameters:
+  ///
+  /// * [double] latitude (required):
+  ///
+  /// * [double] longitude (required):
+  Future<String?> getServerGeocode(
+    double latitude,
+    double longitude,
+  ) async {
+    final response = await getServerGeocodeWithHttpInfo(
+      latitude,
+      longitude,
+    );
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(
+        await _decodeBodyBytes(response),
+        'String',
+      ) as String;
+    }
+    return null;
+  }
+
+  /// Fetch available timezones
+  ///
+  /// Note: This method returns the HTTP [Response].
+  Future<Response> getServerTimezonesWithHttpInfo() async {
+    // ignore: prefer_const_declarations
+    final path = r'/server/timezones';
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>[];
+
+    return apiClient.invokeAPI(
+      path,
+      'GET',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+    );
+  }
+
+  /// Fetch available timezones
+  Future<List<String>?> getServerTimezones() async {
+    final response = await getServerTimezonesWithHttpInfo();
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
+      final responseBody = await _decodeBodyBytes(response);
+      return (await apiClient.deserializeAsync(responseBody, 'List<String>') as List).cast<String>().toList(growable: false);
+    }
+    return null;
+  }
+
+  /// Upload a server file
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [String] path (required):
+  ///
+  /// * [MultipartFile] body (required):
+  Future<Response> postServerFilePathWithHttpInfo(
+    String path,
+    MultipartFile body,
+  ) async {
+    // ignore: prefer_const_declarations
+    final _path = r'/server/file/{path}'.replaceAll('{path}', path);
+
+    // ignore: prefer_final_locals
+    Object? postBody = body;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>['application/octet-stream'];
+
+    return apiClient.invokeAPI(
+      _path,
+      'POST',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+    );
+  }
+
+  /// Upload a server file
+  ///
+  /// Parameters:
+  ///
+  /// * [String] path (required):
+  ///
+  /// * [MultipartFile] body (required):
+  Future<void> postServerFilePath(
+    String path,
+    MultipartFile body,
+  ) async {
+    final response = await postServerFilePathWithHttpInfo(
+      path,
+      body,
+    );
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+  }
+
+  /// Reboot the server process
+  ///
+  /// Note: This method returns the HTTP [Response].
+  Future<Response> postServerRebootWithHttpInfo() async {
+    // ignore: prefer_const_declarations
+    final path = r'/server/reboot';
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>[];
+
+    return apiClient.invokeAPI(
+      path,
+      'POST',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+    );
+  }
+
+  /// Reboot the server process
+  Future<void> postServerReboot() async {
+    final response = await postServerRebootWithHttpInfo();
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+  }
+
   /// Update Server information
   ///
   /// Note: This method returns the HTTP [Response].
   ///
   /// Parameters:
   ///
-  /// * [Server] body (required):
-  Future<Response> serverPutWithHttpInfo(
-    Server body,
+  /// * [Server] server (required):
+  Future<Response> putServerWithHttpInfo(
+    Server server,
   ) async {
     // ignore: prefer_const_declarations
     final path = r'/server';
 
     // ignore: prefer_final_locals
-    Object? postBody = body;
+    Object? postBody = server;
 
     final queryParams = <QueryParam>[];
     final headerParams = <String, String>{};
@@ -98,12 +380,12 @@ class ServerApi {
   ///
   /// Parameters:
   ///
-  /// * [Server] body (required):
-  Future<Server?> serverPut(
-    Server body,
+  /// * [Server] server (required):
+  Future<Server?> putServer(
+    Server server,
   ) async {
-    final response = await serverPutWithHttpInfo(
-      body,
+    final response = await putServerWithHttpInfo(
+      server,
     );
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
@@ -111,8 +393,7 @@ class ServerApi {
     // When a remote server returns no body with a status of 204, we shall not decode it.
     // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
     // FormatException when trying to decode an empty string.
-    if (response.body.isNotEmpty &&
-        response.statusCode != HttpStatus.noContent) {
+    if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
       return await apiClient.deserializeAsync(
         await _decodeBodyBytes(response),
         'Server',

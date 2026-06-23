@@ -24,12 +24,7 @@ class _AddCalendarScreenState extends State<AddCalendarScreen> {
   TimeOfDay? _toTime;
 
   Future<void> _selectDate(BuildContext context, bool isFromDate) async {
-    final DateTime? picked = await showDatePicker(
-      context: context,
-      initialDate: DateTime.now(),
-      firstDate: DateTime(2000),
-      lastDate: DateTime(2101),
-    );
+    final DateTime? picked = await showDatePicker(context: context, initialDate: DateTime.now(), firstDate: DateTime(2000), lastDate: DateTime(2101));
     if (picked != null) {
       setState(() {
         if (isFromDate) {
@@ -42,10 +37,7 @@ class _AddCalendarScreenState extends State<AddCalendarScreen> {
   }
 
   Future<void> _selectTime(BuildContext context, bool isFromTime) async {
-    final TimeOfDay? picked = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay.now(),
-    );
+    final TimeOfDay? picked = await showTimePicker(context: context, initialTime: TimeOfDay.now());
     if (picked != null) {
       setState(() {
         if (isFromTime) {
@@ -62,25 +54,18 @@ class _AddCalendarScreenState extends State<AddCalendarScreen> {
       _formKey.currentState!.save();
       final newCalendar = api.Calendar(name: _name);
       try {
-        final traccarProvider = Provider.of<TraccarProvider>(
-          context,
-          listen: false,
-        );
+        final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
         final calendarsApi = api.CalendarsApi(traccarProvider.apiClient);
-        await calendarsApi.calendarsPost(newCalendar);
+        await calendarsApi.postCalendars(newCalendar);
 
         // Guard checking if the widget is still attached to the widget tree
         if (!mounted) return;
 
         Navigator.of(context).pop(true);
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('sharedSaved'.tr)));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('sharedSaved'.tr)));
       } catch (e) {
         if (!mounted) return;
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Failed to add calendar: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to add calendar: $e')));
       }
     }
   }
@@ -97,9 +82,7 @@ class _AddCalendarScreenState extends State<AddCalendarScreen> {
             child: ListView(
               children: [
                 TextFormField(
-                  decoration: InputDecoration(
-                    labelText: '${'sharedName'.tr} (${'sharedRequired'.tr})',
-                  ),
+                  decoration: InputDecoration(labelText: '${'sharedName'.tr} (${'sharedRequired'.tr})'),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
                       return 'Please enter a name.'.tr;
@@ -114,14 +97,9 @@ class _AddCalendarScreenState extends State<AddCalendarScreen> {
                 Text('sharedType'.tr),
                 DropdownButtonFormField<String>(
                   initialValue: _type,
-                  items: <String>['calendarSimple'.tr, 'calendarRecurrence'.tr]
-                      .map((String value) {
-                        return DropdownMenuItem<String>(
-                          value: value,
-                          child: Text(value),
-                        );
-                      })
-                      .toList(),
+                  items: <String>['calendarSimple'.tr, 'calendarRecurrence'.tr].map((String value) {
+                    return DropdownMenuItem<String>(value: value, child: Text(value));
+                  }).toList(),
                   onChanged: (String? newValue) {
                     setState(() {
                       _type = newValue!;
@@ -132,18 +110,9 @@ class _AddCalendarScreenState extends State<AddCalendarScreen> {
                 Text('calendarRecurrence'.tr),
                 DropdownButtonFormField<String>(
                   initialValue: _recurrence,
-                  items:
-                      <String>[
-                        'calendarDaily'.tr,
-                        'calendarOnce'.tr,
-                        'calendarWeekly'.tr,
-                        'calendarMonthly'.tr,
-                      ].map((String value) {
-                        return DropdownMenuItem<String>(
-                          value: value,
-                          child: Text(value),
-                        );
-                      }).toList(),
+                  items: <String>['calendarDaily'.tr, 'calendarOnce'.tr, 'calendarWeekly'.tr, 'calendarMonthly'.tr].map((String value) {
+                    return DropdownMenuItem<String>(value: value, child: Text(value));
+                  }).toList(),
                   onChanged: (String? newValue) {
                     setState(() {
                       _recurrence = newValue!;
@@ -154,28 +123,10 @@ class _AddCalendarScreenState extends State<AddCalendarScreen> {
                 Row(
                   children: [
                     Expanded(
-                      child: ListTile(
-                        title: Text('reportFrom'.tr),
-                        subtitle: Text(
-                          _fromDate == null
-                              ? 'sharedNoData'.tr
-                              : _fromDate.toString().split(' ')[0],
-                        ),
-                        trailing: const Icon(Icons.calendar_today),
-                        onTap: () => _selectDate(context, true),
-                      ),
+                      child: ListTile(title: Text('reportFrom'.tr), subtitle: Text(_fromDate == null ? 'sharedNoData'.tr : _fromDate.toString().split(' ')[0]), trailing: const Icon(Icons.calendar_today), onTap: () => _selectDate(context, true)),
                     ),
                     Expanded(
-                      child: ListTile(
-                        title: Text('reportTo'.tr),
-                        subtitle: Text(
-                          _toDate == null
-                              ? 'sharedNoData'.tr
-                              : _toDate.toString().split(' ')[0],
-                        ),
-                        trailing: const Icon(Icons.calendar_today),
-                        onTap: () => _selectDate(context, false),
-                      ),
+                      child: ListTile(title: Text('reportTo'.tr), subtitle: Text(_toDate == null ? 'sharedNoData'.tr : _toDate.toString().split(' ')[0]), trailing: const Icon(Icons.calendar_today), onTap: () => _selectDate(context, false)),
                     ),
                   ],
                 ),
@@ -183,28 +134,10 @@ class _AddCalendarScreenState extends State<AddCalendarScreen> {
                 Row(
                   children: [
                     Expanded(
-                      child: ListTile(
-                        title: Text('reportStartTime'.tr),
-                        subtitle: Text(
-                          _fromTime == null
-                              ? 'sharedNoData'.tr
-                              : _fromTime!.format(context),
-                        ),
-                        trailing: const Icon(Icons.access_time),
-                        onTap: () => _selectTime(context, true),
-                      ),
+                      child: ListTile(title: Text('reportStartTime'.tr), subtitle: Text(_fromTime == null ? 'sharedNoData'.tr : _fromTime!.format(context)), trailing: const Icon(Icons.access_time), onTap: () => _selectTime(context, true)),
                     ),
                     Expanded(
-                      child: ListTile(
-                        title: Text('reportEndTime'.tr),
-                        subtitle: Text(
-                          _toTime == null
-                              ? 'sharedNoData'.tr
-                              : _toTime!.format(context),
-                        ),
-                        trailing: const Icon(Icons.access_time),
-                        onTap: () => _selectTime(context, false),
-                      ),
+                      child: ListTile(title: Text('reportEndTime'.tr), subtitle: Text(_toTime == null ? 'sharedNoData'.tr : _toTime!.format(context)), trailing: const Icon(Icons.access_time), onTap: () => _selectTime(context, false)),
                     ),
                   ],
                 ),
@@ -224,10 +157,7 @@ class _AddCalendarScreenState extends State<AddCalendarScreen> {
               },
               child: Text('sharedCancel'.tr),
             ),
-            ElevatedButton(
-              onPressed: _saveCalendar,
-              child: Text('sharedSave'.tr),
-            ),
+            ElevatedButton(onPressed: _saveCalendar, child: Text('sharedSave'.tr)),
           ],
         ),
       ),

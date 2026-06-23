@@ -11,8 +11,7 @@ class ComputedAttributesScreen extends StatefulWidget {
   const ComputedAttributesScreen({super.key});
 
   @override
-  State<ComputedAttributesScreen> createState() =>
-      _ComputedAttributesScreenState();
+  State<ComputedAttributesScreen> createState() => _ComputedAttributesScreenState();
 }
 
 class _ComputedAttributesScreenState extends State<ComputedAttributesScreen> {
@@ -25,14 +24,11 @@ class _ComputedAttributesScreenState extends State<ComputedAttributesScreen> {
   }
 
   void _fetchComputedAttributes() {
-    final traccarProvider = Provider.of<TraccarProvider>(
-      context,
-      listen: false,
-    );
+    final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
     // Correct way to instantiate AttributesApi with the authenticated client
     final attributesApi = api.AttributesApi(traccarProvider.apiClient);
     setState(() {
-      _computedAttributesFuture = attributesApi.attributesComputedGet();
+      _computedAttributesFuture = attributesApi.getAttributesComputed();
     });
   }
 
@@ -46,9 +42,7 @@ class _ComputedAttributesScreenState extends State<ComputedAttributesScreen> {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return Center(child: Text('sharedLoading'.tr));
           } else if (snapshot.hasError) {
-            return Center(
-              child: Text('${'errorGeneral'.tr}: ${snapshot.error}'),
-            );
+            return Center(child: Text('${'errorGeneral'.tr}: ${snapshot.error}'));
           } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
             return Center(child: Text('sharedNoData'.tr));
           } else {
@@ -57,12 +51,8 @@ class _ComputedAttributesScreenState extends State<ComputedAttributesScreen> {
               itemBuilder: (context, index) {
                 final attribute = snapshot.data![index];
                 return ListTile(
-                  title: Text(
-                    attribute.description ?? 'sharedNoDescription'.tr,
-                  ),
-                  subtitle: Text(
-                    '${'sharedAttribute'.tr}: ${attribute.attribute} | ${'sharedExpression'.tr}: ${attribute.expression} | ${'sharedType'.tr}: ${attribute.type}',
-                  ),
+                  title: Text(attribute.description ?? 'sharedNoDescription'.tr),
+                  subtitle: Text('${'sharedAttribute'.tr}: ${attribute.attribute} | ${'sharedExpression'.tr}: ${attribute.expression} | ${'sharedType'.tr}: ${attribute.type}'),
                 );
               },
             );
@@ -71,12 +61,7 @@ class _ComputedAttributesScreenState extends State<ComputedAttributesScreen> {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () async {
-          final newAttribute = await Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => const AddComputedAttributeScreen(),
-            ),
-          );
+          final newAttribute = await Navigator.push(context, MaterialPageRoute(builder: (context) => const AddComputedAttributeScreen()));
           if (newAttribute != null) {
             _fetchComputedAttributes();
           }

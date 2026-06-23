@@ -32,7 +32,7 @@ class PositionsApi {
   ///
   /// * [DateTime] to (required):
   ///   in ISO 8601 format. eg. `1963-11-22T18:30:00Z`
-  Future<Response> positionsDeleteWithHttpInfo(
+  Future<Response> deletePositionsWithHttpInfo(
     int deviceId,
     DateTime from,
     DateTime to,
@@ -78,12 +78,12 @@ class PositionsApi {
   ///
   /// * [DateTime] to (required):
   ///   in ISO 8601 format. eg. `1963-11-22T18:30:00Z`
-  Future<void> positionsDelete(
+  Future<void> deletePositions(
     int deviceId,
     DateTime from,
     DateTime to,
   ) async {
-    final response = await positionsDeleteWithHttpInfo(
+    final response = await deletePositionsWithHttpInfo(
       deviceId,
       from,
       to,
@@ -93,7 +93,56 @@ class PositionsApi {
     }
   }
 
-  /// Fetches a list of Positions
+  /// Delete a Position
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [int] id (required):
+  Future<Response> deletePositionsIdWithHttpInfo(
+    int id,
+  ) async {
+    // ignore: prefer_const_declarations
+    final path = r'/positions/{id}'.replaceAll('{id}', id.toString());
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>[];
+
+    return apiClient.invokeAPI(
+      path,
+      'DELETE',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+    );
+  }
+
+  /// Delete a Position
+  ///
+  /// Parameters:
+  ///
+  /// * [int] id (required):
+  Future<void> deletePositionsId(
+    int id,
+  ) async {
+    final response = await deletePositionsIdWithHttpInfo(
+      id,
+    );
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+  }
+
+  /// Fetch a list of Positions
   ///
   /// We strongly recommend using [Traccar WebSocket API](https://www.traccar.org/traccar-api/) instead of periodically polling positions endpoint. Without any params, it returns a list of last known positions for all the user's Devices. _from_ and _to_ fields are not required with _id_.
   ///
@@ -112,7 +161,7 @@ class PositionsApi {
   ///
   /// * [int] id:
   ///   To fetch one or more positions. Multiple params can be passed like `id=31&id=42`
-  Future<Response> positionsGetWithHttpInfo({
+  Future<Response> getPositionsWithHttpInfo({
     int? deviceId,
     DateTime? from,
     DateTime? to,
@@ -154,7 +203,7 @@ class PositionsApi {
     );
   }
 
-  /// Fetches a list of Positions
+  /// Fetch a list of Positions
   ///
   /// We strongly recommend using [Traccar WebSocket API](https://www.traccar.org/traccar-api/) instead of periodically polling positions endpoint. Without any params, it returns a list of last known positions for all the user's Devices. _from_ and _to_ fields are not required with _id_.
   ///
@@ -171,13 +220,13 @@ class PositionsApi {
   ///
   /// * [int] id:
   ///   To fetch one or more positions. Multiple params can be passed like `id=31&id=42`
-  Future<List<Position>?> positionsGet({
+  Future<List<Position>?> getPositions({
     int? deviceId,
     DateTime? from,
     DateTime? to,
     int? id,
   }) async {
-    final response = await positionsGetWithHttpInfo(
+    final response = await getPositionsWithHttpInfo(
       deviceId: deviceId,
       from: from,
       to: to,
@@ -200,18 +249,27 @@ class PositionsApi {
     return null;
   }
 
-  /// Delete a Position
+  /// Export Positions as CSV
   ///
   /// Note: This method returns the HTTP [Response].
   ///
   /// Parameters:
   ///
-  /// * [int] id (required):
-  Future<Response> positionsIdDeleteWithHttpInfo(
-    int id,
-  ) async {
+  /// * [int] deviceId (required):
+  ///
+  /// * [DateTime] from (required):
+  ///
+  /// * [DateTime] to (required):
+  ///
+  /// * [int] geofenceId:
+  Future<Response> getPositionsCsvWithHttpInfo(
+    int deviceId,
+    DateTime from,
+    DateTime to, {
+    int? geofenceId,
+  }) async {
     // ignore: prefer_const_declarations
-    final path = r'/positions/{id}'.replaceAll('{id}', id.toString());
+    final path = r'/positions/csv';
 
     // ignore: prefer_final_locals
     Object? postBody;
@@ -220,11 +278,18 @@ class PositionsApi {
     final headerParams = <String, String>{};
     final formParams = <String, String>{};
 
+    queryParams.addAll(_queryParams('', 'deviceId', deviceId));
+    if (geofenceId != null) {
+      queryParams.addAll(_queryParams('', 'geofenceId', geofenceId));
+    }
+    queryParams.addAll(_queryParams('', 'from', from));
+    queryParams.addAll(_queryParams('', 'to', to));
+
     const contentTypes = <String>[];
 
     return apiClient.invokeAPI(
       path,
-      'DELETE',
+      'GET',
       queryParams,
       postBody,
       headerParams,
@@ -233,19 +298,198 @@ class PositionsApi {
     );
   }
 
-  /// Delete a Position
+  /// Export Positions as CSV
   ///
   /// Parameters:
   ///
-  /// * [int] id (required):
-  Future<void> positionsIdDelete(
-    int id,
-  ) async {
-    final response = await positionsIdDeleteWithHttpInfo(
-      id,
+  /// * [int] deviceId (required):
+  ///
+  /// * [DateTime] from (required):
+  ///
+  /// * [DateTime] to (required):
+  ///
+  /// * [int] geofenceId:
+  Future<MultipartFile?> getPositionsCsv(
+    int deviceId,
+    DateTime from,
+    DateTime to, {
+    int? geofenceId,
+  }) async {
+    final response = await getPositionsCsvWithHttpInfo(
+      deviceId,
+      from,
+      to,
+      geofenceId: geofenceId,
     );
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty &&
+        response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(
+        await _decodeBodyBytes(response),
+        'MultipartFile',
+      ) as MultipartFile;
+    }
+    return null;
+  }
+
+  /// Export Positions as GPX
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [int] deviceId (required):
+  ///
+  /// * [DateTime] from (required):
+  ///
+  /// * [DateTime] to (required):
+  Future<Response> getPositionsGpxWithHttpInfo(
+    int deviceId,
+    DateTime from,
+    DateTime to,
+  ) async {
+    // ignore: prefer_const_declarations
+    final path = r'/positions/gpx';
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    queryParams.addAll(_queryParams('', 'deviceId', deviceId));
+    queryParams.addAll(_queryParams('', 'from', from));
+    queryParams.addAll(_queryParams('', 'to', to));
+
+    const contentTypes = <String>[];
+
+    return apiClient.invokeAPI(
+      path,
+      'GET',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+    );
+  }
+
+  /// Export Positions as GPX
+  ///
+  /// Parameters:
+  ///
+  /// * [int] deviceId (required):
+  ///
+  /// * [DateTime] from (required):
+  ///
+  /// * [DateTime] to (required):
+  Future<MultipartFile?> getPositionsGpx(
+    int deviceId,
+    DateTime from,
+    DateTime to,
+  ) async {
+    final response = await getPositionsGpxWithHttpInfo(
+      deviceId,
+      from,
+      to,
+    );
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty &&
+        response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(
+        await _decodeBodyBytes(response),
+        'MultipartFile',
+      ) as MultipartFile;
+    }
+    return null;
+  }
+
+  /// Export Positions as KML
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [int] deviceId (required):
+  ///
+  /// * [DateTime] from (required):
+  ///
+  /// * [DateTime] to (required):
+  Future<Response> getPositionsKmlWithHttpInfo(
+    int deviceId,
+    DateTime from,
+    DateTime to,
+  ) async {
+    // ignore: prefer_const_declarations
+    final path = r'/positions/kml';
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    queryParams.addAll(_queryParams('', 'deviceId', deviceId));
+    queryParams.addAll(_queryParams('', 'from', from));
+    queryParams.addAll(_queryParams('', 'to', to));
+
+    const contentTypes = <String>[];
+
+    return apiClient.invokeAPI(
+      path,
+      'GET',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+    );
+  }
+
+  /// Export Positions as KML
+  ///
+  /// Parameters:
+  ///
+  /// * [int] deviceId (required):
+  ///
+  /// * [DateTime] from (required):
+  ///
+  /// * [DateTime] to (required):
+  Future<MultipartFile?> getPositionsKml(
+    int deviceId,
+    DateTime from,
+    DateTime to,
+  ) async {
+    final response = await getPositionsKmlWithHttpInfo(
+      deviceId,
+      from,
+      to,
+    );
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty &&
+        response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(
+        await _decodeBodyBytes(response),
+        'MultipartFile',
+      ) as MultipartFile;
+    }
+    return null;
   }
 }

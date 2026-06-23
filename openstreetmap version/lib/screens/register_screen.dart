@@ -32,39 +32,24 @@ class _RegisterScreenState extends State<RegisterScreen> {
     });
 
     try {
-      final usersApi = api.UsersApi(
-        Provider.of<TraccarProvider>(context, listen: false).apiClient,
-      );
+      final usersApi = api.UsersApi(Provider.of<TraccarProvider>(context, listen: false).apiClient);
 
-      final newUser = api.User(
-        name: _nameController.text,
-        email: _emailController.text,
-        password: _passwordController.text,
-      );
+      final newUser = api.User(name: _nameController.text, email: _emailController.text, password: _passwordController.text);
 
-      await usersApi.usersPost(newUser);
+      await usersApi.postUsers(newUser);
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Account created successfully! You can now log in.'),
-          ),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Account created successfully! You can now log in.')));
         Navigator.of(context).pop();
       }
     } on api.ApiException catch (e) {
       if (mounted) {
-        String errorMessage =
-            'API error: Status Code ${e.code}, Details: ${e.toString()}';
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(errorMessage)));
+        String errorMessage = 'API error: Status Code ${e.code}, Details: ${e.toString()}';
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(errorMessage)));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('An unexpected error occurred: $e')),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('An unexpected error occurred: $e')));
       }
     } finally {
       if (mounted) {
@@ -97,12 +82,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               obscureText: true,
             ),
             const SizedBox(height: 20),
-            _isLoading
-                ? const CircularProgressIndicator()
-                : ElevatedButton(
-                    onPressed: _register,
-                    child: const Text('Register'),
-                  ),
+            _isLoading ? const CircularProgressIndicator() : ElevatedButton(onPressed: _register, child: const Text('Register')),
           ],
         ),
       ),

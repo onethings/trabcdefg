@@ -19,6 +19,7 @@ class Calendar {
     this.attributes,
   });
 
+  /// Unique calendar identifier
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -27,6 +28,7 @@ class Calendar {
   ///
   int? id;
 
+  /// Calendar display name
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -44,6 +46,7 @@ class Calendar {
   ///
   String? data;
 
+  /// Custom calendar attributes
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated

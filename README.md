@@ -27,11 +27,11 @@ samples, guidance on mobile development, and a full API reference.
 
 AndroidManifest.xml example in AndroidManifest.txt.
 
--------------------------------------------now using 6.10.0
+-------------------------------------------now using 6.14.5 - 23/Jun/2026
 for using latest api, Download from https://www.traccar.org/api-reference/openapi.yaml and place on /lib/openapi.yaml
 
 run command in terminal <br />
-dart pub run build_runner build
+dart run build_runner build --delete-conflicting-outputs
 
 
 in /lib/src/generated_api/lib/ folder, 

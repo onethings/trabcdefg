@@ -36,6 +36,7 @@ class User {
     this.attributes,
   });
 
+  /// Unique user identifier
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -44,6 +45,7 @@ class User {
   ///
   int? id;
 
+  /// User display name
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -52,6 +54,7 @@ class User {
   ///
   String? name;
 
+  /// Email address used for login and notifications
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -60,14 +63,10 @@ class User {
   ///
   String? email;
 
-  ///
-  /// Please note: This property should have been non-nullable! Since the specification file
-  /// does not include a default value (using the "default:" property), however, the generated
-  /// source code must fall back to having a nullable type.
-  /// Consider adding a "default:" property in the specification file to hide this note.
-  ///
+  /// Contact phone number for alerts
   String? phone;
 
+  /// When true, the user cannot change settings
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -76,6 +75,7 @@ class User {
   ///
   bool? readonly;
 
+  /// Grants full administrative privileges when enabled
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -84,14 +84,10 @@ class User {
   ///
   bool? administrator;
 
-  ///
-  /// Please note: This property should have been non-nullable! Since the specification file
-  /// does not include a default value (using the "default:" property), however, the generated
-  /// source code must fall back to having a nullable type.
-  /// Consider adding a "default:" property in the specification file to hide this note.
-  ///
+  /// Preferred default map layer for the user
   String? map;
 
+  /// Default map center latitude for this user
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -100,6 +96,7 @@ class User {
   ///
   num? latitude;
 
+  /// Default map center longitude for this user
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -108,6 +105,7 @@ class User {
   ///
   num? longitude;
 
+  /// Default map zoom level on login
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -116,6 +114,7 @@ class User {
   ///
   int? zoom;
 
+  /// Password for user authentication
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -124,14 +123,10 @@ class User {
   ///
   String? password;
 
-  ///
-  /// Please note: This property should have been non-nullable! Since the specification file
-  /// does not include a default value (using the "default:" property), however, the generated
-  /// source code must fall back to having a nullable type.
-  /// Consider adding a "default:" property in the specification file to hide this note.
-  ///
+  /// Preferred coordinate display format
   String? coordinateFormat;
 
+  /// Indicates whether the user account is disabled
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -141,14 +136,9 @@ class User {
   bool? disabled;
 
   /// in ISO 8601 format. eg. `1963-11-22T18:30:00Z`
-  ///
-  /// Please note: This property should have been non-nullable! Since the specification file
-  /// does not include a default value (using the "default:" property), however, the generated
-  /// source code must fall back to having a nullable type.
-  /// Consider adding a "default:" property in the specification file to hide this note.
-  ///
   DateTime? expirationTime;
 
+  /// Maximum number of devices the user can manage
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -157,6 +147,7 @@ class User {
   ///
   int? deviceLimit;
 
+  /// Maximum number of subordinate users
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -165,6 +156,7 @@ class User {
   ///
   int? userLimit;
 
+  /// Restricts user from modifying device attributes
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -173,6 +165,7 @@ class User {
   ///
   bool? deviceReadonly;
 
+  /// Prevents user from sending unsupported commands
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -181,6 +174,7 @@ class User {
   ///
   bool? limitCommands;
 
+  /// Locks the email field to avoid changes
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -189,14 +183,10 @@ class User {
   ///
   bool? fixedEmail;
 
-  ///
-  /// Please note: This property should have been non-nullable! Since the specification file
-  /// does not include a default value (using the "default:" property), however, the generated
-  /// source code must fall back to having a nullable type.
-  /// Consider adding a "default:" property in the specification file to hide this note.
-  ///
+  /// External POI layer configured for the user
   String? poiLayer;
 
+  /// Additional custom user attributes
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated

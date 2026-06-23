@@ -7,6 +7,11 @@ import 'package:trabcdefg/src/generated_api/api.dart' as api;
 import 'package:trabcdefg/storage/user_database_helper.dart';
 
 class TraccarProvider with ChangeNotifier {
+  /// Global reference for the global 401 interceptor to update
+  /// the session after an auto-relogin succeeds.
+  static TraccarProvider? _instance;
+  static TraccarProvider? get instance => _instance;
+
   // FIX: Removed 'final' to allow the client to be updated
   api.ApiClient apiClient;
   final WebSocketService webSocketService;
@@ -28,11 +33,8 @@ class TraccarProvider with ChangeNotifier {
   final Map<int, List<api.Position>> _prefetchedHistory = {};
   Map<int, List<api.Position>> get prefetchedHistory => _prefetchedHistory;
 
-  TraccarProvider({
-    required this.apiClient,
-    required this.webSocketService,
-    required this.authService,
-  }) {
+  TraccarProvider({required this.apiClient, required this.webSocketService, required this.authService}) {
+    _instance = this;
     _listenToWebSocket();
     _loadFavorites();
   }
@@ -65,16 +67,11 @@ class TraccarProvider with ChangeNotifier {
       final data = message;
 
       if (data['devices'] != null) {
-        final deviceList = (data['devices'] as Iterable)
-            .map((model) => api.Device.fromJson(model))
-            .whereType<api.Device>()
-            .toList();
+        final deviceList = (data['devices'] as Iterable).map((model) => api.Device.fromJson(model)).whereType<api.Device>().toList();
 
         for (var newDevice in deviceList) {
           if (newDevice.id != null) {
-            final existingDeviceIndex = _devices.indexWhere(
-              (dev) => dev.id == newDevice.id,
-            );
+            final existingDeviceIndex = _devices.indexWhere((dev) => dev.id == newDevice.id);
             if (existingDeviceIndex != -1) {
               _devices[existingDeviceIndex] = newDevice;
             } else {
@@ -92,9 +89,7 @@ class TraccarProvider with ChangeNotifier {
           if (newPosition != null && newPosition.deviceId != null) {
             _positionMap[newPosition.deviceId!] = newPosition;
 
-            final existingPositionIndex = _positions.indexWhere(
-              (pos) => pos.deviceId == newPosition.deviceId,
-            );
+            final existingPositionIndex = _positions.indexWhere((pos) => pos.deviceId == newPosition.deviceId);
 
             if (existingPositionIndex != -1) {
               _positions[existingPositionIndex] = newPosition;
@@ -107,10 +102,7 @@ class TraccarProvider with ChangeNotifier {
       }
 
       if (data['events'] != null) {
-        final eventList = (data['events'] as Iterable)
-            .map((model) => api.Event.fromJson(model))
-            .whereType<api.Event>()
-            .toList();
+        final eventList = (data['events'] as Iterable).map((model) => api.Event.fromJson(model)).whereType<api.Event>().toList();
 
         for (var newEvent in eventList) {
           if (newEvent.deviceId != null) {
@@ -144,10 +136,7 @@ class TraccarProvider with ChangeNotifier {
 
     // Use the apiClient's basePath to construct the WebSocket URL dynamically
     final uri = Uri.parse(apiClient.basePath);
-    final wsUrl = uri.replace(
-      scheme: uri.scheme == 'https' ? 'wss' : 'ws',
-      path: '/api/socket',
-    );
+    final wsUrl = uri.replace(scheme: uri.scheme == 'https' ? 'wss' : 'ws', path: '/api/socket');
 
     webSocketService.connect(wsUrl.toString(), _sessionId!);
   }
@@ -157,15 +146,7 @@ class TraccarProvider with ChangeNotifier {
       final path = '/session';
       final headerParams = <String, String>{'Cookie': 'JSESSIONID=$_sessionId'};
 
-      await apiClient.invokeAPI(
-        path,
-        'DELETE',
-        [],
-        null,
-        headerParams,
-        {},
-        null,
-      );
+      await apiClient.invokeAPI(path, 'DELETE', [], null, headerParams, {}, null);
     } catch (e) {
       // FIX: Changed print to debugPrint to comply with production rules
       debugPrint('Failed to delete session on the server: $e');
@@ -206,12 +187,12 @@ class TraccarProvider with ChangeNotifier {
 
     try {
       final sessionApi = api.SessionApi(apiClient);
-      final fetchedUser = await sessionApi.sessionGet();
+      final fetchedUser = await sessionApi.getSession();
       final devicesApi = api.DevicesApi(apiClient);
       final positionsApi = api.PositionsApi(apiClient);
 
-      final fetchedDevices = await devicesApi.devicesGet();
-      final fetchedPositions = await positionsApi.positionsGet();
+      final fetchedDevices = await devicesApi.getDevices();
+      final fetchedPositions = await positionsApi.getPositions();
 
       _currentUser = fetchedUser;
       _devices = (fetchedDevices ?? []).whereType<api.Device>().toList();
@@ -222,8 +203,6 @@ class TraccarProvider with ChangeNotifier {
           _positionMap[pos.deviceId!] = pos;
         }
       }
-    } on api.ApiException catch (e) {
-      throw Exception('Failed to fetch initial data: ${e.message}');
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -239,13 +218,7 @@ class TraccarProvider with ChangeNotifier {
     try {
       debugPrint('Pre-fetching 1h history for device: $deviceId');
       final positionsApi = api.PositionsApi(apiClient);
-      final history =
-          await positionsApi.positionsGet(
-            deviceId: deviceId,
-            from: from.toUtc(),
-            to: to.toUtc(),
-          ) ??
-          [];
+      final history = await positionsApi.getPositions(deviceId: deviceId, from: from.toUtc(), to: to.toUtc()) ?? [];
 
       _prefetchedHistory[deviceId] = history;
       notifyListeners();

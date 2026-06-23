@@ -24,14 +24,11 @@ class _GroupsScreenState extends State<GroupsScreen> {
   }
 
   void _fetchGroups() {
-    final traccarProvider = Provider.of<TraccarProvider>(
-      context,
-      listen: false,
-    );
+    final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
     // Correct way to instantiate GroupsApi with the authenticated client
     final groupsApi = api.GroupsApi(traccarProvider.apiClient);
     setState(() {
-      _groupsFuture = groupsApi.groupsGet();
+      _groupsFuture = groupsApi.getGroups();
     });
   }
 
@@ -45,9 +42,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           } else if (snapshot.hasError) {
-            return Center(
-              child: Text('${'errorGeneral'.tr}: ${snapshot.error}'),
-            );
+            return Center(child: Text('${'errorGeneral'.tr}: ${snapshot.error}'));
           } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
             return Center(child: Text('sharedNoData'.tr));
           } else {
@@ -66,10 +61,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () async {
-          final newGroup = await Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const AddGroupScreen()),
-          );
+          final newGroup = await Navigator.push(context, MaterialPageRoute(builder: (context) => const AddGroupScreen()));
           if (newGroup != null) {
             _fetchGroups();
           }

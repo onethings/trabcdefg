@@ -14,24 +14,17 @@ class TraccarService {
 
   Future<void> fetchDevices() async {
     try {
-      final response = await api.devicesGet();
+      final response = await api.getDevices();
       final devices = response;
       if (devices != null) {
         for (var device in devices) {
           // 2. Replace print with developer.log
-          developer.log(
-            'Device Name: ${device.name}, Status: ${device.status}',
-            name: 'TraccarService',
-          );
+          developer.log('Device Name: ${device.name}, Status: ${device.status}', name: 'TraccarService');
         }
       }
     } catch (e) {
       // 3. Pass the error object directly into the error parameter
-      developer.log(
-        'Failed to fetch devices',
-        error: e,
-        name: 'TraccarService',
-      );
+      developer.log('Failed to fetch devices', error: e, name: 'TraccarService');
     }
   }
 }

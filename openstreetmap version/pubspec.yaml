@@ -2,7 +2,7 @@ name: trabcdefg
 description: "A new Flutter project."
 publish_to: 'none'
 
-version: 1.0.21+17
+version: 1.0.22+18
 
 environment:
   sdk: ^3.8.1
@@ -68,6 +68,7 @@ dev_dependencies:
   openapi_generator_annotations: any
   hive_generator: ^2.0.0
   flutter_native_splash: ^2.4.4
+  # analyzer: ^14.0.0
 
 flutter_native_splash:
   color: "#ffffff"

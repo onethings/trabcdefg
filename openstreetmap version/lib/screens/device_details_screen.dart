@@ -21,34 +21,23 @@ class DeviceDetailsScreen extends StatelessWidget {
   const DeviceDetailsScreen({super.key});
 
   // 2. Define a function to fetch all required data
-  Future<DeviceData> _fetchDeviceAndPositions(
-    BuildContext context,
-    int deviceId,
-  ) async {
-    final traccarProvider = Provider.of<TraccarProvider>(
-      context,
-      listen: false,
-    );
+  Future<DeviceData> _fetchDeviceAndPositions(BuildContext context, int deviceId) async {
+    final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
     final devicesApi = api.DevicesApi(traccarProvider.apiClient);
     final positionsApi = api.PositionsApi(traccarProvider.apiClient);
 
     // Fetch the device details
-    final deviceList = await devicesApi.devicesGet(id: deviceId);
-    final device =
-        deviceList!.first; // Assuming the ID is unique and returns one device
+    final deviceList = await devicesApi.getDevices(id: deviceId);
+    final device = deviceList!.first; // Assuming the ID is unique and returns one device
 
     // Fetch the latest position
-    final positions = await positionsApi.positionsGet(deviceId: deviceId);
+    final positions = await positionsApi.getPositions(deviceId: deviceId);
 
     return DeviceData(device, positions);
   }
 
   // 3. A dedicated row for copyable content (the phone number)
-  Widget _buildCopyableDetailRow(
-    BuildContext context,
-    String label,
-    String value,
-  ) {
+  Widget _buildCopyableDetailRow(BuildContext context, String label, String value) {
     // Only allow copying if the value is meaningful (not the 'sharedNoData' string)
     final bool isCopyable = value.isNotEmpty && value != 'sharedNoData'.tr;
 
@@ -59,10 +48,7 @@ class DeviceDetailsScreen extends StatelessWidget {
         children: [
           Expanded(
             flex: 2,
-            child: Text(
-              label,
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
+            child: Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
           ),
           Expanded(
             flex: 3,
@@ -70,12 +56,7 @@ class DeviceDetailsScreen extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 Flexible(
-                  child: Text(
-                    value,
-                    textAlign: TextAlign.right,
-                    overflow: TextOverflow.ellipsis,
-                    maxLines: 2,
-                  ),
+                  child: Text(value, textAlign: TextAlign.right, overflow: TextOverflow.ellipsis, maxLines: 2),
                 ),
                 if (isCopyable)
                   // The copy icon wrapped in a tap detector
@@ -92,12 +73,7 @@ class DeviceDetailsScreen extends StatelessWidget {
                           '$label ${'copiedToClipboard'.tr}';
 
                       // Show confirmation message safely using the captured messenger
-                      messenger.showSnackBar(
-                        SnackBar(
-                          content: Text(confirmationText),
-                          duration: const Duration(seconds: 1),
-                        ),
-                      );
+                      messenger.showSnackBar(SnackBar(content: Text(confirmationText), duration: const Duration(seconds: 1)));
                     },
                     child: const Padding(
                       padding: EdgeInsets.only(left: 8.0),
@@ -118,9 +94,7 @@ class DeviceDetailsScreen extends StatelessWidget {
       future: SharedPreferences.getInstance(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
-          );
+          return const Scaffold(body: Center(child: CircularProgressIndicator()));
         } else if (snapshot.hasError) {
           return Scaffold(
             appBar: AppBar(title: const Text('Error')),
@@ -148,10 +122,7 @@ class DeviceDetailsScreen extends StatelessWidget {
                   builder: (context, provider, child) {
                     final isFavorite = provider.isFavorite(deviceId);
                     return IconButton(
-                      icon: Icon(
-                        isFavorite ? Icons.favorite : Icons.favorite_border,
-                        color: isFavorite ? Colors.red : null,
-                      ),
+                      icon: Icon(isFavorite ? Icons.favorite : Icons.favorite_border, color: isFavorite ? Colors.red : null),
                       onPressed: () => provider.toggleFavorite(deviceId),
                     );
                   },
@@ -168,17 +139,12 @@ class DeviceDetailsScreen extends StatelessWidget {
                 } else if (dataSnapshot.hasData) {
                   final device = dataSnapshot.data!.device;
                   final positions = dataSnapshot.data!.positions;
-                  final position = (positions != null && positions.isNotEmpty)
-                      ? positions.first
-                      : null;
-                  final attributes =
-                      position?.attributes as Map<String, dynamic>?;
+                  final position = (positions != null && positions.isNotEmpty) ? positions.first : null;
+                  final attributes = position?.attributes as Map<String, dynamic>?;
 
                   String formatDate(DateTime? date) {
                     if (date == null) return 'sharedNoData'.tr;
-                    return DateFormat(
-                      'MM/dd/yyyy, hh:mm:ss a',
-                    ).format(date.toLocal());
+                    return DateFormat('MM/dd/yyyy, hh:mm:ss a').format(date.toLocal());
                   }
 
                   String formatDistance(num? distance) {
@@ -219,61 +185,20 @@ class DeviceDetailsScreen extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         // USE NEW WIDGET HERE for copyable phone number
-                        _buildCopyableDetailRow(
-                          context,
-                          'sharedPhone'.tr,
-                          device.phone ?? 'sharedNoData'.tr,
-                        ),
+                        _buildCopyableDetailRow(context, 'sharedPhone'.tr, device.phone ?? 'sharedNoData'.tr),
                         const Divider(height: 25), // Separator
                         // Latest Position Details
-                        Text(
-                          'reportPositions'.tr,
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
+                        Text('reportPositions'.tr, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                         const Divider(),
-                        _buildDetailRow(
-                          'deviceIdentifier'.tr,
-                          position.id?.toString() ?? 'sharedNoData'.tr,
-                        ),
-                        _buildDetailRow(
-                          'Device ID',
-                          position.deviceId?.toString() ?? 'sharedNoData'.tr,
-                        ),
-                        _buildDetailRow(
-                          'positionProtocol'.tr,
-                          position.protocol ?? 'sharedNoData'.tr,
-                        ),
-                        _buildDetailRow(
-                          'positionServerTime'.tr,
-                          formatDate(position.serverTime),
-                        ),
-                        _buildDetailRow(
-                          'positionDeviceTime'.tr,
-                          formatDate(position.deviceTime),
-                        ),
-                        _buildDetailRow(
-                          'positionFixTime'.tr,
-                          formatDate(position.fixTime),
-                        ),
-                        _buildDetailRow(
-                          'positionValid'.tr,
-                          formatBoolValue(position.valid),
-                        ),
-                        _buildDetailRow(
-                          'positionLatitude'.tr,
-                          position.latitude != null
-                              ? '${position.latitude!.toStringAsFixed(6)}°'
-                              : 'sharedNoData'.tr,
-                        ),
-                        _buildDetailRow(
-                          'positionLongitude'.tr,
-                          position.longitude != null
-                              ? '${position.longitude!.toStringAsFixed(6)}°'
-                              : 'sharedNoData'.tr,
-                        ),
+                        _buildDetailRow('deviceIdentifier'.tr, position.id?.toString() ?? 'sharedNoData'.tr),
+                        _buildDetailRow('Device ID', position.deviceId?.toString() ?? 'sharedNoData'.tr),
+                        _buildDetailRow('positionProtocol'.tr, position.protocol ?? 'sharedNoData'.tr),
+                        _buildDetailRow('positionServerTime'.tr, formatDate(position.serverTime)),
+                        _buildDetailRow('positionDeviceTime'.tr, formatDate(position.deviceTime)),
+                        _buildDetailRow('positionFixTime'.tr, formatDate(position.fixTime)),
+                        _buildDetailRow('positionValid'.tr, formatBoolValue(position.valid)),
+                        _buildDetailRow('positionLatitude'.tr, position.latitude != null ? '${position.latitude!.toStringAsFixed(6)}°' : 'sharedNoData'.tr),
+                        _buildDetailRow('positionLongitude'.tr, position.longitude != null ? '${position.longitude!.toStringAsFixed(6)}°' : 'sharedNoData'.tr),
                         _buildDetailRow(
                           'positionAltitude'.tr,
                           position.altitude != null
@@ -281,60 +206,20 @@ class DeviceDetailsScreen extends StatelessWidget {
                               ? '${position.altitude!.toStringAsFixed(2)} ${'sharedMeters'.tr}'
                               : 'sharedNoData'.tr,
                         ),
-                        _buildDetailRow(
-                          'positionSpeed'.tr,
-                          formatSpeed(position.speed),
-                        ),
-                        _buildDetailRow(
-                          'positionCourse'.tr,
-                          formatCourse(position.course),
-                        ),
-                        _buildDetailRow(
-                          'positionAddress'.tr,
-                          position.address ?? 'sharedNoData'.tr,
-                        ),
-                        _buildDetailRow(
-                          'positionAccuracy'.tr,
-                          position.accuracy?.toString() ?? 'sharedNoData'.tr,
-                        ),
-                        _buildDetailRow(
-                          'Network'.tr,
-                          position.network?.toString() ?? 'sharedNoData'.tr,
-                        ),
-                        _buildDetailRow(
-                          'sharedGeofences'.tr,
-                          position.geofenceIds.toString(),
-                        ),
+                        _buildDetailRow('positionSpeed'.tr, formatSpeed(position.speed)),
+                        _buildDetailRow('positionCourse'.tr, formatCourse(position.course)),
+                        _buildDetailRow('positionAddress'.tr, position.address ?? 'sharedNoData'.tr),
+                        _buildDetailRow('positionAccuracy'.tr, position.accuracy?.toString() ?? 'sharedNoData'.tr),
+                        _buildDetailRow('Network'.tr, position.network?.toString() ?? 'sharedNoData'.tr),
+                        _buildDetailRow('sharedGeofences'.tr, position.geofenceIds.toString()),
                         const SizedBox(height: 20),
-                        Text(
-                          'sharedAttributes'.tr,
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
+                        Text('sharedAttributes'.tr, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                         const Divider(),
-                        _buildDetailRow(
-                          'sharedType'.tr,
-                          attributes?['type']?.toString() ?? 'sharedNoData'.tr,
-                        ),
-                        _buildDetailRow(
-                          'deviceStatus'.tr,
-                          attributes?['status']?.toString() ??
-                              'sharedNoData'.tr,
-                        ),
-                        _buildDetailRow(
-                          'positionIgnition'.tr,
-                          formatBoolValue(attributes?['ignition']),
-                        ),
-                        _buildDetailRow(
-                          'positionCharge'.tr,
-                          formatBoolValue(attributes?['charge']),
-                        ),
-                        _buildDetailRow(
-                          'positionBlocked'.tr,
-                          formatBoolValue(attributes?['blocked']),
-                        ),
+                        _buildDetailRow('sharedType'.tr, attributes?['type']?.toString() ?? 'sharedNoData'.tr),
+                        _buildDetailRow('deviceStatus'.tr, attributes?['status']?.toString() ?? 'sharedNoData'.tr),
+                        _buildDetailRow('positionIgnition'.tr, formatBoolValue(attributes?['ignition'])),
+                        _buildDetailRow('positionCharge'.tr, formatBoolValue(attributes?['charge'])),
+                        _buildDetailRow('positionBlocked'.tr, formatBoolValue(attributes?['blocked'])),
                         _buildDetailRow(
                           'positionBatteryLevel'.tr,
                           attributes?['batteryLevel'] != null
@@ -342,26 +227,11 @@ class DeviceDetailsScreen extends StatelessWidget {
                               ? '${attributes?['batteryLevel']}%'
                               : 'sharedNoData'.tr,
                         ),
-                        _buildDetailRow(
-                          'positionRssi'.tr,
-                          attributes?['rssi']?.toString() ?? 'sharedNoData'.tr,
-                        ),
-                        _buildDetailRow(
-                          'positionDistance'.tr,
-                          formatDistance(attributes?['distance']),
-                        ),
-                        _buildDetailRow(
-                          'deviceTotalDistance'.tr,
-                          formatDistance(attributes?['totalDistance']),
-                        ),
-                        _buildDetailRow(
-                          'reportEngineHours'.tr,
-                          formatHours(attributes?['hours']),
-                        ),
-                        _buildDetailRow(
-                          'positionMotion'.tr,
-                          formatBoolValue(attributes?['motion']),
-                        ),
+                        _buildDetailRow('positionRssi'.tr, attributes?['rssi']?.toString() ?? 'sharedNoData'.tr),
+                        _buildDetailRow('positionDistance'.tr, formatDistance(attributes?['distance'])),
+                        _buildDetailRow('deviceTotalDistance'.tr, formatDistance(attributes?['totalDistance'])),
+                        _buildDetailRow('reportEngineHours'.tr, formatHours(attributes?['hours'])),
+                        _buildDetailRow('positionMotion'.tr, formatBoolValue(attributes?['motion'])),
                       ],
                     ),
                   );
@@ -384,19 +254,11 @@ class DeviceDetailsScreen extends StatelessWidget {
         children: [
           Expanded(
             flex: 2,
-            child: Text(
-              label,
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
+            child: Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
           ),
           Expanded(
             flex: 3,
-            child: Text(
-              value,
-              textAlign: TextAlign.right,
-              overflow: TextOverflow.ellipsis,
-              maxLines: 2,
-            ),
+            child: Text(value, textAlign: TextAlign.right, overflow: TextOverflow.ellipsis, maxLines: 2),
           ),
         ],
       ),

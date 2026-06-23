@@ -49,14 +49,14 @@ class ConnectionsScreenState extends State<ConnectionsScreen> {
     final maintenanceApi = api.MaintenanceApi(traccarProvider.apiClient);
 
     try {
-      final linkedGeofences = await geofencesApi.geofencesGet(
+      final linkedGeofences = await geofencesApi.getGeofences(
         deviceId: widget.deviceId,
       );
       debugPrint('Linked Geofences: ${linkedGeofences?.map((g) => g.id)}');
       _selectedItems['geofences'] =
           linkedGeofences?.map((g) => g.id!).toList() ?? [];
 
-      final linkedNotifications = await notificationsApi.notificationsGet(
+      final linkedNotifications = await notificationsApi.getNotifications(
         deviceId: widget.deviceId,
       );
       debugPrint(
@@ -65,7 +65,7 @@ class ConnectionsScreenState extends State<ConnectionsScreen> {
       _selectedItems['notifications'] =
           linkedNotifications?.map((n) => n.id!).toList() ?? [];
 
-      final linkedDrivers = await driversApi.driversGet(
+      final linkedDrivers = await driversApi.getDrivers(
         deviceId: widget.deviceId,
       );
       debugPrint('Linked Drivers: ${linkedDrivers?.map((d) => d.id)}');
@@ -73,21 +73,21 @@ class ConnectionsScreenState extends State<ConnectionsScreen> {
           linkedDrivers?.map((d) => d.id!).toList() ?? [];
 
       final linkedComputedAttributes = await computedAttributesApi
-          .attributesComputedGet(deviceId: widget.deviceId);
+          .getAttributesComputed(deviceId: widget.deviceId);
       debugPrint(
         'Linked Computed Attributes: ${linkedComputedAttributes?.map((ca) => ca.id)}',
       );
       _selectedItems['computedAttributes'] =
           linkedComputedAttributes?.map((ca) => ca.id!).toList() ?? [];
 
-      final linkedCommands = await commandsApi.commandsGet(
+      final linkedCommands = await commandsApi.getCommands(
         deviceId: widget.deviceId,
       );
       debugPrint('Linked Commands: ${linkedCommands?.map((c) => c.id)}');
       _selectedItems['savedCommands'] =
           linkedCommands?.map((c) => c.id!).toList() ?? [];
 
-      final linkedMaintenance = await maintenanceApi.maintenanceGet(
+      final linkedMaintenance = await maintenanceApi.getMaintenance(
         deviceId: widget.deviceId,
       );
       debugPrint('Linked Maintenance: ${linkedMaintenance?.map((m) => m.id)}');
@@ -107,7 +107,7 @@ class ConnectionsScreenState extends State<ConnectionsScreen> {
       listen: false,
     );
     final geofencesApi = api.GeofencesApi(traccarProvider.apiClient);
-    return await geofencesApi.geofencesGet();
+    return await geofencesApi.getGeofences();
   }
 
   Future<List<api.Notification>?> _fetchNotifications() async {
@@ -116,7 +116,7 @@ class ConnectionsScreenState extends State<ConnectionsScreen> {
       listen: false,
     );
     final notificationsApi = api.NotificationsApi(traccarProvider.apiClient);
-    return await notificationsApi.notificationsGet();
+    return await notificationsApi.getNotifications();
   }
 
   Future<List<api.Driver>?> _fetchDrivers() async {
@@ -125,7 +125,7 @@ class ConnectionsScreenState extends State<ConnectionsScreen> {
       listen: false,
     );
     final driversApi = api.DriversApi(traccarProvider.apiClient);
-    return await driversApi.driversGet();
+    return await driversApi.getDrivers();
   }
 
   Future<List<api.Attribute>?> _fetchComputedAttributes() async {
@@ -134,7 +134,7 @@ class ConnectionsScreenState extends State<ConnectionsScreen> {
       listen: false,
     );
     final computedAttributesApi = api.AttributesApi(traccarProvider.apiClient);
-    return await computedAttributesApi.attributesComputedGet();
+    return await computedAttributesApi.getAttributesComputed();
   }
 
   Future<List<api.Command>?> _fetchSavedCommands() async {
@@ -143,7 +143,7 @@ class ConnectionsScreenState extends State<ConnectionsScreen> {
       listen: false,
     );
     final commandsApi = api.CommandsApi(traccarProvider.apiClient);
-    return await commandsApi.commandsGet();
+    return await commandsApi.getCommands();
   }
 
   Future<List<api.Maintenance>?> _fetchMaintenance() async {
@@ -152,7 +152,7 @@ class ConnectionsScreenState extends State<ConnectionsScreen> {
       listen: false,
     );
     final maintenanceApi = api.MaintenanceApi(traccarProvider.apiClient);
-    return await maintenanceApi.maintenanceGet();
+    return await maintenanceApi.getMaintenance();
   }
 
   void _updatePermission(String category, int itemId, bool isSelected) async {

@@ -10,13 +10,11 @@ class AddComputedAttributeScreen extends StatefulWidget {
   const AddComputedAttributeScreen({super.key});
 
   @override
-  State<AddComputedAttributeScreen> createState() =>
-      _AddComputedAttributeScreenState();
+  State<AddComputedAttributeScreen> createState() => _AddComputedAttributeScreenState();
 }
 
 // ignore: library_private_types_in_public_api
-class _AddComputedAttributeScreenState
-    extends State<AddComputedAttributeScreen> {
+class _AddComputedAttributeScreenState extends State<AddComputedAttributeScreen> {
   final _formKey = GlobalKey<FormState>();
   String? _description;
   String? _attribute;
@@ -27,39 +25,23 @@ class _AddComputedAttributeScreenState
     if (_formKey.currentState!.validate()) {
       _formKey.currentState!.save();
 
-      final newAttribute = api.Attribute(
-        description: _description!,
-        attribute: _attribute!,
-        expression: _expression!,
-        type: _type!,
-      );
+      final newAttribute = api.Attribute(description: _description!, attribute: _attribute!, expression: _expression!, type: _type!);
 
       try {
-        final traccarProvider = Provider.of<TraccarProvider>(
-          context,
-          listen: false,
-        );
+        final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
         // Correct way to instantiate AttributesApi with the authenticated client
         final attributesApi = api.AttributesApi(traccarProvider.apiClient);
-        await attributesApi.attributesComputedPost(newAttribute);
+        await attributesApi.postAttributesComputed(newAttribute);
 
         // Fix: check if widget is still in the tree across async gaps
         if (!mounted) return;
 
         Navigator.of(context).pop(true);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              '${'sharedComputedAttribute'.tr} ${'sharedSaved'.tr}',
-            ),
-          ),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${'sharedComputedAttribute'.tr} ${'sharedSaved'.tr}')));
       } catch (e) {
         if (!mounted) return;
 
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('${'errorGeneral'.tr}: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${'errorGeneral'.tr}: $e')));
       }
     }
   }
@@ -67,9 +49,7 @@ class _AddComputedAttributeScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text('${'sharedAdd'.tr} ${'sharedComputedAttribute'.tr}'),
-      ),
+      appBar: AppBar(title: Text('${'sharedAdd'.tr} ${'sharedComputedAttribute'.tr}')),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(16.0),
@@ -78,18 +58,13 @@ class _AddComputedAttributeScreenState
             child: ListView(
               children: [
                 TextFormField(
-                  decoration: InputDecoration(
-                    labelText: 'sharedDescription'.tr,
-                  ),
+                  decoration: InputDecoration(labelText: 'sharedDescription'.tr),
                   onSaved: (value) {
                     _description = value;
                   },
                 ),
                 TextFormField(
-                  decoration: InputDecoration(
-                    labelText:
-                        '${'sharedAttribute'.tr} (${'sharedRequired'.tr})',
-                  ),
+                  decoration: InputDecoration(labelText: '${'sharedAttribute'.tr} (${'sharedRequired'.tr})'),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
                       return '${'sharedAttribute'.tr} ${'sharedRequired'.tr}';
@@ -101,10 +76,7 @@ class _AddComputedAttributeScreenState
                   },
                 ),
                 TextFormField(
-                  decoration: InputDecoration(
-                    labelText:
-                        '${'sharedExpression'.tr} (${'sharedRequired'.tr})',
-                  ),
+                  decoration: InputDecoration(labelText: '${'sharedExpression'.tr} (${'sharedRequired'.tr})'),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
                       return '${'sharedExpression'.tr} ${'sharedRequired'.tr}';
@@ -120,9 +92,7 @@ class _AddComputedAttributeScreenState
                 DropdownButtonFormField<String>(
                   // Fix: changed deprecated 'value' to 'initialValue'
                   initialValue: _type,
-                  items: <String>['String', 'Number', 'Boolean'].map((
-                    String value,
-                  ) {
+                  items: <String>['String', 'Number', 'Boolean'].map((String value) {
                     String translatedValue;
                     if (value == 'String') {
                       translatedValue = 'sharedTypeString'.tr;
@@ -131,10 +101,7 @@ class _AddComputedAttributeScreenState
                     } else {
                       translatedValue = 'sharedTypeBoolean'.tr;
                     }
-                    return DropdownMenuItem<String>(
-                      value: value,
-                      child: Text(translatedValue),
-                    );
+                    return DropdownMenuItem<String>(value: value, child: Text(translatedValue));
                   }).toList(),
                   onChanged: (String? newValue) {
                     setState(() {
@@ -158,10 +125,7 @@ class _AddComputedAttributeScreenState
               },
               child: Text('sharedCancel'.tr),
             ),
-            ElevatedButton(
-              onPressed: _saveAttribute,
-              child: Text('sharedSave'.tr),
-            ),
+            ElevatedButton(onPressed: _saveAttribute, child: Text('sharedSave'.tr)),
           ],
         ),
       ),

@@ -25,6 +25,7 @@ import 'package:trabcdefg/screens/reports/trips_report_screen.dart';
 import 'package:trabcdefg/screens/reset_password_screen.dart';
 import 'package:trabcdefg/screens/splash_screen.dart';
 import 'package:trabcdefg/services/auth_service.dart';
+import 'package:trabcdefg/services/http_interceptor.dart';
 import 'package:trabcdefg/services/localization_service.dart';
 import 'package:trabcdefg/services/websocket_service.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
@@ -50,9 +51,7 @@ void main() async {
   final savedUrl = prefs.getString('traccarServerUrl');
   final savedLanguageCode = prefs.getString('saved_language_code');
 
-  runApp(
-    TraccarApp(initialUrl: savedUrl, initialLanguageCode: savedLanguageCode),
-  );
+  runApp(TraccarApp(initialUrl: savedUrl, initialLanguageCode: savedLanguageCode));
 }
 
 class TraccarApp extends StatelessWidget {
@@ -70,40 +69,72 @@ class TraccarApp extends StatelessWidget {
         Provider<api.ApiClient>(
           create: (_) {
             final client = api.ApiClient(
-              basePath: initialUrl != null
-                  ? '$initialUrl/api'
-                  : AppConstants.traccarApiUrl, // Use constant default
+              basePath: initialUrl != null ? '$initialUrl/api' : AppConstants.traccarApiUrl, // Use constant default
             );
 
             // CRITICAL FIX: Add the Accept header here to force JSON response from the server.
             // This resolves the 'PK' (ZIP file) error.
             client.addDefaultHeader('Accept', 'application/json');
 
+            // Wrap the HTTP client with an interceptor that detects 401
+            // (expired session) responses and attempts auto-relogin first.
+            client.client = AuthInterceptingClient(
+              onUnauthorized: () async {
+                debugPrint('AuthInterceptingClient: 401 detected, attempting auto-relogin...');
+
+                // Try auto-relogin using saved credentials
+                final prefs = await SharedPreferences.getInstance();
+                final email = prefs.getString('saved_email');
+                final password = prefs.getString('saved_password');
+
+                if (email != null && password != null) {
+                  try {
+                    // POST /session is excluded from interception, so this is safe
+                    final sessionApi = api.SessionApi(client);
+                    final response = await sessionApi.postSessionWithHttpInfo(email, password);
+
+                    final setCookieHeader = response.headers['set-cookie'];
+                    if (setCookieHeader != null) {
+                      final jSessionId = setCookieHeader.split(';').firstWhere((s) => s.startsWith('JSESSIONID='), orElse: () => '').split('=').last;
+                      if (jSessionId.isNotEmpty) {
+                        await prefs.setString('jSessionId', jSessionId);
+                        await prefs.setString('userJson', response.body);
+                        debugPrint('Auto-relogin succeeded! New session acquired.');
+
+                        // Update the TraccarProvider with the fresh session
+                        TraccarProvider.instance?.setSessionId(jSessionId);
+                        return; // Don't redirect — the app can continue
+                      }
+                    }
+                  } catch (e) {
+                    debugPrint('Auto-relogin failed in interceptor: $e');
+                  }
+                }
+
+                // Auto-relogin failed or no saved credentials — clear & redirect
+                debugPrint('Auto-relogin unavailable, redirecting to login.');
+                await prefs.remove('jSessionId');
+                await prefs.remove('userJson');
+                await prefs.remove('saved_email');
+                await prefs.remove('saved_password');
+                Get.offAllNamed('/login');
+              },
+            );
+
             return client;
           },
         ),
         // Provide the authentication service.
-        Provider<AuthService>(
-          create: (context) =>
-              AuthService(apiClient: context.read<api.ApiClient>()),
-        ),
+        Provider<AuthService>(create: (context) => AuthService(apiClient: context.read<api.ApiClient>())),
         // Provide the WebSocket service.
         Provider<WebSocketService>(create: (_) => WebSocketService()),
         // Provide the main TraccarProvider for state management.
         ChangeNotifierProvider<TraccarProvider>(
-          create: (context) => TraccarProvider(
-            apiClient: context.read<api.ApiClient>(),
-            webSocketService: context.read<WebSocketService>(),
-            authService: context.read<AuthService>(),
-          ),
+          create: (context) => TraccarProvider(apiClient: context.read<api.ApiClient>(), webSocketService: context.read<WebSocketService>(), authService: context.read<AuthService>()),
         ),
-        ChangeNotifierProvider<MapStyleProvider>(
-          create: (_) => MapStyleProvider(),
-        ),
+        ChangeNotifierProvider<MapStyleProvider>(create: (_) => MapStyleProvider()),
         ChangeNotifierProvider<ThemeProvider>(create: (_) => ThemeProvider()),
-        ChangeNotifierProvider<SettingsProvider>(
-          create: (_) => SettingsProvider(),
-        ),
+        ChangeNotifierProvider<SettingsProvider>(create: (_) => SettingsProvider()),
       ],
       // Changed MaterialApp to GetMaterialApp to correctly handle GetX localization.
       child: Consumer2<ThemeProvider, SettingsProvider>(
@@ -117,17 +148,13 @@ class TraccarApp extends StatelessWidget {
             builder: (context, child) {
               final data = MediaQuery.of(context);
               return MediaQuery(
-                data: data.copyWith(
-                  textScaler: TextScaler.linear(settingsProvider.fontSizeScale),
-                ),
+                data: data.copyWith(textScaler: TextScaler.linear(settingsProvider.fontSizeScale)),
                 child: child!,
               );
             },
             // Configure localization for the app using GetX properties.
             translations: LocalizationService(),
-            locale: initialLanguageCode != null
-                ? LocalizationService.getLocaleFromLang(initialLanguageCode!)
-                : Get.deviceLocale ?? LocalizationService.fallbackLocale,
+            locale: initialLanguageCode != null ? LocalizationService.getLocaleFromLang(initialLanguageCode!) : Get.deviceLocale ?? LocalizationService.fallbackLocale,
             fallbackLocale: LocalizationService.fallbackLocale,
 
             // Define all the application routes.

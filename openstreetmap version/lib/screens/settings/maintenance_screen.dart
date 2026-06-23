@@ -24,14 +24,11 @@ class _MaintenanceScreenState extends State<MaintenanceScreen> {
   }
 
   void _fetchMaintenance() {
-    final traccarProvider = Provider.of<TraccarProvider>(
-      context,
-      listen: false,
-    );
+    final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
     // Correct way to instantiate MaintenanceApi with the authenticated client
     final maintenanceApi = api.MaintenanceApi(traccarProvider.apiClient);
     setState(() {
-      _maintenanceFuture = maintenanceApi.maintenanceGet();
+      _maintenanceFuture = maintenanceApi.getMaintenance();
     });
   }
 
@@ -46,9 +43,7 @@ class _MaintenanceScreenState extends State<MaintenanceScreen> {
             return const Center(child: CircularProgressIndicator());
           } else if (snapshot.hasError) {
             // FIXED: Used clean string interpolation instead of '+' operator
-            return Center(
-              child: Text('${'errorGeneral'.tr}: ${snapshot.error}'),
-            );
+            return Center(child: Text('${'errorGeneral'.tr}: ${snapshot.error}'));
           } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
             return Center(child: Text('sharedNoData'.tr));
           } else {
@@ -58,9 +53,7 @@ class _MaintenanceScreenState extends State<MaintenanceScreen> {
                 final maintenance = snapshot.data![index];
                 return ListTile(
                   title: Text(maintenance.name ?? 'sharedName'.tr),
-                  subtitle: Text(
-                    '${'sharedType'.tr}: ${maintenance.type ?? 'N/A'} | ${'maintenanceStart'.tr}: ${maintenance.start ?? 'N/A'} | ${'maintenancePeriod'.tr}: ${maintenance.period ?? 'N/A'}',
-                  ),
+                  subtitle: Text('${'sharedType'.tr}: ${maintenance.type ?? 'N/A'} | ${'maintenanceStart'.tr}: ${maintenance.start ?? 'N/A'} | ${'maintenancePeriod'.tr}: ${maintenance.period ?? 'N/A'}'),
                 );
               },
             );
@@ -69,12 +62,7 @@ class _MaintenanceScreenState extends State<MaintenanceScreen> {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () async {
-          final newMaintenance = await Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => const AddMaintenanceScreen(),
-            ),
-          );
+          final newMaintenance = await Navigator.push(context, MaterialPageRoute(builder: (context) => const AddMaintenanceScreen()));
           if (newMaintenance != null) {
             _fetchMaintenance();
           }

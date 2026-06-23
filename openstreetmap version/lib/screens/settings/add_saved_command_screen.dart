@@ -23,14 +23,11 @@ class AddSavedCommandScreenState extends State<AddSavedCommandScreen> {
   @override
   void initState() {
     super.initState();
-    final traccarProvider = Provider.of<TraccarProvider>(
-      context,
-      listen: false,
-    );
+    final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
     // Correct way to instantiate CommandsApi with the authenticated client
     final commandsApi = api.CommandsApi(traccarProvider.apiClient);
     setState(() {
-      _commandTypesFuture = commandsApi.commandsTypesGet();
+      _commandTypesFuture = commandsApi.getCommandsTypes();
     });
   }
 
@@ -38,37 +35,24 @@ class AddSavedCommandScreenState extends State<AddSavedCommandScreen> {
     if (_formKey.currentState!.validate()) {
       _formKey.currentState!.save();
 
-      final newCommand = api.Command(
-        description: _description!,
-        type: _selectedType!,
-        attributes: {'noQueue': _noQueue},
-      );
+      final newCommand = api.Command(description: _description!, type: _selectedType!, attributes: {'noQueue': _noQueue});
 
       try {
-        final traccarProvider = Provider.of<TraccarProvider>(
-          context,
-          listen: false,
-        );
+        final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
         // Correct way to instantiate CommandsApi with the authenticated client
         final commandsApi = api.CommandsApi(traccarProvider.apiClient);
-        await commandsApi.commandsPost(newCommand);
+        await commandsApi.postCommands(newCommand);
 
         // Guard against using BuildContext across async gaps
         if (!mounted) return;
 
         Navigator.of(context).pop(true);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('${'sharedSavedCommand'.tr} ${'sharedSaved'.tr}'),
-          ),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${'sharedSavedCommand'.tr} ${'sharedSaved'.tr}')));
       } catch (e) {
         // Guard against using BuildContext across async gaps
         if (!mounted) return;
 
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('${'errorGeneral'.tr}: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${'errorGeneral'.tr}: $e')));
       }
     }
   }
@@ -76,9 +60,7 @@ class AddSavedCommandScreenState extends State<AddSavedCommandScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text('${'sharedAdd'.tr} ${'sharedSavedCommand'.tr}'),
-      ),
+      appBar: AppBar(title: Text('${'sharedAdd'.tr} ${'sharedSavedCommand'.tr}')),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(16.0),
@@ -87,10 +69,7 @@ class AddSavedCommandScreenState extends State<AddSavedCommandScreen> {
             child: ListView(
               children: [
                 TextFormField(
-                  decoration: InputDecoration(
-                    labelText:
-                        '${'sharedDescription'.tr} (${'sharedRequired'.tr})',
-                  ),
+                  decoration: InputDecoration(labelText: '${'sharedDescription'.tr} (${'sharedRequired'.tr})'),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
                       return 'sharedPleaseEnterDescription'.tr;
@@ -112,18 +91,13 @@ class AddSavedCommandScreenState extends State<AddSavedCommandScreen> {
                     } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
                       return Center(child: Text('sharedNoData'.tr));
                     } else {
-                      final commandTypes = snapshot.data!
-                          .map((type) => type.type!)
-                          .toList();
+                      final commandTypes = snapshot.data!.map((type) => type.type!).toList();
                       _selectedType ??= commandTypes.first;
                       return DropdownButtonFormField<String>(
                         decoration: InputDecoration(labelText: 'sharedType'.tr),
                         initialValue: _selectedType, // Fixed deprecation
                         items: commandTypes.map((String value) {
-                          return DropdownMenuItem<String>(
-                            value: value,
-                            child: Text(_getTranslatedCommandType(value)),
-                          );
+                          return DropdownMenuItem<String>(value: value, child: Text(_getTranslatedCommandType(value)));
                         }).toList(),
                         onChanged: (String? newValue) {
                           setState(() {
@@ -170,10 +144,7 @@ class AddSavedCommandScreenState extends State<AddSavedCommandScreen> {
               },
               child: Text('sharedCancel'.tr),
             ),
-            ElevatedButton(
-              onPressed: _saveCommand,
-              child: Text('sharedSave'.tr),
-            ),
+            ElevatedButton(onPressed: _saveCommand, child: Text('sharedSave'.tr)),
           ],
         ),
       ),

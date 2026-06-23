@@ -17,9 +17,11 @@ class Command {
     this.deviceId,
     this.description,
     this.type,
+    this.textChannel,
     this.attributes,
   });
 
+  /// Unique saved command identifier
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -28,6 +30,7 @@ class Command {
   ///
   int? id;
 
+  /// Target device identifier when the command is bound to one device
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -36,6 +39,7 @@ class Command {
   ///
   int? deviceId;
 
+  /// User friendly label displayed in the UI
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -44,6 +48,7 @@ class Command {
   ///
   String? description;
 
+  /// Command type as defined by the device protocol
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -52,6 +57,16 @@ class Command {
   ///
   String? type;
 
+  /// Whether to send the command using the SMS channel
+  ///
+  /// Please note: This property should have been non-nullable! Since the specification file
+  /// does not include a default value (using the "default:" property), however, the generated
+  /// source code must fall back to having a nullable type.
+  /// Consider adding a "default:" property in the specification file to hide this note.
+  ///
+  bool? textChannel;
+
+  /// Additional parameters required by the command type
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -68,6 +83,7 @@ class Command {
           other.deviceId == deviceId &&
           other.description == description &&
           other.type == type &&
+          other.textChannel == textChannel &&
           other.attributes == attributes;
 
   @override
@@ -77,11 +93,12 @@ class Command {
       (deviceId == null ? 0 : deviceId!.hashCode) +
       (description == null ? 0 : description!.hashCode) +
       (type == null ? 0 : type!.hashCode) +
+      (textChannel == null ? 0 : textChannel!.hashCode) +
       (attributes == null ? 0 : attributes!.hashCode);
 
   @override
   String toString() =>
-      'Command[id=$id, deviceId=$deviceId, description=$description, type=$type, attributes=$attributes]';
+      'Command[id=$id, deviceId=$deviceId, description=$description, type=$type, textChannel=$textChannel, attributes=$attributes]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -104,6 +121,11 @@ class Command {
       json[r'type'] = this.type;
     } else {
       json[r'type'] = null;
+    }
+    if (this.textChannel != null) {
+      json[r'textChannel'] = this.textChannel;
+    } else {
+      json[r'textChannel'] = null;
     }
     if (this.attributes != null) {
       json[r'attributes'] = this.attributes;
@@ -138,6 +160,7 @@ class Command {
         deviceId: mapValueOfType<int>(json, r'deviceId'),
         description: mapValueOfType<String>(json, r'description'),
         type: mapValueOfType<String>(json, r'type'),
+        textChannel: mapValueOfType<bool>(json, r'textChannel'),
         attributes: mapValueOfType<Object>(json, r'attributes'),
       );
     }

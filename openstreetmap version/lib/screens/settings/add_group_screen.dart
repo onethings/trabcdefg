@@ -54,24 +54,17 @@ class _AddGroupScreenState extends State<AddGroupScreen> {
       final newGroup = api.Group(name: _groupName!, attributes: attributesMap);
 
       try {
-        final traccarProvider = Provider.of<TraccarProvider>(
-          context,
-          listen: false,
-        );
+        final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
         // Correct way to instantiate GroupsApi with the authenticated client
         final groupsApi = api.GroupsApi(traccarProvider.apiClient);
-        await groupsApi.groupsPost(newGroup);
+        await groupsApi.postGroups(newGroup);
 
         if (!mounted) return;
         Navigator.of(context).pop(true);
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('sharedSaved'.tr)));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('sharedSaved'.tr)));
       } catch (e) {
         if (!mounted) return;
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Failed to add group: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to add group: $e')));
       }
     }
   }
@@ -88,9 +81,7 @@ class _AddGroupScreenState extends State<AddGroupScreen> {
             child: ListView(
               children: [
                 TextFormField(
-                  decoration: InputDecoration(
-                    labelText: '${'sharedName'.tr} (${'sharedRequired'.tr})',
-                  ),
+                  decoration: InputDecoration(labelText: '${'sharedName'.tr} (${'sharedRequired'.tr})'),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
                       return 'Please enter a group name.';
@@ -109,13 +100,7 @@ class _AddGroupScreenState extends State<AddGroupScreen> {
                   },
                 ),
                 const SizedBox(height: 20),
-                Text(
-                  'sharedAttributes'.tr,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+                Text('sharedAttributes'.tr, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 10),
                 ..._attributes.asMap().entries.map((entry) {
                   final index = entry.key;
@@ -129,10 +114,7 @@ class _AddGroupScreenState extends State<AddGroupScreen> {
                             children: [
                               Expanded(
                                 child: TextFormField(
-                                  decoration: InputDecoration(
-                                    labelText:
-                                        '${'sharedAttribute'.tr} ${'sharedName'.tr}',
-                                  ),
+                                  decoration: InputDecoration(labelText: '${'sharedAttribute'.tr} ${'sharedName'.tr}'),
                                   initialValue: attribute['name'],
                                   onSaved: (value) {
                                     attribute['name'] = value!;
@@ -147,44 +129,29 @@ class _AddGroupScreenState extends State<AddGroupScreen> {
                                     attribute['type'] = newValue!;
                                   });
                                 },
-                                items: <String>['String', 'Number', 'Boolean']
-                                    .map<DropdownMenuItem<String>>((
-                                      String value,
-                                    ) {
-                                      String translatedValue;
-                                      switch (value) {
-                                        case 'String':
-                                          translatedValue =
-                                              'sharedTypeString'.tr;
-                                          break;
-                                        case 'Number':
-                                          translatedValue =
-                                              'sharedTypeNumber'.tr;
-                                          break;
-                                        case 'Boolean':
-                                          translatedValue =
-                                              'sharedTypeBoolean'.tr;
-                                          break;
-                                        default:
-                                          translatedValue = value;
-                                      }
-                                      return DropdownMenuItem<String>(
-                                        value: value,
-                                        child: Text(translatedValue),
-                                      );
-                                    })
-                                    .toList(),
+                                items: <String>['String', 'Number', 'Boolean'].map<DropdownMenuItem<String>>((String value) {
+                                  String translatedValue;
+                                  switch (value) {
+                                    case 'String':
+                                      translatedValue = 'sharedTypeString'.tr;
+                                      break;
+                                    case 'Number':
+                                      translatedValue = 'sharedTypeNumber'.tr;
+                                      break;
+                                    case 'Boolean':
+                                      translatedValue = 'sharedTypeBoolean'.tr;
+                                      break;
+                                    default:
+                                      translatedValue = value;
+                                  }
+                                  return DropdownMenuItem<String>(value: value, child: Text(translatedValue));
+                                }).toList(),
                               ),
-                              IconButton(
-                                icon: const Icon(Icons.remove_circle),
-                                onPressed: () => _removeAttribute(index),
-                              ),
+                              IconButton(icon: const Icon(Icons.remove_circle), onPressed: () => _removeAttribute(index)),
                             ],
                           ),
                           TextFormField(
-                            decoration: InputDecoration(
-                              labelText: 'stateValue'.tr,
-                            ),
+                            decoration: InputDecoration(labelText: 'stateValue'.tr),
                             initialValue: attribute['value'],
                             onSaved: (value) {
                               attribute['value'] = value!;
@@ -195,20 +162,13 @@ class _AddGroupScreenState extends State<AddGroupScreen> {
                     ),
                   );
                 }), // Removed unnecessary .toList() from here
-                ElevatedButton.icon(
-                  onPressed: _addAttribute,
-                  icon: const Icon(Icons.add),
-                  label: Text('${'sharedAdd'.tr} ${'sharedAttribute'.tr}'),
-                ),
+                ElevatedButton.icon(onPressed: _addAttribute, icon: const Icon(Icons.add), label: Text('${'sharedAdd'.tr} ${'sharedAttribute'.tr}')),
               ],
             ),
           ),
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _saveGroup,
-        child: const Icon(Icons.save),
-      ),
+      floatingActionButton: FloatingActionButton(onPressed: _saveGroup, child: const Icon(Icons.save)),
     );
   }
 }

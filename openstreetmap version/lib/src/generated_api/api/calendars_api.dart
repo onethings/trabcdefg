@@ -16,89 +16,6 @@ class CalendarsApi {
 
   final ApiClient apiClient;
 
-  /// Fetch a list of Calendars
-  ///
-  /// Without params, it returns a list of Calendars the user has access to
-  ///
-  /// Note: This method returns the HTTP [Response].
-  ///
-  /// Parameters:
-  ///
-  /// * [bool] all:
-  ///   Can only be used by admins or managers to fetch all entities
-  ///
-  /// * [int] userId:
-  ///   Standard users can use this only with their own _userId_
-  Future<Response> calendarsGetWithHttpInfo({
-    bool? all,
-    int? userId,
-  }) async {
-    // ignore: prefer_const_declarations
-    final path = r'/calendars';
-
-    // ignore: prefer_final_locals
-    Object? postBody;
-
-    final queryParams = <QueryParam>[];
-    final headerParams = <String, String>{};
-    final formParams = <String, String>{};
-
-    if (all != null) {
-      queryParams.addAll(_queryParams('', 'all', all));
-    }
-    if (userId != null) {
-      queryParams.addAll(_queryParams('', 'userId', userId));
-    }
-
-    const contentTypes = <String>[];
-
-    return apiClient.invokeAPI(
-      path,
-      'GET',
-      queryParams,
-      postBody,
-      headerParams,
-      formParams,
-      contentTypes.isEmpty ? null : contentTypes.first,
-    );
-  }
-
-  /// Fetch a list of Calendars
-  ///
-  /// Without params, it returns a list of Calendars the user has access to
-  ///
-  /// Parameters:
-  ///
-  /// * [bool] all:
-  ///   Can only be used by admins or managers to fetch all entities
-  ///
-  /// * [int] userId:
-  ///   Standard users can use this only with their own _userId_
-  Future<List<Calendar>?> calendarsGet({
-    bool? all,
-    int? userId,
-  }) async {
-    final response = await calendarsGetWithHttpInfo(
-      all: all,
-      userId: userId,
-    );
-    if (response.statusCode >= HttpStatus.badRequest) {
-      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
-    }
-    // When a remote server returns no body with a status of 204, we shall not decode it.
-    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
-    // FormatException when trying to decode an empty string.
-    if (response.body.isNotEmpty &&
-        response.statusCode != HttpStatus.noContent) {
-      final responseBody = await _decodeBodyBytes(response);
-      return (await apiClient.deserializeAsync(responseBody, 'List<Calendar>')
-              as List)
-          .cast<Calendar>()
-          .toList(growable: false);
-    }
-    return null;
-  }
-
   /// Delete a Calendar
   ///
   /// Note: This method returns the HTTP [Response].
@@ -106,7 +23,7 @@ class CalendarsApi {
   /// Parameters:
   ///
   /// * [int] id (required):
-  Future<Response> calendarsIdDeleteWithHttpInfo(
+  Future<Response> deleteCalendarsIdWithHttpInfo(
     int id,
   ) async {
     // ignore: prefer_const_declarations
@@ -137,15 +54,254 @@ class CalendarsApi {
   /// Parameters:
   ///
   /// * [int] id (required):
-  Future<void> calendarsIdDelete(
+  Future<void> deleteCalendarsId(
     int id,
   ) async {
-    final response = await calendarsIdDeleteWithHttpInfo(
+    final response = await deleteCalendarsIdWithHttpInfo(
       id,
     );
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
+  }
+
+  /// Fetch a list of Calendars
+  ///
+  /// Without params, it returns a list of Calendars the user has access to
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [bool] all:
+  ///   Can only be used by admins or managers to fetch all entities
+  ///
+  /// * [int] userId:
+  ///   Standard users can use this only with their own _userId_
+  ///
+  /// * [int] limit:
+  ///   Limit the number of returned results
+  ///
+  /// * [int] offset:
+  ///   Offset for pagination
+  ///
+  /// * [String] keyword:
+  ///   Search keyword filter
+  Future<Response> getCalendarsWithHttpInfo({
+    bool? all,
+    int? userId,
+    int? limit,
+    int? offset,
+    String? keyword,
+  }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/calendars';
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    if (all != null) {
+      queryParams.addAll(_queryParams('', 'all', all));
+    }
+    if (userId != null) {
+      queryParams.addAll(_queryParams('', 'userId', userId));
+    }
+    if (limit != null) {
+      queryParams.addAll(_queryParams('', 'limit', limit));
+    }
+    if (offset != null) {
+      queryParams.addAll(_queryParams('', 'offset', offset));
+    }
+    if (keyword != null) {
+      queryParams.addAll(_queryParams('', 'keyword', keyword));
+    }
+
+    const contentTypes = <String>[];
+
+    return apiClient.invokeAPI(
+      path,
+      'GET',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+    );
+  }
+
+  /// Fetch a list of Calendars
+  ///
+  /// Without params, it returns a list of Calendars the user has access to
+  ///
+  /// Parameters:
+  ///
+  /// * [bool] all:
+  ///   Can only be used by admins or managers to fetch all entities
+  ///
+  /// * [int] userId:
+  ///   Standard users can use this only with their own _userId_
+  ///
+  /// * [int] limit:
+  ///   Limit the number of returned results
+  ///
+  /// * [int] offset:
+  ///   Offset for pagination
+  ///
+  /// * [String] keyword:
+  ///   Search keyword filter
+  Future<List<Calendar>?> getCalendars({
+    bool? all,
+    int? userId,
+    int? limit,
+    int? offset,
+    String? keyword,
+  }) async {
+    final response = await getCalendarsWithHttpInfo(
+      all: all,
+      userId: userId,
+      limit: limit,
+      offset: offset,
+      keyword: keyword,
+    );
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty &&
+        response.statusCode != HttpStatus.noContent) {
+      final responseBody = await _decodeBodyBytes(response);
+      return (await apiClient.deserializeAsync(responseBody, 'List<Calendar>')
+              as List)
+          .cast<Calendar>()
+          .toList(growable: false);
+    }
+    return null;
+  }
+
+  /// Fetch a Calendar
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [int] id (required):
+  Future<Response> getCalendarsIdWithHttpInfo(
+    int id,
+  ) async {
+    // ignore: prefer_const_declarations
+    final path = r'/calendars/{id}'.replaceAll('{id}', id.toString());
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>[];
+
+    return apiClient.invokeAPI(
+      path,
+      'GET',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+    );
+  }
+
+  /// Fetch a Calendar
+  ///
+  /// Parameters:
+  ///
+  /// * [int] id (required):
+  Future<Calendar?> getCalendarsId(
+    int id,
+  ) async {
+    final response = await getCalendarsIdWithHttpInfo(
+      id,
+    );
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty &&
+        response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(
+        await _decodeBodyBytes(response),
+        'Calendar',
+      ) as Calendar;
+    }
+    return null;
+  }
+
+  /// Create a Calendar
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [Calendar] calendar (required):
+  Future<Response> postCalendarsWithHttpInfo(
+    Calendar calendar,
+  ) async {
+    // ignore: prefer_const_declarations
+    final path = r'/calendars';
+
+    // ignore: prefer_final_locals
+    Object? postBody = calendar;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>['application/json'];
+
+    return apiClient.invokeAPI(
+      path,
+      'POST',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+    );
+  }
+
+  /// Create a Calendar
+  ///
+  /// Parameters:
+  ///
+  /// * [Calendar] calendar (required):
+  Future<Calendar?> postCalendars(
+    Calendar calendar,
+  ) async {
+    final response = await postCalendarsWithHttpInfo(
+      calendar,
+    );
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty &&
+        response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(
+        await _decodeBodyBytes(response),
+        'Calendar',
+      ) as Calendar;
+    }
+    return null;
   }
 
   /// Update a Calendar
@@ -156,16 +312,16 @@ class CalendarsApi {
   ///
   /// * [int] id (required):
   ///
-  /// * [Calendar] body (required):
-  Future<Response> calendarsIdPutWithHttpInfo(
+  /// * [Calendar] calendar (required):
+  Future<Response> putCalendarsIdWithHttpInfo(
     int id,
-    Calendar body,
+    Calendar calendar,
   ) async {
     // ignore: prefer_const_declarations
     final path = r'/calendars/{id}'.replaceAll('{id}', id.toString());
 
     // ignore: prefer_final_locals
-    Object? postBody = body;
+    Object? postBody = calendar;
 
     final queryParams = <QueryParam>[];
     final headerParams = <String, String>{};
@@ -190,74 +346,14 @@ class CalendarsApi {
   ///
   /// * [int] id (required):
   ///
-  /// * [Calendar] body (required):
-  Future<Calendar?> calendarsIdPut(
+  /// * [Calendar] calendar (required):
+  Future<Calendar?> putCalendarsId(
     int id,
-    Calendar body,
+    Calendar calendar,
   ) async {
-    final response = await calendarsIdPutWithHttpInfo(
+    final response = await putCalendarsIdWithHttpInfo(
       id,
-      body,
-    );
-    if (response.statusCode >= HttpStatus.badRequest) {
-      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
-    }
-    // When a remote server returns no body with a status of 204, we shall not decode it.
-    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
-    // FormatException when trying to decode an empty string.
-    if (response.body.isNotEmpty &&
-        response.statusCode != HttpStatus.noContent) {
-      return await apiClient.deserializeAsync(
-        await _decodeBodyBytes(response),
-        'Calendar',
-      ) as Calendar;
-    }
-    return null;
-  }
-
-  /// Create a Calendar
-  ///
-  /// Note: This method returns the HTTP [Response].
-  ///
-  /// Parameters:
-  ///
-  /// * [Calendar] body (required):
-  Future<Response> calendarsPostWithHttpInfo(
-    Calendar body,
-  ) async {
-    // ignore: prefer_const_declarations
-    final path = r'/calendars';
-
-    // ignore: prefer_final_locals
-    Object? postBody = body;
-
-    final queryParams = <QueryParam>[];
-    final headerParams = <String, String>{};
-    final formParams = <String, String>{};
-
-    const contentTypes = <String>['application/json'];
-
-    return apiClient.invokeAPI(
-      path,
-      'POST',
-      queryParams,
-      postBody,
-      headerParams,
-      formParams,
-      contentTypes.isEmpty ? null : contentTypes.first,
-    );
-  }
-
-  /// Create a Calendar
-  ///
-  /// Parameters:
-  ///
-  /// * [Calendar] body (required):
-  Future<Calendar?> calendarsPost(
-    Calendar body,
-  ) async {
-    final response = await calendarsPostWithHttpInfo(
-      body,
+      calendar,
     );
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
