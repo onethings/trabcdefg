@@ -10,7 +10,8 @@ import 'package:maplibre_gl/maplibre_gl.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timeago/timeago.dart' as timeago;
-import 'package:trabcdefg/l10n/timeago_my.dart'; // 新增 Myanmar TimeAgo
+import 'package:trabcdefg/l10n/timeago_my.dart';
+import 'package:url_launcher/url_launcher.dart'; // 新增 Myanmar TimeAgo
 import 'package:trabcdefg/providers/map_style_provider.dart';
 import 'package:trabcdefg/providers/settings_provider.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
@@ -285,6 +286,11 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
                               icon: Icon(provider.isFavorite(widget.selectedDevice.id!) ? Icons.favorite : Icons.favorite_border, color: provider.isFavorite(widget.selectedDevice.id!) ? Colors.red : Colors.grey),
                               onPressed: () => provider.toggleFavorite(widget.selectedDevice.id!),
                             ),
+                            IconButton(
+                              icon: const Icon(Icons.navigation_rounded, color: Colors.blue),
+                              onPressed: () => _navigateToGoogleMaps(lastPosition),
+                              tooltip: 'Navigate',
+                            ),
                           ],
                         ),
                         const SizedBox(height: 4),
@@ -343,6 +349,29 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
   void _onSymbolTapped(Symbol symbol) {
     if (mounted) {
       showModalBottomSheet(context: context, isScrollControlled: true, backgroundColor: Colors.transparent, builder: (context) => _buildBottomSheet(context));
+    }
+  }
+
+  Future<void> _navigateToGoogleMaps(Position position) async {
+    final lat = position.latitude?.toDouble();
+    final lng = position.longitude?.toDouble();
+    if (lat == null || lng == null || (lat == 0.0 && lng == 0.0)) return;
+
+    final latStr = lat.toStringAsFixed(6);
+    final lngStr = lng.toStringAsFixed(6);
+
+    // Try Google Maps navigation app scheme first, then geo: fallback, then web fallback
+    final uris = [
+      Uri.parse('google.navigation:q=$latStr,$lngStr&mode=d'),
+      Uri.parse('geo:0,0?q=$latStr,$lngStr'),
+      Uri.https('www.google.com', '/maps/dir/', {'api': '1', 'destination': '$latStr,$lngStr', 'travelmode': 'driving'}),
+    ];
+
+    for (final uri in uris) {
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+        return;
+      }
     }
   }
 
