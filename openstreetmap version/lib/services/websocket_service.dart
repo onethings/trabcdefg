@@ -17,6 +17,10 @@ class WebSocketService {
   String? _lastUrl;
   String? _lastSessionId;
 
+  /// Optional callback that returns the latest active session ID.
+  /// If set, reconnect will use this instead of the potentially stale [_lastSessionId].
+  String? Function()? sessionIdProvider;
+
   Stream<dynamic> get stream => _controller.stream;
 
   void connect(String wsUrl, String sessionId) {
@@ -26,16 +30,10 @@ class WebSocketService {
 
     try {
       // 2. Replaced print with developer.log
-      developer.log(
-        'Connecting to WebSocket at: $wsUrl',
-        name: 'WebSocketService',
-      );
+      developer.log('Connecting to WebSocket at: $wsUrl', name: 'WebSocketService');
       _reconnectTimer?.cancel();
 
-      _channel = IOWebSocketChannel.connect(
-        Uri.parse(wsUrl),
-        headers: {'Cookie': 'JSESSIONID=$sessionId'},
-      );
+      _channel = IOWebSocketChannel.connect(Uri.parse(wsUrl), headers: {'Cookie': 'JSESSIONID=$sessionId'});
 
       _channel!.stream.listen(
         (message) {
@@ -46,11 +44,7 @@ class WebSocketService {
         },
         onError: (error) {
           // 3. Replaced print with developer.log
-          developer.log(
-            'WebSocket error: $error',
-            name: 'WebSocketService',
-            error: error,
-          );
+          developer.log('WebSocket error: $error', name: 'WebSocketService', error: error);
           _scheduleReconnect();
         },
         onDone: () {
@@ -63,11 +57,7 @@ class WebSocketService {
       );
     } catch (e) {
       // 5. Replaced print with developer.log
-      developer.log(
-        'WebSocket connection failed: $e',
-        name: 'WebSocketService',
-        error: e,
-      );
+      developer.log('WebSocket connection failed: $e', name: 'WebSocketService', error: e);
       _scheduleReconnect();
     }
   }
@@ -76,19 +66,20 @@ class WebSocketService {
     if (!_isConnectAttempted || _reconnectTimer?.isActive == true) return;
 
     _reconnectAttempts++;
-    final delay = Duration(
-      seconds: min(pow(2, _reconnectAttempts).toInt(), 30),
-    );
+    final delay = Duration(seconds: min(pow(2, _reconnectAttempts).toInt(), 30));
 
     // 6. Replaced print with developer.log
-    developer.log(
-      'Scheduling WebSocket reconnect in ${delay.inSeconds}s (Attempt $_reconnectAttempts)',
-      name: 'WebSocketService',
-    );
+    developer.log('Scheduling WebSocket reconnect in ${delay.inSeconds}s (Attempt $_reconnectAttempts)', name: 'WebSocketService');
 
     _reconnectTimer = Timer(delay, () {
-      if (_lastUrl != null && _lastSessionId != null) {
-        connect(_lastUrl!, _lastSessionId!);
+      if (_lastUrl == null) return;
+
+      // Use the latest session ID from the provider if available,
+      // falling back to the potentially stale _lastSessionId.
+      final sessionId = sessionIdProvider != null ? sessionIdProvider!() : _lastSessionId;
+
+      if (sessionId != null) {
+        connect(_lastUrl!, sessionId);
       }
     });
   }

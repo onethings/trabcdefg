@@ -102,7 +102,21 @@ class TraccarApp extends StatelessWidget {
                         debugPrint('Auto-relogin succeeded! New session acquired.');
 
                         // Update the TraccarProvider with the fresh session
-                        TraccarProvider.instance?.setSessionId(jSessionId);
+                        final provider = TraccarProvider.instance;
+                        provider?.setSessionId(jSessionId);
+
+                        // Re-fetch data so the UI immediately reflects the refreshed session.
+                        // This is critical when the session expired silently (e.g. app
+                        // backgrounded for a week) and the interceptor catches the first 401.
+                        try {
+                          await provider?.fetchInitialData().timeout(const Duration(seconds: 15));
+                          debugPrint('Data re-fetched after interceptor auto-relogin.');
+                        } catch (fetchError) {
+                          // Data re-fetch failed, but we have a valid session now.
+                          // The WebSocket will connect and push updates shortly.
+                          debugPrint('Data re-fetch after interceptor auto-relogin failed: $fetchError');
+                        }
+
                         return; // Don't redirect — the app can continue
                       }
                     }

@@ -37,6 +37,10 @@ class TraccarProvider with ChangeNotifier {
     _instance = this;
     _listenToWebSocket();
     _loadFavorites();
+
+    // Wire up the session ID provider so WebSocket reconnects
+    // always use the latest session ID, not a potentially stale one.
+    webSocketService.sessionIdProvider = () => _sessionId;
   }
 
   Future<void> _loadFavorites() async {
