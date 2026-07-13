@@ -657,5 +657,9 @@ const Map<String, String> ta = {
     "settingsMarkerSize": "குறியீட்டு அளவு",
     "settingsNormal": "சாதாரண",
     "settingsLarge": "பெரிய",
-    "settingsExtraLarge": "மிகப் பெரிய"
+    "settingsExtraLarge": "மிகப் பெரிய",
+    "reportGeoFence": "புவி எல்லை",
+    "reportLogs": "பதிவுகள்",
+  "deviceSelectLocation": "சாதனத்தின் இருப்பிடத்தைத் தேர்ந்தெடுக்கவும்",
+  "searchOsm": "OSM-இல் தேடவும்"
 };

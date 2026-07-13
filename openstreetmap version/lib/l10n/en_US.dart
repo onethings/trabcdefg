@@ -194,8 +194,7 @@ const Map<String, String> enUs = {
   "userTemporary": "Temporary",
   "userTerms": "Terms of Service",
   "userPrivacy": "Privacy Policy",
-  "userTermsPrompt":
-      "By clicking Accept, you agree to our Terms of Service and confirm that you have read our Privacy Policy.",
+  "userTermsPrompt": "By clicking Accept, you agree to our Terms of Service and confirm that you have read our Privacy Policy.",
   "userTermsAccepted": "Terms Accepted",
   "userBilling": "Billing",
   "loginTitle": "Login",
@@ -230,8 +229,7 @@ const Map<String, String> enUs = {
   "deviceStatusOffline": "Offline",
   "deviceStatusUnknown": "Unknown",
   "deviceRegisterFirst": "Register your first device",
-  "deviceIdentifierHelp":
-      "IMEI, serial number or other id. It has to match the identifier device reports to the server.",
+  "deviceIdentifierHelp": "IMEI, serial number or other id. It has to match the identifier device reports to the server.",
   "deviceShare": "Share Device",
   "groupDialog": "Group",
   "groupParent": "Group",
@@ -667,4 +665,12 @@ const Map<String, String> enUs = {
   "settingsNormal": "Normal",
   "settingsLarge": "Large",
   "settingsExtraLarge": "Extra Large",
+  "reportGeofences": "Geofence",
+  "reportLogs": "Logs",
+  "odometer": "Odometer",
+  "distance": "Distance",
+  "totalDistance": "Total Distance",
+  "hours": "Hours",
+  "deviceSelectLocation": "Select device location",
+  "searchOsm": "Search in OSM",
 };

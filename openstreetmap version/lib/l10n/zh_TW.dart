@@ -665,4 +665,8 @@ const Map<String, String> zhTw = {
   "settingsNormal": "正常",
   "settingsLarge": "大",
   "settingsExtraLarge": "特大",
+  "reportGeoFence": "電子圍欄",
+  "reportLogs": "日誌",
+  "deviceSelectLocation": "選取設備位置",
+  "searchOsm": "搜尋地點 (OpenStreetMap)",
 };

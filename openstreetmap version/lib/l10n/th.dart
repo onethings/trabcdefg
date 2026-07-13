@@ -658,4 +658,8 @@ const Map<String, String> th = {
     "settingsNormal": "ปกติ",
     "settingsLarge": "ใหญ่",
     "settingsExtraLarge": "ใหญ่มาก",
+    "reportGeoFence": "รั้วภูมิศาสตร์",
+    "reportLogs": "บันทึกการทำงาน",
+  "deviceSelectLocation": "เลือกตำแหน่งอุปกรณ์",
+  "searchOsm": "ค้นหาใน OSM"
 };

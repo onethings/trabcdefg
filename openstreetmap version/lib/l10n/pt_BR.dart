@@ -661,4 +661,8 @@ const Map<String, String> ptBr = {
   "settingsNormal": "Normal",
   "settingsLarge": "Grande",
   "settingsExtraLarge": "Muito Grande",
+  "reportGeoFence": "Relatório de Cerca Geográfica",
+  "reportLogs": "Relatório de Logs",
+  "deviceSelectLocation": "Selecionar localização do dispositivo",
+  "searchOsm": "Pesquisar no OSM"
 };

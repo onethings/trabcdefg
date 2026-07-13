@@ -30,13 +30,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
     final lastDeviceId = prefs.getInt('selectedDeviceId');
     if (lastDeviceId != null && lastDeviceId != 0) {
       if (!mounted) return;
-      final traccarProvider = Provider.of<TraccarProvider>(
-        context,
-        listen: false,
-      );
-      final device = traccarProvider.devices.firstWhereOrNull(
-        (d) => d.id == lastDeviceId,
-      );
+      final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
+      final device = traccarProvider.devices.firstWhereOrNull((d) => d.id == lastDeviceId);
       if (device != null) {
         setState(() {
           _selectedDevice = device;
@@ -46,12 +41,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
   }
 
   Future<void> _selectDate(BuildContext context) async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _selectedDate,
-      firstDate: DateTime(2000),
-      lastDate: DateTime.now(),
-    );
+    final picked = await showDatePicker(context: context, initialDate: _selectedDate, firstDate: DateTime(2000), lastDate: DateTime.now());
 
     if (picked != null) {
       setState(() {
@@ -61,10 +51,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
   }
 
   void _showDeviceSelectionDialog(BuildContext context) {
-    final traccarProvider = Provider.of<TraccarProvider>(
-      context,
-      listen: false,
-    );
+    final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -107,23 +94,14 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
     final prefs = await SharedPreferences.getInstance();
 
-    final fromDate = DateTime.utc(
-      _selectedDate.year,
-      _selectedDate.month,
-      _selectedDate.day,
-    );
+    final fromDate = DateTime.utc(_selectedDate.year, _selectedDate.month, _selectedDate.day);
 
     // Create a DateTime for the end of the selected day in UTC
-    final toDate = fromDate
-        .add(const Duration(days: 1))
-        .subtract(const Duration(milliseconds: 1));
+    final toDate = fromDate.add(const Duration(days: 1)).subtract(const Duration(milliseconds: 1));
     await prefs.setInt('selectedDeviceId', _selectedDevice?.id ?? 0);
     await prefs.setString('historyFrom', fromDate.toIso8601String());
     await prefs.setString('historyTo', toDate.toIso8601String());
-    await prefs.setString(
-      'selectedDeviceName',
-      _selectedDevice!.name.toString(),
-    );
+    await prefs.setString('selectedDeviceName', _selectedDevice!.name.toString());
 
     // FIXED: Added a mounted check to ensure context is still active
     if (!mounted) return;
@@ -133,10 +111,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text('reportTitle'.tr),
-        automaticallyImplyLeading: false,
-      ),
+      appBar: AppBar(title: Text('reportTitle'.tr), automaticallyImplyLeading: false),
       body: ListView(
         children: [
           Padding(
@@ -144,40 +119,18 @@ class _ReportsScreenState extends State<ReportsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'reportConfigure'.tr,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+                Text('reportConfigure'.tr, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 16),
                 Card(
                   elevation: 2,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   child: ListTile(
-                    leading: Icon(
-                      Icons.directions_car,
-                      color: _selectedDevice != null
-                          ? Theme.of(context).colorScheme.primary
-                          : Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
+                    leading: Icon(Icons.directions_car, color: _selectedDevice != null ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurfaceVariant),
                     title: Text(
                       _selectedDevice?.name ?? 'reportDevice'.tr,
-                      style: TextStyle(
-                        fontWeight: _selectedDevice != null
-                            ? FontWeight.bold
-                            : FontWeight.normal,
-                        color: _selectedDevice != null
-                            ? Theme.of(context).colorScheme.onSurface
-                            : Theme.of(context).colorScheme.error,
-                      ),
+                      style: TextStyle(fontWeight: _selectedDevice != null ? FontWeight.bold : FontWeight.normal, color: _selectedDevice != null ? Theme.of(context).colorScheme.onSurface : Theme.of(context).colorScheme.error),
                     ),
-                    subtitle: _selectedDevice == null
-                        ? Text('pleaseSelectDevice'.tr)
-                        : null,
+                    subtitle: _selectedDevice == null ? Text('pleaseSelectDevice'.tr) : null,
                     trailing: const Icon(Icons.arrow_forward_ios, size: 16),
                     onTap: () => _showDeviceSelectionDialog(context),
                   ),
@@ -185,25 +138,11 @@ class _ReportsScreenState extends State<ReportsScreen> {
                 const SizedBox(height: 8),
                 Card(
                   elevation: 2,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   child: ListTile(
-                    leading: Icon(
-                      Icons.calendar_today,
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
-                    title: Text(
-                      '${'reportFrom'.tr}: ${DateFormat('yyyy-MM-dd').format(_selectedDate)}',
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.onSurface,
-                      ),
-                    ),
-                    trailing: Icon(
-                      Icons.arrow_forward_ios,
-                      size: 16,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
+                    leading: Icon(Icons.calendar_today, color: Theme.of(context).colorScheme.primary),
+                    title: Text('${'reportFrom'.tr}: ${DateFormat('yyyy-MM-dd').format(_selectedDate)}', style: TextStyle(color: Theme.of(context).colorScheme.onSurface)),
+                    trailing: Icon(Icons.arrow_forward_ios, size: 16, color: Theme.of(context).colorScheme.onSurfaceVariant),
                     onTap: () => _selectDate(context),
                   ),
                 ),
@@ -213,14 +152,16 @@ class _ReportsScreenState extends State<ReportsScreen> {
           const Divider(),
           _buildReportItem('reportCombined'.tr, 'combined', Icons.show_chart),
           _buildReportItem('reportSummary'.tr, 'summary', Icons.summarize),
-          _buildReportItem(
-            'reportStops'.tr,
-            'stops',
-            Icons.pause_circle_outline,
-          ),
+          _buildReportItem('reportStops'.tr, 'stops', Icons.pause_circle_outline),
           _buildReportItem('reportReplay'.tr, 'route', Icons.replay),
           _buildReportItem('reportTrips'.tr, 'trips', Icons.route),
           _buildReportItem('reportEvents'.tr, 'events', Icons.event_note),
+          const Divider(),
+          _buildReportItem('reportGeofences'.tr, 'geofences', Icons.fence),
+          _buildReportItem('reportChart'.tr, 'chart', Icons.bar_chart),
+          _buildReportItem('reportPositions'.tr, 'positions', Icons.list_alt),
+          _buildReportItem('reportLogs'.tr, 'logs', Icons.article),
+          _buildReportItem('reportScheduled'.tr, 'scheduled', Icons.schedule_send),
         ],
       ),
     );
@@ -229,14 +170,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
   Widget _buildReportItem(String title, String type, IconData icon) {
     return ListTile(
       leading: Icon(icon, color: Theme.of(context).colorScheme.primary),
-      title: Text(
-        title,
-        style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
-      ),
-      trailing: Icon(
-        Icons.chevron_right,
-        color: Theme.of(context).colorScheme.onSurfaceVariant,
-      ),
+      title: Text(title, style: TextStyle(color: Theme.of(context).colorScheme.onSurface)),
+      trailing: Icon(Icons.chevron_right, color: Theme.of(context).colorScheme.onSurfaceVariant),
       onTap: () => _navigateToReport(type),
     );
   }

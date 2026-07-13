@@ -16,9 +16,14 @@ import 'package:trabcdefg/providers/traccar_provider.dart';
 import 'package:trabcdefg/screens/login_screen.dart';
 import 'package:trabcdefg/screens/main_screen.dart';
 import 'package:trabcdefg/screens/register_screen.dart';
+import 'package:trabcdefg/screens/reports/chart_report_screen.dart';
 import 'package:trabcdefg/screens/reports/combined_report_screen.dart';
 import 'package:trabcdefg/screens/reports/events_report_screen.dart';
+import 'package:trabcdefg/screens/reports/geofences_report_screen.dart';
+import 'package:trabcdefg/screens/reports/logs_report_screen.dart';
+import 'package:trabcdefg/screens/reports/positions_report_screen.dart';
 import 'package:trabcdefg/screens/reports/route_report_screen.dart';
+import 'package:trabcdefg/screens/reports/scheduled_reports_screen.dart';
 import 'package:trabcdefg/screens/reports/stops_report_screen.dart';
 import 'package:trabcdefg/screens/reports/summary_report_screen.dart';
 import 'package:trabcdefg/screens/reports/trips_report_screen.dart';
@@ -185,6 +190,11 @@ class TraccarApp extends StatelessWidget {
               '/reports/route': (context) => const RouteReportScreen(),
               '/reports/trips': (context) => const TripsReportScreen(),
               '/reports/events': (context) => const EventsReportScreen(),
+              '/reports/geofences': (context) => const GeofencesReportScreen(),
+              '/reports/chart': (context) => const ChartReportScreen(),
+              '/reports/positions': (context) => const PositionsReportScreen(),
+              '/reports/logs': (context) => const LogsReportScreen(),
+              '/reports/scheduled': (context) => const ScheduledReportsScreen(),
             },
           );
         },

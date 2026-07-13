@@ -657,5 +657,9 @@ const Map<String, String> nb = {
     "settingsMarkerSize": "Markørstørrelse",
     "settingsNormal": "Normal",
     "settingsLarge": "Stor",
-    "settingsExtraLarge": "Ekstra stor"
+    "settingsExtraLarge": "Ekstra stor",
+    "reportGeofences": "Geofence-rapport",
+    "reportLogs": "Rapportlogger",
+  "deviceSelectLocation": "Välj enhetens plats",
+  "searchOsm": "Sök i OSM"
 };
