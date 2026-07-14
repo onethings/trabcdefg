@@ -2,6 +2,10 @@
 
 A new Flutter project using latest traccar openapi.yaml to generate model.
 
+Version: v.1.0.25
+
+[![Watch Demo Short](https://img.youtube.com/vi/W3b8m3Pv3MQ/0.jpg)](https://youtube.com/shorts/W3b8m3Pv3MQ)
+
 ## Getting Started
 
 This project is a starting point for a Flutter application.
