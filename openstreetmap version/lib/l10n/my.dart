@@ -668,4 +668,7 @@ const Map<String, String> my = {
   "reportLogs": "အစီရင်ခံစာမှတ်တမ်းများ",
   "deviceSelectLocation": "စက်၏တည်နေရာကို ရွေးချယ်ပါ",
   "searchOsm": "OSM တွင် ရှာဖွေရန်",
+  "dashboardDeviceStatus": "စက်ပစ္စည်း အခြေအနေ",
+  "dashboardNoDevices": "စက်ပစ္စည်းများ မတွေ့ရှိပါ",
+  "justNow": "ခုနက",
 };

@@ -661,5 +661,8 @@ const Map<String, String> pl = {
   "reportGeoFence": "Raport geofence",
   "reportLogs": "Logi raportów",
   "deviceSelectLocation": "Wybierz lokalizację urządzenia",
-  "searchOsm": "Szukaj w OSM"
+  "searchOsm": "Szukaj w OSM",
+  "dashboardDeviceStatus": "Status urządzenia",
+  "dashboardNoDevices": "Nie znaleziono urządzeń",
+  "justNow": "Przed chwilą",
 };

@@ -662,4 +662,7 @@ const Map<String, String> lv = {
   "reportLogs": "Atskaites žurnāli",
   "deviceSelectLocation": "Atlasiet ierīces atrašanās vietu",
   "searchOsm": "Meklēt OSM",
+  "dashboardDeviceStatus": "Ierīces statuss",
+  "dashboardNoDevices": "Ierīces nav atrastas",
+  "justNow": "Tikko",
 };

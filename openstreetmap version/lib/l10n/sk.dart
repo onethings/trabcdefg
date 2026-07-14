@@ -661,5 +661,8 @@ const Map<String, String> sk = {
   "reportGeoFence": "Geozóna",
   "reportLogs": "Logy",
   "deviceSelectLocation": "Vybrat polohu zařízení",
-  "searchOsm": "Hledat v OSM"
+  "searchOsm": "Hledat v OSM",
+  "dashboardDeviceStatus": "Stav zařízení",
+  "dashboardNoDevices": "Nebyla nalezena žádná zařízení",
+  "justNow": "Právě teď",
 };

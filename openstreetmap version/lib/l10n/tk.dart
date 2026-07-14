@@ -662,4 +662,7 @@ const Map<String, String> tk = {
   "reportLogs": "Jurnal",
   "deviceSelectLocation": "Pilih lokasi perangkat",
   "searchOsm": "Cari di OSM",
+  "dashboardDeviceStatus": "Status perangkat",
+  "dashboardNoDevices": "Tidak ada perangkat ditemukan",
+  "justNow": "Baru saja",
 };

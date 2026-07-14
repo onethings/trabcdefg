@@ -661,5 +661,8 @@ const Map<String, String> vi = {
   "reportGeoFence": "Vùng địa lý",
   "reportLogs": "Nhật ký",
   "deviceSelectLocation": "Chọn vị trí thiết bị",
-  "searchOsm": "Tìm kiếm trong OSM"
+  "searchOsm": "Tìm kiếm trong OSM",
+  "dashboardDeviceStatus": "Trạng thái thiết bị",
+  "dashboardNoDevices": "Không có thiết bị.",
+  "justNow": "vừa xong",
 };

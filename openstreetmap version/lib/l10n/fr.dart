@@ -662,4 +662,7 @@ const Map<String, String> fr = {
   "reportLogs": "Journaux de rapports",
   "deviceSelectLocation": "Sélectionner l'emplacement de l'appareil",
   "searchOsm": "Rechercher dans OSM",
+  "dashboardDeviceStatus": "Statut de l'appareil",
+  "dashboardNoDevices": "Aucun appareil.",
+  "justNow": "à l'instant",
 };

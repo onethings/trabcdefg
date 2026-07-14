@@ -662,4 +662,7 @@ const Map<String, String> hr = {
   "reportLogs": "Zapisi izvješća",
   "deviceSelectLocation": "Odaberite lokaciju uređaja",
   "searchOsm": "Pretraži u OSM",
+  "dashboardDeviceStatus": "Status uređaja",
+  "dashboardNoDevices": "Nema pronađenih uređaja",
+  "justNow": "Upravo sada",
 };

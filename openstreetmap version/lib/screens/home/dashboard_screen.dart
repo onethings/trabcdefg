@@ -5,7 +5,6 @@ import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
-import 'package:trabcdefg/src/generated_api/api.dart' as api;
 
 import '../notifications_screen.dart';
 
@@ -18,15 +17,9 @@ class DashboardScreen extends StatelessWidget {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    final onlineCount = provider.devices
-        .where((d) => d.status == 'online')
-        .length;
-    final movingCount = provider.positions
-        .where((p) => (p.speed ?? 0.0) > 1.0)
-        .length;
-    final offlineCount = provider.devices
-        .where((d) => d.status == 'offline')
-        .length;
+    final onlineCount = provider.devices.where((d) => d.status == 'online').length;
+    final movingCount = provider.positions.where((p) => (p.speed ?? 0.0) > 1.0).length;
+    final offlineCount = provider.devices.where((d) => d.status == 'offline').length;
     final totalCount = provider.devices.length;
 
     // Calculate total distance for today (ideally from reports, but using current totalDistance for display)
@@ -47,26 +40,11 @@ class DashboardScreen extends StatelessWidget {
         flexibleSpace: ClipRRect(
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-            child: Container(
-              color: (isDark ? Colors.black : Colors.white).withValues(
-                alpha: 0.1,
-              ),
-            ),
+            child: Container(color: (isDark ? Colors.black : Colors.white).withValues(alpha: 0.1)),
           ),
         ),
-        title: Text(
-          'dashboardTitle'.tr,
-          style: const TextStyle(
-            fontWeight: FontWeight.w800,
-            letterSpacing: -0.5,
-          ),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.notifications_none_rounded),
-            onPressed: () => Get.to(() => const NotificationsScreen()),
-          ),
-        ],
+        title: Text('dashboardTitle'.tr, style: const TextStyle(fontWeight: FontWeight.w800, letterSpacing: -0.5)),
+        actions: [IconButton(icon: const Icon(Icons.notifications_none_rounded), onPressed: () => Get.to(() => const NotificationsScreen()))],
       ),
       body: Stack(
         children: [
@@ -76,40 +54,19 @@ class DashboardScreen extends StatelessWidget {
               onRefresh: () => provider.fetchInitialData(),
               child: SingleChildScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 12,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _buildGreeting(provider, theme),
                     const SizedBox(height: 24),
-                    _buildStatusSection(
-                      context,
-                      onlineCount,
-                      movingCount,
-                      offlineCount,
-                      totalCount,
-                    ),
+                    _buildStatusSection(context, onlineCount, movingCount, offlineCount, totalCount),
                     const SizedBox(height: 24),
-                    _buildSummaryCard(
-                      context,
-                      'dashboardTotalDistance'.tr,
-                      '${totalKm.toStringAsFixed(1)} km',
-                      Icons.auto_graph_rounded,
-                      theme.colorScheme.primary,
-                    ),
+                    _buildSummaryCard(context, 'dashboardTotalDistance'.tr, '${totalKm.toStringAsFixed(1)} ${"km".tr}', Icons.auto_graph_rounded, theme.colorScheme.primary),
                     const SizedBox(height: 24),
-                    Text(
-                      'dashboardRecentActivity'.tr,
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
+                    Text('dashboardDeviceStatus'.tr, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 12),
-                    _buildRecentEventsList(context, provider.events),
+                    _buildDeviceStatusList(context, provider),
                   ],
                 ),
               ),
@@ -123,15 +80,7 @@ class DashboardScreen extends StatelessWidget {
   Widget _buildBackground(ThemeData theme) {
     return Container(
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            theme.colorScheme.primary.withValues(alpha: 0.08),
-            theme.colorScheme.surface,
-            theme.colorScheme.secondary.withValues(alpha: 0.05),
-          ],
-        ),
+        gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [theme.colorScheme.primary.withValues(alpha: 0.08), theme.colorScheme.surface, theme.colorScheme.secondary.withValues(alpha: 0.05)]),
       ),
     );
   }
@@ -141,75 +90,29 @@ class DashboardScreen extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          '${'dashboardHello'.tr}, $name 👋',
-          style: const TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.w800,
-            letterSpacing: -1,
-          ),
-        ),
-        Text(
-          'dashboardWelcomeBack'.tr,
-          style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
-        ),
+        Text('${'dashboardHello'.tr}, $name 👋', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, letterSpacing: -1)),
+        Text('dashboardWelcomeBack'.tr, style: TextStyle(color: theme.colorScheme.onSurfaceVariant)),
       ],
     );
   }
 
-  Widget _buildStatusSection(
-    BuildContext context,
-    int online,
-    int moving,
-    int offline,
-    int total,
-  ) {
+  Widget _buildStatusSection(BuildContext context, int online, int moving, int offline, int total) {
     return Row(
       children: [
-        Expanded(
-          child: _buildSmallStatusCard(
-            context,
-            'dashboardOnline'.tr,
-            online.toString(),
-            Colors.green,
-          ),
-        ),
+        Expanded(child: _buildSmallStatusCard(context, 'dashboardOnline'.tr, online.toString(), Colors.green)),
         const SizedBox(width: 12),
-        Expanded(
-          child: _buildSmallStatusCard(
-            context,
-            'dashboardMoving'.tr,
-            moving.toString(),
-            Colors.blue,
-          ),
-        ),
+        Expanded(child: _buildSmallStatusCard(context, 'dashboardMoving'.tr, moving.toString(), Colors.blue)),
         const SizedBox(width: 12),
-        Expanded(
-          child: _buildSmallStatusCard(
-            context,
-            'dashboardOffline'.tr,
-            offline.toString(),
-            Colors.grey,
-          ),
-        ),
+        Expanded(child: _buildSmallStatusCard(context, 'dashboardOffline'.tr, offline.toString(), Colors.grey)),
       ],
     );
   }
 
-  Widget _buildSmallStatusCard(
-    BuildContext context,
-    String title,
-    String value,
-    Color color,
-  ) {
+  Widget _buildSmallStatusCard(BuildContext context, String title, String value, Color color) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color:
-            (Theme.of(context).brightness == Brightness.dark
-                    ? Colors.white
-                    : Colors.black)
-                .withValues(alpha: 0.05),
+        color: (Theme.of(context).brightness == Brightness.dark ? Colors.white : Colors.black).withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: color.withValues(alpha: 0.2), width: 1.5),
       ),
@@ -217,11 +120,7 @@ class DashboardScreen extends StatelessWidget {
         children: [
           Text(
             value,
-            style: TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.w900,
-              color: color,
-            ),
+            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: color),
           ),
           const SizedBox(height: 4),
           Text(
@@ -235,57 +134,30 @@ class DashboardScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildSummaryCard(
-    BuildContext context,
-    String title,
-    String value,
-    IconData icon,
-    Color color,
-  ) {
+  Widget _buildSummaryCard(BuildContext context, String title, String value, IconData icon, Color color) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [color.withValues(alpha: 0.8), color],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        gradient: LinearGradient(colors: [color.withValues(alpha: 0.8), color], begin: Alignment.topLeft, end: Alignment.bottomRight),
         borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: color.withValues(alpha: 0.3),
-            blurRadius: 15,
-            offset: const Offset(0, 8),
-          ),
-        ],
+        boxShadow: [BoxShadow(color: color.withValues(alpha: 0.3), blurRadius: 15, offset: const Offset(0, 8))],
       ),
       child: Row(
         children: [
           Container(
             padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.2),
-              shape: BoxShape.circle,
-            ),
+            decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), shape: BoxShape.circle),
             child: Icon(icon, color: Colors.white, size: 30),
           ),
           const SizedBox(width: 20),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                title,
-                style: const TextStyle(color: Colors.white70, fontSize: 14),
-              ),
+              Text(title, style: const TextStyle(color: Colors.white70, fontSize: 14)),
               Text(
                 value,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 28,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: -1,
-                ),
+                style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.w900, letterSpacing: -1),
               ),
             ],
           ),
@@ -294,25 +166,27 @@ class DashboardScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildRecentEventsList(BuildContext context, List<api.Event> events) {
-    if (events.isEmpty) {
+  Widget _buildDeviceStatusList(BuildContext context, TraccarProvider provider) {
+    final devices = provider.devices;
+    if (devices.isEmpty) {
       return Container(
         height: 100,
         alignment: Alignment.center,
-        child: Text(
-          'dashboardNoEvents'.tr,
-          style: const TextStyle(color: Colors.grey),
-        ),
+        child: Text('dashboardNoDevices'.tr, style: const TextStyle(color: Colors.grey)),
       );
     }
 
-    final latestEvents = events.reversed.take(5).toList();
     return ListView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      itemCount: latestEvents.length,
+      itemCount: devices.length,
       itemBuilder: (context, index) {
-        final event = latestEvents[index];
+        final device = devices[index];
+        final isOnline = device.status == 'online';
+        final statusColor = isOnline ? Colors.green : Colors.grey;
+        final lastUpdate = device.lastUpdate?.toLocal();
+        final timeAgo = lastUpdate != null ? _formatTimeAgo(lastUpdate) : '—';
+
         return Container(
           margin: const EdgeInsets.only(bottom: 12),
           padding: const EdgeInsets.all(12),
@@ -323,32 +197,44 @@ class DashboardScreen extends StatelessWidget {
           ),
           child: Row(
             children: [
-              Icon(
-                _getEventIcon(event.type),
-                size: 18,
-                color: Theme.of(context).colorScheme.primary,
+              Container(
+                width: 10,
+                height: 10,
+                decoration: BoxDecoration(color: statusColor, shape: BoxShape.circle),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      (event.type ?? 'unknownEvent').tr,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 13,
-                      ),
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            device.name ?? '—',
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (device.category != null) ...[
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(color: statusColor.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(6)),
+                            child: Text(
+                              device.category!,
+                              style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: statusColor),
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
-                    Text(
-                      DateFormat.yMMMd().add_jm().format(
-                        event.eventTime?.toLocal() ?? DateTime.now(),
-                      ),
-                      style: const TextStyle(fontSize: 11, color: Colors.grey),
-                    ),
+                    const SizedBox(height: 4),
+                    Text('${isOnline ? 'dashboardOnline'.tr : 'dashboardOffline'.tr} · $timeAgo', style: const TextStyle(fontSize: 11, color: Colors.grey)),
                   ],
                 ),
               ),
+              Icon(isOnline ? Icons.check_circle_rounded : Icons.info_outline_rounded, size: 18, color: statusColor),
             ],
           ),
         );
@@ -356,24 +242,18 @@ class DashboardScreen extends StatelessWidget {
     );
   }
 
-  IconData _getEventIcon(String? type) {
-    switch (type) {
-      case 'deviceOnline':
-        return Icons.cloud_done_rounded;
-      case 'deviceOffline':
-        return Icons.cloud_off_rounded;
-      case 'deviceMoving':
-        return Icons.directions_car_rounded;
-      case 'deviceStopped':
-        return Icons.stop_circle_rounded;
-      case 'geofenceEnter':
-        return Icons.login_rounded;
-      case 'geofenceExit':
-        return Icons.logout_rounded;
-      case 'alarm':
-        return Icons.warning_amber_rounded;
-      default:
-        return Icons.event_note_rounded;
+  String _formatTimeAgo(DateTime dateTime) {
+    final now = DateTime.now();
+    final diff = now.difference(dateTime);
+
+    if (diff.inMinutes < 1) {
+      return 'justNow'.tr;
+    } else if (diff.inMinutes < 60) {
+      return '${diff.inMinutes}m';
+    } else if (diff.inHours < 24) {
+      return '${diff.inHours}h';
+    } else {
+      return DateFormat.MMMd().add_jm().format(dateTime);
     }
   }
 }

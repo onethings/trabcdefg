@@ -662,4 +662,7 @@ const Map<String, String> ka = {
   "reportLogs": "ანგარიშების ჟურნალები",
   "deviceSelectLocation": "მოწყობილობის მდებარეობის არჩევა",
   "searchOsm": "ძიება OSM-ში",
+  "dashboardDeviceStatus": "მოწყობილობის სტატუსი",
+  "dashboardNoDevices": "მოწყობილობები ვერ მოიძებნა",
+  "justNow": "ახლავე",
 };

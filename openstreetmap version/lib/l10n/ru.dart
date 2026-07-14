@@ -661,5 +661,8 @@ const Map<String, String> ru = {
   "reportGeoFence": "Отчёт о геозоне",
   "reportLogs": "Журналы отчётов",
   "deviceSelectLocation": "Выберите местоположение устройства",
-  "searchOsm": "Поиск в OSM"
+  "searchOsm": "Поиск в OSM",
+  "dashboardDeviceStatus": "Статус устройства",
+  "dashboardNoDevices": "Нет устройств.",
+  "justNow": "только что",
 };

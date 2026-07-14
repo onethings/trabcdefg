@@ -661,5 +661,8 @@ const Map<String, String> az = {
   "reportGeofences": "Coğrafi hasar hesabatı",
   "reportLogs": "Hesabat jurnalları",
   "deviceSelectLocation": "Cihazın yerini seçin",
-  "searchOsm": "OSM-də axtarış"
+  "searchOsm": "OSM-də axtarış",
+  "dashboardDeviceStatus": "Cihazın statusu",
+  "dashboardNoDevices": "Cihaz tapılmadı",
+  "justNow": "İndi",
 };

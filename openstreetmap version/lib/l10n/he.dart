@@ -661,5 +661,8 @@ const Map<String, String> he = {
   "reportGeofences": "דוח גידור גיאוגרפי",
   "reportLogs": "יומני דוחות",
   "deviceSelectLocation": "בחר מיקום מכשיר",
-  "searchOsm": "חפש ב-OSM"
+  "searchOsm": "חפש ב-OSM",
+  "dashboardDeviceStatus": "סטטוס התקן",
+  "dashboardNoDevices": "לא נמצאו התקנים",
+  "justNow": "עכשיו",
 };

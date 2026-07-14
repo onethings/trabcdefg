@@ -662,4 +662,7 @@ const Map<String, String> fi = {
   "reportLogs": "Raporttilokit",
   "deviceSelectLocation": "Valitse laitteen sijainti",
   "searchOsm": "Hae OSM:stä",
+  "dashboardDeviceStatus": "Laitteen tila",
+  "dashboardNoDevices": "Ei laitteita",
+  "justNow": "Juuri nyt",
 };

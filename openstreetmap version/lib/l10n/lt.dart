@@ -662,4 +662,7 @@ const Map<String, String> lt = {
   "reportLogs": "Ataskaitų žurnalai",
   "deviceSelectLocation": "Pasirinkite įrenginio vietą",
   "searchOsm": "Ieškoti OSM",
+  "dashboardDeviceStatus": "Įrenginio būsena",
+  "dashboardNoDevices": "Įrenginių nerasta",
+  "justNow": "Ką tik",
 };

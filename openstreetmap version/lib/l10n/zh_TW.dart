@@ -669,4 +669,7 @@ const Map<String, String> zhTw = {
   "reportLogs": "日誌",
   "deviceSelectLocation": "選取設備位置",
   "searchOsm": "搜尋地點 (OpenStreetMap)",
+  "dashboardDeviceStatus": "裝置狀態",
+  "dashboardNoDevices": "未找到裝置",
+  "justNow": "現在",
 };

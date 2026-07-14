@@ -662,4 +662,7 @@ const Map<String, String> uk = {
   "reportLogs": "Журнал",
   "deviceSelectLocation": "Выбрать местоположение устройства",
   "searchOsm": "Поиск в OSM",
+  "dashboardDeviceStatus": "Статус пристрою",
+  "dashboardNoDevices": "Немає пристроїв.",
+  "justNow": "щойно",
 };

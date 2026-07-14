@@ -662,4 +662,7 @@ const Map<String, String> da = {
   "reportLogs": "Rapportlogger",
   "deviceSelectLocation": "Velg enhetsplassering",
   "searchOsm": "Søk i OSM",
+  "dashboardDeviceStatus": "Enhetsstatus",
+  "dashboardNoDevices": "Ingen enheter funnet",
+  "justNow": "Akkurat nå",
 };

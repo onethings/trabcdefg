@@ -662,4 +662,7 @@ const Map<String, String> el = {
   "reportLogs": "Αρχεία καταγραφής αναφοράς",
   "deviceSelectLocation": "Επιλογή τοποθεσίας συσκευής",
   "searchOsm": "Αναζήτηση στο OSM",
+  "dashboardDeviceStatus": "Κατάσταση συσκευής",
+  "dashboardNoDevices": "Δεν υπάρχουν συσκευές.",
+  "justNow": "μόλις τώρα",
 };

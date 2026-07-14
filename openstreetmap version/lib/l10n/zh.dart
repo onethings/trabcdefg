@@ -669,4 +669,7 @@ const Map<String, String> zhCN = {
   "settingsLarge": "大",
   "settingsExtraLarge": "特大",
   "reportGeoFence": "电子围栏",
+  "dashboardDeviceStatus": "设备状态",
+  "dashboardNoDevices": "未找到设备",
+  "justNow": "现在",
 };

@@ -662,4 +662,7 @@ const Map<String, String> sw = {
   "reportLogs": "Historia",
   "deviceSelectLocation": "Seleccionar ubicación del dispositivo",
   "searchOsm": "Buscar en OSM",
+  "dashboardDeviceStatus": "Estado del dispositivo",
+  "dashboardNoDevices": "No se encontraron dispositivos",
+  "justNow": "Justo ahora",
 };

@@ -662,4 +662,7 @@ const Map<String, String> si = {
   "reportLogs": "වාර්තා ලොග්",
   "deviceSelectLocation": "උපාංගයේ පිහිටීම තෝරන්න",
   "searchOsm": "OSM හි සොයන්න",
+  "dashboardDeviceStatus": "උපාංගයේ තත්ත්වය",
+  "dashboardNoDevices": "උපාංග කිසිවක් හමු නොවීය",
+  "justNow": "දැන්",
 };

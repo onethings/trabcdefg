@@ -662,4 +662,7 @@ const Map<String, String> uz = {
   "reportLogs": "Jurnal",
   "deviceSelectLocation": "Pilih lokasi perangkat",
   "searchOsm": "Cari di OSM",
+  "dashboardDeviceStatus": "Status perangkat",
+  "dashboardNoDevices": "Tidak ada perangkat ditemukan",
+  "justNow": "Baru saja",
 };

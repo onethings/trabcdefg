@@ -661,5 +661,8 @@ const Map<String, String> hy = {
   "reportGeofences": "Աշխարհագրական ցանկապատների հաշվետվություն",
   "reportLogs": "Հաշվետվությունների մատյաններ",
   "deviceSelectLocation": "Ընտրել սարքի գտնվելու վայրը",
-  "searchOsm": "Փնտրել OSM-ում"
+  "searchOsm": "Փնտրել OSM-ում",
+  "dashboardDeviceStatus": "Սարքի կարգավիճակը",
+  "dashboardNoDevices": "Սարքեր չեն գտնվել",
+  "justNow": "Հենց հիմա",
 };

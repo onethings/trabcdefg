@@ -662,4 +662,7 @@ const Map<String, String> bn = {
   "reportLogs": "রিপোর্ট লগ",
   "deviceSelectLocation": "ডিভাইসের অবস্থান নির্বাচন করুন",
   "searchOsm": "OSM-এ অনুসন্ধান করুন",
+  "dashboardDeviceStatus": "ডিভাইসের স্থিতি",
+  "dashboardNoDevices": "কোনো ডিভাইস পাওয়া যায়নি",
+  "justNow": "এইমাত্র",
 };

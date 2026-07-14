@@ -662,4 +662,7 @@ const Map<String, String> ja = {
   "reportLogs": "レポートログ",
   "deviceSelectLocation": "デバイスの場所を選択",
   "searchOsm": "OSMで検索",
+  "dashboardDeviceStatus": "デバイスの状態",
+  "dashboardNoDevices": "デバイスが見つかりません",
+  "justNow": "たった今",
 };

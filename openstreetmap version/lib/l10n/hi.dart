@@ -662,4 +662,7 @@ const Map<String, String> hi = {
   "reportLogs": "रिपोर्ट लॉग",
   "deviceSelectLocation": "डिवाइस का स्थान चुनें",
   "searchOsm": "OSM में खोजें",
+  "dashboardDeviceStatus": "डिवाइस स्थिति",
+  "dashboardNoDevices": "कोई डिवाइस नहीं।",
+  "justNow": "अभी",
 };

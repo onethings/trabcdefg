@@ -662,4 +662,7 @@ const Map<String, String> km = {
   "reportLogs": "កំណត់ហេតុរបាយការណ៍",
   "deviceSelectLocation": "ជ្រើសរើសទីតាំងឧបករណ៍",
   "searchOsm": "ស្វែងរកក្នុង OSM",
+  "dashboardDeviceStatus": "ស្ថានភាពឧបករណ៍",
+  "dashboardNoDevices": "មិនមានឧបករណ៍រកឃើញទេ",
+  "justNow": "ពេលនេះ",
 };

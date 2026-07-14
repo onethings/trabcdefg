@@ -661,5 +661,8 @@ const Map<String, String> et = {
   "reportGeofences": "Geopiirete aruanne",
   "reportLogs": "Aruannete logid",
   "deviceSelectLocation": "Vali seadme asukoht",
-  "searchOsm": "Otsi OSM-ist"
+  "searchOsm": "Otsi OSM-ist",
+  "dashboardDeviceStatus": "Seadme olek",
+  "dashboardNoDevices": "Seadmeid ei leitud",
+  "justNow": "Just praegu",
 };

@@ -661,5 +661,8 @@ const Map<String, String> mn = {
   "reportGeofences": "Геохашааны тайлан",
   "reportLogs": "Тайлангийн бүртгэл",
   "deviceSelectLocation": "Төхөөрөмжийн байршлыг сонгох",
-  "searchOsm": "OSM-ээс хайх"
+  "searchOsm": "OSM-ээс хайх",
+  "dashboardDeviceStatus": "Төхөөрөмжийн төлөв",
+  "dashboardNoDevices": "Төхөөрөмж олдсонгүй",
+  "justNow": "Саяхан",
 };

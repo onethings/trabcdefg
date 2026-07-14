@@ -661,5 +661,8 @@ const Map<String, String> gl = {
   "reportGeofences": "Relatório de geocercas",
   "reportLogs": "Registos de relatórios",
   "deviceSelectLocation": "Selecionar localização do dispositivo",
-  "searchOsm": "Pesquisar no OSM"
+  "searchOsm": "Pesquisar no OSM",
+  "dashboardDeviceStatus": "Estado do dispositivo",
+  "dashboardNoDevices": "Nenhum dispositivo encontrado",
+  "justNow": "Agora mesmo",
 };

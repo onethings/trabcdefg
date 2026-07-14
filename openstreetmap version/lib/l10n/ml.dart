@@ -662,4 +662,7 @@ const Map<String, String> ml = {
   "reportLogs": "റിപ്പോർട്ട് ലോഗുകൾ",
   "deviceSelectLocation": "ഉപകരണത്തിന്റെ സ്ഥാനം തിരഞ്ഞെടുക്കുക",
   "searchOsm": "OSM-ൽ തിരയുക",
+  "dashboardDeviceStatus": "ഉപകരണത്തിന്റെ അവസ്ഥ",
+  "dashboardNoDevices": "ഉപകരണങ്ങളൊന്നും കണ്ടെത്തിയില്ല",
+  "justNow": "ഇപ്പോൾ",
 };

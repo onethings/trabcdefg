@@ -661,5 +661,8 @@ const Map<String, String> ro = {
   "reportGeoFence": "Raport geofence",
   "reportLogs": "Jurnale raport",
   "deviceSelectLocation": "Zgjedh vendndodhjen e pajisjes",
-  "searchOsm": "Kërko në OSM"
+  "searchOsm": "Kërko në OSM",
+  "dashboardDeviceStatus": "Statusi i pajisjes",
+  "dashboardNoDevices": "Nuk u gjet asnjë pajisje",
+  "justNow": "Sapo",
 };

@@ -662,4 +662,7 @@ const Map<String, String> hu = {
   "reportLogs": "Jelentésnaplók",
   "deviceSelectLocation": "Eszköz helyének kiválasztása",
   "searchOsm": "Keresés az OSM-ben",
+  "dashboardDeviceStatus": "Eszköz állapota",
+  "dashboardNoDevices": "Nincsenek eszközök",
+  "justNow": "Most",
 };

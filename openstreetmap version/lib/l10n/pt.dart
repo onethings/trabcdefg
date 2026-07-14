@@ -661,5 +661,8 @@ const Map<String, String> pt = {
   "reportGeoFence": "Relatório de Geocerca",
   "reportLogs": "Relatório de Registos",
   "deviceSelectLocation": "Selecionar localização do dispositivo",
-  "searchOsm": "Pesquisar no OSM"
+  "searchOsm": "Pesquisar no OSM",
+  "dashboardDeviceStatus": "Status do dispositivo",
+  "dashboardNoDevices": "Sem dispositivos.",
+  "justNow": "agora mesmo",
 };

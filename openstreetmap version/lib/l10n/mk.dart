@@ -661,5 +661,8 @@ const Map<String, String> mk = {
   "reportGeofences": "Извештај за геозони",
   "reportLogs": "Дневници на извештаи",
   "deviceSelectLocation": "Изберете локација на уредот",
-  "searchOsm": "Пребарај во OSM"
+  "searchOsm": "Пребарај во OSM",
+  "dashboardDeviceStatus": "Статус на уредот",
+  "dashboardNoDevices": "Не се пронајдени уреди",
+  "justNow": "Тукушто",
 };

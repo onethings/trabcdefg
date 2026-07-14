@@ -661,5 +661,8 @@ const Map<String, String> ko = {
   "reportGeofences": "지오펜스 보고서",
   "reportLogs": "보고서 로그",
   "deviceSelectLocation": "장치 위치 선택",
-  "searchOsm": "OSM에서 검색"
+  "searchOsm": "OSM에서 검색",
+  "dashboardDeviceStatus": "기기 상태",
+  "dashboardNoDevices": "기기를 찾을 수 없습니다",
+  "justNow": "방금 전",
 };

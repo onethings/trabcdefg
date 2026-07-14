@@ -662,4 +662,7 @@ const Map<String, String> af = {
   "reportLogs": "Logboeke van verslae",
   "deviceSelectLocation": "Kies toestelligging",
   "searchOsm": "Soek OSM",
+  "dashboardDeviceStatus": "Enhetsstatus",
+  "dashboardNoDevices": "Ingen enheter funnet",
+  "justNow": "Akkurat nå"
 };

@@ -664,4 +664,7 @@ const Map<String, String> arSA = {
   "reportLogs": "سجلات التقرير",
   "deviceSelectLocation": "تحديد موقع الجهاز",
   "searchOsm": "البحث في خرائط OSM",
+  "dashboardDeviceStatus": "حالة الجهاز",
+  "dashboardNoDevices": "لا توجد أجهزة",
+  "justNow": "الآن",
 };

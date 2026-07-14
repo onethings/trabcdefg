@@ -662,4 +662,7 @@ const Map<String, String> sq = {
   "reportLogs": "Raporti i Regjistrit",
   "deviceSelectLocation": "Zgjidhni vendndodhjen e pajisjes",
   "searchOsm": "Kërko në OSM",
+  "dashboardDeviceStatus": "Statusi i pajisjes",
+  "dashboardNoDevices": "Nuk u gjet asnjë pajisje",
+  "justNow": "Sapo",
 };

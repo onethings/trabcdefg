@@ -661,5 +661,8 @@ const Map<String, String> tr = {
   "reportGeoFence": "Geofence Raporu",
   "reportLogs": "Günlük Raporu",
   "deviceSelectLocation": "Cihaz konumu seç",
-  "searchOsm": "OSM'de ara"
+  "searchOsm": "OSM'de ara",
+  "dashboardDeviceStatus": "Cihaz Durumu",
+  "dashboardNoDevices": "Cihaz yok.",
+  "justNow": "şimdi",
 };

@@ -662,4 +662,7 @@ const Map<String, String> kk = {
   "reportLogs": "Есеп журналдары",
   "deviceSelectLocation": "Құрылғының орналасқан жерін таңдау",
   "searchOsm": "OSM ішінен іздеу",
+  "dashboardDeviceStatus": "Құрылғы күйі",
+  "dashboardNoDevices": "Құрылғылар табылмады",
+  "justNow": "Жаңа ғана",
 };

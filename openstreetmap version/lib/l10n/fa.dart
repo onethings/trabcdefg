@@ -662,4 +662,7 @@ const Map<String, String> fa = {
   "reportLogs": "گزارش‌های ثبت‌شده",
   "deviceSelectLocation": "انتخاب موقعیت دستگاه",
   "searchOsm": "جستجو در OSM",
+  "dashboardDeviceStatus": "وضعیت دستگاه",
+  "dashboardNoDevices": "دستگاهی یافت نشد",
+  "justNow": "همین الان",
 };

@@ -661,5 +661,8 @@ const Map<String, String> nl = {
   "reportGeofences": "Geofence-rapport",
   "reportLogs": "Rapportlogboeken",
   "deviceSelectLocation": "Apparatlocatie selecteren",
-  "searchOsm": "Zoeken in OSM"
+  "searchOsm": "Zoeken in OSM",
+  "dashboardDeviceStatus": "Apparaatstatus",
+  "dashboardNoDevices": "Geen apparaten.",
+  "justNow": "zonet",
 };

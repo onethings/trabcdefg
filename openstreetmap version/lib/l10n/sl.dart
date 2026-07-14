@@ -662,4 +662,7 @@ const Map<String, String> sl = {
   "reportLogs": "Dnevniki",
   "deviceSelectLocation": "Izberite lokacijo naprave",
   "searchOsm": "Išči v OSM",
+  "dashboardDeviceStatus": "Status naprave",
+  "dashboardNoDevices": "Naprav ni bilo mogoče najti",
+  "justNow": "Pravkar",
 };

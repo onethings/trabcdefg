@@ -661,5 +661,8 @@ const Map<String, String> ca = {
   "reportGeofences": "Informe de geocerca",
   "reportLogs": "Registres d'informes",
   "deviceSelectLocation": "Seleccionar la ubicació del dispositiu",
-  "searchOsm": "Cercar a OSM"
+  "searchOsm": "Cercar a OSM",
+  "dashboardDeviceStatus": "Estat de l'aparell",
+  "dashboardNoDevices": "No s'han trobat aparells",
+  "justNow": "Ara mateix",
 };

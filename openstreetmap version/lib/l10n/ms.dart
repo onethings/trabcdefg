@@ -662,4 +662,7 @@ const Map<String, String> ms = {
   "reportLogs": "Log laporan",
   "deviceSelectLocation": "Pilih lokasi perangkat",
   "searchOsm": "Cari di OSM",
+  "dashboardDeviceStatus": "Status Peranti",
+  "dashboardNoDevices": "Tiada peranti.",
+  "justNow": "baru sahaja",
 };

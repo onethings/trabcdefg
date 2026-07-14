@@ -662,4 +662,7 @@ const Map<String, String> lo = {
   "reportLogs": "ບັນທຶກບົດລາຍງານ",
   "deviceSelectLocation": "ເລືອກສະຖານທີ່ອຸປະກອນ",
   "searchOsm": "ຄົ້ນຫາໃນ OSM",
+  "dashboardDeviceStatus": "ສະຖານະອຸປະກອນ",
+  "dashboardNoDevices": "ບໍ່ພົບອຸປະກອນໃດໆ",
+  "justNow": "ດຽວນີ້",
 };

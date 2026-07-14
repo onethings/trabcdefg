@@ -662,4 +662,7 @@ const Map<String, String> cs = {
   "reportLogs": "Protokoly zpráv",
   "deviceSelectLocation": "Vybrat polohu zařízení",
   "searchOsm": "Hledat v OSM",
+  "dashboardDeviceStatus": "Stav zařízení",
+  "dashboardNoDevices": "Žádná zařízení nebyla nalezena",
+  "justNow": "Právě teď",
 };

@@ -662,4 +662,7 @@ const Map<String, String> ne = {
   "reportLogs": "रिपोर्ट लगहरू",
   "deviceSelectLocation": "यन्त्रको स्थान चयन गर्नुहोस्",
   "searchOsm": "OSM मा खोज्नुहोस्",
+  "dashboardDeviceStatus": "उपकरणको स्थिति",
+  "dashboardNoDevices": "कुनै पनि उपकरण फेला परेन",
+  "justNow": "अहिले भर्खर",
 };

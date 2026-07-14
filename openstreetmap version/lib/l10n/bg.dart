@@ -661,5 +661,8 @@ const Map<String, String> bg = {
   "reportGeofences": "Отчет за геозони",
   "reportLogs": "Дневници на отчетите",
   "deviceSelectLocation": "Избор на местоположение на устройството",
-  "searchOsm": "Търсене в OSM"
+  "searchOsm": "Търсене в OSM",
+  "dashboardDeviceStatus": "Статус на устройството",
+  "dashboardNoDevices": "Няма намерени устройства",
+  "justNow": "Току-що",
 };
