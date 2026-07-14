@@ -257,7 +257,10 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
       }
 
       final originalPositions = List<api.Position>.from(fetchedPositions);
-      fetchedPositions = fetchedPositions.where((p) => (p.speed ?? 0) > 0).toList();
+      final filteredPositions = fetchedPositions.where((p) => (p.speed ?? 0) > 0).toList();
+      if (filteredPositions.isNotEmpty) {
+        fetchedPositions = filteredPositions;
+      }
 
       _calculateStops(originalPositions);
 

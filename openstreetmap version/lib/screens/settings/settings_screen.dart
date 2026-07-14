@@ -17,6 +17,8 @@ import 'package:trabcdefg/screens/settings/groups_screen.dart';
 import 'package:trabcdefg/screens/settings/maintenance_screen.dart';
 import 'package:trabcdefg/screens/settings/notification_page.dart';
 import 'package:trabcdefg/screens/settings/saved_commands_screen.dart';
+import 'package:trabcdefg/screens/settings/server_info_screen.dart';
+import 'package:trabcdefg/screens/settings/emulator_screen.dart';
 import 'package:trabcdefg/services/localization_service.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -170,11 +172,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: supportedLocales.map((locale) {
-                final String localeCode =
-                    locale.languageCode +
-                    (locale.countryCode != null
-                        ? '_${locale.countryCode}'
-                        : '');
+                final String localeCode = locale.languageCode + (locale.countryCode != null ? '_${locale.countryCode}' : '');
                 final String? languageName = languageNames[localeCode];
                 return ListTile(
                   title: Text(languageName ?? localeCode),
@@ -215,18 +213,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                RadioListTile<ThemeMode>(
-                  title: Text('themeSystem'.tr),
-                  value: ThemeMode.system,
-                ),
-                RadioListTile<ThemeMode>(
-                  title: Text('themeLight'.tr),
-                  value: ThemeMode.light,
-                ),
-                RadioListTile<ThemeMode>(
-                  title: Text('themeDark'.tr),
-                  value: ThemeMode.dark,
-                ),
+                RadioListTile<ThemeMode>(title: Text('themeSystem'.tr), value: ThemeMode.system),
+                RadioListTile<ThemeMode>(title: Text('themeLight'.tr), value: ThemeMode.light),
+                RadioListTile<ThemeMode>(title: Text('themeDark'.tr), value: ThemeMode.dark),
               ],
             ),
           ),
@@ -253,18 +242,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                RadioListTile<double>(
-                  title: Text('settingsNormal'.tr),
-                  value: 1.0,
-                ),
-                RadioListTile<double>(
-                  title: Text('settingsLarge'.tr),
-                  value: 1.2,
-                ),
-                RadioListTile<double>(
-                  title: Text('settingsExtraLarge'.tr),
-                  value: 1.4,
-                ),
+                RadioListTile<double>(title: Text('settingsNormal'.tr), value: 1.0),
+                RadioListTile<double>(title: Text('settingsLarge'.tr), value: 1.2),
+                RadioListTile<double>(title: Text('settingsExtraLarge'.tr), value: 1.4),
               ],
             ),
           ),
@@ -291,18 +271,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                RadioListTile<double>(
-                  title: Text('settingsNormal'.tr),
-                  value: 1.0,
-                ),
-                RadioListTile<double>(
-                  title: Text('settingsLarge'.tr),
-                  value: 1.5,
-                ),
-                RadioListTile<double>(
-                  title: Text('settingsExtraLarge'.tr),
-                  value: 2.0,
-                ),
+                RadioListTile<double>(title: Text('settingsNormal'.tr), value: 1.0),
+                RadioListTile<double>(title: Text('settingsLarge'.tr), value: 1.5),
+                RadioListTile<double>(title: Text('settingsExtraLarge'.tr), value: 2.0),
               ],
             ),
           ),
@@ -316,155 +287,99 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final traccarProvider = context.read<TraccarProvider>();
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text('settingsTitle'.tr),
-        automaticallyImplyLeading: false,
-      ),
+      appBar: AppBar(title: Text('settingsTitle'.tr), automaticallyImplyLeading: false),
       body: SafeArea(
         child: Column(
           children: [
             Expanded(
               child: ListView(
                 children: [
-                  ListTile(
-                    leading: const Icon(Icons.settings),
-                    title: Text('loginLanguage'.tr),
-                    onTap: _showLanguageSelectionDialog,
-                  ),
-                  ListTile(
-                    leading: const Icon(Icons.brightness_6),
-                    title: Text('settingsTheme'.tr),
-                    onTap: _showThemeSelectionDialog,
-                  ),
-                  ListTile(
-                    leading: const Icon(Icons.text_fields),
-                    title: Text('settingsFontSize'.tr),
-                    onTap: _showFontSizeDialog,
-                  ),
-                  ListTile(
-                    leading: const Icon(Icons.location_on),
-                    title: Text('settingsMarkerSize'.tr),
-                    onTap: _showMarkerSizeDialog,
-                  ),
+                  ListTile(leading: const Icon(Icons.settings), title: Text('loginLanguage'.tr), onTap: _showLanguageSelectionDialog),
+                  ListTile(leading: const Icon(Icons.brightness_6), title: Text('settingsTheme'.tr), onTap: _showThemeSelectionDialog),
+                  ListTile(leading: const Icon(Icons.text_fields), title: Text('settingsFontSize'.tr), onTap: _showFontSizeDialog),
+                  ListTile(leading: const Icon(Icons.location_on), title: Text('settingsMarkerSize'.tr), onTap: _showMarkerSizeDialog),
                   ListTile(
                     leading: const Icon(Icons.notifications),
                     title: Text('sharedNotifications'.tr),
                     onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const NotificationPage(),
-                        ),
-                      );
+                      Navigator.push(context, MaterialPageRoute(builder: (context) => const NotificationPage()));
                     },
                   ),
                   ListTile(
                     leading: const Icon(Icons.account_circle),
                     title: Text('settingsUser'.tr),
                     onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const EditUserScreen(),
-                        ),
-                      );
+                      Navigator.push(context, MaterialPageRoute(builder: (context) => const EditUserScreen()));
                     },
                   ),
                   ListTile(
                     leading: const Icon(Icons.devices),
                     title: Text('deviceTitle'.tr),
                     onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const DevicesScreen(),
-                        ),
-                      );
+                      Navigator.push(context, MaterialPageRoute(builder: (context) => const DevicesScreen()));
                     },
                   ),
                   ListTile(
                     leading: const Icon(Icons.location_on),
                     title: Text('sharedGeofence'.tr),
                     onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const GeofencesScreen(),
-                        ),
-                      );
+                      Navigator.push(context, MaterialPageRoute(builder: (context) => const GeofencesScreen()));
                     },
                   ),
                   ListTile(
                     leading: const Icon(Icons.group),
                     title: Text('settingsGroups'.tr),
                     onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const GroupsScreen(),
-                        ),
-                      );
+                      Navigator.push(context, MaterialPageRoute(builder: (context) => const GroupsScreen()));
                     },
                   ),
                   ListTile(
                     leading: const Icon(Icons.person),
                     title: Text('sharedDrivers'.tr),
                     onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const DriversScreen(),
-                        ),
-                      );
+                      Navigator.push(context, MaterialPageRoute(builder: (context) => const DriversScreen()));
                     },
                   ),
                   ListTile(
                     leading: const Icon(Icons.calendar_today),
                     title: Text('sharedCalendars'.tr),
                     onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const CalendarsScreen(),
-                        ),
-                      );
+                      Navigator.push(context, MaterialPageRoute(builder: (context) => const CalendarsScreen()));
                     },
                   ),
                   ListTile(
                     leading: const Icon(Icons.calculate),
                     title: Text('sharedComputedAttributes'.tr),
                     onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) =>
-                              const ComputedAttributesScreen(),
-                        ),
-                      );
+                      Navigator.push(context, MaterialPageRoute(builder: (context) => const ComputedAttributesScreen()));
                     },
                   ),
                   ListTile(
                     leading: const Icon(Icons.build),
                     title: Text('sharedMaintenance'.tr),
                     onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const MaintenanceScreen(),
-                        ),
-                      );
+                      Navigator.push(context, MaterialPageRoute(builder: (context) => const MaintenanceScreen()));
                     },
                   ),
                   ListTile(
                     leading: const Icon(Icons.save),
                     title: Text('sharedSavedCommands'.tr),
                     onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const SavedCommandsScreen(),
-                        ),
-                      );
+                      Navigator.push(context, MaterialPageRoute(builder: (context) => const SavedCommandsScreen()));
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.info_outline),
+                    title: Text('sharedInfoTitle'.tr),
+                    onTap: () {
+                      Navigator.push(context, MaterialPageRoute(builder: (context) => const ServerInfoScreen()));
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.developer_mode),
+                    title: Text('sharedEmulator'.tr),
+                    onTap: () {
+                      Navigator.push(context, MaterialPageRoute(builder: (context) => const EmulatorScreen()));
                     },
                   ),
                 ],
@@ -478,14 +393,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   traccarProvider.clearSessionAndData();
 
                   // Navigate back to the login screen and clear the navigation stack
-                  Navigator.of(
-                    context,
-                  ).pushNamedAndRemoveUntil('/login', (route) => false);
+                  Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
                 },
                 style: ElevatedButton.styleFrom(
-                  minimumSize: const Size.fromHeight(
-                    50,
-                  ), // Make the button full-width
+                  minimumSize: const Size.fromHeight(50), // Make the button full-width
                   backgroundColor: Theme.of(context).colorScheme.error,
                   foregroundColor: Theme.of(context).colorScheme.onError,
                 ),
@@ -498,15 +409,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 future: PackageInfo.fromPlatform(),
                 builder: (context, snapshot) {
                   if (snapshot.hasData) {
-                    return Text(
-                      '${'appVersion'.tr}: ${snapshot.data!.version}+${snapshot.data!.buildNumber}',
-                      style: TextStyle(
-                        color: Theme.of(
-                          context,
-                        ).colorScheme.onSurface.withValues(alpha: 0.5),
-                        fontSize: 12,
-                      ),
-                    );
+                    return Text('${'appVersion'.tr}: ${snapshot.data!.version}+${snapshot.data!.buildNumber}', style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5), fontSize: 12));
                   }
                   return const SizedBox.shrink();
                 },
