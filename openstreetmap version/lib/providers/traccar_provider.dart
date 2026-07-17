@@ -26,6 +26,8 @@ class TraccarProvider with ChangeNotifier {
   final Map<int, api.Position> _positionMap = {};
   List<api.Event> _events = [];
   Map<int, api.Event> _latestDeviceEvent = {};
+  List<api.Geofence> _geofences = [];
+  List<api.Notification> _serverNotifications = [];
   bool _isLoading = false;
   Set<int> _favoriteDeviceIds = {};
   Set<int> get favoriteDeviceIds => _favoriteDeviceIds;
@@ -133,7 +135,25 @@ class TraccarProvider with ChangeNotifier {
   api.Position? getPosition(int deviceId) => _positionMap[deviceId];
   List<api.Event> get events => _events;
   Map<int, api.Event> get latestDeviceEvent => _latestDeviceEvent;
+  List<api.Geofence> get geofences => _geofences;
+  List<api.Notification> get serverNotifications => _serverNotifications;
   bool get isLoading => _isLoading;
+
+  /// Returns the set of event types configured on the server for the given notificator.
+  /// If notificator is null, returns all configured event types.
+  Set<String> getServerEventTypes({String? notificator}) {
+    return _serverNotifications.where((n) => n.type != null && (notificator == null || (n.notificators?.contains(notificator) ?? false))).map((n) => n.type!).toSet();
+  }
+
+  /// Returns the geofence name for a given geofence ID, or null if not found.
+  String? getGeofenceName(int? geofenceId) {
+    if (geofenceId == null) return null;
+    try {
+      return _geofences.firstWhere((g) => g.id == geofenceId).name;
+    } catch (_) {
+      return null;
+    }
+  }
 
   void setSessionId(String sessionId) {
     _sessionId = sessionId;
@@ -164,6 +184,8 @@ class TraccarProvider with ChangeNotifier {
     _positionMap.clear();
     _events = [];
     _latestDeviceEvent = {};
+    _geofences = [];
+    _serverNotifications = [];
 
     try {
       webSocketService.disconnect();
@@ -194,13 +216,19 @@ class TraccarProvider with ChangeNotifier {
       final fetchedUser = await sessionApi.getSession();
       final devicesApi = api.DevicesApi(apiClient);
       final positionsApi = api.PositionsApi(apiClient);
+      final geofencesApi = api.GeofencesApi(apiClient);
+      final notificationsApi = api.NotificationsApi(apiClient);
 
       final fetchedDevices = await devicesApi.getDevices();
       final fetchedPositions = await positionsApi.getPositions();
+      final fetchedGeofences = await geofencesApi.getGeofences();
+      final fetchedNotifications = await notificationsApi.getNotifications();
 
       _currentUser = fetchedUser;
       _devices = (fetchedDevices ?? []).whereType<api.Device>().toList();
       _positions = fetchedPositions ?? [];
+      _geofences = (fetchedGeofences ?? []).whereType<api.Geofence>().toList();
+      _serverNotifications = (fetchedNotifications ?? []).whereType<api.Notification>().toList();
       _positionMap.clear();
       for (var pos in _positions) {
         if (pos.deviceId != null) {

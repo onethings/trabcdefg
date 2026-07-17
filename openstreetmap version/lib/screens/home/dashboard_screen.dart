@@ -5,6 +5,7 @@ import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
+import 'package:trabcdefg/src/generated_api/api.dart' as api;
 
 import '../notifications_screen.dart';
 
@@ -64,9 +65,9 @@ class DashboardScreen extends StatelessWidget {
                     const SizedBox(height: 24),
                     _buildSummaryCard(context, 'dashboardTotalDistance'.tr, '${totalKm.toStringAsFixed(1)} ${"km".tr}', Icons.auto_graph_rounded, theme.colorScheme.primary),
                     const SizedBox(height: 24),
-                    Text('dashboardDeviceStatus'.tr, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    Text('sharedAlarms'.tr, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 12),
-                    _buildDeviceStatusList(context, provider),
+                    _buildAlarmList(context, provider),
                   ],
                 ),
               ),
@@ -166,26 +167,34 @@ class DashboardScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildDeviceStatusList(BuildContext context, TraccarProvider provider) {
-    final devices = provider.devices;
-    if (devices.isEmpty) {
+  Widget _buildAlarmList(BuildContext context, TraccarProvider provider) {
+    final latestEvents = provider.latestDeviceEvent;
+    if (latestEvents.isEmpty) {
       return Container(
         height: 100,
         alignment: Alignment.center,
-        child: Text('dashboardNoDevices'.tr, style: const TextStyle(color: Colors.grey)),
+        child: Text('dashboardNoEvents'.tr, style: const TextStyle(color: Colors.grey)),
       );
     }
 
     return ListView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      itemCount: devices.length,
+      itemCount: latestEvents.entries.length,
       itemBuilder: (context, index) {
-        final device = devices[index];
-        final isOnline = device.status == 'online';
-        final statusColor = isOnline ? Colors.green : Colors.grey;
-        final lastUpdate = device.lastUpdate?.toLocal();
-        final timeAgo = lastUpdate != null ? _formatTimeAgo(lastUpdate) : '—';
+        final entry = latestEvents.entries.elementAt(index);
+        final event = entry.value;
+        final deviceId = entry.key;
+
+        // Find device name (license plate)
+        final device = provider.devices.cast<api.Device?>().firstWhere((d) => d?.id == deviceId, orElse: () => null);
+        final deviceName = device?.name ?? '—';
+
+        // Find the geofence name
+        final geofenceName = provider.getGeofenceName(event.geofenceId);
+
+        final eventTime = event.eventTime?.toLocal();
+        final timeAgo = eventTime != null ? _formatTimeAgo(eventTime) : '—';
 
         return Container(
           margin: const EdgeInsets.only(bottom: 12),
@@ -198,48 +207,71 @@ class DashboardScreen extends StatelessWidget {
           child: Row(
             children: [
               Container(
-                width: 10,
-                height: 10,
-                decoration: BoxDecoration(color: statusColor, shape: BoxShape.circle),
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(color: Theme.of(context).colorScheme.error.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
+                child: Icon(_getAlarmIcon(event.type), size: 20, color: Theme.of(context).colorScheme.error),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        Flexible(
-                          child: Text(
-                            device.name ?? '—',
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        if (device.category != null) ...[
-                          const SizedBox(width: 6),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(color: statusColor.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(6)),
-                            child: Text(
-                              device.category!,
-                              style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: statusColor),
-                            ),
+                    Text(
+                      deviceName,
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    if (geofenceName != null) ...[
+                      const SizedBox(height: 2),
+                      Row(
+                        children: [
+                          Icon(Icons.flag_rounded, size: 11, color: Theme.of(context).colorScheme.secondary),
+                          const SizedBox(width: 3),
+                          Text(
+                            geofenceName,
+                            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: Theme.of(context).colorScheme.secondary),
                           ),
                         ],
-                      ],
+                      ),
+                    ],
+                    const SizedBox(height: 2),
+                    Text(
+                      (event.type ?? 'unknownEvent').tr,
+                      style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(height: 4),
-                    Text('${isOnline ? 'dashboardOnline'.tr : 'dashboardOffline'.tr} · $timeAgo', style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                    const SizedBox(height: 2),
+                    Text(timeAgo, style: const TextStyle(fontSize: 10, color: Colors.grey)),
                   ],
                 ),
               ),
-              Icon(isOnline ? Icons.check_circle_rounded : Icons.info_outline_rounded, size: 18, color: statusColor),
+              Icon(Icons.chevron_right_rounded, size: 18, color: Colors.grey),
             ],
           ),
         );
       },
     );
+  }
+
+  IconData _getAlarmIcon(String? type) {
+    switch (type) {
+      case 'deviceOnline':
+        return Icons.cloud_done_rounded;
+      case 'deviceOffline':
+        return Icons.cloud_off_rounded;
+      case 'deviceMoving':
+        return Icons.directions_car_rounded;
+      case 'deviceStopped':
+        return Icons.stop_circle_rounded;
+      case 'geofenceEnter':
+        return Icons.login_rounded;
+      case 'geofenceExit':
+        return Icons.logout_rounded;
+      case 'alarm':
+        return Icons.warning_amber_rounded;
+      default:
+        return Icons.notifications_active_rounded;
+    }
   }
 
   String _formatTimeAgo(DateTime dateTime) {

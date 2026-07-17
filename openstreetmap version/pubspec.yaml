@@ -2,7 +2,7 @@ name: trabcdefg
 description: "A new Flutter project."
 publish_to: 'none'
 
-version: 1.0.25+21
+version: 1.0.26+22
 
 environment:
   sdk: ^3.8.1
