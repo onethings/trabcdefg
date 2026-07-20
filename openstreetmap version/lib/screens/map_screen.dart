@@ -54,14 +54,12 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   final ValueNotifier<String> _selectedAddressNotifier = ValueNotifier("");
 
   bool _isCacheInitialized = false;
-  OverlayEntry? _navOverlay;
   Timer? _zoomDebounce;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _showNavOverlay());
 
     _iconService = MarkerIconService(loadedIcons: _loadedIcons);
     _cacheService.init().then((_) {
@@ -102,7 +100,6 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   @override
   void dispose() {
     _zoomDebounce?.cancel();
-    _hideNavOverlay();
     WidgetsBinding.instance.removeObserver(this);
     _httpClient.close();
     _panelOpenNotifier.dispose();
@@ -457,7 +454,9 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       return;
     }
 
-    _panelOpenNotifier.value = true;
+    setState(() {
+      _panelOpenNotifier.value = true;
+    });
     _bottomSheetController = _scaffoldKey.currentState!.showBottomSheet((context) {
       return ValueListenableBuilder<api.Device?>(
         valueListenable: _selectedDeviceNotifier,
@@ -493,14 +492,11 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       );
     });
 
-    // Re-insert nav overlay on top of bottom sheet
-    _showNavOverlay();
-
     _bottomSheetController!.closed.then((_) {
-      _panelOpenNotifier.value = false;
-      _bottomSheetController = null;
       if (mounted) {
         setState(() {
+          _panelOpenNotifier.value = false;
+          _bottomSheetController = null;
           _isFollowingDevice = false;
         });
       }
@@ -697,7 +693,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                   ),
                 ),
                 Positioned(
-                  top: MediaQuery.of(context).padding.top + 12,
+                  top: MediaQuery.of(context).padding.top + 12, //12
                   right: 16,
                   child: Column(
                     children: [
@@ -720,30 +716,12 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                 ),
                 if (_isStyleLoaded) _DataUpdateListener(data: traccarProvider.positions, onUpdate: () => _updateAllMarkers(traccarProvider)),
                 if (traccarProvider.isLoading && traccarProvider.devices.isEmpty) const Center(child: CircularProgressIndicator()),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
 
-  void _showNavOverlay() {
-    _navOverlay?.remove();
-    _navOverlay = OverlayEntry(
-      builder: (context) {
-        return ValueListenableBuilder<api.Device?>(
-          valueListenable: _selectedDeviceNotifier,
-          builder: (context, currentDev, _) {
-            return ValueListenableBuilder<bool>(
-              valueListenable: _panelOpenNotifier,
-              builder: (context, isPanelOpen, _) {
-                final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
-
-                return Positioned(
+                // Device navigation bar
+                Positioned(
                   left: 0,
                   right: 0,
-                  bottom: MediaQuery.of(context).padding.bottom + (isPanelOpen ? 280 : 80),
+                  bottom: MediaQuery.of(context).padding.bottom + (_panelOpenNotifier.value ? 230 : 30), //280 : 80
                   child: Material(
                     color: Colors.transparent,
                     child: Row(
@@ -765,7 +743,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               _buildMapControl(Icons.add_rounded, () => _mapController?.animateCamera(maplibre.CameraUpdate.zoomIn()), "btn_zoom_in"),
-                              const SizedBox(height: 4),
+                              const SizedBox(height: 14),//4
                               _buildMapControl(Icons.remove_rounded, () => _mapController?.animateCamera(maplibre.CameraUpdate.zoomOut()), "btn_zoom_out"),
                             ],
                           ),
@@ -773,19 +751,13 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                       ],
                     ),
                   ),
-                );
-              },
-            );
-          },
+                ),
+              ],
+            ),
+          ),
         );
       },
     );
-    Overlay.of(context).insert(_navOverlay!);
-  }
-
-  void _hideNavOverlay() {
-    _navOverlay?.remove();
-    _navOverlay = null;
   }
 
   Widget _buildMapControl(IconData icon, VoidCallback onTap, String heroTag, {bool isActive = false, bool isToggle = false}) {
