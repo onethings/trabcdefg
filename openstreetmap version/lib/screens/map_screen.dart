@@ -5,7 +5,6 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:get/get.dart';
-import 'package:hive/hive.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:latlong2/latlong.dart' as latlong;
@@ -48,10 +47,9 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   final TileCacheService _cacheService = TileCacheService();
   late MarkerIconService _iconService;
   final http.Client _httpClient = http.Client();
-  bool _isControlsExpanded = true;
-  bool _showGeofences = true;
-  final String _controlsExpandedKey = 'isMapControlsExpanded';
-  bool _isPanelOpen = false;
+
+  final ValueNotifier<bool> _panelOpenNotifier = ValueNotifier(false);
+  bool get _isPanelOpen => _panelOpenNotifier.value;
   bool _isFollowingDevice = false;
 
   // Reactive notifiers for seamless detail panel updates
@@ -60,13 +58,14 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   final ValueNotifier<String> _selectedAddressNotifier = ValueNotifier("");
 
   bool _isCacheInitialized = false;
+  OverlayEntry? _navOverlay;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _showNavOverlay());
 
-    _loadUIPreferences();
     _iconService = MarkerIconService(loadedIcons: _loadedIcons);
     _cacheService.init().then((_) {
       // OPTIMIZATION: Warm up OfflineAddressService early on map screen arrival
@@ -104,24 +103,12 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     }
   }
 
-  void _loadUIPreferences() {
-    final box = Hive.box('ui_settings');
-    setState(() {
-      _isControlsExpanded = box.get(_controlsExpandedKey, defaultValue: false);
-    });
-  }
-
-  void _toggleMapControls() {
-    setState(() {
-      _isControlsExpanded = !_isControlsExpanded;
-    });
-    Hive.box('ui_settings').put(_controlsExpandedKey, _isControlsExpanded);
-  }
-
   @override
   void dispose() {
+    _hideNavOverlay();
     WidgetsBinding.instance.removeObserver(this);
     _httpClient.close();
+    _panelOpenNotifier.dispose();
     _selectedDeviceNotifier.dispose();
     _selectedPositionNotifier.dispose();
     _selectedAddressNotifier.dispose();
@@ -488,7 +475,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       return;
     }
 
-    _isPanelOpen = true;
+    _panelOpenNotifier.value = true;
     _bottomSheetController = _scaffoldKey.currentState!.showBottomSheet((context) {
       return ValueListenableBuilder<api.Device?>(
         valueListenable: _selectedDeviceNotifier,
@@ -524,10 +511,14 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       );
     });
 
+    // Re-insert nav overlay on top of bottom sheet
+    _showNavOverlay();
+
     _bottomSheetController!.closed.then((_) {
+      _panelOpenNotifier.value = false;
       if (mounted) {
         setState(() {
-          _isPanelOpen = false;
+          _isFollowingDevice = false;
         });
       }
     });
@@ -720,6 +711,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                     key: _mapKey,
                     initialCameraPosition: _lastCameraPosition ?? maplibre.CameraPosition(target: maplibre.LatLng(initialFlutterLatLng.latitude, initialFlutterLatLng.longitude), zoom: initialZoom),
                     styleString: Provider.of<MapStyleProvider>(context).styleString,
+                    compassEnabled: false,
                     onCameraMove: (position) {
                       SharedPreferences.getInstance().then((prefs) {
                         prefs.setDouble('map_zoom_level', position.zoom);
@@ -749,11 +741,16 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                   ),
                 ),
                 Positioned(
-                  top: MediaQuery.of(context).padding.top + 70,
+                  top: MediaQuery.of(context).padding.top + 12,
                   right: 16,
                   child: Column(
                     children: [
-                      _buildMapControl(_isControlsExpanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded, _toggleMapControls, "btn_expand_toggle", isActive: _isControlsExpanded, isToggle: true),
+                      _buildMapControl(
+                        Provider.of<MapStyleProvider>(context).isSatelliteMode ? Icons.satellite_alt : Icons.map,
+                        () => Provider.of<MapStyleProvider>(context, listen: false).toggleMapType(),
+                        "btn_style",
+                        isActive: Provider.of<MapStyleProvider>(context).isSatelliteMode,
+                      ),
                       const SizedBox(height: 12),
                       _buildMapControl(Icons.explore_rounded, () => _mapController?.animateCamera(maplibre.CameraUpdate.bearingTo(0)), "btn_compass"),
                       const SizedBox(height: 12),
@@ -767,16 +764,6 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                       }, "btn_myloc"),
                       const SizedBox(height: 12),
                       _buildMapControl(Icons.zoom_out_map_rounded, () => _zoomToFitAll(traccarProvider), "btn_zoom"),
-                      if (_isControlsExpanded) ...[
-                        const SizedBox(height: 12),
-                        _buildMapControl(_showGeofences ? Icons.layers_rounded : Icons.layers_outlined, () => setState(() => _showGeofences = !_showGeofences), "btn_geofence", isActive: _showGeofences),
-                        const SizedBox(height: 12),
-                        _buildMapControl(Provider.of<MapStyleProvider>(context).isSatelliteMode ? Icons.map : Icons.satellite_alt, () => Provider.of<MapStyleProvider>(context, listen: false).toggleMapType(), "btn_style"),
-                        const SizedBox(height: 12),
-                        _buildMapControl(Icons.arrow_upward_rounded, () => _navigateToDevice(-1, traccarProvider.devices, traccarProvider.positions), "btn_prev"),
-                        const SizedBox(height: 12),
-                        _buildMapControl(Icons.arrow_downward_rounded, () => _navigateToDevice(1, traccarProvider.devices, traccarProvider.positions), "btn_next"),
-                      ],
                     ],
                   ),
                 ),
@@ -788,6 +775,66 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
         );
       },
     );
+  }
+
+  void _showNavOverlay() {
+    _navOverlay?.remove();
+    _navOverlay = OverlayEntry(
+      builder: (context) {
+        return ValueListenableBuilder<api.Device?>(
+          valueListenable: _selectedDeviceNotifier,
+          builder: (context, currentDev, _) {
+            return ValueListenableBuilder<bool>(
+              valueListenable: _panelOpenNotifier,
+              builder: (context, isPanelOpen, _) {
+                final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
+
+                return Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: MediaQuery.of(context).padding.bottom + (isPanelOpen ? 280 : 80),
+                  child: Material(
+                    color: Colors.transparent,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Expanded(
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              _buildMapControl(Icons.chevron_left_rounded, () => _navigateToDevice(-1, traccarProvider.devices, traccarProvider.positions), "btn_prev_device"),
+                              const SizedBox(width: 28),
+                              _buildMapControl(Icons.chevron_right_rounded, () => _navigateToDevice(1, traccarProvider.devices, traccarProvider.positions), "btn_next_device"),
+                            ],
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.only(right: 16),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              _buildMapControl(Icons.add_rounded, () => _mapController?.animateCamera(maplibre.CameraUpdate.zoomIn()), "btn_zoom_in"),
+                              const SizedBox(height: 4),
+                              _buildMapControl(Icons.remove_rounded, () => _mapController?.animateCamera(maplibre.CameraUpdate.zoomOut()), "btn_zoom_out"),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+    Overlay.of(context).insert(_navOverlay!);
+  }
+
+  void _hideNavOverlay() {
+    _navOverlay?.remove();
+    _navOverlay = null;
   }
 
   Widget _buildMapControl(IconData icon, VoidCallback onTap, String heroTag, {bool isActive = false, bool isToggle = false}) {
