@@ -1,13 +1,10 @@
 import 'dart:async';
-import 'dart:math';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
-import 'package:flutter_map/flutter_map.dart';
 import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
-import 'package:latlong2/latlong.dart' as latlong;
 import 'package:maplibre_gl/maplibre_gl.dart' as maplibre;
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -41,7 +38,6 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   bool _isStyleLoaded = false;
   bool _hasInitialZoomed = false;
   final Set<String> _loadedIcons = {};
-  bool _markersLoaded = false;
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   api.Device? _currentDevice;
   final TileCacheService _cacheService = TileCacheService();
@@ -59,6 +55,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
   bool _isCacheInitialized = false;
   OverlayEntry? _navOverlay;
+  Timer? _zoomDebounce;
 
   @override
   void initState() {
@@ -78,7 +75,6 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       }
     });
 
-    _loadMarkerIcons();
     _currentDevice = widget.selectedDevice;
 
     if (_currentDevice == null) {
@@ -105,6 +101,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    _zoomDebounce?.cancel();
     _hideNavOverlay();
     WidgetsBinding.instance.removeObserver(this);
     _httpClient.close();
@@ -119,21 +116,20 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       if (mounted) {
-        if (_mapController != null) {
-          _lastCameraPosition = _mapController!.cameraPosition;
-        }
-
-        setState(() {
-          _mapKey = UniqueKey();
-        });
-
         final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
-        traccarProvider.fetchInitialData().catchError((error) {
-          debugPrint("Session validation failed on resume: $error");
-          if (mounted) {
-            Get.offAllNamed('/login');
-          }
-        });
+        traccarProvider
+            .fetchInitialData()
+            .then((_) {
+              if (mounted) {
+                _updateAllMarkers(traccarProvider);
+              }
+            })
+            .catchError((error) {
+              debugPrint("Session validation failed on resume: $error");
+              if (mounted) {
+                Get.offAllNamed('/login');
+              }
+            });
       }
     }
   }
@@ -246,16 +242,6 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     }
   }
 
-  Future<void> _loadMarkerIcons() async {
-    await Future.delayed(Duration.zero);
-
-    if (mounted) {
-      setState(() {
-        _markersLoaded = true;
-      });
-    }
-  }
-
   PersistentBottomSheetController? _bottomSheetController;
   String _formatDate(DateTime? date) {
     if (date == null) return 'N/A';
@@ -310,10 +296,6 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     } catch (e) {
       Get.snackbar('Error'.tr, 'An unknown error occurred.'.tr, snackPosition: SnackPosition.BOTTOM, backgroundColor: Colors.red.shade100);
     }
-  }
-
-  latlong.LatLng _toFlutterLatLng(double latitude, double longitude) {
-    return latlong.LatLng(latitude, longitude);
   }
 
   void _navigateToDevice(int direction, List<api.Device> devices, List<api.Position> positions) {
@@ -516,6 +498,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
     _bottomSheetController!.closed.then((_) {
       _panelOpenNotifier.value = false;
+      _bottomSheetController = null;
       if (mounted) {
         setState(() {
           _isFollowingDevice = false;
@@ -631,56 +614,26 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
           return const Scaffold(body: Center(child: Text('Initializing Map Assets...')));
         }
 
-        final flutterMarkers = <Marker>{};
-
-        latlong.LatLng initialFlutterLatLng = const latlong.LatLng(0, 0);
-        double initialZoom = 2.0;
-
-        if (_markersLoaded) {
-          for (final api.Device device in traccarProvider.devices) {
-            final api.Position? position = _findPositionOrNull(traccarProvider.positions, device.id);
-
-            if (position != null && position.latitude != null && position.longitude != null) {
-              final latlong.LatLng flutterMarkerPosition = _toFlutterLatLng(position.latitude!.toDouble(), position.longitude!.toDouble());
-
-              final String category = device.category ?? 'default';
-              final String status = device.status ?? 'unknown';
-              final double course = position.course?.toDouble() ?? 0.0;
-
-              flutterMarkers.add(
-                Marker(
-                  width: 50.0,
-                  height: 50.0,
-                  point: flutterMarkerPosition,
-                  child: Transform.rotate(
-                    angle: course * (pi / 180),
-                    child: GestureDetector(
-                      onTap: () {
-                        _onDeviceSelected(device, traccarProvider.positions);
-                      },
-                      child: Image.asset('assets/images/marker_${category}_$status.png', errorBuilder: (context, error, stackTrace) => const Icon(Icons.location_on)),
-                    ),
-                  ),
-                ),
-              );
-            }
-          }
-        }
+        double initialLat = 0, initialLng = 0, initialZoom = 2.0;
 
         if (_currentDevice != null) {
           final initialPosition = _findPositionOrNull(traccarProvider.positions, _currentDevice!.id);
 
           if (initialPosition?.latitude != null && initialPosition?.longitude != null) {
-            initialFlutterLatLng = latlong.LatLng(initialPosition!.latitude!.toDouble(), initialPosition.longitude!.toDouble());
+            initialLat = initialPosition!.latitude!.toDouble();
+            initialLng = initialPosition.longitude!.toDouble();
             initialZoom = 15.0;
           }
         } else if (traccarProvider.positions.isNotEmpty) {
           final api.Position firstPosition = traccarProvider.positions.first;
           if (firstPosition.latitude != null && firstPosition.longitude != null) {
-            initialFlutterLatLng = latlong.LatLng(firstPosition.latitude!.toDouble(), firstPosition.longitude!.toDouble());
+            initialLat = firstPosition.latitude!.toDouble();
+            initialLng = firstPosition.longitude!.toDouble();
             initialZoom = 5.0;
           }
         }
+
+        final mapStyleProvider = Provider.of<MapStyleProvider>(context);
 
         return SafeArea(
           top: false,
@@ -709,12 +662,15 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                   },
                   child: maplibre.MapLibreMap(
                     key: _mapKey,
-                    initialCameraPosition: _lastCameraPosition ?? maplibre.CameraPosition(target: maplibre.LatLng(initialFlutterLatLng.latitude, initialFlutterLatLng.longitude), zoom: initialZoom),
-                    styleString: Provider.of<MapStyleProvider>(context).styleString,
+                    initialCameraPosition: _lastCameraPosition ?? maplibre.CameraPosition(target: maplibre.LatLng(initialLat, initialLng), zoom: initialZoom),
+                    styleString: mapStyleProvider.styleString,
                     compassEnabled: false,
                     onCameraMove: (position) {
-                      SharedPreferences.getInstance().then((prefs) {
-                        prefs.setDouble('map_zoom_level', position.zoom);
+                      _zoomDebounce?.cancel();
+                      _zoomDebounce = Timer(const Duration(milliseconds: 300), () {
+                        SharedPreferences.getInstance().then((prefs) {
+                          prefs.setDouble('map_zoom_level', position.zoom);
+                        });
                       });
                     },
                     onStyleLoadedCallback: _onStyleLoaded,
@@ -745,12 +701,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                   right: 16,
                   child: Column(
                     children: [
-                      _buildMapControl(
-                        Provider.of<MapStyleProvider>(context).isSatelliteMode ? Icons.satellite_alt : Icons.map,
-                        () => Provider.of<MapStyleProvider>(context, listen: false).toggleMapType(),
-                        "btn_style",
-                        isActive: Provider.of<MapStyleProvider>(context).isSatelliteMode,
-                      ),
+                      _buildMapControl(mapStyleProvider.isSatelliteMode ? Icons.satellite_alt : Icons.map, () => mapStyleProvider.toggleMapType(), "btn_style", isActive: mapStyleProvider.isSatelliteMode),
                       const SizedBox(height: 12),
                       _buildMapControl(Icons.explore_rounded, () => _mapController?.animateCamera(maplibre.CameraUpdate.bearingTo(0)), "btn_compass"),
                       const SizedBox(height: 12),
