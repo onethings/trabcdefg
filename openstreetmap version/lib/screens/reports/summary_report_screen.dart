@@ -41,16 +41,17 @@ class SummaryReport {
   factory SummaryReport.fromJson(Map<String, dynamic> json) {
     return SummaryReport(
       deviceId: json['deviceId'] as int,
-      deviceName: json['deviceName'] as String,
-      distance: (json['distance'] as num).toDouble(),
-      averageSpeed: (json['averageSpeed'] as num).toDouble(),
-      maxSpeed: (json['maxSpeed'] as num).toDouble(),
-      spentFuel: (json['spentFuel'] as num).toDouble(),
-      startOdometer: (json['startOdometer'] as num).toDouble(),
-      endOdometer: (json['endOdometer'] as num).toDouble(),
-      startTime: DateTime.parse(json['startTime'] as String),
-      endTime: DateTime.parse(json['endTime'] as String),
-      engineHours: json['engineHours'] as int,
+      deviceName: json['deviceName'] as String? ?? '',
+      distance: (json['distance'] as num?)?.toDouble() ?? 0.0,
+      averageSpeed: (json['averageSpeed'] as num?)?.toDouble() ?? 0.0,
+      maxSpeed: (json['maxSpeed'] as num?)?.toDouble() ?? 0.0,
+      spentFuel: (json['spentFuel'] as num?)?.toDouble() ?? 0.0,
+      startOdometer: (json['startOdometer'] as num?)?.toDouble() ?? 0.0,
+      endOdometer: (json['endOdometer'] as num?)?.toDouble() ?? 0.0,
+      // v4.4 may omit startTime/endTime — use safe fallback
+      startTime: json['startTime'] != null ? DateTime.parse(json['startTime'] as String) : DateTime.now(),
+      endTime: json['endTime'] != null ? DateTime.parse(json['endTime'] as String) : DateTime.now(),
+      engineHours: json['engineHours'] as int? ?? 0,
     );
   }
 }
@@ -77,18 +78,13 @@ class _SummaryReportScreenState extends State<SummaryReportScreen> {
       _isLoading = true;
     });
 
-    final traccarProvider = Provider.of<TraccarProvider>(
-      context,
-      listen: false,
-    );
+    final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
 
     final prefs = await SharedPreferences.getInstance();
     final deviceId = prefs.getInt('selectedDeviceId');
     final fromDateString = prefs.getString('historyFrom');
     final toDateString = prefs.getString('historyTo');
-    debugPrint(
-      'Fetched from SharedPreferences: deviceId=$deviceId, fromDate=$fromDateString, toDate=$toDateString',
-    );
+    debugPrint('Fetched from SharedPreferences: deviceId=$deviceId, fromDate=$fromDateString, toDate=$toDateString');
 
     if (deviceId == null || fromDateString == null || toDateString == null) {
       setState(() {
@@ -112,15 +108,16 @@ class _SummaryReportScreenState extends State<SummaryReportScreen> {
     try {
       final apiClient = traccarProvider.apiClient;
 
+      final queryParams = [api.QueryParam('from', fromDate.toIso8601String()), api.QueryParam('to', toDate.toIso8601String()), api.QueryParam('deviceId', deviceId.toString())];
+      // The "daily" parameter is not supported on v4.4 — omit it for compatibility.
+      if (traccarProvider.isVersionAtLeast('5.0')) {
+        queryParams.add(api.QueryParam('daily', false.toString()));
+      }
+
       final response = await apiClient.invokeAPI(
         '/reports/summary',
         'GET',
-        [
-          api.QueryParam('from', fromDate.toIso8601String()),
-          api.QueryParam('to', toDate.toIso8601String()),
-          api.QueryParam('deviceId', deviceId.toString()),
-          api.QueryParam('daily', false.toString()),
-        ],
+        queryParams,
         null, // body
         {}, // headerParams
         {}, // formParams
@@ -130,9 +127,7 @@ class _SummaryReportScreenState extends State<SummaryReportScreen> {
       final decodedData = json.decode(response.body);
 
       if (decodedData is List && decodedData.isNotEmpty) {
-        _summaryReport = SummaryReport.fromJson(
-          decodedData.first as Map<String, dynamic>,
-        );
+        _summaryReport = SummaryReport.fromJson(decodedData.first as Map<String, dynamic>);
       }
     } catch (e) {
       debugPrint('Error fetching summary report: $e');
@@ -140,9 +135,7 @@ class _SummaryReportScreenState extends State<SummaryReportScreen> {
       // Added a mounted guard here to avoid context across async gaps lint
       if (!mounted) return;
 
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('errorGeneral'.tr)));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('errorGeneral'.tr)));
     } finally {
       if (mounted) {
         setState(() {
@@ -164,11 +157,7 @@ class _SummaryReportScreenState extends State<SummaryReportScreen> {
   Widget build(BuildContext context) {
     if (_isLoading) {
       return Scaffold(
-        body: Center(
-          child: CircularProgressIndicator(
-            color: Theme.of(context).colorScheme.primary,
-          ),
-        ),
+        body: Center(child: CircularProgressIndicator(color: Theme.of(context).colorScheme.primary)),
       );
     }
 
@@ -181,9 +170,7 @@ class _SummaryReportScreenState extends State<SummaryReportScreen> {
 
     return Scaffold(
       // Fixed string concatenation warning here
-      appBar: AppBar(
-        title: Text('${'reportSummary'.tr}: ${_summaryReport!.deviceName}'),
-      ),
+      appBar: AppBar(title: Text('${'reportSummary'.tr}: ${_summaryReport!.deviceName}')),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: ListView(
@@ -197,53 +184,18 @@ class _SummaryReportScreenState extends State<SummaryReportScreen> {
                   children: [
                     Text(
                       '${'sharedName'.tr}: ${_summaryReport!.deviceName}',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Theme.of(context).colorScheme.onSurface,
-                      ),
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface),
                     ),
                     const Divider(),
-                    _buildSummaryItem(
-                      'deviceTotalDistance'.tr,
-                      '${(_summaryReport!.distance / 1000).toStringAsFixed(2)} ${'sharedKm'.tr}',
-                    ),
-                    _buildSummaryItem(
-                      'reportAverageSpeed'.tr,
-                      '${_summaryReport!.averageSpeed.toStringAsFixed(2)} ${'sharedKmh'.tr}',
-                    ),
-                    _buildSummaryItem(
-                      'reportMaximumSpeed'.tr,
-                      '${_summaryReport!.maxSpeed.toStringAsFixed(2)} ${'sharedKmh'.tr}',
-                    ),
-                    _buildSummaryItem(
-                      'reportSpentFuel'.tr,
-                      '${_summaryReport!.spentFuel.toStringAsFixed(2)} ${'sharedLiter'.tr}',
-                    ),
-                    _buildSummaryItem(
-                      'reportStartOdometer'.tr,
-                      '${(_summaryReport!.startOdometer / 1000).toStringAsFixed(2)} ${'sharedKm'.tr}',
-                    ),
-                    _buildSummaryItem(
-                      'reportEndOdometer'.tr,
-                      '${(_summaryReport!.endOdometer / 1000).toStringAsFixed(2)} ${'sharedKm'.tr}',
-                    ),
-                    _buildSummaryItem(
-                      'reportStartTime'.tr,
-                      DateFormat(
-                        'yyyy-MM-dd HH:mm',
-                      ).format(_summaryReport!.startTime.toLocal()),
-                    ),
-                    _buildSummaryItem(
-                      'reportEndTime'.tr,
-                      DateFormat(
-                        'yyyy-MM-dd HH:mm',
-                      ).format(_summaryReport!.endTime.toLocal()),
-                    ),
-                    _buildSummaryItem(
-                      'reportEngineHours'.tr,
-                      _formatEngineHours(_summaryReport!.engineHours),
-                    ),
+                    _buildSummaryItem('deviceTotalDistance'.tr, '${(_summaryReport!.distance / 1000).toStringAsFixed(2)} ${'sharedKm'.tr}'),
+                    _buildSummaryItem('reportAverageSpeed'.tr, '${_summaryReport!.averageSpeed.toStringAsFixed(2)} ${'sharedKmh'.tr}'),
+                    _buildSummaryItem('reportMaximumSpeed'.tr, '${_summaryReport!.maxSpeed.toStringAsFixed(2)} ${'sharedKmh'.tr}'),
+                    _buildSummaryItem('reportSpentFuel'.tr, '${_summaryReport!.spentFuel.toStringAsFixed(2)} ${'sharedLiter'.tr}'),
+                    _buildSummaryItem('reportStartOdometer'.tr, '${(_summaryReport!.startOdometer / 1000).toStringAsFixed(2)} ${'sharedKm'.tr}'),
+                    _buildSummaryItem('reportEndOdometer'.tr, '${(_summaryReport!.endOdometer / 1000).toStringAsFixed(2)} ${'sharedKm'.tr}'),
+                    _buildSummaryItem('reportStartTime'.tr, DateFormat('yyyy-MM-dd HH:mm').format(_summaryReport!.startTime.toLocal())),
+                    _buildSummaryItem('reportEndTime'.tr, DateFormat('yyyy-MM-dd HH:mm').format(_summaryReport!.endTime.toLocal())),
+                    _buildSummaryItem('reportEngineHours'.tr, _formatEngineHours(_summaryReport!.engineHours)),
                   ],
                 ),
               ),
@@ -256,16 +208,10 @@ class _SummaryReportScreenState extends State<SummaryReportScreen> {
 
   Widget _buildSummaryItem(String title, String value) {
     return ListTile(
-      title: Text(
-        title,
-        style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
-      ),
+      title: Text(title, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
       trailing: Text(
         value,
-        style: TextStyle(
-          fontWeight: FontWeight.bold,
-          color: Theme.of(context).colorScheme.onSurface,
-        ),
+        style: TextStyle(fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface),
       ),
     );
   }

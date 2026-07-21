@@ -20,13 +20,10 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen>
-    with SingleTickerProviderStateMixin {
+class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStateMixin {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  final _serverUrlController = TextEditingController(
-    text: AppConstants.traccarServerUrl,
-  );
+  final _serverUrlController = TextEditingController(text: AppConstants.traccarServerUrl);
   bool _isLoading = false;
   bool _obscurePassword = true;
   String _version = "";
@@ -38,14 +35,8 @@ class _LoginScreenState extends State<LoginScreen>
   void initState() {
     super.initState();
     _loadVersion();
-    _animationController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1000),
-    );
-    _fadeAnimation = CurvedAnimation(
-      parent: _animationController,
-      curve: Curves.easeIn,
-    );
+    _animationController = AnimationController(vsync: this, duration: const Duration(milliseconds: 1000));
+    _fadeAnimation = CurvedAnimation(parent: _animationController, curve: Curves.easeIn);
     _animationController.forward();
   }
 
@@ -72,12 +63,9 @@ class _LoginScreenState extends State<LoginScreen>
       }
 
       // Auto-append scheme if missing
-      if (!serverUrl.startsWith('http://') &&
-          !serverUrl.startsWith('https://')) {
+      if (!serverUrl.startsWith('http://') && !serverUrl.startsWith('https://')) {
         // If it looks like a local IP or localhost, default to http, else https
-        final isLocal = RegExp(
-          r'^(localhost|127\.|192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)',
-        ).hasMatch(serverUrl);
+        final isLocal = RegExp(r'^(localhost|127\.|192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)').hasMatch(serverUrl);
         serverUrl = (isLocal ? 'http://' : 'https://') + serverUrl;
       }
 
@@ -106,17 +94,16 @@ class _LoginScreenState extends State<LoginScreen>
       if (jSessionId != null) traccarProvider.setSessionId(jSessionId);
 
       await traccarProvider.fetchInitialData();
+      // 🔥 Pre-fetch & cache server version at login so all screens
+      // can use traccarProvider.serverVersion without extra API calls.
+      await traccarProvider.fetchServerVersion();
 
       if (mounted) Navigator.of(context).pushNamed('/main');
     } catch (e) {
       if (mounted) {
         Get.snackbar(
           'Error'.tr,
-          e.toString().contains('Failed host lookup') ||
-                  e.toString().contains('Exception occurred:')
-              ? 'Could not connect to server. Please check the URL and your network.'
-                    .tr
-              : e.toString(),
+          e.toString().contains('Failed host lookup') || e.toString().contains('Exception occurred:') ? 'Could not connect to server. Please check the URL and your network.'.tr : e.toString(),
           snackPosition: SnackPosition.BOTTOM,
         );
       }
@@ -126,9 +113,7 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   void _handleQrScan(BuildContext context) async {
-    final result = await Navigator.of(context).push<String>(
-      MaterialPageRoute(builder: (context) => const QrScannerScreen()),
-    );
+    final result = await Navigator.of(context).push<String>(MaterialPageRoute(builder: (context) => const QrScannerScreen()));
     if (result != null) {
       _serverUrlController.text = result;
       final prefs = await SharedPreferences.getInstance();
@@ -140,9 +125,7 @@ class _LoginScreenState extends State<LoginScreen>
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
-      ),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(30))),
       backgroundColor: Colors.transparent,
       builder: (context) => _ServerPickerSheet(
         onSelected: (url) {
@@ -159,9 +142,7 @@ class _LoginScreenState extends State<LoginScreen>
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
-      ),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(30))),
       backgroundColor: Colors.transparent,
       builder: (context) => const _LanguagePickerSheet(),
     );
@@ -211,24 +192,8 @@ class _LoginScreenState extends State<LoginScreen>
       color: theme.colorScheme.surface,
       child: Stack(
         children: [
-          Positioned(
-            top: -100,
-            right: -50,
-            child: CircleAvatar(
-              radius: 150,
-              backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.1),
-            ),
-          ),
-          Positioned(
-            bottom: -50,
-            left: -50,
-            child: CircleAvatar(
-              radius: 120,
-              backgroundColor: theme.colorScheme.secondary.withValues(
-                alpha: 0.08,
-              ),
-            ),
-          ),
+          Positioned(top: -100, right: -50, child: CircleAvatar(radius: 150, backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.1))),
+          Positioned(bottom: -50, left: -50, child: CircleAvatar(radius: 120, backgroundColor: theme.colorScheme.secondary.withValues(alpha: 0.08))),
           BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 40, sigmaY: 40),
             child: Container(color: Colors.transparent),
@@ -253,33 +218,17 @@ class _LoginScreenState extends State<LoginScreen>
                 icon: Icons.lan_outlined,
                 readOnly: true,
                 onTap: () => _showServerDialog(context),
-                suffix: IconButton(
-                  icon: const Icon(Icons.qr_code_scanner_rounded, size: 20),
-                  onPressed: () => _handleQrScan(context),
-                ),
+                suffix: IconButton(icon: const Icon(Icons.qr_code_scanner_rounded, size: 20), onPressed: () => _handleQrScan(context)),
               ),
               const SizedBox(height: 16),
-              _buildTextField(
-                controller: _emailController,
-                label: 'userEmail'.tr,
-                icon: Icons.alternate_email_rounded,
-              ),
+              _buildTextField(controller: _emailController, label: 'userEmail'.tr, icon: Icons.alternate_email_rounded),
               const SizedBox(height: 16),
               _buildTextField(
                 controller: _passwordController,
                 label: 'userPassword'.tr,
                 icon: Icons.lock_outline_rounded,
                 obscure: _obscurePassword,
-                suffix: IconButton(
-                  icon: Icon(
-                    _obscurePassword
-                        ? Icons.visibility_off_outlined
-                        : Icons.visibility_outlined,
-                    size: 20,
-                  ),
-                  onPressed: () =>
-                      setState(() => _obscurePassword = !_obscurePassword),
-                ),
+                suffix: IconButton(icon: Icon(_obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined, size: 20), onPressed: () => setState(() => _obscurePassword = !_obscurePassword)),
               ),
               const SizedBox(height: 24),
               _buildSubmitButton(theme),
@@ -290,27 +239,14 @@ class _LoginScreenState extends State<LoginScreen>
     );
   }
 
-  Widget _buildTextField({
-    required TextEditingController controller,
-    required String label,
-    required IconData icon,
-    bool obscure = false,
-    Widget? suffix,
-    VoidCallback? onTap,
-    bool readOnly = false,
-  }) {
+  Widget _buildTextField({required TextEditingController controller, required String label, required IconData icon, bool obscure = false, Widget? suffix, VoidCallback? onTap, bool readOnly = false}) {
     final theme = Theme.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
           padding: const EdgeInsets.only(left: 4, bottom: 8),
-          child: Text(
-            label,
-            style: theme.textTheme.labelMedium?.copyWith(
-              fontWeight: FontWeight.bold,
-            ),
-          ),
+          child: Text(label, style: theme.textTheme.labelMedium?.copyWith(fontWeight: FontWeight.bold)),
         ),
         TextField(
           controller: controller,
@@ -322,26 +258,15 @@ class _LoginScreenState extends State<LoginScreen>
             suffixIcon: suffix,
             filled: true,
             fillColor: theme.colorScheme.onSurface.withValues(alpha: 0.03),
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 16,
-            ),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: BorderSide.none,
-            ),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16),
-              borderSide: BorderSide(
-                color: theme.colorScheme.outlineVariant.withValues(alpha: 0.3),
-              ),
+              borderSide: BorderSide(color: theme.colorScheme.outlineVariant.withValues(alpha: 0.3)),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16),
-              borderSide: BorderSide(
-                color: theme.colorScheme.primary,
-                width: 1.5,
-              ),
+              borderSide: BorderSide(color: theme.colorScheme.primary, width: 1.5),
             ),
           ),
         ),
@@ -358,27 +283,10 @@ class _LoginScreenState extends State<LoginScreen>
         style: ElevatedButton.styleFrom(
           backgroundColor: theme.colorScheme.primary,
           foregroundColor: theme.colorScheme.onPrimary,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18),
-          ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
           elevation: 0,
         ),
-        child: _isLoading
-            ? const SizedBox(
-                width: 24,
-                height: 24,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: Colors.white,
-                ),
-              )
-            : Text(
-                'loginLogin'.tr,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
+        child: _isLoading ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : Text('loginLogin'.tr, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
       ),
     );
   }
@@ -387,15 +295,9 @@ class _LoginScreenState extends State<LoginScreen>
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        TextButton(
-          onPressed: () => Get.toNamed('/register'),
-          child: Text('loginRegister'.tr),
-        ),
+        TextButton(onPressed: () => Get.toNamed('/register'), child: Text('loginRegister'.tr)),
         Text('|', style: TextStyle(color: theme.colorScheme.outlineVariant)),
-        TextButton(
-          onPressed: () => Get.toNamed('/reset-password'),
-          child: Text('loginReset'.tr),
-        ),
+        TextButton(onPressed: () => Get.toNamed('/reset-password'), child: Text('loginReset'.tr)),
       ],
     );
   }
@@ -421,29 +323,12 @@ class _LoginScreenState extends State<LoginScreen>
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            'v $_version',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
-            ),
-          ),
+          Text('v $_version', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withValues(alpha: 0.4))),
           Row(
             children: [
-              _buildThemeDot(
-                themeProvider,
-                AppThemePreset.obsidian,
-                const Color(0xFF1A1A1A),
-              ),
-              _buildThemeDot(
-                themeProvider,
-                AppThemePreset.deepSea,
-                const Color(0xFF0D1B2A),
-              ),
-              _buildThemeDot(
-                themeProvider,
-                AppThemePreset.mint,
-                const Color(0xFF52B788),
-              ),
+              _buildThemeDot(themeProvider, AppThemePreset.obsidian, const Color(0xFF1A1A1A)),
+              _buildThemeDot(themeProvider, AppThemePreset.deepSea, const Color(0xFF0D1B2A)),
+              _buildThemeDot(themeProvider, AppThemePreset.mint, const Color(0xFF52B788)),
             ],
           ),
         ],
@@ -451,11 +336,7 @@ class _LoginScreenState extends State<LoginScreen>
     );
   }
 
-  Widget _buildThemeDot(
-    ThemeProvider provider,
-    AppThemePreset preset,
-    Color color,
-  ) {
+  Widget _buildThemeDot(ThemeProvider provider, AppThemePreset preset, Color color) {
     final isSelected = provider.activePreset == preset;
     return GestureDetector(
       onTap: () => provider.setPreset(preset),
@@ -467,19 +348,8 @@ class _LoginScreenState extends State<LoginScreen>
         decoration: BoxDecoration(
           color: color,
           shape: BoxShape.circle,
-          border: Border.all(
-            color: isSelected ? Colors.white : Colors.transparent,
-            width: 2,
-          ),
-          boxShadow: isSelected
-              ? [
-                  BoxShadow(
-                    color: color.withValues(alpha: 0.5),
-                    blurRadius: 10,
-                    spreadRadius: 1,
-                  ),
-                ]
-              : [],
+          border: Border.all(color: isSelected ? Colors.white : Colors.transparent, width: 2),
+          boxShadow: isSelected ? [BoxShadow(color: color.withValues(alpha: 0.5), blurRadius: 10, spreadRadius: 1)] : [],
         ),
       ),
     );
@@ -509,20 +379,15 @@ class _ServerPickerSheetState extends State<_ServerPickerSheet> {
     final theme = Theme.of(context);
     final allServers = AppConstants.officialServers;
 
-    final filteredServers = allServers
-        .where((s) => s.toLowerCase().contains(_inputQuery.toLowerCase()))
-        .toList();
+    final filteredServers = allServers.where((s) => s.toLowerCase().contains(_inputQuery.toLowerCase())).toList();
 
-    bool showCustomOption =
-        _inputQuery.isNotEmpty && !allServers.contains(_inputQuery);
+    bool showCustomOption = _inputQuery.isNotEmpty && !allServers.contains(_inputQuery);
 
     return BackdropFilter(
       filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
       child: Container(
         height: MediaQuery.of(context).size.height * 0.75,
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom,
-        ),
+        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
         decoration: BoxDecoration(
           color: theme.colorScheme.surface.withValues(alpha: 0.9),
           borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
@@ -534,13 +399,7 @@ class _ServerPickerSheetState extends State<_ServerPickerSheet> {
               const SizedBox(height: 12),
               _buildHandle(),
               const SizedBox(height: 16),
-              Text(
-                'ServerUrl'.tr,
-                style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
+              Text('ServerUrl'.tr, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
               const SizedBox(height: 12),
 
               Padding(
@@ -553,10 +412,7 @@ class _ServerPickerSheetState extends State<_ServerPickerSheet> {
                     prefixIcon: const Icon(Icons.edit_note_rounded),
                     suffixIcon: _inputQuery.isNotEmpty
                         ? IconButton(
-                            icon: const Icon(
-                              Icons.check_circle,
-                              color: Colors.green,
-                            ),
+                            icon: const Icon(Icons.check_circle, color: Colors.green),
                             onPressed: () {
                               widget.onSelected(_inputQuery);
                               Navigator.pop(context);
@@ -564,13 +420,8 @@ class _ServerPickerSheetState extends State<_ServerPickerSheet> {
                           )
                         : null,
                     filled: true,
-                    fillColor: theme.colorScheme.onSurface.withValues(
-                      alpha: 0.05,
-                    ),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide.none,
-                    ),
+                    fillColor: theme.colorScheme.onSurface.withValues(alpha: 0.05),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
                   ),
                 ),
               ),
@@ -617,10 +468,7 @@ class _ServerPickerSheetState extends State<_ServerPickerSheet> {
     return Container(
       width: 40,
       height: 4,
-      decoration: BoxDecoration(
-        color: Colors.grey[400],
-        borderRadius: BorderRadius.circular(2),
-      ),
+      decoration: BoxDecoration(color: Colors.grey[400], borderRadius: BorderRadius.circular(2)),
     );
   }
 }
@@ -671,19 +519,10 @@ class _LanguagePickerSheetState extends State<_LanguagePickerSheet> {
               Container(
                 width: 40,
                 height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.grey[400],
-                  borderRadius: BorderRadius.circular(2),
-                ),
+                decoration: BoxDecoration(color: Colors.grey[400], borderRadius: BorderRadius.circular(2)),
               ),
               const SizedBox(height: 16),
-              Text(
-                'loginLanguage'.tr,
-                style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
+              Text('loginLanguage'.tr, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
               const SizedBox(height: 12),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20.0),
@@ -694,13 +533,8 @@ class _LanguagePickerSheetState extends State<_LanguagePickerSheet> {
                     hintText: 'sharedSearch'.tr,
                     prefixIcon: const Icon(Icons.search),
                     filled: true,
-                    fillColor: theme.colorScheme.onSurface.withValues(
-                      alpha: 0.05,
-                    ),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide.none,
-                    ),
+                    fillColor: theme.colorScheme.onSurface.withValues(alpha: 0.05),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
                   ),
                 ),
               ),
@@ -709,11 +543,7 @@ class _LanguagePickerSheetState extends State<_LanguagePickerSheet> {
                 child: ListView.separated(
                   padding: const EdgeInsets.symmetric(horizontal: 10),
                   itemCount: filteredIndices.length,
-                  separatorBuilder: (context, index) => Divider(
-                    color: theme.colorScheme.outlineVariant.withValues(
-                      alpha: 0.3,
-                    ),
-                  ),
+                  separatorBuilder: (context, index) => Divider(color: theme.colorScheme.outlineVariant.withValues(alpha: 0.3)),
                   itemBuilder: (context, index) {
                     final idx = filteredIndices[index];
                     return ListTile(

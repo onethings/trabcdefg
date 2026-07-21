@@ -1,5 +1,6 @@
 // lib/screens/history_route_screen.dart
 import 'dart:async';
+import 'dart:convert';
 import 'dart:developer' as developer;
 import 'dart:io';
 import 'dart:math';
@@ -718,6 +719,10 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
     final reportsApi = api.ReportsApi(traccarProvider.apiClient);
     final dailyBox = await Hive.openBox<ReportSummaryHive>('daily_summaries');
+    final serverVersion = await traccarProvider.fetchServerVersion();
+    final today = DateTime.now();
+
+    developer.log('Server version: $serverVersion — fetching monthly data for ${month.year}-${month.month}', name: 'HistoryRouteScreen');
 
     _dailySummaries.clear();
     final firstDayOfMonth = DateTime(month.year, month.month, 1);
@@ -729,6 +734,15 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
       final cachedSummary = dailyBox.get(hiveKey);
 
       if (cachedSummary != null) {
+        // ❗ Old API (e.g., v4.4) may have cached zero-value entries for future dates.
+        // Skip cached zero entries for dates after today so they get re-fetched later.
+        final distance = cachedSummary.distance ?? 0;
+        final engineHours = cachedSummary.engineHours ?? 0;
+        if (date.isAfter(today) && distance <= 0 && engineHours <= 0) {
+          developer.log('Skipping stale zero cache for future date: ${DateFormat('yyyy-MM-dd').format(date)}', name: 'HistoryRouteScreen');
+          await dailyBox.delete(hiveKey);
+          continue;
+        }
         _dailySummaries[dayUtc] = api.ReportSummary(distance: cachedSummary.distance, averageSpeed: cachedSummary.averageSpeed, maxSpeed: cachedSummary.maxSpeed, spentFuel: cachedSummary.spentFuel, engineHours: cachedSummary.engineHours);
       }
     }
@@ -740,6 +754,13 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     for (var date = firstDayOfMonth; date.isBefore(lastDayOfMonth.add(const Duration(days: 1))); date = date.add(const Duration(days: 1))) {
       final dayUtc = DateTime.utc(date.year, date.month, date.day);
 
+      // 🔥 Skip future dates — no data exists yet, and old API (v4.4) incorrectly
+      // returns zero-value summaries for future dates that would pollute our cache.
+      if (date.isAfter(today)) {
+        developer.log('Skipping future date (no network fetch): ${DateFormat('yyyy-MM-dd').format(date)}', name: 'HistoryRouteScreen');
+        continue;
+      }
+
       if (_dailySummaries.containsKey(dayUtc)) {
         continue;
       }
@@ -749,18 +770,58 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
       final String hiveKey = '${_deviceId}_${DateFormat('yyyy-MM-dd').format(dayUtc)}';
 
       try {
-        final summary = await reportsApi.getReportsSummary(from, to, deviceId: [_deviceId!]);
-        if (summary != null && summary.isNotEmpty) {
-          final dailySummary = summary.first;
+        api.ReportSummary? dailySummary;
+        try {
+          // Try using the generated API first (works on v6.x+)
+          final summary = await reportsApi.getReportsSummary(from, to, deviceId: [_deviceId!]);
+          if (summary != null && summary.isNotEmpty) {
+            dailySummary = summary.first;
+          }
+        } catch (e) {
+          // Fallback for old API (v4.x) — the generated fromJson may fail
+          // on missing fields. Use raw API call with manual parsing instead.
+          developer.log('Generated API failed, trying raw API fallback: $e', name: 'HistoryRouteScreen');
+          try {
+            final response = await traccarProvider.apiClient.invokeAPI(
+              '/reports/summary',
+              'GET',
+              [api.QueryParam('from', from.toIso8601String()), api.QueryParam('to', to.toIso8601String()), api.QueryParam('deviceId', _deviceId.toString())],
+              null,
+              {},
+              {},
+              'application/json',
+            );
+            if (response.body.isNotEmpty) {
+              final decoded = json.decode(response.body) as List?;
+              if (decoded != null && decoded.isNotEmpty) {
+                final raw = decoded.first as Map<String, dynamic>;
+                dailySummary = api.ReportSummary(
+                  distance: (raw['distance'] as num?)?.toDouble(),
+                  averageSpeed: (raw['averageSpeed'] as num?)?.toDouble(),
+                  maxSpeed: (raw['maxSpeed'] as num?)?.toDouble(),
+                  spentFuel: (raw['spentFuel'] as num?)?.toDouble(),
+                  engineHours: raw['engineHours'] as int?,
+                );
+              }
+            }
+          } catch (e2) {
+            developer.log('Raw API fallback also failed for day $date: $e2', name: 'HistoryRouteScreen');
+          }
+        }
+
+        if (dailySummary != null) {
+          developer.log('Fetched summary for ${DateFormat('yyyy-MM-dd').format(date)}: distance=${dailySummary.distance}, engineHours=${dailySummary.engineHours}, avgSpeed=${dailySummary.averageSpeed}', name: 'HistoryRouteScreen');
           _dailySummaries[dayUtc] = dailySummary;
 
           await dailyBox.put(hiveKey, ReportSummaryHive.fromApi(dailySummary));
           if (mounted) {
             setState(() {});
           }
+        } else {
+          developer.log('  → empty result (no data for this day)', name: 'HistoryRouteScreen');
         }
       } catch (e) {
-        debugPrint('背景抓取數據失敗: $e');
+        developer.log('Failed to fetch data for day $date: $e', name: 'HistoryRouteScreen');
       }
     }
   }

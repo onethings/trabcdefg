@@ -29,6 +29,47 @@ class TraccarProvider with ChangeNotifier {
   List<api.Geofence> _geofences = [];
   List<api.Notification> _serverNotifications = [];
   bool _isLoading = false;
+  String? _serverVersion;
+
+  /// Returns the cached server version (e.g. "4.4", "6.14.15"), or null if not yet fetched.
+  String? get serverVersion => _serverVersion;
+
+  /// Fetches and caches the server version from the Traccar API.
+  /// Safe to call multiple times — the result is cached after first fetch.
+  Future<String?> fetchServerVersion() async {
+    if (_serverVersion != null) return _serverVersion;
+    try {
+      final serverApi = api.ServerApi(apiClient);
+      final server = await serverApi.getServer();
+      _serverVersion = server?.version;
+      debugPrint('Server version: $_serverVersion');
+      return _serverVersion;
+    } catch (e) {
+      debugPrint('Failed to fetch server version: $e');
+      return null;
+    }
+  }
+
+  /// Checks whether the cached server version is >= [target] (e.g. "5.0").
+  /// Returns false if version is unknown or parsing fails.
+  bool isVersionAtLeast(String target) {
+    if (_serverVersion == null) return false;
+    try {
+      final parts = _serverVersion!.split('.').map((s) => int.tryParse(s) ?? 0).toList();
+      final targetParts = target.split('.').map((s) => int.tryParse(s) ?? 0).toList();
+      final maxLen = parts.length > targetParts.length ? parts.length : targetParts.length;
+      for (var i = 0; i < maxLen; i++) {
+        final a = i < parts.length ? parts[i] : 0;
+        final b = i < targetParts.length ? targetParts[i] : 0;
+        if (a > b) return true;
+        if (a < b) return false;
+      }
+      return true; // equal
+    } catch (_) {
+      return false;
+    }
+  }
+
   Set<int> _favoriteDeviceIds = {};
   Set<int> get favoriteDeviceIds => _favoriteDeviceIds;
 
@@ -179,6 +220,7 @@ class TraccarProvider with ChangeNotifier {
     await authService.logout();
 
     _sessionId = null;
+    _serverVersion = null;
     _devices = [];
     _positions = [];
     _positionMap.clear();

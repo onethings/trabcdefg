@@ -19,10 +19,20 @@ class _ReportsScreenState extends State<ReportsScreen> {
   DateTime _selectedDate = DateTime.now();
   api.Device? _selectedDevice;
 
+  // Report types available on all server versions (v4.4+)
+  static const _basicReports = {'summary', 'stops', 'route', 'trips', 'events', 'chart'};
+
   @override
   void initState() {
     super.initState();
     _loadLastDevice();
+  }
+
+  bool _isReportAvailable(TraccarProvider provider, String type) {
+    // If server version is unknown (still loading), show all for safety
+    if (provider.serverVersion == null) return true;
+    // v4.4 only supports basic reports; v5.0+ supports all
+    return provider.isVersionAtLeast('5.0') || _basicReports.contains(type);
   }
 
   Future<void> _loadLastDevice() async {
@@ -150,29 +160,47 @@ class _ReportsScreenState extends State<ReportsScreen> {
             ),
           ),
           const Divider(),
-          _buildReportItem('reportCombined'.tr, 'combined', Icons.show_chart),
-          _buildReportItem('reportSummary'.tr, 'summary', Icons.summarize),
-          _buildReportItem('reportStops'.tr, 'stops', Icons.pause_circle_outline),
-          _buildReportItem('reportReplay'.tr, 'route', Icons.replay),
-          _buildReportItem('reportTrips'.tr, 'trips', Icons.route),
-          _buildReportItem('reportEvents'.tr, 'events', Icons.event_note),
+          ..._buildReportSection(context, [
+            _ReportDef('reportCombined'.tr, 'combined', Icons.show_chart),
+            _ReportDef('reportSummary'.tr, 'summary', Icons.summarize),
+            _ReportDef('reportStops'.tr, 'stops', Icons.pause_circle_outline),
+            _ReportDef('reportReplay'.tr, 'route', Icons.replay),
+            _ReportDef('reportTrips'.tr, 'trips', Icons.route),
+            _ReportDef('reportEvents'.tr, 'events', Icons.event_note),
+          ]),
           const Divider(),
-          _buildReportItem('reportGeofences'.tr, 'geofences', Icons.fence),
-          _buildReportItem('reportChart'.tr, 'chart', Icons.bar_chart),
-          _buildReportItem('reportPositions'.tr, 'positions', Icons.list_alt),
-          _buildReportItem('reportLogs'.tr, 'logs', Icons.article),
-          _buildReportItem('reportScheduled'.tr, 'scheduled', Icons.schedule_send),
+          ..._buildReportSection(context, [
+            _ReportDef('reportGeofences'.tr, 'geofences', Icons.fence),
+            _ReportDef('reportChart'.tr, 'chart', Icons.bar_chart),
+            _ReportDef('reportPositions'.tr, 'positions', Icons.list_alt),
+            _ReportDef('reportLogs'.tr, 'logs', Icons.article),
+            _ReportDef('reportScheduled'.tr, 'scheduled', Icons.schedule_send),
+          ]),
         ],
       ),
     );
   }
 
-  Widget _buildReportItem(String title, String type, IconData icon) {
+  List<Widget> _buildReportSection(BuildContext context, List<_ReportDef> defs) {
+    final provider = Provider.of<TraccarProvider>(context, listen: false);
+    return defs.where((d) => _isReportAvailable(provider, d.type)).map((d) {
+      return _buildReportItem(d);
+    }).toList();
+  }
+
+  Widget _buildReportItem(_ReportDef def) {
     return ListTile(
-      leading: Icon(icon, color: Theme.of(context).colorScheme.primary),
-      title: Text(title, style: TextStyle(color: Theme.of(context).colorScheme.onSurface)),
+      leading: Icon(def.icon, color: Theme.of(context).colorScheme.primary),
+      title: Text(def.title, style: TextStyle(color: Theme.of(context).colorScheme.onSurface)),
       trailing: Icon(Icons.chevron_right, color: Theme.of(context).colorScheme.onSurfaceVariant),
-      onTap: () => _navigateToReport(type),
+      onTap: () => _navigateToReport(def.type),
     );
   }
+}
+
+class _ReportDef {
+  final String title;
+  final String type;
+  final IconData icon;
+  const _ReportDef(this.title, this.type, this.icon);
 }
