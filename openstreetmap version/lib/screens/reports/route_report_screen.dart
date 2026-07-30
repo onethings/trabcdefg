@@ -115,18 +115,13 @@ class _RouteReportScreenState extends State<RouteReportScreen> {
       _isLoading = true;
     });
 
-    final traccarProvider = Provider.of<TraccarProvider>(
-      context,
-      listen: false,
-    );
+    final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
 
     final prefs = await SharedPreferences.getInstance();
     final deviceId = prefs.getInt('selectedDeviceId');
     final fromDateString = prefs.getString('historyFrom');
     final toDateString = prefs.getString('historyTo');
-    debugPrint(
-      'Fetched from SharedPreferences: deviceId=$deviceId, fromDate=$fromDateString, toDate=$toDateString',
-    );
+    debugPrint('Fetched from SharedPreferences: deviceId=$deviceId, fromDate=$fromDateString, toDate=$toDateString');
 
     if (deviceId == null || fromDateString == null || toDateString == null) {
       if (!mounted) return;
@@ -151,11 +146,7 @@ class _RouteReportScreenState extends State<RouteReportScreen> {
 
     try {
       final apiClient = traccarProvider.apiClient;
-      final queryParams = [
-        api.QueryParam('from', fromDate.toIso8601String()),
-        api.QueryParam('to', toDate.toIso8601String()),
-        api.QueryParam('deviceId', deviceId.toString()),
-      ];
+      final queryParams = [api.QueryParam('from', fromDate.toIso8601String()), api.QueryParam('to', toDate.toIso8601String()), api.QueryParam('deviceId', deviceId.toString())];
       final path = '/reports/route';
       final headerParams = {'Accept': 'application/json'};
 
@@ -175,40 +166,24 @@ class _RouteReportScreenState extends State<RouteReportScreen> {
           final decodedData = json.decode(response.body);
 
           if (decodedData is List && decodedData.isNotEmpty) {
-            _routeReport = decodedData
-                .map((e) => RouteReport.fromJson(e as Map<String, dynamic>))
-                .toList();
+            _routeReport = decodedData.map((e) => RouteReport.fromJson(e as Map<String, dynamic>)).toList();
 
             if (_routeReport.isNotEmpty) {
-              final device = traccarProvider.devices.firstWhere(
-                (d) => d.id == _routeReport.first.deviceId,
-                orElse: () => api.Device(),
-              );
+              final device = traccarProvider.devices.firstWhere((d) => d.id == _routeReport.first.deviceId, orElse: () => api.Device());
               _deviceName = device.name;
               _createMapElements();
             }
           }
         } else {
-          debugPrint(
-            'Warning: Expected JSON, but received content type: $contentType',
-          );
+          debugPrint('Warning: Expected JSON, but received content type: $contentType');
           if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'Failed to load route report. The server returned a file instead of JSON.'
-                    .tr,
-              ),
-            ),
-          );
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to load route report. The server returned a file instead of JSON.'.tr)));
         }
       }
     } catch (e) {
       debugPrint('Error fetching route report: $e');
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to load route report.'.tr)),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to load route report.'.tr)));
     } finally {
       if (mounted) {
         setState(() {
@@ -233,18 +208,10 @@ class _RouteReportScreenState extends State<RouteReportScreen> {
     await _mapController!.clearSymbols();
     await _mapController!.clearLines();
 
-    final points = _routeReport
-        .map((p) => maplibre.LatLng(p.latitude, p.longitude))
-        .toList();
+    final points = _routeReport.map((p) => maplibre.LatLng(p.latitude, p.longitude)).toList();
 
     if (points.isNotEmpty) {
-      await _mapController!.addLine(
-        maplibre.LineOptions(
-          geometry: points,
-          lineColor: "#0000FF",
-          lineWidth: 4.0,
-        ),
-      );
+      await _mapController!.addLine(maplibre.LineOptions(geometry: points, lineColor: "#0000FF", lineWidth: 4.0));
 
       await _addMarker(points.first, "start_pin", "assets/images/start.png");
       await _addMarker(points.last, "end_pin", "assets/images/destination.png");
@@ -253,11 +220,7 @@ class _RouteReportScreenState extends State<RouteReportScreen> {
     }
   }
 
-  Future<void> _addMarker(
-    maplibre.LatLng point,
-    String iconId,
-    String assetPath,
-  ) async {
+  Future<void> _addMarker(maplibre.LatLng point, String iconId, String assetPath) async {
     if (!_loadedIcons.contains(iconId)) {
       final ByteData bytes = await rootBundle.load(assetPath);
       final Uint8List list = bytes.buffer.asUint8List();
@@ -265,14 +228,7 @@ class _RouteReportScreenState extends State<RouteReportScreen> {
       _loadedIcons.add(iconId);
     }
 
-    await _mapController!.addSymbol(
-      maplibre.SymbolOptions(
-        geometry: point,
-        iconImage: iconId,
-        iconSize: 0.8,
-        iconAnchor: "bottom",
-      ),
-    );
+    await _mapController!.addSymbol(maplibre.SymbolOptions(geometry: point, iconImage: iconId, iconSize: 0.8, iconAnchor: "bottom"));
   }
 
   void _zoomToFit(List<maplibre.LatLng> points) {
@@ -282,18 +238,7 @@ class _RouteReportScreenState extends State<RouteReportScreen> {
     double minLng = points.map((p) => p.longitude).reduce(min);
     double maxLng = points.map((p) => p.longitude).reduce(max);
 
-    _mapController?.animateCamera(
-      maplibre.CameraUpdate.newLatLngBounds(
-        maplibre.LatLngBounds(
-          southwest: maplibre.LatLng(minLat, minLng),
-          northeast: maplibre.LatLng(maxLat, maxLng),
-        ),
-        left: 50,
-        right: 50,
-        top: 50,
-        bottom: 50,
-      ),
-    );
+    _mapController?.animateCamera(maplibre.CameraUpdate.newLatLngBounds(maplibre.LatLngBounds(southwest: maplibre.LatLng(minLat, minLng), northeast: maplibre.LatLng(maxLat, maxLng)), left: 50, right: 50, top: 50, bottom: 50));
   }
 
   void _animateToPosition(maplibre.LatLng position) {
@@ -312,24 +257,17 @@ class _RouteReportScreenState extends State<RouteReportScreen> {
     final status = await Permission.storage.request();
     if (!status.isGranted) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Storage permission is required to save the file.'.tr),
-        ),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Storage permission is required to save the file.'.tr)));
       return;
     }
 
     if (_routeReport.isEmpty) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('No data to export.'.tr)));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('No data to export.'.tr)));
       return;
     }
 
-    final csvHeader =
-        'id,deviceId,deviceTime,latitude,longitude,speed,address,protocol,serverTime,fixTime,outdated,valid,altitude,course,accuracy,network,attributes\n';
+    final csvHeader = 'id,deviceId,deviceTime,latitude,longitude,speed,address,protocol,serverTime,fixTime,outdated,valid,altitude,course,accuracy,network,attributes\n';
     final csvRows = _routeReport
         .map((position) {
           final attributesJson = json.encode(position.attributes);
@@ -339,22 +277,17 @@ class _RouteReportScreenState extends State<RouteReportScreen> {
 
     final csvContent = csvHeader + csvRows;
     final directory = await getExternalStorageDirectory();
-    final fileName =
-        'route_report_${_deviceName ?? 'vehicle'}_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.csv';
+    final fileName = 'route_report_${_deviceName ?? 'vehicle'}_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.csv';
     final file = File('${directory!.path}/$fileName');
 
     try {
       await file.writeAsString(csvContent);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${'Report exported to'.tr} ${file.path}')),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${'Report exported to'.tr} ${file.path}')));
     } catch (e) {
       debugPrint('Error exporting CSV: $e');
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Failed to export report.'.tr)));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to export report.'.tr)));
     }
   }
 
@@ -372,19 +305,12 @@ class _RouteReportScreenState extends State<RouteReportScreen> {
     }
 
     final mapProvider = Provider.of<MapStyleProvider>(context);
-    final initialCenter = _routeReport.isNotEmpty
-        ? maplibre.LatLng(
-            _routeReport.first.latitude,
-            _routeReport.first.longitude,
-          )
-        : const maplibre.LatLng(21.9162, 95.9560);
+    final initialCenter = _routeReport.isNotEmpty ? maplibre.LatLng(_routeReport.first.latitude, _routeReport.first.longitude) : const maplibre.LatLng(21.9162, 95.9560);
 
     return Scaffold(
       appBar: AppBar(
         title: Text('${'reportReplay'.tr}: ${_deviceName ?? ''}'),
-        actions: [
-          IconButton(icon: const Icon(Icons.download), onPressed: _exportToCsv),
-        ],
+        actions: [IconButton(icon: const Icon(Icons.download), onPressed: _exportToCsv)],
       ),
       body: Column(
         children: [
@@ -393,26 +319,16 @@ class _RouteReportScreenState extends State<RouteReportScreen> {
             child: Stack(
               children: [
                 maplibre.MapLibreMap(
+                  key: ValueKey(mapProvider.isSatelliteMode),
                   onMapCreated: (c) => _mapController = c,
                   onStyleLoadedCallback: _onStyleLoaded,
-                  initialCameraPosition: maplibre.CameraPosition(
-                    target: initialCenter,
-                    zoom: 14.0,
-                  ),
+                  initialCameraPosition: maplibre.CameraPosition(target: initialCenter, zoom: 14.0),
                   styleString: mapProvider.styleString,
                 ),
                 Positioned(
                   top: 10,
                   right: 10,
-                  child: FloatingActionButton(
-                    mini: true,
-                    onPressed: () => mapProvider.toggleMapType(),
-                    child: Icon(
-                      mapProvider.isSatelliteMode
-                          ? Icons.map
-                          : Icons.satellite_alt,
-                    ),
-                  ),
+                  child: FloatingActionButton(mini: true, onPressed: () => mapProvider.toggleMapType(), child: Icon(mapProvider.isSatelliteMode ? Icons.map : Icons.satellite_alt)),
                 ),
               ],
             ),
@@ -425,9 +341,7 @@ class _RouteReportScreenState extends State<RouteReportScreen> {
               itemBuilder: (context, index) {
                 final position = _routeReport[index];
                 return GestureDetector(
-                  onTap: () => _animateToPosition(
-                    maplibre.LatLng(position.latitude, position.longitude),
-                  ),
+                  onTap: () => _animateToPosition(maplibre.LatLng(position.latitude, position.longitude)),
                   child: Card(
                     elevation: 4,
                     margin: const EdgeInsets.only(bottom: 16.0),
@@ -436,35 +350,14 @@ class _RouteReportScreenState extends State<RouteReportScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            '${'reportPositions'.tr} ${index + 1}',
-                            style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
+                          Text('${'reportPositions'.tr} ${index + 1}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                           const Divider(),
-                          ListTile(
-                            title: Text('positionDeviceTime'.tr),
-                            trailing: Text(
-                              _formatDateTime(position.deviceTime),
-                            ),
-                          ),
-                          ListTile(
-                            title: Text('positionSpeed'.tr),
-                            trailing: Text(_formatSpeed(position.speed)),
-                          ),
+                          ListTile(title: Text('positionDeviceTime'.tr), trailing: Text(_formatDateTime(position.deviceTime))),
+                          ListTile(title: Text('positionSpeed'.tr), trailing: Text(_formatSpeed(position.speed))),
                           ListTile(
                             title: Text('positionAddress'.tr),
                             trailing: FutureBuilder<String>(
-                              future:
-                                  position.address != null &&
-                                      position.address!.isNotEmpty
-                                  ? Future.value(position.address)
-                                  : OfflineAddressService.getAddress(
-                                      position.latitude,
-                                      position.longitude,
-                                    ),
+                              future: position.address != null && position.address!.isNotEmpty ? Future.value(position.address) : OfflineAddressService.getAddress(position.latitude, position.longitude),
                               builder: (context, snapshot) {
                                 return Text(snapshot.data ?? '...');
                               },

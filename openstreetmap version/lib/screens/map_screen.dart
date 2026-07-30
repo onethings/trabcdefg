@@ -31,8 +31,6 @@ class MapScreen extends StatefulWidget {
 }
 
 class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
-  Key _mapKey = UniqueKey();
-
   maplibre.MapLibreMapController? _mapController;
   maplibre.CameraPosition? _lastCameraPosition;
   bool _isStyleLoaded = false;
@@ -600,8 +598,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<TraccarProvider>(
-      builder: (context, traccarProvider, child) {
+    return Consumer2<TraccarProvider, MapStyleProvider>(
+      builder: (context, traccarProvider, mapStyleProvider, child) {
         if (traccarProvider.isLoading && traccarProvider.devices.isEmpty) {
           return const Scaffold(body: Center(child: CircularProgressIndicator()));
         }
@@ -629,8 +627,6 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
           }
         }
 
-        final mapStyleProvider = Provider.of<MapStyleProvider>(context);
-
         return SafeArea(
           top: false,
           child: Scaffold(
@@ -647,8 +643,20 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
             drawer: _buildDeviceListDrawer(context, traccarProvider),
             body: Stack(
               children: [
-                Listener(
-                  onPointerDown: (_) {
+                maplibre.MapLibreMap(
+                  key: ValueKey(mapStyleProvider.isSatelliteMode),
+                  initialCameraPosition: _lastCameraPosition ?? maplibre.CameraPosition(target: maplibre.LatLng(initialLat, initialLng), zoom: initialZoom),
+                  styleString: mapStyleProvider.styleString,
+                  compassEnabled: false,
+                  onCameraMove: (position) {
+                    _lastCameraPosition = position;
+                    _zoomDebounce?.cancel();
+                    _zoomDebounce = Timer(const Duration(milliseconds: 300), () {
+                      SharedPreferences.getInstance().then((prefs) {
+                        prefs.setDouble('map_zoom_level', position.zoom);
+                      });
+                    });
+
                     if (_isFollowingDevice) {
                       setState(() {
                         _isFollowingDevice = false;
@@ -656,44 +664,34 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                       debugPrint("Smart Auto-Follow disabled by user gesture");
                     }
                   },
-                  child: maplibre.MapLibreMap(
-                    key: _mapKey,
-                    initialCameraPosition: _lastCameraPosition ?? maplibre.CameraPosition(target: maplibre.LatLng(initialLat, initialLng), zoom: initialZoom),
-                    styleString: mapStyleProvider.styleString,
-                    compassEnabled: false,
-                    onCameraMove: (position) {
-                      _zoomDebounce?.cancel();
-                      _zoomDebounce = Timer(const Duration(milliseconds: 300), () {
-                        SharedPreferences.getInstance().then((prefs) {
-                          prefs.setDouble('map_zoom_level', position.zoom);
-                        });
-                      });
-                    },
-                    onStyleLoadedCallback: _onStyleLoaded,
-                    onMapCreated: (controller) {
-                      _mapController = controller;
+                  onStyleLoadedCallback: _onStyleLoaded,
+                  onMapCreated: (controller) {
+                    _mapController = controller;
 
-                      _mapController!.onSymbolTapped.add((symbol) {
-                        final deviceIdString = symbol.data?['deviceId'];
-                        final deviceId = int.tryParse(deviceIdString ?? '');
+                    _mapController!.onSymbolTapped.add((symbol) {
+                      final deviceIdString = symbol.data?['deviceId'];
+                      final deviceId = int.tryParse(deviceIdString ?? '');
 
-                        if (deviceId != null && mounted) {
-                          final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
-                          _onDeviceSelected(traccarProvider.devices.firstWhere((d) => d.id == deviceId), traccarProvider.positions, forceShowPanel: true);
-                        }
-                      });
-                    },
-                    onMapClick: (point, latLng) {
-                      if (_bottomSheetController != null) {
-                        _bottomSheetController!.close();
-                        _bottomSheetController = null;
-                        _isFollowingDevice = false;
+                      if (deviceId != null && mounted) {
+                        final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
+                        _onDeviceSelected(traccarProvider.devices.firstWhere((d) => d.id == deviceId), traccarProvider.positions, forceShowPanel: true);
                       }
-                    },
-                  ),
+                    });
+                  },
+                  onMapClick: (point, latLng) {
+                    if (_isFollowingDevice) {
+                      setState(() {
+                        _isFollowingDevice = false;
+                      });
+                    }
+                    if (_bottomSheetController != null) {
+                      _bottomSheetController!.close();
+                      _bottomSheetController = null;
+                    }
+                  },
                 ),
                 Positioned(
-                  top: MediaQuery.of(context).padding.top + 12, //12
+                  top: MediaQuery.of(context).padding.top + kToolbarHeight + 8, //12
                   right: 16,
                   child: Column(
                     children: [
@@ -743,7 +741,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               _buildMapControl(Icons.add_rounded, () => _mapController?.animateCamera(maplibre.CameraUpdate.zoomIn()), "btn_zoom_in"),
-                              const SizedBox(height: 14),//4
+                              const SizedBox(height: 14), //4
                               _buildMapControl(Icons.remove_rounded, () => _mapController?.animateCamera(maplibre.CameraUpdate.zoomOut()), "btn_zoom_out"),
                             ],
                           ),

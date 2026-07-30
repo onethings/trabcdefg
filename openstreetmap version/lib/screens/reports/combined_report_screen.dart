@@ -48,8 +48,7 @@ class _CombinedReportScreenState extends State<CombinedReportScreen> {
 
   // Icons are now asset paths/widgets, not BitmapDescriptors
   static const String _ignitionOnIconPath = 'assets/images/accon.png'; // ADDED
-  static const String _ignitionOffIconPath =
-      'assets/images/accoff.png'; // ADDED
+  static const String _ignitionOffIconPath = 'assets/images/accoff.png'; // ADDED
 
   Map<int, api.Position> _positionsMap = {};
 
@@ -75,10 +74,7 @@ class _CombinedReportScreenState extends State<CombinedReportScreen> {
       _isLoading = true;
     });
 
-    final traccarProvider = Provider.of<TraccarProvider>(
-      context,
-      listen: false,
-    );
+    final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
 
     await _loadMarkerIcons();
 
@@ -86,9 +82,7 @@ class _CombinedReportScreenState extends State<CombinedReportScreen> {
     final deviceId = prefs.getInt('selectedDeviceId');
     final fromDateString = prefs.getString('historyFrom');
     final toDateString = prefs.getString('historyTo');
-    debugPrint(
-      'Fetched from SharedPreferences: deviceId=$deviceId, fromDate=$fromDateString, toDate=$toDateString',
-    );
+    debugPrint('Fetched from SharedPreferences: deviceId=$deviceId, fromDate=$fromDateString, toDate=$toDateString');
 
     // Handle potential null values from SharedPreferences
     if (deviceId == null || fromDateString == null || toDateString == null) {
@@ -111,10 +105,7 @@ class _CombinedReportScreenState extends State<CombinedReportScreen> {
     }
 
     // Retrieve the device name
-    final selectedDevice = traccarProvider.devices.firstWhere(
-      (device) => device.id == deviceId,
-      orElse: () => api.Device(),
-    );
+    final selectedDevice = traccarProvider.devices.firstWhere((device) => device.id == deviceId, orElse: () => api.Device());
     _deviceName = selectedDevice.name ?? 'reportCombinedReport'.tr;
 
     try {
@@ -123,11 +114,7 @@ class _CombinedReportScreenState extends State<CombinedReportScreen> {
       final response = await apiClient.invokeAPI(
         '/reports/combined',
         'GET',
-        [
-          api.QueryParam('from', fromDate.toIso8601String()),
-          api.QueryParam('to', toDate.toIso8601String()),
-          api.QueryParam('deviceId', deviceId.toString()),
-        ],
+        [api.QueryParam('from', fromDate.toIso8601String()), api.QueryParam('to', toDate.toIso8601String()), api.QueryParam('deviceId', deviceId.toString())],
         null, // body
         {}, // headerParams
         {}, // formParams
@@ -145,24 +132,9 @@ class _CombinedReportScreenState extends State<CombinedReportScreen> {
       }
 
       if (combinedData != null) {
-        final positions =
-            (combinedData['positions'] as List?)
-                ?.map((e) => api.Position.fromJson(e))
-                .whereType<api.Position>()
-                .toList() ??
-            [];
-        final events =
-            (combinedData['events'] as List?)
-                ?.map((e) => api.Event.fromJson(e))
-                .whereType<api.Event>()
-                .toList() ??
-            [];
-        final route =
-            (combinedData['route'] as List?)
-                ?.map((e) => (e as List).cast<double>())
-                .whereType<List<double>>()
-                .toList() ??
-            [];
+        final positions = (combinedData['positions'] as List?)?.map((e) => api.Position.fromJson(e)).whereType<api.Position>().toList() ?? [];
+        final events = (combinedData['events'] as List?)?.map((e) => api.Event.fromJson(e)).whereType<api.Event>().toList() ?? [];
+        final route = (combinedData['route'] as List?)?.map((e) => (e as List).cast<double>()).whereType<List<double>>().toList() ?? [];
 
         if (positions.isNotEmpty || events.isNotEmpty || route.isNotEmpty) {
           // For MapLibre, we'll flatten positions and events into a single list for display
@@ -180,9 +152,7 @@ class _CombinedReportScreenState extends State<CombinedReportScreen> {
           // or that the diff's usage of `p.latitude` is a simplification for a different data structure.
           // For faithful application, I will make _combinedReport a list of the original CombinedReport objects,
           // and then adapt _createMapElements to extract LatLngs from the first CombinedReport's route/positions.
-          _combinedReport = [
-            CombinedReport(positions: positions, events: events, route: route),
-          ];
+          _combinedReport = [CombinedReport(positions: positions, events: events, route: route)];
           _positionsMap = {for (var pos in positions) pos.id!: pos};
           _createMapElements();
         }
@@ -190,9 +160,7 @@ class _CombinedReportScreenState extends State<CombinedReportScreen> {
     } catch (e) {
       debugPrint('Error fetching combined report: $e');
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${'errorGeneral'.tr}: ${e.toString()}')),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${'errorGeneral'.tr}: ${e.toString()}')));
     } finally {
       setState(() {
         _isLoading = false;
@@ -215,56 +183,26 @@ class _CombinedReportScreenState extends State<CombinedReportScreen> {
     await _mapController!.clearSymbols();
     await _mapController!.clearLines();
 
-    final report = _combinedReport
-        .first; // Assuming only one CombinedReport object in the list
+    final report = _combinedReport.first; // Assuming only one CombinedReport object in the list
 
     final List<maplibre.LatLng> routePoints = [];
     if (report.route != null && report.route!.isNotEmpty) {
-      routePoints.addAll(
-        report.route!
-            .map((coord) => maplibre.LatLng(coord[1], coord[0]))
-            .toList(),
-      );
+      routePoints.addAll(report.route!.map((coord) => maplibre.LatLng(coord[1], coord[0])).toList());
     } else if (report.positions.isNotEmpty) {
-      routePoints.addAll(
-        report.positions
-            .where((p) => p.latitude != null && p.longitude != null)
-            .map(
-              (p) => maplibre.LatLng(
-                p.latitude!.toDouble(),
-                p.longitude!.toDouble(),
-              ),
-            )
-            .toList(),
-      );
+      routePoints.addAll(report.positions.where((p) => p.latitude != null && p.longitude != null).map((p) => maplibre.LatLng(p.latitude!.toDouble(), p.longitude!.toDouble())).toList());
     }
 
     if (routePoints.isNotEmpty) {
       if (!mounted) return;
-      await _mapController!.addLine(
-        maplibre.LineOptions(
-          geometry: routePoints,
-          lineColor: Theme.of(context).colorScheme.primary.toHex(),
-          lineWidth: 4.0,
-        ),
-      );
+      await _mapController!.addLine(maplibre.LineOptions(geometry: routePoints, lineColor: Theme.of(context).colorScheme.primary.toHex(), lineWidth: 4.0));
 
       // Add markers for stops/events if any, or just start/end
-      await _addMarker(
-        routePoints.first,
-        "start_pin",
-        "assets/images/start.png",
-      );
-      await _addMarker(
-        routePoints.last,
-        "end_pin",
-        "assets/images/destination.png",
-      );
+      await _addMarker(routePoints.first, "start_pin", "assets/images/start.png");
+      await _addMarker(routePoints.last, "end_pin", "assets/images/destination.png");
 
       // Add event markers
       for (var event in report.events) {
-        if (event.positionId != null &&
-            _positionsMap.containsKey(event.positionId)) {
+        if (event.positionId != null && _positionsMap.containsKey(event.positionId)) {
           final position = _positionsMap[event.positionId]!;
           if (position.latitude != null && position.longitude != null) {
             String iconId;
@@ -283,14 +221,7 @@ class _CombinedReportScreenState extends State<CombinedReportScreen> {
                 assetPath = 'assets/images/event_default.png';
                 break;
             }
-            await _addMarker(
-              maplibre.LatLng(
-                position.latitude!.toDouble(),
-                position.longitude!.toDouble(),
-              ),
-              iconId,
-              assetPath,
-            );
+            await _addMarker(maplibre.LatLng(position.latitude!.toDouble(), position.longitude!.toDouble()), iconId, assetPath);
           }
         }
       }
@@ -299,11 +230,7 @@ class _CombinedReportScreenState extends State<CombinedReportScreen> {
     }
   }
 
-  Future<void> _addMarker(
-    maplibre.LatLng point,
-    String iconId,
-    String assetPath,
-  ) async {
+  Future<void> _addMarker(maplibre.LatLng point, String iconId, String assetPath) async {
     if (!_loadedIcons.contains(iconId)) {
       final ByteData bytes = await rootBundle.load(assetPath);
       final Uint8List list = bytes.buffer.asUint8List();
@@ -311,14 +238,7 @@ class _CombinedReportScreenState extends State<CombinedReportScreen> {
       _loadedIcons.add(iconId);
     }
 
-    await _mapController!.addSymbol(
-      maplibre.SymbolOptions(
-        geometry: point,
-        iconImage: iconId,
-        iconSize: 0.8,
-        iconAnchor: "bottom",
-      ),
-    );
+    await _mapController!.addSymbol(maplibre.SymbolOptions(geometry: point, iconImage: iconId, iconSize: 0.8, iconAnchor: "bottom"));
   }
 
   void _zoomToFit(List<maplibre.LatLng> points) {
@@ -328,18 +248,7 @@ class _CombinedReportScreenState extends State<CombinedReportScreen> {
     double minLng = points.map((p) => p.longitude).reduce(min);
     double maxLng = points.map((p) => p.longitude).reduce(max);
 
-    _mapController?.animateCamera(
-      maplibre.CameraUpdate.newLatLngBounds(
-        maplibre.LatLngBounds(
-          southwest: maplibre.LatLng(minLat, minLng),
-          northeast: maplibre.LatLng(maxLat, maxLng),
-        ),
-        left: 50,
-        right: 50,
-        top: 50,
-        bottom: 50,
-      ),
-    );
+    _mapController?.animateCamera(maplibre.CameraUpdate.newLatLngBounds(maplibre.LatLngBounds(southwest: maplibre.LatLng(minLat, minLng), northeast: maplibre.LatLng(maxLat, maxLng)), left: 50, right: 50, top: 50, bottom: 50));
   }
 
   void _animateToPosition(maplibre.LatLng position) {
@@ -350,18 +259,11 @@ class _CombinedReportScreenState extends State<CombinedReportScreen> {
   Widget build(BuildContext context) {
     if (_isLoading) {
       return Scaffold(
-        body: Center(
-          child: CircularProgressIndicator(
-            color: Theme.of(context).colorScheme.primary,
-          ),
-        ),
+        body: Center(child: CircularProgressIndicator(color: Theme.of(context).colorScheme.primary)),
       );
     }
 
-    if (_combinedReport.isEmpty ||
-        (_combinedReport.first.positions.isEmpty &&
-            (_combinedReport.first.route == null ||
-                _combinedReport.first.route!.isEmpty))) {
+    if (_combinedReport.isEmpty || (_combinedReport.first.positions.isEmpty && (_combinedReport.first.route == null || _combinedReport.first.route!.isEmpty))) {
       return Scaffold(
         appBar: AppBar(title: Text(_deviceName ?? 'reportCombinedReport'.tr)),
         body: Center(child: Text('sharedNoData'.tr)),
@@ -369,24 +271,14 @@ class _CombinedReportScreenState extends State<CombinedReportScreen> {
     }
 
     final mapProvider = Provider.of<MapStyleProvider>(context);
-    final initialCenter =
-        (_combinedReport.first.route != null &&
-            _combinedReport.first.route!.isNotEmpty)
-        ? maplibre.LatLng(
-            _combinedReport.first.route!.first[1],
-            _combinedReport.first.route!.first[0],
-          )
+    final initialCenter = (_combinedReport.first.route != null && _combinedReport.first.route!.isNotEmpty)
+        ? maplibre.LatLng(_combinedReport.first.route!.first[1], _combinedReport.first.route!.first[0])
         : (_combinedReport.first.positions.isNotEmpty
-              ? maplibre.LatLng(
-                  _combinedReport.first.positions.first.latitude!.toDouble(),
-                  _combinedReport.first.positions.first.longitude!.toDouble(),
-                )
+              ? maplibre.LatLng(_combinedReport.first.positions.first.latitude!.toDouble(), _combinedReport.first.positions.first.longitude!.toDouble())
               : const maplibre.LatLng(21.9162, 95.9560)); // Default if no data
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text('${'reportCombined'.tr}: ${_deviceName ?? ''}'),
-      ),
+      appBar: AppBar(title: Text('${'reportCombined'.tr}: ${_deviceName ?? ''}')),
       body: Column(
         children: [
           Expanded(
@@ -394,15 +286,11 @@ class _CombinedReportScreenState extends State<CombinedReportScreen> {
             child: Stack(
               children: [
                 maplibre.MapLibreMap(
+                  key: ValueKey(mapProvider.isSatelliteMode),
                   onMapCreated: (c) => _mapController = c,
                   onStyleLoadedCallback: _onStyleLoaded,
-                  initialCameraPosition: maplibre.CameraPosition(
-                    target: initialCenter,
-                    zoom: 14.0,
-                  ),
-                  styleString: mapProvider.getStyle(
-                    Theme.of(context).brightness,
-                  ),
+                  initialCameraPosition: maplibre.CameraPosition(target: initialCenter, zoom: 14.0),
+                  styleString: mapProvider.getStyle(Theme.of(context).brightness),
                 ),
                 Positioned(
                   top: 10,
@@ -412,12 +300,7 @@ class _CombinedReportScreenState extends State<CombinedReportScreen> {
                     mini: true,
                     backgroundColor: Theme.of(context).colorScheme.surface,
                     onPressed: () => mapProvider.toggleMapType(),
-                    child: Icon(
-                      mapProvider.isSatelliteMode
-                          ? Icons.map
-                          : Icons.satellite_alt,
-                      color: Theme.of(context).colorScheme.onSurface,
-                    ),
+                    child: Icon(mapProvider.isSatelliteMode ? Icons.map : Icons.satellite_alt, color: Theme.of(context).colorScheme.onSurface),
                   ),
                 ),
               ],
@@ -427,9 +310,7 @@ class _CombinedReportScreenState extends State<CombinedReportScreen> {
             flex: 1,
             child: ListView.builder(
               padding: const EdgeInsets.all(16.0),
-              itemCount:
-                  _combinedReport.first.positions.length +
-                  _combinedReport.first.events.length,
+              itemCount: _combinedReport.first.positions.length + _combinedReport.first.events.length,
               itemBuilder: (context, index) {
                 final report = _combinedReport.first;
                 if (index < report.positions.length) {
@@ -439,34 +320,17 @@ class _CombinedReportScreenState extends State<CombinedReportScreen> {
                       title: Text(
                         '${'sharedDevice'.tr}: $_deviceName, '
                         '${'positionSpeed'.tr}: ${pos.speed} ${'sharedKmh'.tr}',
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.onSurface,
-                        ),
+                        style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
                       ),
-                      subtitle: Text(
-                        '${'reportTimeType'.tr}: ${DateFormat('yyyy-MM-dd HH:mm').format(pos.deviceTime?.toLocal() ?? DateTime.now())}',
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                      ),
+                      subtitle: Text('${'reportTimeType'.tr}: ${DateFormat('yyyy-MM-dd HH:mm').format(pos.deviceTime?.toLocal() ?? DateTime.now())}', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
                       trailing: FutureBuilder<String>(
-                        future: pos.address != null && pos.address!.isNotEmpty
-                            ? Future.value(pos.address)
-                            : OfflineAddressService.getAddress(
-                                pos.latitude!.toDouble(),
-                                pos.longitude!.toDouble(),
-                              ),
+                        future: pos.address != null && pos.address!.isNotEmpty ? Future.value(pos.address) : OfflineAddressService.getAddress(pos.latitude!.toDouble(), pos.longitude!.toDouble()),
                         builder: (context, snapshot) {
                           return SizedBox(
                             width: 120,
                             child: Text(
                               snapshot.data ?? '...',
-                              style: TextStyle(
-                                fontSize: 10,
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.onSurfaceVariant,
-                              ),
+                              style: TextStyle(fontSize: 10, color: Theme.of(context).colorScheme.onSurfaceVariant),
                               textAlign: TextAlign.right,
                               overflow: TextOverflow.ellipsis,
                               maxLines: 2,
@@ -476,12 +340,7 @@ class _CombinedReportScreenState extends State<CombinedReportScreen> {
                       ),
                       onTap: () async {
                         if (pos.latitude != null && pos.longitude != null) {
-                          _animateToPosition(
-                            maplibre.LatLng(
-                              pos.latitude!.toDouble(),
-                              pos.longitude!.toDouble(),
-                            ),
-                          );
+                          _animateToPosition(maplibre.LatLng(pos.latitude!.toDouble(), pos.longitude!.toDouble()));
                         }
                       },
                     ),
@@ -491,37 +350,19 @@ class _CombinedReportScreenState extends State<CombinedReportScreen> {
                   final event = report.events[eventIndex];
                   String translatedEventKey;
                   if (event.type != null && event.type!.isNotEmpty) {
-                    translatedEventKey =
-                        'event${event.type![0].toUpperCase()}${event.type!.substring(1)}';
+                    translatedEventKey = 'event${event.type![0].toUpperCase()}${event.type!.substring(1)}';
                   } else {
                     translatedEventKey = 'eventUnknown';
                   }
                   return Card(
                     child: ListTile(
-                      title: Text(
-                        '${'reportEventTypes'.tr}: ${translatedEventKey.tr}',
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.onSurface,
-                        ),
-                      ),
-                      subtitle: Text(
-                        '${'reportTimeType'.tr}: ${DateFormat('yyyy-MM-dd HH:mm').format(event.eventTime?.toLocal() ?? DateTime.now())}',
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                      ),
+                      title: Text('${'reportEventTypes'.tr}: ${translatedEventKey.tr}', style: TextStyle(color: Theme.of(context).colorScheme.onSurface)),
+                      subtitle: Text('${'reportTimeType'.tr}: ${DateFormat('yyyy-MM-dd HH:mm').format(event.eventTime?.toLocal() ?? DateTime.now())}', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
                       onTap: () async {
-                        if (event.positionId != null &&
-                            _positionsMap.containsKey(event.positionId)) {
+                        if (event.positionId != null && _positionsMap.containsKey(event.positionId)) {
                           final position = _positionsMap[event.positionId]!;
-                          if (position.latitude != null &&
-                              position.longitude != null) {
-                            _animateToPosition(
-                              maplibre.LatLng(
-                                position.latitude!.toDouble(),
-                                position.longitude!.toDouble(),
-                              ),
-                            );
+                          if (position.latitude != null && position.longitude != null) {
+                            _animateToPosition(maplibre.LatLng(position.latitude!.toDouble(), position.longitude!.toDouble()));
                           }
                         }
                       },
@@ -538,6 +379,5 @@ class _CombinedReportScreenState extends State<CombinedReportScreen> {
 }
 
 extension ColorToHex on Color {
-  String toHex() =>
-      '#${toARGB32().toRadixString(16).padLeft(8, '0').substring(2)}';
+  String toHex() => '#${toARGB32().toRadixString(16).padLeft(8, '0').substring(2)}';
 }

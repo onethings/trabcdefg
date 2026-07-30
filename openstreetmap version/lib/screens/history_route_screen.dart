@@ -464,6 +464,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
       body: Stack(
         children: [
           MapLibreMap(
+            key: ValueKey(Provider.of<MapStyleProvider>(context).isSatelliteMode),
             onMapCreated: (c) => _mapController = c,
             onStyleLoadedCallback: _onStyleLoaded,
             initialCameraPosition: CameraPosition(target: const LatLng(0, 0), zoom: _currentZoom),

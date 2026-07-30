@@ -22,7 +22,7 @@ class MapStyleProvider with ChangeNotifier {
   static const String _darkStyle = "assets/styles/dark.json";
   static const String _terrainStyle = "assets/styles/fiord.json";
   static const String _hybridStyle = "assets/styles/positron.json";
-  static const String _satelliteStyle = "assets/styles/aws-hybrid.json";
+  static const String _satelliteStyle = "assets/styles/esri-satellite.json";
 
   MapStyleProvider() {
     _loadPreference();

@@ -115,18 +115,13 @@ class _StopsReportScreenState extends State<StopsReportScreen> {
       _isLoading = true;
     });
 
-    final traccarProvider = Provider.of<TraccarProvider>(
-      context,
-      listen: false,
-    );
+    final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
 
     final prefs = await SharedPreferences.getInstance();
     final deviceId = prefs.getInt('selectedDeviceId');
     final fromDateString = prefs.getString('historyFrom');
     final toDateString = prefs.getString('historyTo');
-    debugPrint(
-      'Fetched from SharedPreferences: deviceId=$deviceId, fromDate=$fromDateString, toDate=$toDateString',
-    );
+    debugPrint('Fetched from SharedPreferences: deviceId=$deviceId, fromDate=$fromDateString, toDate=$toDateString');
 
     if (deviceId == null || fromDateString == null || toDateString == null) {
       setState(() {
@@ -149,11 +144,7 @@ class _StopsReportScreenState extends State<StopsReportScreen> {
 
     try {
       final apiClient = traccarProvider.apiClient;
-      final queryParams = [
-        api.QueryParam('from', fromDate.toIso8601String()),
-        api.QueryParam('to', toDate.toIso8601String()),
-        api.QueryParam('deviceId', deviceId.toString()),
-      ];
+      final queryParams = [api.QueryParam('from', fromDate.toIso8601String()), api.QueryParam('to', toDate.toIso8601String()), api.QueryParam('deviceId', deviceId.toString())];
       final path = '/reports/stops';
       final headerParams = {'Accept': 'application/json'};
 
@@ -173,35 +164,22 @@ class _StopsReportScreenState extends State<StopsReportScreen> {
           final decodedData = json.decode(response.body);
 
           if (decodedData is List && decodedData.isNotEmpty) {
-            _stopsReport = decodedData
-                .map((e) => StopReport.fromJson(e as Map<String, dynamic>))
-                .toList();
+            _stopsReport = decodedData.map((e) => StopReport.fromJson(e as Map<String, dynamic>)).toList();
             if (_stopsReport.isNotEmpty) {
               _deviceName = _stopsReport.first.deviceName;
               _createMapElements();
             }
           }
         } else {
-          debugPrint(
-            'Warning: Expected JSON, but received content type: $contentType',
-          );
+          debugPrint('Warning: Expected JSON, but received content type: $contentType');
           if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'Failed to load stops report. The server returned a file instead of JSON. Please check the Traccar server settings for reports.'
-                    .tr,
-              ),
-            ),
-          );
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to load stops report. The server returned a file instead of JSON. Please check the Traccar server settings for reports.'.tr)));
         }
       }
     } catch (e) {
       debugPrint('Error fetching stops report: $e');
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to load stops report.'.tr)),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to load stops report.'.tr)));
     } finally {
       setState(() {
         _isLoading = false;
@@ -237,11 +215,7 @@ class _StopsReportScreenState extends State<StopsReportScreen> {
     }
   }
 
-  Future<void> _addMarker(
-    maplibre.LatLng point,
-    String iconId,
-    String assetPath,
-  ) async {
+  Future<void> _addMarker(maplibre.LatLng point, String iconId, String assetPath) async {
     const baseIconId = "parking_pin";
     if (!_loadedIcons.contains(baseIconId)) {
       final ByteData bytes = await rootBundle.load(assetPath);
@@ -250,14 +224,7 @@ class _StopsReportScreenState extends State<StopsReportScreen> {
       _loadedIcons.add(baseIconId);
     }
 
-    await _mapController!.addSymbol(
-      maplibre.SymbolOptions(
-        geometry: point,
-        iconImage: baseIconId,
-        iconSize: 0.6,
-        iconAnchor: "bottom",
-      ),
-    );
+    await _mapController!.addSymbol(maplibre.SymbolOptions(geometry: point, iconImage: baseIconId, iconSize: 0.6, iconAnchor: "bottom"));
   }
 
   void _zoomToFit(List<maplibre.LatLng> points) {
@@ -267,18 +234,7 @@ class _StopsReportScreenState extends State<StopsReportScreen> {
     double minLng = points.map((p) => p.longitude).reduce(min);
     double maxLng = points.map((p) => p.longitude).reduce(max);
 
-    _mapController?.animateCamera(
-      maplibre.CameraUpdate.newLatLngBounds(
-        maplibre.LatLngBounds(
-          southwest: maplibre.LatLng(minLat, minLng),
-          northeast: maplibre.LatLng(maxLat, maxLng),
-        ),
-        left: 50,
-        right: 50,
-        top: 50,
-        bottom: 50,
-      ),
-    );
+    _mapController?.animateCamera(maplibre.CameraUpdate.newLatLngBounds(maplibre.LatLngBounds(southwest: maplibre.LatLng(minLat, minLng), northeast: maplibre.LatLng(maxLat, maxLng)), left: 50, right: 50, top: 50, bottom: 50));
   }
 
   void _animateToPosition(maplibre.LatLng position) {
@@ -297,11 +253,7 @@ class _StopsReportScreenState extends State<StopsReportScreen> {
   Widget build(BuildContext context) {
     if (_isLoading) {
       return Scaffold(
-        body: Center(
-          child: CircularProgressIndicator(
-            color: Theme.of(context).colorScheme.primary,
-          ),
-        ),
+        body: Center(child: CircularProgressIndicator(color: Theme.of(context).colorScheme.primary)),
       );
     }
 
@@ -313,12 +265,7 @@ class _StopsReportScreenState extends State<StopsReportScreen> {
     }
 
     final mapProvider = Provider.of<MapStyleProvider>(context);
-    final initialCenter = _stopsReport.isNotEmpty
-        ? maplibre.LatLng(
-            _stopsReport.first.latitude,
-            _stopsReport.first.longitude,
-          )
-        : const maplibre.LatLng(21.9162, 95.9560);
+    final initialCenter = _stopsReport.isNotEmpty ? maplibre.LatLng(_stopsReport.first.latitude, _stopsReport.first.longitude) : const maplibre.LatLng(21.9162, 95.9560);
 
     return Scaffold(
       appBar: AppBar(title: Text('${'reportStops'.tr}: ${_deviceName ?? ''}')),
@@ -329,15 +276,11 @@ class _StopsReportScreenState extends State<StopsReportScreen> {
             child: Stack(
               children: [
                 maplibre.MapLibreMap(
+                  key: ValueKey(mapProvider.isSatelliteMode),
                   onMapCreated: (c) => _mapController = c,
                   onStyleLoadedCallback: _onStyleLoaded,
-                  initialCameraPosition: maplibre.CameraPosition(
-                    target: initialCenter,
-                    zoom: 14.0,
-                  ),
-                  styleString: mapProvider.getStyle(
-                    Theme.of(context).brightness,
-                  ),
+                  initialCameraPosition: maplibre.CameraPosition(target: initialCenter, zoom: 14.0),
+                  styleString: mapProvider.getStyle(Theme.of(context).brightness),
                 ),
                 Positioned(
                   top: 10,
@@ -347,12 +290,7 @@ class _StopsReportScreenState extends State<StopsReportScreen> {
                     mini: true,
                     backgroundColor: Theme.of(context).colorScheme.surface,
                     onPressed: () => mapProvider.toggleMapType(),
-                    child: Icon(
-                      mapProvider.isSatelliteMode
-                          ? Icons.map
-                          : Icons.satellite_alt,
-                      color: Theme.of(context).colorScheme.onSurface,
-                    ),
+                    child: Icon(mapProvider.isSatelliteMode ? Icons.map : Icons.satellite_alt, color: Theme.of(context).colorScheme.onSurface),
                   ),
                 ),
               ],
@@ -366,9 +304,7 @@ class _StopsReportScreenState extends State<StopsReportScreen> {
               itemBuilder: (context, index) {
                 final stop = _stopsReport[index];
                 return GestureDetector(
-                  onTap: () => _animateToPosition(
-                    maplibre.LatLng(stop.latitude, stop.longitude),
-                  ),
+                  onTap: () => _animateToPosition(maplibre.LatLng(stop.latitude, stop.longitude)),
                   child: Card(
                     // ... Card content (retaining existing style)
                     elevation: 4,
@@ -380,73 +316,31 @@ class _StopsReportScreenState extends State<StopsReportScreen> {
                         children: [
                           Text(
                             '${'reportStops'.tr} ${index + 1}',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: Theme.of(context).colorScheme.onSurface,
-                            ),
+                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface),
                           ),
                           const Divider(),
-                          _buildStopDetailRow(
-                            'reportStartDate'.tr,
-                            DateFormat(
-                              'yyyy-MM-dd HH:mm',
-                            ).format(stop.startTime.toLocal()),
-                          ),
-                          _buildStopDetailRow(
-                            'reportEndTime'.tr,
-                            DateFormat(
-                              'yyyy-MM-dd HH:mm',
-                            ).format(stop.endTime.toLocal()),
-                          ),
-                          _buildStopDetailRow(
-                            'reportDuration'.tr,
-                            _formatDuration(stop.duration),
-                          ),
+                          _buildStopDetailRow('reportStartDate'.tr, DateFormat('yyyy-MM-dd HH:mm').format(stop.startTime.toLocal())),
+                          _buildStopDetailRow('reportEndTime'.tr, DateFormat('yyyy-MM-dd HH:mm').format(stop.endTime.toLocal())),
+                          _buildStopDetailRow('reportDuration'.tr, _formatDuration(stop.duration)),
                           ListTile(
-                            title: Text(
-                              'positionAddress'.tr,
-                              style: TextStyle(
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.onSurfaceVariant,
-                              ),
-                            ),
+                            title: Text('positionAddress'.tr, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
                             trailing: ConstrainedBox(
-                              constraints: BoxConstraints(
-                                maxWidth:
-                                    MediaQuery.of(context).size.width * 0.5,
-                              ),
+                              constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.5),
                               child: FutureBuilder<String>(
-                                future:
-                                    stop.address != null &&
-                                        stop.address!.isNotEmpty
-                                    ? Future.value(stop.address)
-                                    : OfflineAddressService.getAddress(
-                                        stop.latitude,
-                                        stop.longitude,
-                                      ),
+                                future: stop.address != null && stop.address!.isNotEmpty ? Future.value(stop.address) : OfflineAddressService.getAddress(stop.latitude, stop.longitude),
                                 builder: (context, snapshot) {
                                   return Text(
                                     snapshot.data ?? 'Address not available'.tr,
                                     textAlign: TextAlign.right,
                                     overflow: TextOverflow.ellipsis,
                                     maxLines: 2,
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      color: Theme.of(
-                                        context,
-                                      ).colorScheme.onSurface,
-                                    ),
+                                    style: TextStyle(fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface),
                                   );
                                 },
                               ),
                             ),
                           ),
-                          _buildStopDetailRow(
-                            'reportEngineHours'.tr,
-                            _formatDuration(stop.engineHours),
-                          ),
+                          _buildStopDetailRow('reportEngineHours'.tr, _formatDuration(stop.engineHours)),
                         ],
                       ),
                     ),
@@ -462,16 +356,10 @@ class _StopsReportScreenState extends State<StopsReportScreen> {
 
   Widget _buildStopDetailRow(String title, String value) {
     return ListTile(
-      title: Text(
-        title,
-        style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
-      ),
+      title: Text(title, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
       trailing: Text(
         value,
-        style: TextStyle(
-          fontWeight: FontWeight.bold,
-          color: Theme.of(context).colorScheme.onSurface,
-        ),
+        style: TextStyle(fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface),
       ),
     );
   }
