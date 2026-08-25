@@ -2,6 +2,7 @@
 // A page to create or edit notifications in the TracDefg app.
 import 'dart:convert';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
@@ -188,41 +189,51 @@ class _NotificationPageState extends State<NotificationPage> {
   }
 
   void _showNotificatorSelection() {
-    showDialog(
+    showCupertinoModalPopup<void>(
       context: context,
-      builder: (BuildContext context) {
-        return StatefulBuilder(
-          builder: (BuildContext context, StateSetter setState) {
-            return AlertDialog(
-              title: Text('notificationType'.tr),
-              content: SingleChildScrollView(
-                child: ListBody(
-                  children: _notificatorTypes.map((notificator) {
-                    final isSelected = _selectedNotificators.contains(notificator['type']);
-                    final String? localizationKey = notificatorKeys[notificator['type']];
-                    final String displayValue = localizationKey != null ? localizationKey.tr : notificator['type'];
-                    return CheckboxListTile(
-                      value: isSelected,
-                      title: Text(displayValue),
-                      onChanged: (bool? value) {
-                        setState(() {
-                          if (value == true) {
-                            _selectedNotificators.add(notificator['type']);
-                          } else {
-                            _selectedNotificators.remove(notificator['type']);
-                          }
-                          this.setState(() {}); // Update parent state
-                        });
-                      },
-                    );
-                  }).toList(),
+      builder: (BuildContext context) => StatefulBuilder(
+        builder: (BuildContext context, StateSetter setState) => Container(
+          height: 420,
+          padding: const EdgeInsets.only(top: 12),
+          color: CupertinoColors.systemBackground,
+          child: SafeArea(
+            top: false,
+            child: Column(
+              children: [
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: CupertinoButton(padding: const EdgeInsets.symmetric(horizontal: 20), child: Text('sharedSave'.tr), onPressed: () => Navigator.pop(context)),
                 ),
-              ),
-              actions: [TextButton(onPressed: () => Navigator.pop(context), child: Text('sharedSave'.tr))],
-            );
-          },
-        );
-      },
+                Expanded(
+                  child: SingleChildScrollView(
+                    child: ListBody(
+                      children: _notificatorTypes.map((notificator) {
+                        final isSelected = _selectedNotificators.contains(notificator['type']);
+                        final String? localizationKey = notificatorKeys[notificator['type']];
+                        final String displayValue = localizationKey != null ? localizationKey.tr : notificator['type'];
+                        return CheckboxListTile(
+                          value: isSelected,
+                          title: Text(displayValue),
+                          onChanged: (bool? value) {
+                            setState(() {
+                              if (value == true) {
+                                _selectedNotificators.add(notificator['type']);
+                              } else {
+                                _selectedNotificators.remove(notificator['type']);
+                              }
+                              this.setState(() {}); // Update parent state
+                            });
+                          },
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -230,13 +241,13 @@ class _NotificationPageState extends State<NotificationPage> {
   Widget build(BuildContext context) {
     if (_isLoading) {
       return Scaffold(
-        appBar: AppBar(title: Text('sharedNotification'.tr)),
+        appBar: CupertinoNavigationBar(middle: Text('sharedNotification'.tr)),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
 
     return Scaffold(
-      appBar: AppBar(title: Text('sharedNotification'.tr)),
+      appBar: CupertinoNavigationBar(middle: Text('sharedNotification'.tr)),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
         child: Form(
@@ -268,7 +279,7 @@ class _NotificationPageState extends State<NotificationPage> {
                   ListTile(
                     title: Text('sharedNotifications'.tr),
                     subtitle: Text(_selectedNotificators.map((type) => notificatorKeys[type] != null ? notificatorKeys[type]!.tr : type).join(', ')),
-                    trailing: const Icon(Icons.arrow_drop_down),
+                    trailing: const Icon(CupertinoIcons.chevron_down),
                     onTap: _showNotificatorSelection,
                   ),
                   if (_selectedNotificators.contains('command'))

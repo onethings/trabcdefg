@@ -1,5 +1,6 @@
 // add_driver_screen.dart
 // A screen to add or edit a driver in the TracDefg app.
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:provider/provider.dart';
@@ -118,7 +119,7 @@ class _AddDriverScreenState extends State<AddDriverScreen> {
         : '${'sharedAdd'.tr} ${'sharedDriver'.tr}';
 
     return Scaffold(
-      appBar: AppBar(title: Text(titleText)),
+      appBar: CupertinoNavigationBar(middle: Text(titleText)),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(16.0),
@@ -216,7 +217,7 @@ class _AddDriverScreenState extends State<AddDriverScreen> {
                     ),
                   );
                 }),
-                ElevatedButton.icon(onPressed: _addAttribute, icon: const Icon(Icons.add), label: Text('${'sharedAdd'.tr} ${'sharedAttribute'.tr}')),
+                ElevatedButton.icon(onPressed: _addAttribute, icon: const Icon(CupertinoIcons.add), label: Text('${'sharedAdd'.tr} ${'sharedAttribute'.tr}')),
               ],
             ),
           ),

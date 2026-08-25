@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
@@ -299,7 +300,7 @@ class _RouteReportScreenState extends State<RouteReportScreen> {
 
     if (_routeReport.isEmpty) {
       return Scaffold(
-        appBar: AppBar(title: Text(_deviceName ?? 'reportReplay'.tr)),
+        appBar: CupertinoNavigationBar(middle: Text(_deviceName ?? 'reportReplay'.tr)),
         body: Center(child: Text('sharedNoData'.tr)),
       );
     }
@@ -308,9 +309,9 @@ class _RouteReportScreenState extends State<RouteReportScreen> {
     final initialCenter = _routeReport.isNotEmpty ? maplibre.LatLng(_routeReport.first.latitude, _routeReport.first.longitude) : const maplibre.LatLng(21.9162, 95.9560);
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text('${'reportReplay'.tr}: ${_deviceName ?? ''}'),
-        actions: [IconButton(icon: const Icon(Icons.download), onPressed: _exportToCsv)],
+      appBar: CupertinoNavigationBar(
+        middle: Text('${'reportReplay'.tr}: ${_deviceName ?? ''}'),
+        trailing: IconButton(icon: const Icon(CupertinoIcons.arrow_down_circle), onPressed: _exportToCsv),
       ),
       body: Column(
         children: [

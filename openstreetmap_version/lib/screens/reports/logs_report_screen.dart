@@ -2,6 +2,7 @@
 // Audit log viewer with column selection (based on traccar-web AuditPage).
 import 'dart:convert';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
@@ -96,26 +97,24 @@ class _LogsReportScreenState extends State<LogsReportScreen> {
     final activeColumns = _columns.entries.where((e) => e.value).map((e) => e.key).toList();
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text('reportAudit'.tr),
-        actions: [
-          PopupMenuButton<String>(
-            icon: const Icon(Icons.view_column),
-            onSelected: (key) => setState(() => _columns[key] = !(_columns[key] ?? false)),
-            itemBuilder: (_) => _columns.keys.map((key) {
-              return PopupMenuItem(
-                value: key,
-                child: Row(
-                  children: [
-                    Checkbox(value: _columns[key] ?? false, onChanged: null, materialTapTargetSize: MaterialTapTargetSize.shrinkWrap),
-                    const SizedBox(width: 8),
-                    Text(_columnLabels[key]?.tr ?? key),
-                  ],
-                ),
-              );
-            }).toList(),
-          ),
-        ],
+      appBar: CupertinoNavigationBar(
+        middle: Text('reportAudit'.tr),
+        trailing: PopupMenuButton<String>(
+          icon: const Icon(Icons.view_column),
+          onSelected: (key) => setState(() => _columns[key] = !(_columns[key] ?? false)),
+          itemBuilder: (_) => _columns.keys.map((key) {
+            return PopupMenuItem(
+              value: key,
+              child: Row(
+                children: [
+                  Checkbox(value: _columns[key] ?? false, onChanged: null, materialTapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                  const SizedBox(width: 8),
+                  Text(_columnLabels[key]?.tr ?? key),
+                ],
+              ),
+            );
+          }).toList(),
+        ),
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())

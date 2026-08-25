@@ -1,5 +1,6 @@
 // add_computed_attribute_screen.dart
 //  A screen to add a new computed attribute in the TracDefg app.
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:provider/provider.dart';
@@ -49,7 +50,7 @@ class _AddComputedAttributeScreenState extends State<AddComputedAttributeScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('${'sharedAdd'.tr} ${'sharedComputedAttribute'.tr}')),
+      appBar: CupertinoNavigationBar(middle: Text('${'sharedAdd'.tr} ${'sharedComputedAttribute'.tr}')),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(16.0),

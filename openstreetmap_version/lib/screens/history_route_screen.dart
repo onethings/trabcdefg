@@ -5,6 +5,7 @@ import 'dart:developer' as developer;
 import 'dart:io';
 import 'dart:math';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
@@ -526,7 +527,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
 
   Widget _buildPlaybackPanel() {
     return Positioned(
-      bottom: 24,
+      bottom: 24 + MediaQuery.of(context).padding.bottom,
       left: 16,
       right: 16,
       child: Container(
@@ -555,11 +556,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
               final distance = _getDistanceFormatted(idx);
               return Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  _buildStatItem("positionDrivingTime".tr, time, Icons.access_time_rounded),
-                  _buildStatItem("positionSpeed".tr, "$speed ${'sharedKmh'.tr}", Icons.speed_rounded),
-                  _buildStatItem("sharedDistance".tr, distance, Icons.straighten),
-                ],
+                children: [_buildStatItem("positionDrivingTime".tr, time, CupertinoIcons.clock), _buildStatItem("positionSpeed".tr, "$speed ${'sharedKmh'.tr}", Icons.speed_rounded), _buildStatItem("sharedDistance".tr, distance, Icons.straighten)],
               );
             }),
             const SizedBox(height: 8),
@@ -854,7 +851,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
             content: SizedBox(
               width: 340,
-              height: 460,
+              height: 520,
               child: Column(
                 children: [
                   const SizedBox(height: 16),
@@ -865,6 +862,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
                       firstDay: DateTime.utc(2020),
                       lastDay: DateTime.now(),
                       focusedDay: _focusedDay,
+                      daysOfWeekHeight: 24,
                       selectedDayPredicate: (d) => isSameDay(_selectedCalendarDay, d),
                       onPageChanged: (focusedDay) {
                         modalSetState(() {
@@ -909,18 +907,18 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
                         defaultTextStyle: TextStyle(color: Theme.of(context).colorScheme.onSurface),
                         weekendTextStyle: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7)),
                         outsideTextStyle: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3)),
-                        cellMargin: const EdgeInsets.all(6),
+                        cellMargin: const EdgeInsets.all(4),
                       ),
                       headerStyle: HeaderStyle(
                         formatButtonVisible: false,
                         titleCentered: true,
                         titleTextStyle: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontSize: 17, fontWeight: FontWeight.bold),
                         leftChevronIcon: Icon(Icons.chevron_left, color: Theme.of(context).colorScheme.primary),
-                        rightChevronIcon: Icon(Icons.chevron_right, color: Theme.of(context).colorScheme.primary),
+                        rightChevronIcon: Icon(CupertinoIcons.chevron_right, color: Theme.of(context).colorScheme.primary),
                       ),
                       daysOfWeekStyle: DaysOfWeekStyle(
-                        weekdayStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
-                        weekendStyle: TextStyle(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.8)),
+                        weekdayStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12),
+                        weekendStyle: TextStyle(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.8), fontSize: 12),
                       ),
                     ),
                   ),

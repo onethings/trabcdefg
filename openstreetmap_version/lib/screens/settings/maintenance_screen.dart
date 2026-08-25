@@ -1,5 +1,6 @@
 // maintenance_screen.dart
 // A screen to display and manage maintenance schedules in the TracDefg app.
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:provider/provider.dart';
@@ -35,7 +36,7 @@ class _MaintenanceScreenState extends State<MaintenanceScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('sharedMaintenance'.tr)),
+      appBar: CupertinoNavigationBar(middle: Text('sharedMaintenance'.tr)),
       body: FutureBuilder<List<api.Maintenance>?>(
         future: _maintenanceFuture,
         builder: (context, snapshot) {
@@ -67,7 +68,7 @@ class _MaintenanceScreenState extends State<MaintenanceScreen> {
             _fetchMaintenance();
           }
         },
-        child: const Icon(Icons.add),
+        child: const Icon(CupertinoIcons.add),
       ),
     );
   }

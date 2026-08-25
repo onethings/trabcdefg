@@ -1,5 +1,6 @@
 // add_group_screen.dart
 // A screen to add a new group in the TracDefg app.
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:provider/provider.dart';
@@ -72,7 +73,7 @@ class _AddGroupScreenState extends State<AddGroupScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('${'sharedAdd'.tr} ${'groupDialog'.tr}')),
+      appBar: CupertinoNavigationBar(middle: Text('${'sharedAdd'.tr} ${'groupDialog'.tr}')),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(16.0),
@@ -162,13 +163,13 @@ class _AddGroupScreenState extends State<AddGroupScreen> {
                     ),
                   );
                 }), // Removed unnecessary .toList() from here
-                ElevatedButton.icon(onPressed: _addAttribute, icon: const Icon(Icons.add), label: Text('${'sharedAdd'.tr} ${'sharedAttribute'.tr}')),
+                ElevatedButton.icon(onPressed: _addAttribute, icon: const Icon(CupertinoIcons.add), label: Text('${'sharedAdd'.tr} ${'sharedAttribute'.tr}')),
               ],
             ),
           ),
         ),
       ),
-      floatingActionButton: FloatingActionButton(onPressed: _saveGroup, child: const Icon(Icons.save)),
+      floatingActionButton: FloatingActionButton(onPressed: _saveGroup, child: const Icon(CupertinoIcons.checkmark_circle)),
     );
   }
 }

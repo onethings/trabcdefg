@@ -1,5 +1,6 @@
 // lib/screens/device_details_screen.dart
 // DeviceDetailsScreen displaying detailed device info and latest position
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // <-- ADD THIS IMPORT for Clipboard
 import 'package:get/get.dart';
@@ -97,7 +98,7 @@ class DeviceDetailsScreen extends StatelessWidget {
           return const Scaffold(body: Center(child: CircularProgressIndicator()));
         } else if (snapshot.hasError) {
           return Scaffold(
-            appBar: AppBar(title: const Text('Error')),
+            appBar: CupertinoNavigationBar(middle: const Text('Error')),
             body: Center(child: Text('Error: ${snapshot.error}')),
           );
         } else if (snapshot.hasData) {
@@ -107,27 +108,25 @@ class DeviceDetailsScreen extends StatelessWidget {
 
           if (deviceId == null || deviceName == null) {
             return Scaffold(
-              appBar: AppBar(title: const Text('Device Details')),
+              appBar: CupertinoNavigationBar(middle: const Text('Device Details')),
               body: const Center(child: Text('Device not selected.')),
             );
           }
 
           // 3. Use the new function to fetch combined data
           return Scaffold(
-            appBar: AppBar(
+            appBar: CupertinoNavigationBar(
               // FIX: Removed unnecessary non-null assertion '!' and replaced '+' with interpolation
-              title: Text('$deviceName - ${'deviceSecondaryInfo'.tr}'),
-              actions: [
-                Consumer<TraccarProvider>(
-                  builder: (context, provider, child) {
-                    final isFavorite = provider.isFavorite(deviceId);
-                    return IconButton(
-                      icon: Icon(isFavorite ? Icons.favorite : Icons.favorite_border, color: isFavorite ? Colors.red : null),
-                      onPressed: () => provider.toggleFavorite(deviceId),
-                    );
-                  },
-                ),
-              ],
+              middle: Text('$deviceName - ${'deviceSecondaryInfo'.tr}'),
+              trailing: Consumer<TraccarProvider>(
+                builder: (context, provider, child) {
+                  final isFavorite = provider.isFavorite(deviceId);
+                  return IconButton(
+                    icon: Icon(isFavorite ? CupertinoIcons.heart_fill : CupertinoIcons.heart, color: isFavorite ? Colors.red : null),
+                    onPressed: () => provider.toggleFavorite(deviceId),
+                  );
+                },
+              ),
             ),
             body: FutureBuilder<DeviceData>(
               future: _fetchDeviceAndPositions(context, deviceId),

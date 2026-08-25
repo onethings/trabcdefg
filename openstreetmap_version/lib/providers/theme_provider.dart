@@ -2,14 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:trabcdefg/theme/app_theme.dart';
 
-enum AppThemePreset { obsidian, deepSea, mint }
+enum AppThemePreset { ios, obsidian, deepSea, mint }
 
 class ThemeProvider with ChangeNotifier {
   static const String _themeKey = 'theme_mode';
   static const String _presetKey = 'theme_preset';
 
   ThemeMode _themeMode = ThemeMode.system;
-  AppThemePreset _activePreset = AppThemePreset.obsidian;
+  AppThemePreset _activePreset = AppThemePreset.ios;
 
   ThemeMode get themeMode => _themeMode;
   AppThemePreset get activePreset => _activePreset;
@@ -37,6 +37,8 @@ class ThemeProvider with ChangeNotifier {
 
   ThemeData getTheme(Brightness brightness) {
     switch (_activePreset) {
+      case AppThemePreset.ios:
+        return AppTheme.iosTheme(brightness);
       case AppThemePreset.obsidian:
         return AppTheme.obsidianTheme(brightness);
       case AppThemePreset.deepSea:

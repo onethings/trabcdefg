@@ -1,5 +1,6 @@
 // add_maintenance_screen.dart
 // A screen to add a new maintenance entry in the TracDefg app.
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:provider/provider.dart';
@@ -73,7 +74,7 @@ class _AddMaintenanceScreenState extends State<AddMaintenanceScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('${'sharedAdd'.tr} ${'sharedMaintenance'.tr}')),
+      appBar: CupertinoNavigationBar(middle: Text('${'sharedAdd'.tr} ${'sharedMaintenance'.tr}')),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(16.0),
@@ -119,7 +120,7 @@ class _AddMaintenanceScreenState extends State<AddMaintenanceScreen> {
                   return ListTile(
                     title: Text('${entry.key}: ${entry.value}'),
                     trailing: IconButton(
-                      icon: const Icon(Icons.delete),
+                      icon: const Icon(CupertinoIcons.trash),
                       onPressed: () {
                         setState(() {
                           _attributes.remove(entry.key);
@@ -163,7 +164,7 @@ class _AddMaintenanceScreenState extends State<AddMaintenanceScreen> {
                         });
                       },
                     ),
-                    IconButton(icon: const Icon(Icons.add), onPressed: _addAttribute),
+                    IconButton(icon: const Icon(CupertinoIcons.add), onPressed: _addAttribute),
                   ],
                 ),
               ],

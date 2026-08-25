@@ -1,5 +1,6 @@
 // add_device_screen.dart
 // A screen to add a new driver in the TracDefg app.
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:provider/provider.dart';
@@ -112,9 +113,9 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.device == null ? 'sharedAdd'.tr + 'sharedDevice'.tr : 'sharedEdit'.tr + 'sharedDevice'.tr),
-        actions: [IconButton(icon: const Icon(Icons.save), onPressed: _saveDevice)],
+      appBar: CupertinoNavigationBar(
+        middle: Text(widget.device == null ? 'sharedAdd'.tr + 'sharedDevice'.tr : 'sharedEdit'.tr + 'sharedDevice'.tr),
+        trailing: IconButton(icon: const Icon(CupertinoIcons.checkmark_circle), onPressed: _saveDevice),
       ),
       body: SafeArea(
         child: Padding(

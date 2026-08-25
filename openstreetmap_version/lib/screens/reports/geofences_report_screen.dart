@@ -3,6 +3,7 @@
 // Based on traccar-web GeofenceReportPage.
 import 'dart:convert';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
@@ -117,26 +118,24 @@ class _GeofencesReportScreenState extends State<GeofencesReportScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text('reportGeofences'.tr),
-        actions: [
-          PopupMenuButton<String>(
-            icon: const Icon(Icons.view_column),
-            onSelected: (_) => setState(() => _showDuration = !_showDuration),
-            itemBuilder: (_) => [
-              PopupMenuItem(
-                value: 'duration',
-                child: Row(
-                  children: [
-                    Checkbox(value: _showDuration, onChanged: null, materialTapTargetSize: MaterialTapTargetSize.shrinkWrap),
-                    const SizedBox(width: 8),
-                    Text('reportDuration'.tr),
-                  ],
-                ),
+      appBar: CupertinoNavigationBar(
+        middle: Text('reportGeofences'.tr),
+        trailing: PopupMenuButton<String>(
+          icon: const Icon(Icons.view_column),
+          onSelected: (_) => setState(() => _showDuration = !_showDuration),
+          itemBuilder: (_) => [
+            PopupMenuItem(
+              value: 'duration',
+              child: Row(
+                children: [
+                  Checkbox(value: _showDuration, onChanged: null, materialTapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                  const SizedBox(width: 8),
+                  Text('reportDuration'.tr),
+                ],
               ),
-            ],
-          ),
-        ],
+            ),
+          ],
+        ),
       ),
       body: Column(
         children: [

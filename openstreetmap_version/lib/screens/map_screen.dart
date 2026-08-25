@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:ui' as ui;
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
@@ -244,21 +245,22 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _showDeleteConfirmationDialog(api.Device device) async {
-    final result = await showDialog<bool>(
+    final result = await showCupertinoDialog<bool>(
       context: context,
       builder: (BuildContext context) {
-        return AlertDialog(
+        return CupertinoAlertDialog(
           title: Text('Delete Device'.tr),
           content: Text('Are you sure you want to delete the device "${device.name}"?'.tr),
           actions: <Widget>[
-            TextButton(
+            CupertinoDialogAction(
               child: Text('Cancel'.tr),
               onPressed: () {
                 Navigator.of(context).pop(false);
               },
             ),
-            TextButton(
-              child: Text('Delete'.tr, style: const TextStyle(color: Colors.red)),
+            CupertinoDialogAction(
+              textStyle: const TextStyle(color: CupertinoColors.systemRed),
+              child: Text('Delete'.tr),
               onPressed: () {
                 Navigator.of(context).pop(true);
               },
@@ -376,74 +378,79 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   }
 
   void _showMoreOptionsDialog(api.Device device, api.Position? currentPosition) {
-    showDialog(
+    showCupertinoModalPopup<void>(
       context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text(device.name ?? 'More Options'.tr),
-          content: SingleChildScrollView(
-            child: ListBody(
-              children: <Widget>[
-                ListTile(
-                  title: Text('sharedCreateGeofence'.tr),
-                  onTap: () {
-                    Navigator.of(context).pop();
-                    Navigator.push(context, MaterialPageRoute(builder: (context) => const AddGeofenceScreen()));
-                  },
-                ),
-                ListTile(
-                  title: Text('linkGoogleMaps'.tr),
-                  onTap: () {
-                    Navigator.of(context).pop();
-                    if (currentPosition?.latitude != null && currentPosition?.longitude != null) {
-                      final url = Uri.parse('https://maps.google.com/maps?q=${currentPosition!.latitude!.toDouble()},${currentPosition.longitude!.toDouble()}');
-                      _launchUrl(url);
-                    }
-                  },
-                ),
-                ListTile(
-                  title: Text('linkAppleMaps'.tr),
-                  onTap: () {
-                    Navigator.of(context).pop();
-                    if (currentPosition?.latitude != null && currentPosition?.longitude != null) {
-                      final url = Uri.parse('https://maps.apple.com/?q=${currentPosition!.latitude!.toDouble()},${currentPosition.longitude!.toDouble()}');
-                      _launchUrl(url);
-                    }
-                  },
-                ),
-                ListTile(
-                  title: Text('linkStreetView'.tr),
-                  onTap: () {
-                    Navigator.of(context).pop();
-                    if (currentPosition?.latitude != null && currentPosition?.longitude != null) {
-                      final url = Uri.parse('google.streetview:cbll=${currentPosition!.latitude!.toDouble()},${currentPosition.longitude!.toDouble()}');
-                      _launchUrl(url);
-                    }
-                  },
-                ),
-                ListTile(
-                  title: Text('deviceShare'.tr),
-                  onTap: () async {
-                    // 1. 在非同步操作前，先把 Navigator 存起來（最推薦的做法）
-                    final navigator = Navigator.of(context);
+      builder: (BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        color: CupertinoColors.systemBackground,
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text(device.name ?? 'More Options'.tr, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
+              ),
+              ListTile(
+                title: Text('sharedCreateGeofence'.tr),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  Navigator.push(context, MaterialPageRoute(builder: (context) => const AddGeofenceScreen()));
+                },
+              ),
+              ListTile(
+                title: Text('linkGoogleMaps'.tr),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  if (currentPosition?.latitude != null && currentPosition?.longitude != null) {
+                    final url = Uri.parse('https://maps.google.com/maps?q=${currentPosition!.latitude!.toDouble()},${currentPosition.longitude!.toDouble()}');
+                    _launchUrl(url);
+                  }
+                },
+              ),
+              ListTile(
+                title: Text('linkAppleMaps'.tr),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  if (currentPosition?.latitude != null && currentPosition?.longitude != null) {
+                    final url = Uri.parse('https://maps.apple.com/?q=${currentPosition!.latitude!.toDouble()},${currentPosition.longitude!.toDouble()}');
+                    _launchUrl(url);
+                  }
+                },
+              ),
+              ListTile(
+                title: Text('linkStreetView'.tr),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  if (currentPosition?.latitude != null && currentPosition?.longitude != null) {
+                    final url = Uri.parse('google.streetview:cbll=${currentPosition!.latitude!.toDouble()},${currentPosition.longitude!.toDouble()}');
+                    _launchUrl(url);
+                  }
+                },
+              ),
+              ListTile(
+                title: Text('deviceShare'.tr),
+                onTap: () async {
+                  // 1. 在非同步操作前，先把 Navigator 存起來（最推薦的做法）
+                  final navigator = Navigator.of(context);
 
-                    Navigator.of(context).pop();
-                    final prefs = await SharedPreferences.getInstance();
-                    await prefs.setInt('sharedDeviceId', device.id!);
-                    await prefs.setString('sharedDeviceName', device.name!);
+                  Navigator.of(context).pop();
+                  final prefs = await SharedPreferences.getInstance();
+                  await prefs.setInt('sharedDeviceId', device.id!);
+                  await prefs.setString('sharedDeviceName', device.name!);
 
-                    // 2. 檢查目前 State 是否還活在樹中
-                    if (!mounted) return;
+                  // 2. 檢查目前 State 是否還活在樹中
+                  if (!mounted) return;
 
-                    // 3. 使用安全存下來的 navigator 導頁
-                    navigator.push(MaterialPageRoute(builder: (context) => const ShareDeviceScreen()));
-                  },
-                ),
-              ],
-            ),
+                  // 3. 使用安全存下來的 navigator 導頁
+                  navigator.push(MaterialPageRoute(builder: (context) => const ShareDeviceScreen()));
+                },
+              ),
+            ],
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 
@@ -579,7 +586,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                       Icon(Icons.key, color: isIgnitionOn ? Colors.green : Colors.red, size: 16),
                     ],
                   ),
-                  trailing: const Icon(Icons.chevron_right),
+                  trailing: const Icon(CupertinoIcons.chevron_right),
                   onTap: () {
                     Navigator.of(context).pop();
 
@@ -732,7 +739,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                               if (traccarProvider.devices.length > 1) ...[
                                 _buildMapControl(Icons.chevron_left_rounded, () => _navigateToDevice(-1, traccarProvider.devices, traccarProvider.positions), "btn_prev_device"),
                                 const SizedBox(width: 28),
-                                _buildMapControl(Icons.chevron_right_rounded, () => _navigateToDevice(1, traccarProvider.devices, traccarProvider.positions), "btn_next_device"),
+                                _buildMapControl(CupertinoIcons.chevron_right, () => _navigateToDevice(1, traccarProvider.devices, traccarProvider.positions), "btn_next_device"),
                               ],
                             ],
                           ),
@@ -764,29 +771,44 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final colorScheme = Theme.of(context).colorScheme;
 
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(12),
-      child: BackdropFilter(
-        filter: ui.ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-        child: Container(
-          width: 44,
-          height: 44,
-          decoration: BoxDecoration(
-            color: isActive ? colorScheme.primary.withValues(alpha: 0.85) : (isDark ? Colors.black.withValues(alpha: 0.4) : Colors.white.withValues(alpha: 0.7)),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: isDark ? Colors.white.withValues(alpha: 0.1) : Colors.black.withValues(alpha: 0.05), width: 0.5),
-          ),
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: onTap,
+    // 陰影放在最外層 Container，畫在 44x44 按鍵框「外面」，才不會被圓角裁剪
+    return Container(
+      width: 44,
+      height: 44,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          // 環境光（ambient）：較大、較柔，營造按鍵浮起的層次
+          BoxShadow(color: isDark ? Colors.black.withValues(alpha: 0.6) : Colors.black.withValues(alpha: 0.32), blurRadius: 16, offset: const Offset(0, 6)),
+          // 主光（key light）：較小、較實，貼合按鍵邊緣增加立體感
+          BoxShadow(color: isDark ? Colors.black.withValues(alpha: 0.42) : Colors.black.withValues(alpha: 0.2), blurRadius: 4, offset: const Offset(0, 2)),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: BackdropFilter(
+          filter: ui.ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          child: Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              // 不透明背景：避免外層陰影從半透明處透進按鍵內部
+              color: isActive ? colorScheme.primary : (isDark ? const Color(0xFF1C1C1E) : Colors.white),
               borderRadius: BorderRadius.circular(12),
-              splashColor: colorScheme.primary.withValues(alpha: 0.1),
-              highlightColor: colorScheme.primary.withValues(alpha: 0.05),
-              child: Center(
-                child: Hero(
-                  tag: heroTag,
-                  child: Icon(icon, color: isActive ? colorScheme.onPrimary : (isDark ? Colors.white70 : Colors.black87), size: isToggle ? 24 : 20),
+              border: Border.all(color: isDark ? Colors.white.withValues(alpha: 0.1) : Colors.black.withValues(alpha: 0.05), width: 0.5),
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: onTap,
+                borderRadius: BorderRadius.circular(12),
+                splashColor: colorScheme.primary.withValues(alpha: 0.1),
+                highlightColor: colorScheme.primary.withValues(alpha: 0.05),
+                child: Center(
+                  child: Hero(
+                    tag: heroTag,
+                    child: Icon(icon, color: isActive ? colorScheme.onPrimary : (isDark ? Colors.white70 : Colors.black87), size: isToggle ? 24 : 20),
+                  ),
                 ),
               ),
             ),

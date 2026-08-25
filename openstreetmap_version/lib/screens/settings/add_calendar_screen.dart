@@ -1,8 +1,10 @@
 // add_calendar_screen.dart
 // A screen to add a new calendar in the TracDefg app.
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:provider/provider.dart';
+import 'package:trabcdefg/src/utils/cupertino_pickers.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
 
@@ -24,7 +26,7 @@ class _AddCalendarScreenState extends State<AddCalendarScreen> {
   TimeOfDay? _toTime;
 
   Future<void> _selectDate(BuildContext context, bool isFromDate) async {
-    final DateTime? picked = await showDatePicker(context: context, initialDate: DateTime.now(), firstDate: DateTime(2000), lastDate: DateTime(2101));
+    final DateTime? picked = await showCupertinoDatePickerSheet(context, initialDate: DateTime.now(), firstDate: DateTime(2000), lastDate: DateTime(2101));
     if (picked != null) {
       setState(() {
         if (isFromDate) {
@@ -37,7 +39,7 @@ class _AddCalendarScreenState extends State<AddCalendarScreen> {
   }
 
   Future<void> _selectTime(BuildContext context, bool isFromTime) async {
-    final TimeOfDay? picked = await showTimePicker(context: context, initialTime: TimeOfDay.now());
+    final TimeOfDay? picked = await showCupertinoTimePickerSheet(context, initialTime: TimeOfDay.now());
     if (picked != null) {
       setState(() {
         if (isFromTime) {
@@ -73,7 +75,7 @@ class _AddCalendarScreenState extends State<AddCalendarScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('${'sharedAdd'.tr} ${'sharedCalendar'.tr}')),
+      appBar: CupertinoNavigationBar(middle: Text('${'sharedAdd'.tr} ${'sharedCalendar'.tr}')),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(16.0),
@@ -123,10 +125,15 @@ class _AddCalendarScreenState extends State<AddCalendarScreen> {
                 Row(
                   children: [
                     Expanded(
-                      child: ListTile(title: Text('reportFrom'.tr), subtitle: Text(_fromDate == null ? 'sharedNoData'.tr : _fromDate.toString().split(' ')[0]), trailing: const Icon(Icons.calendar_today), onTap: () => _selectDate(context, true)),
+                      child: ListTile(
+                        title: Text('reportFrom'.tr),
+                        subtitle: Text(_fromDate == null ? 'sharedNoData'.tr : _fromDate.toString().split(' ')[0]),
+                        trailing: const Icon(CupertinoIcons.calendar_today),
+                        onTap: () => _selectDate(context, true),
+                      ),
                     ),
                     Expanded(
-                      child: ListTile(title: Text('reportTo'.tr), subtitle: Text(_toDate == null ? 'sharedNoData'.tr : _toDate.toString().split(' ')[0]), trailing: const Icon(Icons.calendar_today), onTap: () => _selectDate(context, false)),
+                      child: ListTile(title: Text('reportTo'.tr), subtitle: Text(_toDate == null ? 'sharedNoData'.tr : _toDate.toString().split(' ')[0]), trailing: const Icon(CupertinoIcons.calendar_today), onTap: () => _selectDate(context, false)),
                     ),
                   ],
                 ),
@@ -134,10 +141,10 @@ class _AddCalendarScreenState extends State<AddCalendarScreen> {
                 Row(
                   children: [
                     Expanded(
-                      child: ListTile(title: Text('reportStartTime'.tr), subtitle: Text(_fromTime == null ? 'sharedNoData'.tr : _fromTime!.format(context)), trailing: const Icon(Icons.access_time), onTap: () => _selectTime(context, true)),
+                      child: ListTile(title: Text('reportStartTime'.tr), subtitle: Text(_fromTime == null ? 'sharedNoData'.tr : _fromTime!.format(context)), trailing: const Icon(CupertinoIcons.clock), onTap: () => _selectTime(context, true)),
                     ),
                     Expanded(
-                      child: ListTile(title: Text('reportEndTime'.tr), subtitle: Text(_toTime == null ? 'sharedNoData'.tr : _toTime!.format(context)), trailing: const Icon(Icons.access_time), onTap: () => _selectTime(context, false)),
+                      child: ListTile(title: Text('reportEndTime'.tr), subtitle: Text(_toTime == null ? 'sharedNoData'.tr : _toTime!.format(context)), trailing: const Icon(CupertinoIcons.clock), onTap: () => _selectTime(context, false)),
                     ),
                   ],
                 ),

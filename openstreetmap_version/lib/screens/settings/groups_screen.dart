@@ -1,5 +1,6 @@
 // groups_screen.dart
 // A screen to display and manage groups in the TracDefg app.
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:provider/provider.dart';
@@ -35,7 +36,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('groupDialog'.tr)),
+      appBar: CupertinoNavigationBar(middle: Text('groupDialog'.tr)),
       body: FutureBuilder<List<api.Group>?>(
         future: _groupsFuture,
         builder: (context, snapshot) {
@@ -66,7 +67,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
             _fetchGroups();
           }
         },
-        child: const Icon(Icons.add),
+        child: const Icon(CupertinoIcons.add),
       ),
     );
   }

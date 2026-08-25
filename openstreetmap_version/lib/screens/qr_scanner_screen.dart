@@ -1,6 +1,7 @@
 // lib/screens/qr_scanner_screen.dart
 // A screen that allows users to scan a QR code to get the server URL.
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
@@ -24,7 +25,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Scan Server URL')),
+      appBar: CupertinoNavigationBar(middle: const Text('Scan Server URL')),
       body: MobileScanner(
         controller: _scannerController,
         onDetect: (capture) {

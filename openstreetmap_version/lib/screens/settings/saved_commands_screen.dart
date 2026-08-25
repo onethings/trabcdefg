@@ -1,5 +1,6 @@
 // saved_commands_screen.dart
 // A screen to display and manage saved commands in the TracDefg app.
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:provider/provider.dart';
@@ -35,7 +36,7 @@ class _SavedCommandsScreenState extends State<SavedCommandsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('sharedSavedCommands'.tr)),
+      appBar: CupertinoNavigationBar(middle: Text('sharedSavedCommands'.tr)),
       body: FutureBuilder<List<api.Command>?>(
         future: _commandsFuture,
         builder: (context, snapshot) {
@@ -68,7 +69,7 @@ class _SavedCommandsScreenState extends State<SavedCommandsScreen> {
             _fetchCommands();
           }
         },
-        child: const Icon(Icons.add),
+        child: const Icon(CupertinoIcons.add),
       ),
     );
   }

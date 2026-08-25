@@ -1,5 +1,6 @@
 // lib/screens/edit_user_screen.dart
 // A screen to edit user information in the TracDefg app.
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
@@ -215,11 +216,11 @@ class _EditUserScreenState extends State<EditUserScreen> {
 
   Future<void> _showDeleteConfirmationDialog() async {
     final TextEditingController confirmEmailController = TextEditingController();
-    return showDialog<void>(
+    return showCupertinoDialog<void>(
       context: context,
       barrierDismissible: false,
       builder: (BuildContext context) {
-        return AlertDialog(
+        return CupertinoAlertDialog(
           title: Text('userDeleteAccount'.tr),
           content: SingleChildScrollView(
             child: ListBody(
@@ -234,15 +235,15 @@ class _EditUserScreenState extends State<EditUserScreen> {
             ),
           ),
           actions: <Widget>[
-            TextButton(
+            CupertinoDialogAction(
               child: Text('sharedCancel'.tr),
               onPressed: () {
                 Navigator.of(context).pop();
               },
             ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-              child: Text('sharedRemove'.tr, style: const TextStyle(color: Colors.white)),
+            CupertinoDialogAction(
+              textStyle: const TextStyle(color: CupertinoColors.systemRed),
+              child: Text('sharedRemove'.tr),
               onPressed: () {
                 if (confirmEmailController.text == _currentUser?.email) {
                   Navigator.of(context).pop();
@@ -261,7 +262,7 @@ class _EditUserScreenState extends State<EditUserScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('settingsUser'.tr)),
+      appBar: CupertinoNavigationBar(middle: Text('settingsUser'.tr)),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(

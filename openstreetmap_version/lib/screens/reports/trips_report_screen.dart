@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart'; // Added for debugPrint
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
@@ -295,7 +296,7 @@ class _TripsReportScreenState extends State<TripsReportScreen> {
 
     if (_tripsReport.isEmpty) {
       return Scaffold(
-        appBar: AppBar(title: Text(_deviceName ?? 'reportTrips'.tr)),
+        appBar: CupertinoNavigationBar(middle: Text(_deviceName ?? 'reportTrips'.tr)),
         body: Center(child: Text('sharedNoData'.tr)),
       );
     }
@@ -304,7 +305,7 @@ class _TripsReportScreenState extends State<TripsReportScreen> {
     final initialCenter = _tripsReport.isNotEmpty ? maplibre.LatLng(_tripsReport.first.startLat, _tripsReport.first.startLon) : const maplibre.LatLng(21.9162, 95.9560);
 
     return Scaffold(
-      appBar: AppBar(title: Text('${'reportTrips'.tr}: ${_deviceName ?? ''}')),
+      appBar: CupertinoNavigationBar(middle: Text('${'reportTrips'.tr}: ${_deviceName ?? ''}')),
       body: Column(
         children: [
           Expanded(

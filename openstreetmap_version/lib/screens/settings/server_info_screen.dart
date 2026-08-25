@@ -1,5 +1,6 @@
 // server_info_screen.dart
 // Displays Traccar server information and version.
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:provider/provider.dart';
@@ -54,7 +55,7 @@ class _ServerInfoScreenState extends State<ServerInfoScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('sharedInfoTitle'.tr)),
+      appBar: CupertinoNavigationBar(middle: Text('sharedInfoTitle'.tr)),
       body: _buildBody(),
     );
   }
@@ -116,7 +117,7 @@ class _ServerInfoScreenState extends State<ServerInfoScreen> {
           _buildInfoTile(Icons.public, 'positionLongitude'.tr, server.longitude?.toStringAsFixed(6) ?? 'N/A'),
           _buildInfoTile(Icons.zoom_in, 'serverZoom'.tr, server.zoom?.toString() ?? 'N/A'),
 
-          if (attributes.isNotEmpty) ...[const Divider(height: 32), _buildSectionHeader('sharedExtra'.tr), ...attributes.entries.map((entry) => _buildInfoTile(Icons.info_outline, entry.key.toString(), entry.value.toString()))],
+          if (attributes.isNotEmpty) ...[const Divider(height: 32), _buildSectionHeader('sharedExtra'.tr), ...attributes.entries.map((entry) => _buildInfoTile(CupertinoIcons.info_circle, entry.key.toString(), entry.value.toString()))],
         ],
       ),
     );

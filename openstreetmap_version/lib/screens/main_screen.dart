@@ -1,7 +1,6 @@
 // lib/screens/main_screen.dart
 // The main screen with bottom navigation to different sections: Device List, Map, Reports, and Settings.
-import 'dart:ui';
-
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:provider/provider.dart';
@@ -123,27 +122,21 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: IndexedStack(index: _currentIndex, children: _screens),
-      bottomNavigationBar: ClipRRect(
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-          child: BottomNavigationBar(
-            backgroundColor: Theme.of(context).brightness == Brightness.dark ? Colors.black.withValues(alpha: 0.5) : Colors.white.withValues(alpha: 0.5),
-            elevation: 0,
-            type: BottomNavigationBarType.fixed,
-            currentIndex: _currentIndex,
-            onTap: _onTabTapped,
-            selectedItemColor: Theme.of(context).colorScheme.primary,
-            unselectedItemColor: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
-            items: [
-              BottomNavigationBarItem(icon: const Icon(Icons.list_rounded), label: 'deviceTitle'.tr),
-              BottomNavigationBarItem(icon: const Icon(Icons.map_rounded), label: 'mapTitle'.tr),
-              BottomNavigationBarItem(icon: const Icon(Icons.settings_rounded), label: 'settingsTitle'.tr),
-            ],
-          ),
-        ),
+    return CupertinoTabScaffold(
+      tabBar: CupertinoTabBar(
+        currentIndex: _currentIndex,
+        onTap: _onTabTapped,
+        activeColor: Theme.of(context).colorScheme.primary,
+        inactiveColor: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+        items: [
+          BottomNavigationBarItem(icon: const Icon(CupertinoIcons.list_bullet), label: 'deviceTitle'.tr),
+          BottomNavigationBarItem(icon: const Icon(CupertinoIcons.map), label: 'mapTitle'.tr),
+          BottomNavigationBarItem(icon: const Icon(CupertinoIcons.settings), label: 'settingsTitle'.tr),
+        ],
       ),
+      tabBuilder: (context, index) {
+        return CupertinoTabView(builder: (context) => _screens[index]);
+      },
     );
   }
 }

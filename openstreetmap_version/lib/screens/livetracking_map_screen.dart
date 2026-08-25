@@ -2,6 +2,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
@@ -149,7 +150,7 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(widget.selectedDevice.name ?? 'mapLiveRoutes'.tr)),
+      appBar: CupertinoNavigationBar(middle: Text(widget.selectedDevice.name ?? 'mapLiveRoutes'.tr)),
       body: Consumer<TraccarProvider>(
         builder: (context, traccarProvider, child) {
           final lastPosition = traccarProvider.positions.firstWhere((pos) => pos.deviceId == widget.selectedDevice.id, orElse: () => Position());
@@ -224,7 +225,7 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
                     await prefs.setInt('selectedDeviceId', widget.selectedDevice.id!);
                     await prefs.setString('selectedDeviceName', widget.selectedDevice.name ?? '');
                     if (context.mounted) {
-                      Navigator.push(context, MaterialPageRoute(builder: (context) => const MonthlyMileageScreen()));
+                      Navigator.of(context, rootNavigator: true).push(MaterialPageRoute(builder: (context) => const MonthlyMileageScreen()));
                     }
                   },
                   child: const Icon(Icons.route, color: Colors.blue),
@@ -283,7 +284,7 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
                               ),
                             ),
                             IconButton(
-                              icon: Icon(provider.isFavorite(widget.selectedDevice.id!) ? Icons.favorite : Icons.favorite_border, color: provider.isFavorite(widget.selectedDevice.id!) ? Colors.red : Colors.grey),
+                              icon: Icon(provider.isFavorite(widget.selectedDevice.id!) ? CupertinoIcons.heart_fill : CupertinoIcons.heart, color: provider.isFavorite(widget.selectedDevice.id!) ? Colors.red : Colors.grey),
                               onPressed: () => provider.toggleFavorite(widget.selectedDevice.id!),
                             ),
                             IconButton(
@@ -320,7 +321,7 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
                 children: [
                   _buildInfoItem(Icons.speed, ((lastPosition.speed ?? 0) * 1.852).toStringAsFixed(1), 'km/h'),
                   // UPDATED: Precise Timestamp Formatting
-                  _buildInfoItem(Icons.access_time_rounded, widget.selectedDevice.lastUpdate != null ? DateFormat('yyyy-MM-dd HH:mm:ss').format(widget.selectedDevice.lastUpdate!.toLocal()) : '--', 'Last Update'),
+                  _buildInfoItem(CupertinoIcons.clock, widget.selectedDevice.lastUpdate != null ? DateFormat('yyyy-MM-dd HH:mm:ss').format(widget.selectedDevice.lastUpdate!.toLocal()) : '--', 'Last Update'),
                   if (attributes.containsKey('batteryLevel')) _buildInfoItem(Icons.battery_std, '${attributes['batteryLevel']}%', 'Battery'),
                 ],
               ),

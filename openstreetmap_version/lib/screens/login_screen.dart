@@ -1,5 +1,6 @@
 import 'dart:ui';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -108,12 +109,12 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       }
       // 400 — surface the server message, e.g. "Account has expired"
       if (e.statusCode == 400 && e.message.contains('Account has expired')) {
-        showDialog<void>(
+        showCupertinoDialog<void>(
           context: context,
-          builder: (context) => AlertDialog(
+          builder: (context) => CupertinoAlertDialog(
             title: Text('Error'.tr),
             content: Text('loginFailed'.tr),
-            actions: [TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('OK'))],
+            actions: [CupertinoDialogAction(onPressed: () => Navigator.of(context).pop(), child: const Text('OK'))],
           ),
         );
         return;
@@ -553,7 +554,7 @@ class _LanguagePickerSheetState extends State<_LanguagePickerSheet> {
                   onChanged: (value) => setState(() => _searchQuery = value),
                   decoration: InputDecoration(
                     hintText: 'sharedSearch'.tr,
-                    prefixIcon: const Icon(Icons.search),
+                    prefixIcon: const Icon(CupertinoIcons.search),
                     filled: true,
                     fillColor: theme.colorScheme.onSurface.withValues(alpha: 0.05),
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),

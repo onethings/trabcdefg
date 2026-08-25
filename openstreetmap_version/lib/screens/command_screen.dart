@@ -1,5 +1,6 @@
 // lib/screens/command_screen.dart
 // CommandScreen for sending commands to selected device
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart'; // For .tr and Get.snackbar
 import 'package:provider/provider.dart'; // Import Provider
@@ -135,7 +136,7 @@ class _CommandScreenState extends State<CommandScreen> {
     final commandsApi = api.CommandsApi(traccarProvider.apiClient);
 
     return Scaffold(
-      appBar: AppBar(title: Text('deviceCommand'.tr)),
+      appBar: CupertinoNavigationBar(middle: Text('deviceCommand'.tr)),
       body: Form(
         key: _formKey,
         child: SingleChildScrollView(
@@ -154,7 +155,7 @@ class _CommandScreenState extends State<CommandScreen> {
                   await _fetchAndShowCommandTypes(commandsApi);
                 },
                 child: InputDecorator(
-                  decoration: InputDecoration(labelText: 'sharedType'.tr, border: const OutlineInputBorder(), suffixIcon: const Icon(Icons.arrow_drop_down)),
+                  decoration: InputDecoration(labelText: 'sharedType'.tr, border: const OutlineInputBorder(), suffixIcon: const Icon(CupertinoIcons.chevron_down)),
                   // FIX: Left operand can't be null layout fixed here
                   child: Text(_selectedCommandType == null ? 'Select Command Type'.tr : _getCommandTranslationKey(_selectedCommandType!.type).tr, style: TextStyle(color: _selectedCommandType == null ? Colors.grey : Colors.black)),
                 ),

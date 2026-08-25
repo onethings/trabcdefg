@@ -1,5 +1,6 @@
 // computed_attributes_screen.dart
 // A screen to display and manage computed attributes in the TracDefg app.
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:provider/provider.dart';
@@ -35,7 +36,7 @@ class _ComputedAttributesScreenState extends State<ComputedAttributesScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('sharedComputedAttributes'.tr)),
+      appBar: CupertinoNavigationBar(middle: Text('sharedComputedAttributes'.tr)),
       body: FutureBuilder<List<api.Attribute>?>(
         future: _computedAttributesFuture,
         builder: (context, snapshot) {
@@ -66,7 +67,7 @@ class _ComputedAttributesScreenState extends State<ComputedAttributesScreen> {
             _fetchComputedAttributes();
           }
         },
-        child: const Icon(Icons.add),
+        child: const Icon(CupertinoIcons.add),
       ),
     );
   }

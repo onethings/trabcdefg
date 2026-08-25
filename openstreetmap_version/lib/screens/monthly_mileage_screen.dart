@@ -3,6 +3,7 @@
 import 'dart:convert';
 import 'dart:developer' as developer;
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:hive_flutter/hive_flutter.dart';
@@ -260,7 +261,7 @@ class _MonthlyMileageScreenState extends State<MonthlyMileageScreen> {
 
     if (!mounted) return; // Guard cross-async context navigation
 
-    Navigator.push(context, MaterialPageRoute(builder: (context) => HistoryRouteScreen()));
+    Navigator.of(context, rootNavigator: true).push(MaterialPageRoute(builder: (context) => HistoryRouteScreen()));
   }
 
   // Helper method to format milliseconds into "Hh Mm" string
@@ -282,7 +283,7 @@ class _MonthlyMileageScreenState extends State<MonthlyMileageScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(_selectedDeviceName ?? 'Monthly Mileage')),
+      appBar: CupertinoNavigationBar(middle: Text(_selectedDeviceName ?? 'Monthly Mileage')),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _selectedDeviceId == null
@@ -298,6 +299,8 @@ class _MonthlyMileageScreenState extends State<MonthlyMileageScreen> {
                         firstDay: DateTime.utc(2020, 1, 1),
                         lastDay: DateTime.utc(2030, 12, 31),
                         focusedDay: _focusedDay,
+                        daysOfWeekHeight: 28,
+                        rowHeight: 44,
                         calendarFormat: _calendarFormat,
                         onFormatChanged: (format) {
                           setState(() {
@@ -309,6 +312,10 @@ class _MonthlyMileageScreenState extends State<MonthlyMileageScreen> {
                         },
                         onDaySelected: _onDaySelected,
                         onPageChanged: _onPageChanged,
+                        daysOfWeekStyle: DaysOfWeekStyle(
+                          weekdayStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12),
+                          weekendStyle: TextStyle(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.8), fontSize: 12),
+                        ),
                         eventLoader: (day) {
                           final dayUtc = DateTime.utc(day.year, day.month, day.day);
                           if (_dailySummaries.containsKey(dayUtc)) {

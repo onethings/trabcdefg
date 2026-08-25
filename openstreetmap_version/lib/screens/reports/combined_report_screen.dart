@@ -4,6 +4,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
@@ -266,7 +267,7 @@ class _CombinedReportScreenState extends State<CombinedReportScreen> {
 
     if (_combinedReport.isEmpty || (_combinedReport.first.positions.isEmpty && (_combinedReport.first.route == null || _combinedReport.first.route!.isEmpty))) {
       return Scaffold(
-        appBar: AppBar(title: Text(_deviceName ?? 'reportCombinedReport'.tr)),
+        appBar: CupertinoNavigationBar(middle: Text(_deviceName ?? 'reportCombinedReport'.tr)),
         body: Center(child: Text('sharedNoData'.tr)),
       );
     }
@@ -279,7 +280,7 @@ class _CombinedReportScreenState extends State<CombinedReportScreen> {
               : const maplibre.LatLng(21.9162, 95.9560)); // Default if no data
 
     return Scaffold(
-      appBar: AppBar(title: Text('${'reportCombined'.tr}: ${_deviceName ?? ''}')),
+      appBar: CupertinoNavigationBar(middle: Text('${'reportCombined'.tr}: ${_deviceName ?? ''}')),
       body: Column(
         children: [
           Expanded(

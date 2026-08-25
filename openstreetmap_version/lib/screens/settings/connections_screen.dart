@@ -2,6 +2,7 @@
 // A screen to manage connections between devices and other entities in the TracDefg app.
 import 'dart:convert';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
@@ -151,7 +152,7 @@ class ConnectionsScreenState extends State<ConnectionsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Connections'.tr)),
+      appBar: CupertinoNavigationBar(middle: Text('Connections'.tr)),
       body: SingleChildScrollView(
         child: Column(
           children: [

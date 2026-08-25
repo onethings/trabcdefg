@@ -1,5 +1,6 @@
 // drivers_screen.dart
 // A screen to display and manage drivers in the TracDefg app.
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:provider/provider.dart';
@@ -35,7 +36,7 @@ class _DriversScreenState extends State<DriversScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('sharedDrivers'.tr)),
+      appBar: CupertinoNavigationBar(middle: Text('sharedDrivers'.tr)),
       body: FutureBuilder<List<api.Driver>?>(
         future: _driversFuture,
         builder: (context, snapshot) {
@@ -57,7 +58,7 @@ class _DriversScreenState extends State<DriversScreen> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       IconButton(
-                        icon: const Icon(Icons.edit),
+                        icon: const Icon(CupertinoIcons.pencil),
                         onPressed: () async {
                           final updatedDriver = await Navigator.push(context, MaterialPageRoute(builder: (context) => AddDriverScreen(driver: driver)));
 
@@ -67,18 +68,22 @@ class _DriversScreenState extends State<DriversScreen> {
                         },
                       ), // Added missing comma divider here
                       IconButton(
-                        icon: const Icon(Icons.delete),
+                        icon: const Icon(CupertinoIcons.trash),
                         onPressed: () async {
                           // FIX: Capture dependencies from BuildContext BEFORE the async gaps
                           final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
 
                           final bool? confirm = await Get.dialog<bool>(
-                            AlertDialog(
+                            CupertinoAlertDialog(
                               title: const Text('Delete Driver?'),
                               content: Text('Are you sure you want to delete ${driver.name}?'),
                               actions: [
-                                TextButton(onPressed: () => Get.back(result: false), child: Text('sharedCancel'.tr)),
-                                TextButton(onPressed: () => Get.back(result: true), child: const Text('Delete')),
+                                CupertinoDialogAction(onPressed: () => Get.back(result: false), child: Text('sharedCancel'.tr)),
+                                CupertinoDialogAction(
+                                  textStyle: const TextStyle(color: CupertinoColors.systemRed),
+                                  onPressed: () => Get.back(result: true),
+                                  child: const Text('Delete'),
+                                ),
                               ],
                             ),
                           );
@@ -115,7 +120,7 @@ class _DriversScreenState extends State<DriversScreen> {
             _fetchDrivers();
           }
         },
-        child: const Icon(Icons.add),
+        child: const Icon(CupertinoIcons.add),
       ),
     );
   }

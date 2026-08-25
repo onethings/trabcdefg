@@ -1,5 +1,6 @@
 import 'dart:ui';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:hive_flutter/hive_flutter.dart';
@@ -150,7 +151,7 @@ class _DeviceDetailPanelState extends State<DeviceDetailPanel> {
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: Row(
                     children: [
-                      Icon(Icons.location_on_rounded, size: 14, color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.7)),
+                      Icon(CupertinoIcons.location_solid, size: 14, color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.7)),
                       const SizedBox(width: 6),
                       Expanded(
                         child: Text(
@@ -197,12 +198,12 @@ class _DeviceDetailPanelState extends State<DeviceDetailPanel> {
 
   Widget _buildBatteryItem(BuildContext context) {
     final battery = _getAttribute(widget.position, 'batteryLevel') as num?;
-    return _buildStatusItem(context, Icons.battery_charging_full_rounded, battery != null ? '$battery%' : '--', 'positionBattery'.tr);
+    return _buildStatusItem(context, CupertinoIcons.battery_charging, battery != null ? '$battery%' : '--', 'positionBattery'.tr);
   }
 
   Widget _buildIgnitionItem(BuildContext context) {
     final isOn = _getAttribute(widget.position, 'ignition') == true;
-    return _buildStatusItem(context, Icons.power_settings_new_rounded, isOn ? 'sharedOn'.tr : 'sharedOff'.tr, 'positionIgnition'.tr);
+    return _buildStatusItem(context, CupertinoIcons.power, isOn ? 'sharedOn'.tr : 'sharedOff'.tr, 'positionIgnition'.tr);
   }
 
   Widget _buildHeaderActionIcons(BuildContext context) {
@@ -210,16 +211,16 @@ class _DeviceDetailPanelState extends State<DeviceDetailPanel> {
       children: [
         _buildCircleIcon(context, Icons.route_rounded, () => _navigateToMileage(context)),
         const SizedBox(width: 8),
-        _buildCircleIcon(context, Icons.refresh_rounded, widget.onRefresh),
+        _buildCircleIcon(context, CupertinoIcons.refresh, widget.onRefresh),
         const SizedBox(width: 8),
         Consumer<TraccarProvider>(
           builder: (context, provider, child) {
             final isFavorite = provider.isFavorite(widget.device.id!);
-            return _buildCircleIcon(context, isFavorite ? Icons.favorite : Icons.favorite_border, () => provider.toggleFavorite(widget.device.id!), color: isFavorite ? Colors.red : null);
+            return _buildCircleIcon(context, isFavorite ? CupertinoIcons.heart_fill : CupertinoIcons.heart, () => provider.toggleFavorite(widget.device.id!), color: isFavorite ? Colors.red : null);
           },
         ),
         const SizedBox(width: 8),
-        _buildCircleIcon(context, _isExpanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded, _toggleExpanded),
+        _buildCircleIcon(context, _isExpanded ? CupertinoIcons.chevron_up : CupertinoIcons.chevron_down, _toggleExpanded),
       ],
     );
   }
@@ -253,12 +254,12 @@ class _DeviceDetailPanelState extends State<DeviceDetailPanel> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
-          _buildActionItem(context, Icons.navigation_rounded, () => _navigateToGoogleMaps()),
-          _buildActionItem(context, Icons.info_outline_rounded, () => _navigateToDetails(context)),
-          _buildActionItem(context, Icons.send_rounded, () => _navigateToCommand(context)),
-          _buildActionItem(context, Icons.more_horiz_rounded, widget.onMoreOptionsPressed),
-          _buildActionItem(context, Icons.edit_outlined, () => _navigateToEdit(context)),
-          _buildActionItem(context, Icons.delete_outline_rounded, widget.onDeletePressed, color: Colors.red),
+          _buildActionItem(context, CupertinoIcons.location_north, () => _navigateToGoogleMaps()),
+          _buildActionItem(context, CupertinoIcons.info_circle, () => _navigateToDetails(context)),
+          _buildActionItem(context, CupertinoIcons.paperplane, () => _navigateToCommand(context)),
+          _buildActionItem(context, CupertinoIcons.ellipsis, widget.onMoreOptionsPressed),
+          _buildActionItem(context, CupertinoIcons.pencil, () => _navigateToEdit(context)),
+          _buildActionItem(context, CupertinoIcons.trash, widget.onDeletePressed, color: Colors.red),
         ],
       ),
     );
@@ -276,7 +277,7 @@ class _DeviceDetailPanelState extends State<DeviceDetailPanel> {
     await prefs.setInt('selectedDeviceId', widget.device.id!);
     await prefs.setString('selectedDeviceName', widget.device.name!);
     if (context.mounted) {
-      Navigator.push(context, MaterialPageRoute(builder: (context) => const MonthlyMileageScreen()));
+      Navigator.of(context, rootNavigator: true).push(MaterialPageRoute(builder: (context) => const MonthlyMileageScreen()));
     }
   }
 

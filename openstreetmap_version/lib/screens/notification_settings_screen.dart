@@ -2,6 +2,7 @@
 // Settings screen for notification timer and filter configuration.
 import 'dart:ui';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:trabcdefg/services/notification_settings_service.dart';
@@ -98,7 +99,7 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
 
     if (_isLoading) {
       return Scaffold(
-        appBar: AppBar(title: Text('settingsTitle'.tr)),
+        appBar: CupertinoNavigationBar(middle: Text('settingsTitle'.tr)),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
@@ -303,9 +304,9 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
                     Expanded(
                       child: Text(_fieldLabel(field), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
                     ),
-                    Switch(
+                    CupertinoSwitch(
                       value: isVisible,
-                      activeColor: theme.colorScheme.primary,
+                      activeTrackColor: theme.colorScheme.primary,
                       onChanged: (val) {
                         setState(() {
                           if (val) {
@@ -415,7 +416,7 @@ class _ColorPickerSheet extends StatelessWidget {
                     border: Border.all(color: isSelected ? Theme.of(context).colorScheme.primary : Colors.grey.withValues(alpha: 0.2), width: isSelected ? 3 : 1),
                     boxShadow: isSelected ? [BoxShadow(color: color.withValues(alpha: 0.5), blurRadius: 12, offset: const Offset(0, 4))] : null,
                   ),
-                  child: isSelected ? const Icon(Icons.check, color: Colors.white, size: 22) : null,
+                  child: isSelected ? const Icon(CupertinoIcons.checkmark, color: Colors.white, size: 22) : null,
                 ),
               );
             }).toList(),

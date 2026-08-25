@@ -3,6 +3,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
@@ -163,14 +164,14 @@ class _SummaryReportScreenState extends State<SummaryReportScreen> {
 
     if (_summaryReport == null) {
       return Scaffold(
-        appBar: AppBar(title: Text('reportSummary'.tr)),
+        appBar: CupertinoNavigationBar(middle: Text('reportSummary'.tr)),
         body: Center(child: Text('sharedNoData'.tr)),
       );
     }
 
     return Scaffold(
       // Fixed string concatenation warning here
-      appBar: AppBar(title: Text('${'reportSummary'.tr}: ${_summaryReport!.deviceName}')),
+      appBar: CupertinoNavigationBar(middle: Text('${'reportSummary'.tr}: ${_summaryReport!.deviceName}')),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: ListView(

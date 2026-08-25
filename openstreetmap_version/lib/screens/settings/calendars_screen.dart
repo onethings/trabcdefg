@@ -1,5 +1,6 @@
 // calendars_screen.dart
 // A screen to display and manage calendars in the TracDefg app.
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:provider/provider.dart';
@@ -35,7 +36,7 @@ class _CalendarsScreenState extends State<CalendarsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('sharedCalendars'.tr)),
+      appBar: CupertinoNavigationBar(middle: Text('sharedCalendars'.tr)),
       body: FutureBuilder<List<api.Calendar>?>(
         future: _calendarsFuture,
         builder: (context, snapshot) {
@@ -63,7 +64,7 @@ class _CalendarsScreenState extends State<CalendarsScreen> {
             _fetchCalendars();
           }
         },
-        child: const Icon(Icons.add),
+        child: const Icon(CupertinoIcons.add),
       ),
     );
   }

@@ -1,5 +1,6 @@
 import 'dart:ui';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
@@ -245,7 +246,7 @@ class DashboardScreen extends StatelessWidget {
                   ],
                 ),
               ),
-              Icon(Icons.chevron_right_rounded, size: 18, color: Colors.grey),
+              Icon(CupertinoIcons.chevron_right, size: 18, color: Colors.grey),
             ],
           ),
         );
@@ -260,7 +261,7 @@ class DashboardScreen extends StatelessWidget {
       case 'deviceOffline':
         return Icons.cloud_off_rounded;
       case 'deviceMoving':
-        return Icons.directions_car_rounded;
+        return CupertinoIcons.car_fill;
       case 'deviceStopped':
         return Icons.stop_circle_rounded;
       case 'geofenceEnter':

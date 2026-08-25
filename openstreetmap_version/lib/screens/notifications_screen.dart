@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:ui';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
@@ -97,65 +98,77 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   void _showHelpDialog(BuildContext context) {
-    showDialog(
+    showCupertinoModalPopup<void>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Row(
-          children: [
-            Icon(Icons.info_outline_rounded, color: Theme.of(context).colorScheme.primary),
-            const SizedBox(width: 10),
-            const Text('How to Use Notifications', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
-          ],
-        ),
-        content: SingleChildScrollView(
+      builder: (ctx) => Container(
+        height: 500,
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        color: CupertinoColors.systemBackground,
+        child: SafeArea(
+          top: false,
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
             children: [
-              _helpSection(
-                'Countdown Timer',
-                'Each notification has a countdown timer on the right side. '
-                    'The timer starts from the moment the event is received and runs for the configured duration. '
-                    'You can set the duration and colors in Settings (⚙️).',
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                child: Row(
+                  children: [
+                    Icon(CupertinoIcons.info_circle, color: Theme.of(context).colorScheme.primary),
+                    const SizedBox(width: 10),
+                    const Text('How to Use Notifications', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
+                  ],
+                ),
               ),
-              const SizedBox(height: 16),
-              _helpSection(
-                'Timer Colors',
-                'The timer changes color as time runs down:\n'
-                    '• More time remaining → warmer colors (red/orange)\n'
-                    '• Less time remaining → cooler colors (blue/green)\n'
-                    'All colors are customizable in Settings.',
+              Expanded(
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _helpSection(
+                        'Countdown Timer',
+                        'Each notification has a countdown timer on the right side. '
+                            'The timer starts from the moment the event is received and runs for the configured duration. '
+                            'You can set the duration and colors in Settings (⚙️).',
+                      ),
+                      const SizedBox(height: 16),
+                      _helpSection(
+                        'Timer Colors',
+                        'The timer changes color as time runs down:\n'
+                            '• More time remaining → warmer colors (red/orange)\n'
+                            '• Less time remaining → cooler colors (blue/green)\n'
+                            'All colors are customizable in Settings.',
+                      ),
+                      const SizedBox(height: 16),
+                      _helpSection(
+                        'Event Type Filter',
+                        'Use Settings to select which event types to show. '
+                            'For example, you can choose to see only geofence entries/exits and alarms.',
+                      ),
+                      const SizedBox(height: 16),
+                      _helpSection(
+                        'Card Layout',
+                        'You can customize what information appears on each notification card: '
+                            'Event Type, License Plate, Geofence Name, and Time. '
+                            'Toggle fields on/off and reorder them by dragging in Settings. '
+                            'When fewer fields are shown, the text becomes larger for better readability.',
+                      ),
+                      const SizedBox(height: 16),
+                      _helpSection(
+                        'Geofence Alerts',
+                        'When a vehicle enters or exits a geofence, a notification is created. '
+                            'The geofence name is displayed on the card if available.',
+                      ),
+                    ],
+                  ),
+                ),
               ),
-              const SizedBox(height: 16),
-              _helpSection(
-                'Event Type Filter',
-                'Use Settings to select which event types to show. '
-                    'For example, you can choose to see only geofence entries/exits and alarms.',
-              ),
-              const SizedBox(height: 16),
-              _helpSection(
-                'Card Layout',
-                'You can customize what information appears on each notification card: '
-                    'Event Type, License Plate, Geofence Name, and Time. '
-                    'Toggle fields on/off and reorder them by dragging in Settings. '
-                    'When fewer fields are shown, the text becomes larger for better readability.',
-              ),
-              const SizedBox(height: 16),
-              _helpSection(
-                'Geofence Alerts',
-                'When a vehicle enters or exits a geofence, a notification is created. '
-                    'The geofence name is displayed on the card if available.',
+              CupertinoButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: Text('sharedAccept'.tr, style: const TextStyle(fontWeight: FontWeight.w700)),
               ),
             ],
           ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text('sharedAccept'.tr, style: const TextStyle(fontWeight: FontWeight.w700)),
-          ),
-        ],
       ),
     );
   }
@@ -194,7 +207,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           ),
         ),
         actions: [
-          IconButton(icon: const Icon(Icons.info_outline_rounded), tooltip: 'How to use Notifications', onPressed: () => _showHelpDialog(context)),
+          IconButton(icon: const Icon(CupertinoIcons.info_circle), tooltip: 'How to use Notifications', onPressed: () => _showHelpDialog(context)),
           IconButton(icon: const Icon(Icons.tune_rounded), tooltip: 'Notification Settings', onPressed: _openSettings),
         ],
       ),
@@ -414,7 +427,7 @@ class _EventCard extends StatelessWidget {
       case 'deviceOffline':
         return Icons.cloud_off_rounded;
       case 'deviceMoving':
-        return Icons.directions_car_rounded;
+        return CupertinoIcons.car_fill;
       case 'deviceStopped':
         return Icons.stop_circle_rounded;
       case 'geofenceEnter':

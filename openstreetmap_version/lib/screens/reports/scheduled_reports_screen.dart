@@ -2,6 +2,7 @@
 // Scheduled reports using /api/reports endpoint (traccar-web style).
 import 'dart:convert';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:provider/provider.dart';
@@ -87,7 +88,7 @@ class _ScheduledReportsScreenState extends State<ScheduledReportsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('reportScheduled'.tr)),
+      appBar: CupertinoNavigationBar(middle: Text('reportScheduled'.tr)),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _items.isEmpty
@@ -125,13 +126,14 @@ class _ScheduledReportsScreenState extends State<ScheduledReportsScreen> {
                     trailing: IconButton(
                       icon: Icon(Icons.delete_outline, color: Theme.of(context).colorScheme.error),
                       onPressed: () {
-                        showDialog(
+                        showCupertinoDialog(
                           context: context,
-                          builder: (ctx) => AlertDialog(
+                          builder: (ctx) => CupertinoAlertDialog(
                             title: Text('sharedRemoveConfirm'.tr),
                             actions: [
-                              TextButton(onPressed: () => Navigator.pop(ctx), child: Text('sharedCancel'.tr)),
-                              TextButton(
+                              CupertinoDialogAction(onPressed: () => Navigator.pop(ctx), child: Text('sharedCancel'.tr)),
+                              CupertinoDialogAction(
+                                textStyle: const TextStyle(color: CupertinoColors.systemRed),
                                 onPressed: () {
                                   Navigator.pop(ctx);
                                   _delete(item.id);

@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'dart:math';
 
 import 'package:fl_chart/fl_chart.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:provider/provider.dart';
@@ -140,7 +141,7 @@ class _ChartReportScreenState extends State<ChartReportScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('${'reportChart'.tr}: ${_deviceName ?? ''}')),
+      appBar: CupertinoNavigationBar(middle: Text('${'reportChart'.tr}: ${_deviceName ?? ''}')),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _rawItems.isEmpty
@@ -244,7 +245,7 @@ class _ChartReportScreenState extends State<ChartReportScreen> {
                 overflow: TextOverflow.ellipsis,
               ),
             ),
-            Icon(Icons.arrow_drop_down, color: color.onSurfaceVariant),
+            Icon(CupertinoIcons.chevron_down, color: color.onSurfaceVariant),
           ],
         ),
       ),

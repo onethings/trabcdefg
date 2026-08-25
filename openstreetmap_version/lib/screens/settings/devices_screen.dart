@@ -5,6 +5,7 @@ import 'dart:io';
 
 import 'package:csv/csv.dart';
 import 'package:excel/excel.dart' as excel_lib; // FIX: camelCase to lower_case_with_underscores
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:path_provider/path_provider.dart';
@@ -177,14 +178,20 @@ class _DevicesScreenState extends State<DevicesScreen> {
   }
 
   void _showExportFormatSelectionDialog() {
-    showDialog(
+    showCupertinoModalPopup<void>(
       context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text('Export Format'.tr),
-          content: Column(
+      builder: (BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        color: CupertinoColors.systemBackground,
+        child: SafeArea(
+          top: false,
+          child: Column(
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text('Export Format'.tr, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
+              ),
               ListTile(
                 leading: const Icon(Icons.description),
                 title: const Text('CSV (.csv) - Share/Save'),
@@ -203,8 +210,8 @@ class _DevicesScreenState extends State<DevicesScreen> {
               ),
             ],
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 
@@ -221,7 +228,7 @@ class _DevicesScreenState extends State<DevicesScreen> {
               controller: _searchController,
               decoration: InputDecoration(
                 hintText: 'sharedSearch'.tr,
-                prefixIcon: const Icon(Icons.search),
+                prefixIcon: const Icon(CupertinoIcons.search),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide.none),
                 filled: true,
                 fillColor: Colors.white,
@@ -252,8 +259,8 @@ class _DevicesScreenState extends State<DevicesScreen> {
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      IconButton(icon: const Icon(Icons.edit), onPressed: () => _editDevice(device)),
-                      IconButton(icon: const Icon(Icons.delete), onPressed: () => _deleteDevice(device.id!)),
+                      IconButton(icon: const Icon(CupertinoIcons.pencil), onPressed: () => _editDevice(device)),
+                      IconButton(icon: const Icon(CupertinoIcons.trash), onPressed: () => _deleteDevice(device.id!)),
                       IconButton(
                         icon: const Icon(Icons.link),
                         onPressed: () {
@@ -275,7 +282,7 @@ class _DevicesScreenState extends State<DevicesScreen> {
             _fetchDevices();
           }
         },
-        child: const Icon(Icons.add),
+        child: const Icon(CupertinoIcons.add),
       ),
     );
   }

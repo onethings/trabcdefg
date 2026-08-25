@@ -1,5 +1,6 @@
 // add_saved_command_screen.dart
 // A screen to add a new saved command in the TracDefg app.
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:provider/provider.dart';
@@ -60,7 +61,7 @@ class AddSavedCommandScreenState extends State<AddSavedCommandScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('${'sharedAdd'.tr} ${'sharedSavedCommand'.tr}')),
+      appBar: CupertinoNavigationBar(middle: Text('${'sharedAdd'.tr} ${'sharedSavedCommand'.tr}')),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(16.0),

@@ -1,6 +1,7 @@
 // lib/screens/device_list_screen.dart
 import 'dart:async';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:provider/provider.dart';
@@ -227,7 +228,7 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
     } else {
       return Row(
         children: [
-          Icon(Icons.location_on, size: 14, color: Theme.of(context).colorScheme.outline),
+          Icon(CupertinoIcons.location_solid, size: 14, color: Theme.of(context).colorScheme.outline),
           const SizedBox(width: 6),
           Expanded(
             child: Text(
@@ -338,7 +339,7 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
             children: [
               Row(
                 children: [
-                  Icon(Icons.directions_car, color: statusColor),
+                  Icon(CupertinoIcons.car_fill, color: statusColor),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
@@ -356,7 +357,7 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
                               ),
                             ),
                             IconButton(
-                              icon: Icon(isFavorite ? Icons.favorite : Icons.favorite_border, color: isFavorite ? Colors.red : Colors.grey, size: 20),
+                              icon: Icon(isFavorite ? CupertinoIcons.heart_fill : CupertinoIcons.heart, color: isFavorite ? Colors.red : Colors.grey, size: 20),
                               padding: EdgeInsets.zero,
                               constraints: const BoxConstraints(),
                               onPressed: () => provider.toggleFavorite(device.id!),
@@ -417,7 +418,7 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
             ),
             const SizedBox(width: 8),
             IconButton(
-              icon: Icon(isFavorite ? Icons.favorite : Icons.favorite_border, color: isFavorite ? Colors.red : Colors.grey, size: 18),
+              icon: Icon(isFavorite ? CupertinoIcons.heart_fill : CupertinoIcons.heart, color: isFavorite ? Colors.red : Colors.grey, size: 18),
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(),
               onPressed: () => provider.toggleFavorite(device.id!),
@@ -535,7 +536,7 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
                         value: 1,
                         child: Row(
                           children: [
-                            Icon(Icons.check, size: 18, color: _mileageDays == 1 ? null : Colors.transparent),
+                            Icon(CupertinoIcons.checkmark, size: 18, color: _mileageDays == 1 ? null : Colors.transparent),
                             const SizedBox(width: 8),
                             Text('dashboardTotalDistance'.tr),
                           ],
@@ -545,7 +546,7 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
                         value: 3,
                         child: Row(
                           children: [
-                            Icon(Icons.check, size: 18, color: _mileageDays == 3 ? null : Colors.transparent),
+                            Icon(CupertinoIcons.checkmark, size: 18, color: _mileageDays == 3 ? null : Colors.transparent),
                             const SizedBox(width: 8),
                             Text('${'dashboardTotalDistance'.tr} (3 ${'sharedDays'.tr})'),
                           ],
@@ -576,7 +577,7 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
           controller: _searchController,
           decoration: InputDecoration(
             hintText: 'sharedSearchDevices'.tr,
-            prefixIcon: const Icon(Icons.search, size: 20),
+            prefixIcon: const Icon(CupertinoIcons.search, size: 20),
             filled: true,
             fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
@@ -656,7 +657,7 @@ class _AccTimerBadgeState extends State<_AccTimerBadge> {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(color: (isMoving ? Colors.green : widget.baseColor).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
       child: Text(
-        isMoving ? "${widget.speed.toStringAsFixed(0)} ${'sharedKmh'.tr}" : (widget.isStale ? 'deviceStatusOfflineUpper'.tr : "${'deviceStatusAccOn'.tr}$timerText"),
+        isMoving ? "${widget.speed.toStringAsFixed(0)} ${'sharedKmh'.tr}" : (widget.isStale ? 'deviceStatusOfflineUpper'.tr : (widget.isOn ? "${'deviceStatusAccOn'.tr}$timerText" : 'alarmParking'.tr)),
         style: TextStyle(color: isMoving ? Colors.green : widget.baseColor, fontWeight: FontWeight.bold, fontSize: 11),
       ),
     );
@@ -691,7 +692,7 @@ class _AccTimerBadgeState extends State<_AccTimerBadge> {
     return Padding(
       padding: const EdgeInsets.only(right: 8),
       child: Text(
-        "${'deviceStatusAccOn'.tr}$timeStr",
+        widget.isOn ? "${'deviceStatusAccOn'.tr}$timeStr" : 'alarmParking'.tr,
         textAlign: TextAlign.center,
         style: TextStyle(fontSize: 9, color: widget.baseColor, fontWeight: FontWeight.bold),
       ),

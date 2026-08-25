@@ -6,6 +6,7 @@ import 'dart:math';
 import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 // --- Imports and Definitions for FlutterMap and Caching (from map_screen.dart) ---
 
@@ -129,14 +130,18 @@ class GeofencesScreenState extends State<GeofencesScreen> {
   }
 
   void _deleteGeofence(int geofenceId) async {
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showCupertinoDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => CupertinoAlertDialog(
         title: Text('sharedRemoveConfirm'.tr),
         content: Text('Are you sure you want to delete this geofence?'.tr),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('sharedCancel'.tr)),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text('sharedRemove'.tr)),
+          CupertinoDialogAction(onPressed: () => Navigator.pop(ctx, false), child: Text('sharedCancel'.tr)),
+          CupertinoDialogAction(
+            textStyle: const TextStyle(color: CupertinoColors.systemRed),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text('sharedRemove'.tr),
+          ),
         ],
       ),
     );
@@ -217,7 +222,7 @@ class GeofencesScreenState extends State<GeofencesScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('sharedGeofences'.tr)),
+      appBar: CupertinoNavigationBar(middle: Text('sharedGeofences'.tr)),
       body: FutureBuilder<List<api.Geofence>>(
         future: _geofencesFuture,
         builder: (context, snapshot) {
@@ -240,8 +245,8 @@ class GeofencesScreenState extends State<GeofencesScreen> {
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      IconButton(icon: const Icon(Icons.edit), onPressed: () => _editGeofence(geofence)),
-                      IconButton(icon: const Icon(Icons.delete), onPressed: () => _deleteGeofence(geofence.id!)),
+                      IconButton(icon: const Icon(CupertinoIcons.pencil), onPressed: () => _editGeofence(geofence)),
+                      IconButton(icon: const Icon(CupertinoIcons.trash), onPressed: () => _deleteGeofence(geofence.id!)),
                     ],
                   ),
                 );
@@ -285,7 +290,7 @@ class GeofencesScreenState extends State<GeofencesScreen> {
             }
           }
         },
-        child: const Icon(Icons.add),
+        child: const Icon(CupertinoIcons.add),
       ),
     );
   }
@@ -456,7 +461,7 @@ class AddGeofenceScreenState extends State<AddGeofenceScreen> {
             point: _polygonPoints[i],
             width: 30,
             height: 30,
-            child: const Icon(Icons.location_on, color: Colors.red),
+            child: const Icon(CupertinoIcons.location_solid, color: Colors.red),
           ),
         );
       }
@@ -605,39 +610,50 @@ class AddGeofenceScreenState extends State<AddGeofenceScreen> {
   // --- Device location picker ---
   void _showDevicePicker() {
     final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
-    showDialog(
+    showCupertinoModalPopup<void>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('sharedDevice'.tr),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: ListView.builder(
-            shrinkWrap: true,
-            itemCount: traccarProvider.devices.length,
-            itemBuilder: (_, i) {
-              final device = traccarProvider.devices[i];
-              final pos = traccarProvider.getPosition(device.id!);
-              return ListTile(
-                leading: Icon(Icons.directions_car, color: Theme.of(context).colorScheme.primary),
-                title: Text(device.name ?? '#${device.id}'),
-                subtitle: pos != null ? Text('${pos.latitude?.toStringAsFixed(4) ?? "?"}, ${pos.longitude?.toStringAsFixed(4) ?? "?"}') : Text('sharedNoData'.tr),
-                onTap: () {
-                  if (pos != null && pos.latitude != null && pos.longitude != null) {
-                    final lat = pos.latitude!.toDouble();
-                    final lng = pos.longitude!.toDouble();
-                    setState(() {
-                      _geofenceType = 'CIRCLE';
-                      _circleCenter = LatLng(lat, lng);
-                      _radius = 100.0;
-                      _polygonPoints.clear();
-                      _updateShapes();
-                      _mapController.move(LatLng(lat, lng), 15.0);
-                    });
-                    Navigator.pop(ctx);
-                  }
-                },
-              );
-            },
+      builder: (ctx) => Container(
+        height: 420,
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        color: CupertinoColors.systemBackground,
+        child: SafeArea(
+          top: false,
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text('sharedDevice'.tr, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
+              ),
+              Expanded(
+                child: ListView.builder(
+                  itemCount: traccarProvider.devices.length,
+                  itemBuilder: (_, i) {
+                    final device = traccarProvider.devices[i];
+                    final pos = traccarProvider.getPosition(device.id!);
+                    return ListTile(
+                      leading: Icon(CupertinoIcons.car_fill, color: Theme.of(context).colorScheme.primary),
+                      title: Text(device.name ?? '#${device.id}'),
+                      subtitle: pos != null ? Text('${pos.latitude?.toStringAsFixed(4) ?? "?"}, ${pos.longitude?.toStringAsFixed(4) ?? "?"}') : Text('sharedNoData'.tr),
+                      onTap: () {
+                        if (pos != null && pos.latitude != null && pos.longitude != null) {
+                          final lat = pos.latitude!.toDouble();
+                          final lng = pos.longitude!.toDouble();
+                          setState(() {
+                            _geofenceType = 'CIRCLE';
+                            _circleCenter = LatLng(lat, lng);
+                            _radius = 100.0;
+                            _polygonPoints.clear();
+                            _updateShapes();
+                            _mapController.move(LatLng(lat, lng), 15.0);
+                          });
+                          Navigator.pop(ctx);
+                        }
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -648,7 +664,7 @@ class AddGeofenceScreenState extends State<AddGeofenceScreen> {
   Widget build(BuildContext context) {
     if (!_isCacheInitialized) {
       return Scaffold(
-        appBar: AppBar(title: Text('sharedLoading'.tr)),
+        appBar: CupertinoNavigationBar(middle: Text('sharedLoading'.tr)),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
@@ -659,7 +675,7 @@ class AddGeofenceScreenState extends State<AddGeofenceScreen> {
         actions: [
           IconButton(icon: Icon(_mapType == AppMapType.satellite ? Icons.map : Icons.satellite), onPressed: () => setState(() => _mapType = _mapType == AppMapType.satellite ? AppMapType.openStreetMap : AppMapType.satellite)),
           IconButton(
-            icon: const Icon(Icons.save),
+            icon: const Icon(CupertinoIcons.checkmark_circle),
             onPressed: () async {
               if (_formKey.currentState!.validate() && ((_geofenceType == 'CIRCLE' && _circleCenter != null) || (_geofenceType == 'POLYGON' && (_showSimplified ? _simplifiedPoints : _polygonPoints).length >= 3))) {
                 _formKey.currentState!.save();
@@ -716,7 +732,7 @@ class AddGeofenceScreenState extends State<AddGeofenceScreen> {
                             height: 20,
                             child: Padding(padding: EdgeInsets.all(12), child: CircularProgressIndicator(strokeWidth: 2)),
                           )
-                        : IconButton(icon: const Icon(Icons.search), onPressed: () => _searchLocation(_searchController.text)),
+                        : IconButton(icon: const Icon(CupertinoIcons.search), onPressed: () => _searchLocation(_searchController.text)),
                   ),
                   onSubmitted: _searchLocation,
                 ),
@@ -802,7 +818,7 @@ class AddGeofenceScreenState extends State<AddGeofenceScreen> {
                         Row(
                           children: [
                             Expanded(child: Text('Simplify: ${_polygonPoints.length} → ${_simplifiedPoints.length} nodes')),
-                            Switch(
+                            CupertinoSwitch(
                               value: _showSimplified,
                               onChanged: (v) {
                                 setState(() {
@@ -833,7 +849,7 @@ class AddGeofenceScreenState extends State<AddGeofenceScreen> {
                         Align(
                           alignment: Alignment.centerRight,
                           child: TextButton.icon(
-                            icon: const Icon(Icons.clear, size: 18),
+                            icon: const Icon(CupertinoIcons.xmark, size: 18),
                             label: Text('Clear Points'.tr),
                             onPressed: () {
                               setState(() {

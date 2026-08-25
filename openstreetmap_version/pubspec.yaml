@@ -31,27 +31,19 @@ dependencies:
   flutter:
     sdk: flutter
 
-  # The following adds the Cupertino Icons font to your application.
-  # Use with the CupertinoIcons class for iOS style icons.
-  cupertino_icons: ^1.0.8
+  # CupertinoIcons 字型（iOS 風格主題 icon 需要，App 蘋果化後重新加入）
+  cupertino_icons: ^1.0.9
   intl: ^0.20.2
   collection: ^1.19.1
   meta: ^1.16.0
   get: ^4.7.2
   provider: ^6.1.5+1
-  flutter_phoenix: ^1.1.1
   table_calendar: ^3.2.0
-  sliding_up_panel: ^2.0.0+1
   timeago: ^3.6.0
 
   # --- Networking ---
-  dio: ^5.4.0
   http: ^1.5.0
-  http_auth: ^1.0.1
   web_socket_channel: ^3.0.3
-  cookie_jar: ^4.0.8
-  dio_cookie_manager: ^3.3.0
-  dio_cache_interceptor_hive_store: ^4.0.0
 
   # --- Storage & Database ---
   shared_preferences: ^2.5.3
@@ -59,15 +51,11 @@ dependencies:
   hive: ^2.2.3
   hive_flutter: ^1.1.0
   sqflite: ^2.4.2
-  http_cache_hive_store: ^5.0.1
 
   # --- Maps & Locations ---
   flutter_map: ^8.2.1
   latlong2: ^0.9.1
   maplibre_gl: 0.25.0
-  location: ^8.0.1
-  flutter_map_cache: ^1.5.2
-  flutter_map_tile_caching: ^10.1.1
   dart_geohash: ^2.1.0
 
   # --- Utilities & Services ---

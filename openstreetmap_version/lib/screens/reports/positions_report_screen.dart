@@ -3,6 +3,7 @@
 // Based on traccar-web PositionsReportPage (uses /api/positions + map).
 import 'dart:convert';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
@@ -170,9 +171,9 @@ class _PositionsReportScreenState extends State<PositionsReportScreen> {
   Widget build(BuildContext context) {
     final mapStyle = Provider.of<MapStyleProvider>(context).styleString;
     return Scaffold(
-      appBar: AppBar(
-        title: Text('${'reportPositions'.tr}: ${_deviceName ?? ''}'),
-        actions: [IconButton(icon: Icon(_showMap ? Icons.list : Icons.map), tooltip: _showMap ? 'Show List' : 'Show Map', onPressed: () => setState(() => _showMap = !_showMap))],
+      appBar: CupertinoNavigationBar(
+        middle: Text('${'reportPositions'.tr}: ${_deviceName ?? ''}'),
+        trailing: IconButton(icon: Icon(_showMap ? CupertinoIcons.list_bullet : CupertinoIcons.map), tooltip: _showMap ? 'Show List' : 'Show Map', onPressed: () => setState(() => _showMap = !_showMap)),
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -202,7 +203,7 @@ class _PositionsReportScreenState extends State<PositionsReportScreen> {
                         margin: const EdgeInsets.only(bottom: 4),
                         child: ListTile(
                           dense: true,
-                          leading: Icon(item.valid ? Icons.location_on : Icons.location_off, color: item.valid ? Colors.green : Colors.red, size: 20),
+                          leading: Icon(item.valid ? CupertinoIcons.location_solid : CupertinoIcons.location, color: item.valid ? Colors.green : Colors.red, size: 20),
                           title: Text(
                             DateFormat('yyyy-MM-dd HH:mm:ss').format(item.fixTime.toLocal()),
                             style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface),

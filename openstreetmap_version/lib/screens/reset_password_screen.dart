@@ -1,5 +1,6 @@
 // lib/screens/reset_password_screen.dart
 // A screen that allows users to reset their password by entering their email address.
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:trabcdefg/constants.dart';
@@ -59,7 +60,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Reset Password')),
+      appBar: CupertinoNavigationBar(middle: const Text('Reset Password')),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(

@@ -3,6 +3,7 @@
 import 'dart:convert';
 import 'dart:math';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
@@ -354,7 +355,7 @@ class _EmulatorScreenState extends State<EmulatorScreen> {
                     child: Text('sharedEmulator'.tr, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
                   ),
                   // Search button
-                  IconButton(icon: Icon(_showSearch ? Icons.search_off : Icons.search), onPressed: _showSearchDialog, tooltip: 'sharedSearch'.tr),
+                  IconButton(icon: Icon(_showSearch ? CupertinoIcons.xmark_circle : CupertinoIcons.search), onPressed: _showSearchDialog, tooltip: 'sharedSearch'.tr),
                   if (_lastSentStatus != null)
                     Padding(
                       padding: const EdgeInsets.only(right: 8),
@@ -390,7 +391,7 @@ class _EmulatorScreenState extends State<EmulatorScreen> {
                       focusNode: _searchFocusNode,
                       decoration: InputDecoration(
                         hintText: 'searchOsm'.tr,
-                        prefixIcon: const Icon(Icons.search),
+                        prefixIcon: const Icon(CupertinoIcons.search),
                         suffixIcon: _isSearching
                             ? const Padding(
                                 padding: EdgeInsets.all(12),

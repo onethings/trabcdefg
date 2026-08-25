@@ -3,6 +3,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
@@ -169,7 +170,7 @@ class _EventsReportScreenState extends State<EventsReportScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('${'reportEvents'.tr}: ${_deviceName ?? ''}')),
+      appBar: CupertinoNavigationBar(middle: Text('${'reportEvents'.tr}: ${_deviceName ?? ''}')),
       body: _isLoading
           ? Center(child: CircularProgressIndicator(color: Theme.of(context).colorScheme.primary))
           : Column(
