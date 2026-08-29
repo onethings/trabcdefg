@@ -1,5 +1,7 @@
 // lib/screens/main_screen.dart
 // The main screen with bottom navigation to different sections: Device List, Map, Reports, and Settings.
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -23,15 +25,22 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   int _currentIndex = 0;
   final List<Widget> _screens = const [DeviceListScreen(), MapScreen(), SettingsScreen()];
 
+  // 🛑 伺服器健康檢查：伺服器當機/斷線時，把使用者送回登入頁，
+  // 避免在伺服器不可用的狀態下繼續使用 Devices/Map/Settings。
+  Timer? _serverHealthTimer;
+  int _serverFailCount = 0;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _loadLastTab();
+    _startServerHealthCheck();
   }
 
   @override
   void dispose() {
+    _serverHealthTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -96,6 +105,38 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       if (mounted) {
         debugPrint('Session expired and auto-relogin failed. Redirecting to login.');
         Get.offAllNamed('/login');
+      }
+    }
+  }
+
+  /// 每 20 秒輕量 ping 一次伺服器（GET /session）。
+  /// - 成功：重置失敗計數。
+  /// - 401（session 過期）：立即回登入頁。
+  /// - 連線失敗（伺服器當機）：連續 2 次失敗才回登入頁，避免短暫斷線就踢人。
+  void _startServerHealthCheck() {
+    _serverHealthTimer?.cancel();
+    _serverHealthTimer = Timer.periodic(const Duration(seconds: 20), (_) => _checkServerHealth());
+  }
+
+  Future<void> _checkServerHealth() async {
+    if (!mounted) return;
+    final traccarProvider = context.read<TraccarProvider>();
+    try {
+      await api.SessionApi(traccarProvider.apiClient).getSession().timeout(const Duration(seconds: 5));
+      _serverFailCount = 0; // 伺服器正常
+      return;
+    } catch (e) {
+      final isAuthFailure = e is api.ApiException && e.code == 401;
+      if (!isAuthFailure) {
+        _serverFailCount++;
+        debugPrint('Server unreachable (health check $_serverFailCount/2): $e');
+      }
+      if (isAuthFailure || _serverFailCount >= 2) {
+        _serverHealthTimer?.cancel();
+        if (mounted) {
+          Get.snackbar('Error'.tr, isAuthFailure ? 'Your session has expired. Please log in again.'.tr : 'Connection to server lost. Please check your network and log in again.'.tr, snackPosition: SnackPosition.BOTTOM);
+          Get.offAllNamed('/login');
+        }
       }
     }
   }

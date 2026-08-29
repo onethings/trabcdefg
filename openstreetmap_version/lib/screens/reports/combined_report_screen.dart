@@ -240,7 +240,7 @@ class _CombinedReportScreenState extends State<CombinedReportScreen> {
       _loadedIcons.add(iconId);
     }
 
-    await _mapController!.addSymbol(maplibre.SymbolOptions(geometry: point, iconImage: iconId, iconSize: 0.8, iconAnchor: "bottom"));
+    await _mapController!.addSymbol(maplibre.SymbolOptions(geometry: point, iconImage: iconId, iconSize: 1.4, iconAnchor: "bottom"));
   }
 
   void _zoomToFit(List<maplibre.LatLng> points) {

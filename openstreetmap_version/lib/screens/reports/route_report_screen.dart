@@ -97,6 +97,7 @@ class _RouteReportScreenState extends State<RouteReportScreen> {
   maplibre.MapLibreMapController? _mapController;
   final Set<String> _loadedIcons = {};
   bool _isStyleLoaded = false;
+  maplibre.Symbol? _selectedMarker; // Marker for the currently tapped position card
   final http.Client _httpClient = http.Client();
 
   @override
@@ -207,6 +208,7 @@ class _RouteReportScreenState extends State<RouteReportScreen> {
     }
 
     await _mapController!.clearSymbols();
+    _selectedMarker = null; // symbols were just cleared
     await _mapController!.clearLines();
 
     final points = _routeReport.map((p) => maplibre.LatLng(p.latitude, p.longitude)).toList();
@@ -229,7 +231,7 @@ class _RouteReportScreenState extends State<RouteReportScreen> {
       _loadedIcons.add(iconId);
     }
 
-    await _mapController!.addSymbol(maplibre.SymbolOptions(geometry: point, iconImage: iconId, iconSize: 0.8, iconAnchor: "bottom"));
+    await _mapController!.addSymbol(maplibre.SymbolOptions(geometry: point, iconImage: iconId, iconSize: 1.4, iconAnchor: "bottom"));
   }
 
   void _zoomToFit(List<maplibre.LatLng> points) {
@@ -244,6 +246,38 @@ class _RouteReportScreenState extends State<RouteReportScreen> {
 
   void _animateToPosition(maplibre.LatLng position) {
     _mapController?.animateCamera(maplibre.CameraUpdate.newLatLng(position));
+  }
+
+  // Called when a Positions card is tapped: show only that position's marker on the map
+  // (instead of markers for every position), then move the camera to it.
+  Future<void> _onCardTap(int index) async {
+    if (index < 0 || index >= _routeReport.length) return;
+    final position = _routeReport[index];
+    await _showSelectedMarker(index);
+    _animateToPosition(maplibre.LatLng(position.latitude, position.longitude));
+  }
+
+  Future<void> _showSelectedMarker(int index) async {
+    if (_mapController == null || index < 0 || index >= _routeReport.length) return;
+
+    // Only one selected marker at a time: remove the previous one.
+    if (_selectedMarker != null) {
+      await _mapController!.removeSymbol(_selectedMarker!);
+      _selectedMarker = null;
+    }
+
+    final position = _routeReport[index];
+    // Use a numbered pin (p_1..p_50) so the map marker matches the "Position N" card.
+    final iconId = "p_${(index % 50) + 1}";
+    if (!_loadedIcons.contains(iconId)) {
+      final ByteData bytes = await rootBundle.load("assets/images/$iconId.png");
+      final Uint8List list = bytes.buffer.asUint8List();
+      await _mapController!.addImage(iconId, list);
+      _loadedIcons.add(iconId);
+    }
+
+    final symbol = await _mapController!.addSymbol(maplibre.SymbolOptions(geometry: maplibre.LatLng(position.latitude, position.longitude), iconImage: iconId, iconSize: 3.5, iconAnchor: "bottom", zIndex: 20));
+    _selectedMarker = symbol;
   }
 
   String _formatDateTime(DateTime dateTime) {
@@ -342,7 +376,7 @@ class _RouteReportScreenState extends State<RouteReportScreen> {
               itemBuilder: (context, index) {
                 final position = _routeReport[index];
                 return GestureDetector(
-                  onTap: () => _animateToPosition(maplibre.LatLng(position.latitude, position.longitude)),
+                  onTap: () => _onCardTap(index),
                   child: Card(
                     elevation: 4,
                     margin: const EdgeInsets.only(bottom: 16.0),
@@ -356,12 +390,26 @@ class _RouteReportScreenState extends State<RouteReportScreen> {
                           ListTile(title: Text('positionDeviceTime'.tr), trailing: Text(_formatDateTime(position.deviceTime))),
                           ListTile(title: Text('positionSpeed'.tr), trailing: Text(_formatSpeed(position.speed))),
                           ListTile(
-                            title: Text('positionAddress'.tr),
-                            trailing: FutureBuilder<String>(
-                              future: position.address != null && position.address!.isNotEmpty ? Future.value(position.address) : OfflineAddressService.getAddress(position.latitude, position.longitude),
-                              builder: (context, snapshot) {
-                                return Text(snapshot.data ?? '...');
-                              },
+                            title: Text(
+                              'positionAddress'.tr,
+                              style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            trailing: ConstrainedBox(
+                              constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.55),
+                              child: FutureBuilder<String>(
+                                future: position.address != null && position.address!.isNotEmpty ? Future.value(position.address) : OfflineAddressService.getAddress(position.latitude, position.longitude),
+                                builder: (context, snapshot) {
+                                  return Text(
+                                    snapshot.data ?? '...',
+                                    textAlign: TextAlign.right,
+                                    overflow: TextOverflow.ellipsis,
+                                    maxLines: 2,
+                                    style: TextStyle(fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface),
+                                  );
+                                },
+                              ),
                             ),
                           ),
                         ],

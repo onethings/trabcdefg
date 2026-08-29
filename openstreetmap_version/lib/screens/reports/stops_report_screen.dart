@@ -209,7 +209,9 @@ class _StopsReportScreenState extends State<StopsReportScreen> {
       final stop = _stopsReport[i];
       final point = maplibre.LatLng(stop.latitude, stop.longitude);
       points.add(point);
-      await _addMarker(point, "stop_$i", "assets/images/parking.png");
+      // Cycle through p_1.png ... p_50.png so each stop gets its own icon.
+      final iconId = "p_${(i % 50) + 1}";
+      await _addMarker(point, iconId, "assets/images/$iconId.png");
     }
 
     if (points.isNotEmpty) {
@@ -218,15 +220,14 @@ class _StopsReportScreenState extends State<StopsReportScreen> {
   }
 
   Future<void> _addMarker(maplibre.LatLng point, String iconId, String assetPath) async {
-    const baseIconId = "parking_pin";
-    if (!_loadedIcons.contains(baseIconId)) {
+    if (!_loadedIcons.contains(iconId)) {
       final ByteData bytes = await rootBundle.load(assetPath);
       final Uint8List list = bytes.buffer.asUint8List();
-      await _mapController!.addImage(baseIconId, list);
-      _loadedIcons.add(baseIconId);
+      await _mapController!.addImage(iconId, list);
+      _loadedIcons.add(iconId);
     }
 
-    await _mapController!.addSymbol(maplibre.SymbolOptions(geometry: point, iconImage: baseIconId, iconSize: 0.6, iconAnchor: "bottom"));
+    await _mapController!.addSymbol(maplibre.SymbolOptions(geometry: point, iconImage: iconId, iconSize: 3.5, iconAnchor: "bottom"));
   }
 
   void _zoomToFit(List<maplibre.LatLng> points) {

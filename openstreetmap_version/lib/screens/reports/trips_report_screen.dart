@@ -252,7 +252,7 @@ class _TripsReportScreenState extends State<TripsReportScreen> {
       _loadedIcons.add(baseIconId);
     }
 
-    await _mapController!.addSymbol(maplibre.SymbolOptions(geometry: point, iconImage: baseIconId, iconSize: 0.6, iconAnchor: "bottom"));
+    await _mapController!.addSymbol(maplibre.SymbolOptions(geometry: point, iconImage: baseIconId, iconSize: 1.4, iconAnchor: "bottom"));
   }
 
   void _zoomToFit(List<maplibre.LatLng> points) {

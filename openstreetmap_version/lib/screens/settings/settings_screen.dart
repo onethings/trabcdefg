@@ -170,40 +170,54 @@ class _SettingsScreenState extends State<SettingsScreen> {
       builder: (context) => Container(
         height: 420,
         padding: const EdgeInsets.symmetric(vertical: 12),
-        color: CupertinoColors.systemBackground,
-        child: SafeArea(
-          top: false,
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Text('loginLanguage'.tr, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
-              ),
-              Expanded(
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: supportedLocales.map((locale) {
-                      final String localeCode = locale.languageCode + (locale.countryCode != null ? '_${locale.countryCode}' : '');
-                      final String? languageName = languageNames[localeCode];
-                      return ListTile(
-                        title: Text(languageName ?? localeCode),
-                        onTap: () async {
-                          await LocalizationService.saveLocale(locale);
-                          if (!mounted) {
-                            return;
-                          }
-                          Get.updateLocale(locale);
-                          if (context.mounted) {
-                            Navigator.of(context).pop();
-                          }
-                        },
-                      );
-                    }).toList(),
+        color: Theme.of(context).colorScheme.surface,
+        // ListTile needs a Material ancestor; the Cupertino popup route has none.
+        child: Material(
+          type: MaterialType.transparency,
+          child: SafeArea(
+            top: false,
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text(
+                    'loginLanguage'.tr,
+                    style: const TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
-              ),
-            ],
+                Expanded(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: supportedLocales.map((locale) {
+                        final String localeCode =
+                            locale.languageCode +
+                            (locale.countryCode != null
+                                ? '_${locale.countryCode}'
+                                : '');
+                        final String? languageName = languageNames[localeCode];
+                        return ListTile(
+                          title: Text(languageName ?? localeCode),
+                          onTap: () async {
+                            await LocalizationService.saveLocale(locale);
+                            if (!mounted) {
+                              return;
+                            }
+                            Get.updateLocale(locale);
+                            if (context.mounted) {
+                              Navigator.of(context).pop();
+                            }
+                          },
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -216,34 +230,53 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       builder: (context) => Container(
         padding: const EdgeInsets.symmetric(vertical: 12),
-        color: CupertinoColors.systemBackground,
-        child: SafeArea(
-          top: false,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Text('settingsTheme'.tr, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
-              ),
-              RadioGroup<ThemeMode>(
-                groupValue: themeProvider.themeMode,
-                onChanged: (ThemeMode? value) {
-                  if (value != null) {
-                    themeProvider.setThemeMode(value);
-                  }
-                  Navigator.of(context).pop();
-                },
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    RadioListTile<ThemeMode>(title: Text('themeSystem'.tr), value: ThemeMode.system),
-                    RadioListTile<ThemeMode>(title: Text('themeLight'.tr), value: ThemeMode.light),
-                    RadioListTile<ThemeMode>(title: Text('themeDark'.tr), value: ThemeMode.dark),
-                  ],
+        color: Theme.of(context).colorScheme.surface,
+        // RadioListTile needs a Material ancestor; the Cupertino popup route has none.
+        child: Material(
+          type: MaterialType.transparency,
+          child: SafeArea(
+            top: false,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text(
+                    'settingsTheme'.tr,
+                    style: const TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ),
-              ),
-            ],
+                RadioGroup<ThemeMode>(
+                  groupValue: themeProvider.themeMode,
+                  onChanged: (ThemeMode? value) {
+                    if (value != null) {
+                      themeProvider.setThemeMode(value);
+                    }
+                    Navigator.of(context).pop();
+                  },
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      RadioListTile<ThemeMode>(
+                        title: Text('themeSystem'.tr),
+                        value: ThemeMode.system,
+                      ),
+                      RadioListTile<ThemeMode>(
+                        title: Text('themeLight'.tr),
+                        value: ThemeMode.light,
+                      ),
+                      RadioListTile<ThemeMode>(
+                        title: Text('themeDark'.tr),
+                        value: ThemeMode.dark,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -256,34 +289,53 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       builder: (context) => Container(
         padding: const EdgeInsets.symmetric(vertical: 12),
-        color: CupertinoColors.systemBackground,
-        child: SafeArea(
-          top: false,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Text('settingsFontSize'.tr, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
-              ),
-              RadioGroup<double>(
-                groupValue: settingsProvider.fontSizeScale,
-                onChanged: (double? value) {
-                  if (value != null) {
-                    settingsProvider.setFontSizeScale(value);
-                  }
-                  Navigator.of(context).pop();
-                },
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    RadioListTile<double>(title: Text('settingsNormal'.tr), value: 1.0),
-                    RadioListTile<double>(title: Text('settingsLarge'.tr), value: 1.2),
-                    RadioListTile<double>(title: Text('settingsExtraLarge'.tr), value: 1.4),
-                  ],
+        color: Theme.of(context).colorScheme.surface,
+        // RadioListTile needs a Material ancestor; the Cupertino popup route has none.
+        child: Material(
+          type: MaterialType.transparency,
+          child: SafeArea(
+            top: false,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text(
+                    'settingsFontSize'.tr,
+                    style: const TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ),
-              ),
-            ],
+                RadioGroup<double>(
+                  groupValue: settingsProvider.fontSizeScale,
+                  onChanged: (double? value) {
+                    if (value != null) {
+                      settingsProvider.setFontSizeScale(value);
+                    }
+                    Navigator.of(context).pop();
+                  },
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      RadioListTile<double>(
+                        title: Text('settingsNormal'.tr),
+                        value: 1.0,
+                      ),
+                      RadioListTile<double>(
+                        title: Text('settingsLarge'.tr),
+                        value: 1.2,
+                      ),
+                      RadioListTile<double>(
+                        title: Text('settingsExtraLarge'.tr),
+                        value: 1.4,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -296,34 +348,53 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       builder: (context) => Container(
         padding: const EdgeInsets.symmetric(vertical: 12),
-        color: CupertinoColors.systemBackground,
-        child: SafeArea(
-          top: false,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Text('settingsMarkerSize'.tr, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
-              ),
-              RadioGroup<double>(
-                groupValue: settingsProvider.markerSizeScale,
-                onChanged: (double? value) {
-                  if (value != null) {
-                    settingsProvider.setMarkerSizeScale(value);
-                  }
-                  Navigator.of(context).pop();
-                },
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    RadioListTile<double>(title: Text('settingsNormal'.tr), value: 1.0),
-                    RadioListTile<double>(title: Text('settingsLarge'.tr), value: 1.5),
-                    RadioListTile<double>(title: Text('settingsExtraLarge'.tr), value: 2.0),
-                  ],
+        color: Theme.of(context).colorScheme.surface,
+        // RadioListTile needs a Material ancestor; the Cupertino popup route has none.
+        child: Material(
+          type: MaterialType.transparency,
+          child: SafeArea(
+            top: false,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text(
+                    'settingsMarkerSize'.tr,
+                    style: const TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ),
-              ),
-            ],
+                RadioGroup<double>(
+                  groupValue: settingsProvider.markerSizeScale,
+                  onChanged: (double? value) {
+                    if (value != null) {
+                      settingsProvider.setMarkerSizeScale(value);
+                    }
+                    Navigator.of(context).pop();
+                  },
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      RadioListTile<double>(
+                        title: Text('settingsNormal'.tr),
+                        value: 1.0,
+                      ),
+                      RadioListTile<double>(
+                        title: Text('settingsLarge'.tr),
+                        value: 1.5,
+                      ),
+                      RadioListTile<double>(
+                        title: Text('settingsExtraLarge'.tr),
+                        value: 2.0,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -335,7 +406,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final traccarProvider = context.read<TraccarProvider>();
 
     return Scaffold(
-      appBar: CupertinoNavigationBar(middle: Text('settingsTitle'.tr), automaticallyImplyLeading: false),
+      appBar: CupertinoNavigationBar(
+        middle: Text('settingsTitle'.tr),
+        automaticallyImplyLeading: false,
+      ),
       body: SafeArea(
         child: Column(
           children: [
@@ -347,96 +421,178 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     title: Text('reportTitle'.tr),
                     trailing: const Icon(CupertinoIcons.chevron_right),
                     onTap: () {
-                      Navigator.push(context, MaterialPageRoute(builder: (context) => const ReportsScreen()));
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const ReportsScreen(),
+                        ),
+                      );
                     },
                   ),
                   const Divider(),
-                  ListTile(leading: const Icon(CupertinoIcons.settings), title: Text('loginLanguage'.tr), onTap: _showLanguageSelectionDialog),
-                  ListTile(leading: const Icon(CupertinoIcons.sun_max), title: Text('settingsTheme'.tr), onTap: _showThemeSelectionDialog),
-                  ListTile(leading: const Icon(Icons.text_fields), title: Text('settingsFontSize'.tr), onTap: _showFontSizeDialog),
-                  ListTile(leading: const Icon(CupertinoIcons.location_solid), title: Text('settingsMarkerSize'.tr), onTap: _showMarkerSizeDialog),
+                  ListTile(
+                    leading: const Icon(CupertinoIcons.settings),
+                    title: Text('loginLanguage'.tr),
+                    onTap: _showLanguageSelectionDialog,
+                  ),
+                  ListTile(
+                    leading: const Icon(CupertinoIcons.sun_max),
+                    title: Text('settingsTheme'.tr),
+                    onTap: _showThemeSelectionDialog,
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.text_fields),
+                    title: Text('settingsFontSize'.tr),
+                    onTap: _showFontSizeDialog,
+                  ),
+                  ListTile(
+                    leading: const Icon(CupertinoIcons.location_solid),
+                    title: Text('settingsMarkerSize'.tr),
+                    onTap: _showMarkerSizeDialog,
+                  ),
                   ListTile(
                     leading: const Icon(CupertinoIcons.bell),
                     title: Text('sharedNotifications'.tr),
                     onTap: () {
-                      Navigator.push(context, MaterialPageRoute(builder: (context) => const NotificationPage()));
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const NotificationPage(),
+                        ),
+                      );
                     },
                   ),
                   ListTile(
                     leading: const Icon(Icons.account_circle),
                     title: Text('settingsUser'.tr),
                     onTap: () {
-                      Navigator.push(context, MaterialPageRoute(builder: (context) => const EditUserScreen()));
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const EditUserScreen(),
+                        ),
+                      );
                     },
                   ),
                   ListTile(
                     leading: const Icon(Icons.devices),
                     title: Text('deviceTitle'.tr),
                     onTap: () {
-                      Navigator.push(context, MaterialPageRoute(builder: (context) => const DevicesScreen()));
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const DevicesScreen(),
+                        ),
+                      );
                     },
                   ),
                   ListTile(
                     leading: const Icon(CupertinoIcons.location_solid),
                     title: Text('sharedGeofence'.tr),
                     onTap: () {
-                      Navigator.push(context, MaterialPageRoute(builder: (context) => const GeofencesScreen()));
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const GeofencesScreen(),
+                        ),
+                      );
                     },
                   ),
                   ListTile(
                     leading: const Icon(CupertinoIcons.person_2),
                     title: Text('settingsGroups'.tr),
                     onTap: () {
-                      Navigator.push(context, MaterialPageRoute(builder: (context) => const GroupsScreen()));
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const GroupsScreen(),
+                        ),
+                      );
                     },
                   ),
                   ListTile(
                     leading: const Icon(CupertinoIcons.person),
                     title: Text('sharedDrivers'.tr),
                     onTap: () {
-                      Navigator.push(context, MaterialPageRoute(builder: (context) => const DriversScreen()));
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const DriversScreen(),
+                        ),
+                      );
                     },
                   ),
                   ListTile(
                     leading: const Icon(CupertinoIcons.calendar_today),
                     title: Text('sharedCalendars'.tr),
                     onTap: () {
-                      Navigator.push(context, MaterialPageRoute(builder: (context) => const CalendarsScreen()));
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const CalendarsScreen(),
+                        ),
+                      );
                     },
                   ),
                   ListTile(
                     leading: const Icon(Icons.calculate),
                     title: Text('sharedComputedAttributes'.tr),
                     onTap: () {
-                      Navigator.push(context, MaterialPageRoute(builder: (context) => const ComputedAttributesScreen()));
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) =>
+                              const ComputedAttributesScreen(),
+                        ),
+                      );
                     },
                   ),
                   ListTile(
                     leading: const Icon(CupertinoIcons.wrench),
                     title: Text('sharedMaintenance'.tr),
                     onTap: () {
-                      Navigator.push(context, MaterialPageRoute(builder: (context) => const MaintenanceScreen()));
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const MaintenanceScreen(),
+                        ),
+                      );
                     },
                   ),
                   ListTile(
                     leading: const Icon(Icons.save),
                     title: Text('sharedSavedCommands'.tr),
                     onTap: () {
-                      Navigator.push(context, MaterialPageRoute(builder: (context) => const SavedCommandsScreen()));
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const SavedCommandsScreen(),
+                        ),
+                      );
                     },
                   ),
                   ListTile(
                     leading: const Icon(CupertinoIcons.info_circle),
                     title: Text('sharedInfoTitle'.tr),
                     onTap: () {
-                      Navigator.push(context, MaterialPageRoute(builder: (context) => const ServerInfoScreen()));
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const ServerInfoScreen(),
+                        ),
+                      );
                     },
                   ),
                   ListTile(
                     leading: const Icon(Icons.developer_mode),
                     title: Text('sharedEmulator'.tr),
                     onTap: () {
-                      Navigator.push(context, MaterialPageRoute(builder: (context) => const EmulatorScreen()));
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const EmulatorScreen(),
+                        ),
+                      );
                     },
                   ),
                 ],
@@ -450,10 +606,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   traccarProvider.clearSessionAndData();
 
                   // Navigate back to the login screen and clear the navigation stack
-                  Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
+                  Navigator.of(context)
+                      .pushNamedAndRemoveUntil('/login', (route) => false);
                 },
                 style: ElevatedButton.styleFrom(
-                  minimumSize: const Size.fromHeight(50), // Make the button full-width
+                  minimumSize: const Size.fromHeight(
+                    50,
+                  ), // Make the button full-width
                   backgroundColor: Theme.of(context).colorScheme.error,
                   foregroundColor: Theme.of(context).colorScheme.onError,
                 ),
@@ -466,7 +625,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 future: PackageInfo.fromPlatform(),
                 builder: (context, snapshot) {
                   if (snapshot.hasData) {
-                    return Text('${'appVersion'.tr}: ${snapshot.data!.version}+${snapshot.data!.buildNumber}', style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5), fontSize: 12));
+                    return Text(
+                      '${'appVersion'.tr}: ${snapshot.data!.version}+${snapshot.data!.buildNumber}',
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurface
+                            .withValues(alpha: 0.5),
+                        fontSize: 12,
+                      ),
+                    );
                   }
                   return const SizedBox.shrink();
                 },

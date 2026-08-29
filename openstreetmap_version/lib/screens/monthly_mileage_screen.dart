@@ -280,101 +280,195 @@ class _MonthlyMileageScreenState extends State<MonthlyMileageScreen> {
     return '$hours$hourAbbr $minutes$minAbbr';
   }
 
+  // Builds a single inset-grouped detail row (label on the left, value on the right).
+  Widget _buildDetailRow(String label, String value, Color secondaryLabel) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: const TextStyle(fontSize: 16)),
+          Text(value, style: TextStyle(fontSize: 16, color: secondaryLabel)),
+        ],
+      ),
+    );
+  }
+
+  // Hairline separator between inset-grouped rows, matching the iOS look.
+  Widget _buildSeparator(Color separatorColor) {
+    return Container(height: 0.5, margin: const EdgeInsets.only(left: 16), color: separatorColor);
+  }
+
+  // The iOS-style "inset grouped" card showing the selected day's stats.
+  Widget _buildDetailCard(Color cardColor, Color separatorColor, Color secondaryLabel) {
+    final summary = _selectedDaySummary!;
+    final distanceInKm = ((summary.distance ?? 0.0) / 1000).toStringAsFixed(2);
+    final averageSpeed = (summary.averageSpeed ?? 0.0).toStringAsFixed(2);
+    final maxSpeed = (summary.maxSpeed ?? 0.0).toStringAsFixed(2);
+    final spentFuel = (summary.spentFuel ?? 0.0).toStringAsFixed(2);
+
+    return Container(
+      decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(14)),
+      child: Column(
+        children: [
+          _buildDetailRow('Date'.tr, DateFormat('yyyy-MM-dd').format(_selectedDay!), secondaryLabel),
+          _buildSeparator(separatorColor),
+          _buildDetailRow('sharedDistance'.tr, '$distanceInKm ${'sharedKm'.tr}', secondaryLabel),
+          _buildSeparator(separatorColor),
+          _buildDetailRow('reportEngineHours'.tr, _formatDuration(summary.engineHours), secondaryLabel),
+          _buildSeparator(separatorColor),
+          _buildDetailRow('reportAverageSpeed'.tr, '$averageSpeed ${'sharedKmh'.tr}', secondaryLabel),
+          _buildSeparator(separatorColor),
+          _buildDetailRow('reportMaximumSpeed'.tr, '$maxSpeed ${'sharedKmh'.tr}', secondaryLabel),
+          _buildSeparator(separatorColor),
+          _buildDetailRow('reportSpentFuel'.tr, '$spentFuel ${'sharedLiter'.tr}', secondaryLabel),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: CupertinoNavigationBar(middle: Text(_selectedDeviceName ?? 'Monthly Mileage')),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _selectedDeviceId == null
-          ? const Center(child: Text('Please select a device on the map screen first.'))
-          : Row(
-              children: [
-                Expanded(
-                  flex: 2,
-                  child: Column(
-                    children: [
-                      TableCalendar(
-                        locale: Get.locale?.languageCode,
-                        firstDay: DateTime.utc(2020, 1, 1),
-                        lastDay: DateTime.utc(2030, 12, 31),
-                        focusedDay: _focusedDay,
-                        daysOfWeekHeight: 28,
-                        rowHeight: 44,
-                        calendarFormat: _calendarFormat,
-                        onFormatChanged: (format) {
-                          setState(() {
-                            _calendarFormat = format;
-                          });
-                        },
-                        selectedDayPredicate: (day) {
-                          return isSameDay(_selectedDay, day);
-                        },
-                        onDaySelected: _onDaySelected,
-                        onPageChanged: _onPageChanged,
-                        daysOfWeekStyle: DaysOfWeekStyle(
-                          weekdayStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12),
-                          weekendStyle: TextStyle(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.8), fontSize: 12),
-                        ),
-                        eventLoader: (day) {
-                          final dayUtc = DateTime.utc(day.year, day.month, day.day);
-                          if (_dailySummaries.containsKey(dayUtc)) {
-                            return [true];
-                          }
-                          return [];
-                        },
-                        calendarBuilders: CalendarBuilders(
-                          markerBuilder: (context, date, events) {
-                            final dayUtc = DateTime.utc(date.year, date.month, date.day);
-                            if (_dailySummaries.containsKey(dayUtc)) {
-                              final summary = _dailySummaries[dayUtc]!;
-                              final distanceInKm = (summary.distance ?? 0.0) / 1000;
-                              final engineHoursInHours = (summary.engineHours ?? 0) / 3600000;
+    final groupedBackground = CupertinoDynamicColor.resolve(CupertinoColors.systemGroupedBackground, context);
+    final cardColor = CupertinoDynamicColor.resolve(CupertinoColors.systemBackground, context);
+    final separatorColor = CupertinoDynamicColor.resolve(CupertinoColors.separator, context);
+    final secondaryLabel = CupertinoDynamicColor.resolve(CupertinoColors.secondaryLabel, context);
 
-                              return Positioned(
-                                bottom: -3.1,
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  crossAxisAlignment: CrossAxisAlignment.center,
-                                  children: [
-                                    Text('${distanceInKm.toStringAsFixed(0)}km', style: const TextStyle(fontSize: 9, color: Colors.blue)),
-                                    Text('${engineHoursInHours.toStringAsFixed(1)}h', style: const TextStyle(fontSize: 9, color: Colors.red)),
-                                  ],
-                                ),
-                              );
-                            }
-                            return null;
+    return CupertinoTheme(
+      data: CupertinoThemeData(brightness: Theme.of(context).brightness),
+      child: Theme(
+        data: Theme.of(context).copyWith(textTheme: Theme.of(context).textTheme.apply(fontFamily: '.SF Pro Text')),
+        child: Scaffold(
+          backgroundColor: groupedBackground,
+          appBar: CupertinoNavigationBar(
+            middle: Text(_selectedDeviceName ?? 'Monthly Mileage', style: const TextStyle(fontWeight: FontWeight.w600)),
+          ),
+          body: _isLoading
+              ? const Center(child: CupertinoActivityIndicator())
+              : _selectedDeviceId == null
+              ? Center(
+                  child: Text('Please select a device on the map screen first.', style: TextStyle(color: secondaryLabel)),
+                )
+              : Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(0, 0, 0, 0), //12, 8, 12, 4
+                      child: Container(
+                        decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(14)),
+                        child: TableCalendar(
+                          locale: Get.locale?.languageCode,
+                          firstDay: DateTime.utc(2020, 1, 1),
+                          lastDay: DateTime.utc(2030, 12, 31),
+                          focusedDay: _focusedDay,
+                          daysOfWeekHeight: 0,
+                          rowHeight: 54,
+                          headerStyle: const HeaderStyle(
+                            titleCentered: true,
+                            leftChevronIcon: Icon(CupertinoIcons.chevron_left, size: 18),
+                            rightChevronIcon: Icon(CupertinoIcons.chevron_right, size: 18),
+                            titleTextStyle: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                            formatButtonTextStyle: TextStyle(fontSize: 13, color: CupertinoColors.systemBlue),
+                          ),
+                          // Align the day number to the top of the cell so the
+                          // mileage / engine-hours text below doesn't overlap it.
+                          calendarStyle: const CalendarStyle(
+                            markersAlignment: Alignment.topCenter,
+                            outsideDaysVisible: false,
+                            // Smaller gaps between adjacent dates.
+                            cellMargin: EdgeInsets.symmetric(horizontal: 1, vertical: 1), //3,2
+                            defaultTextStyle: TextStyle(fontSize: 15),
+                            weekendTextStyle: TextStyle(fontSize: 15, color: CupertinoColors.systemRed),
+                            todayTextStyle: TextStyle(color: CupertinoColors.white, fontSize: 15, fontWeight: FontWeight.w600),
+                            todayDecoration: BoxDecoration(color: CupertinoColors.systemRed, shape: BoxShape.circle),
+                            selectedTextStyle: TextStyle(color: CupertinoColors.white, fontSize: 15, fontWeight: FontWeight.w600),
+                            selectedDecoration: BoxDecoration(color: CupertinoColors.systemBlue, shape: BoxShape.circle),
+                          ),
+                          calendarFormat: _calendarFormat,
+                          onFormatChanged: (format) {
+                            setState(() {
+                              _calendarFormat = format;
+                            });
                           },
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      const Divider(),
-                      if (_selectedDaySummary != null)
-                        Expanded(
-                          child: Padding(
-                            padding: const EdgeInsets.all(16.0),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('${'Date'.tr}: ${DateFormat('yyyy-MM-dd').format(_selectedDay!)}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                                const SizedBox(height: 8),
-                                Text('${'sharedDistance'.tr}: ${((_selectedDaySummary!.distance ?? 0.0) / 1000).toStringAsFixed(2)} ${'sharedKm'.tr}'),
-                                Text('${'reportEngineHours'.tr}: ${_formatDuration(_selectedDaySummary!.engineHours)}'),
-                                Text('${'reportAverageSpeed'.tr}: ${(_selectedDaySummary!.averageSpeed ?? 0.0).toStringAsFixed(2)} ${'sharedKmh'.tr}'),
-                                Text('${'reportMaximumSpeed'.tr}: ${(_selectedDaySummary!.maxSpeed ?? 0.0).toStringAsFixed(2)} ${'sharedKmh'.tr}'),
-                                Text('${'reportSpentFuel'.tr}: ${(_selectedDaySummary!.spentFuel ?? 0.0).toStringAsFixed(2)} ${'sharedLiter'.tr}'),
-                                const SizedBox(height: 50),
-                                ElevatedButton.icon(onPressed: _onPlayTapped, icon: const Icon(Icons.play_arrow), label: Text('reportReplay'.tr)),
-                              ],
-                            ),
+                          selectedDayPredicate: (day) {
+                            return isSameDay(_selectedDay, day);
+                          },
+                          onDaySelected: _onDaySelected,
+                          onPageChanged: _onPageChanged,
+                          daysOfWeekStyle: DaysOfWeekStyle(
+                            weekdayStyle: TextStyle(color: secondaryLabel, fontSize: 12),
+                            weekendStyle: TextStyle(color: CupertinoColors.systemRed.withValues(alpha: 0.7), fontSize: 12),
+                          ),
+                          eventLoader: (day) {
+                            final dayUtc = DateTime.utc(day.year, day.month, day.day);
+                            if (_dailySummaries.containsKey(dayUtc)) {
+                              return [true];
+                            }
+                            return [];
+                          },
+                          calendarBuilders: CalendarBuilders(
+                            markerBuilder: (context, date, events) {
+                              final dayUtc = DateTime.utc(date.year, date.month, date.day);
+                              if (_dailySummaries.containsKey(dayUtc)) {
+                                final summary = _dailySummaries[dayUtc]!;
+                                final distanceInKm = (summary.distance ?? 0.0) / 1000;
+                                final engineHoursInHours = (summary.engineHours ?? 0) / 3600000;
+
+                                // Two lines: mileage on top, engine hours below.
+                                // Anchored right under the day number so the gap
+                                // stays small no matter what rowHeight is set to.
+                                return Positioned(
+                                  top: 32, //21
+                                  left: 0,
+                                  right: 0,
+                                  //    bottom: 0,
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    crossAxisAlignment: CrossAxisAlignment.center,
+                                    children: [
+                                      Text(
+                                        '${distanceInKm.toStringAsFixed(0)}km',
+                                        style: const TextStyle(fontSize: 10, color: CupertinoColors.systemBlue, fontWeight: FontWeight.w500),
+                                      ),
+                                      Text(
+                                        '${engineHoursInHours.toStringAsFixed(1)}h',
+                                        style: const TextStyle(fontSize: 10, color: CupertinoColors.systemOrange, fontWeight: FontWeight.w500),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              }
+                              return null;
+                            },
                           ),
                         ),
-                      if (_selectedDaySummary == null) Expanded(child: Center(child: Text('sharedNoData'.tr))),
-                    ],
-                  ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    if (_selectedDaySummary == null)
+                      Expanded(
+                        child: Center(
+                          child: Text('sharedNoData'.tr, style: TextStyle(color: secondaryLabel)),
+                        ),
+                      )
+                    else
+                      Expanded(
+                        child: ListView(
+                          padding: const EdgeInsets.fromLTRB(0, 0, 0, 0), //12, 4, 12, 12
+                          children: [
+                            _buildDetailCard(cardColor, separatorColor, secondaryLabel),
+                            const SizedBox(height: 2), //12
+                            CupertinoButton.filled(
+                              onPressed: _onPlayTapped,
+                              borderRadius: BorderRadius.circular(12),
+                              child: Row(mainAxisSize: MainAxisSize.min, children: [const Icon(CupertinoIcons.play_fill, size: 16), const SizedBox(width: 6), Text('reportReplay'.tr)]),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
                 ),
-              ],
-            ),
+        ),
+      ),
     );
   }
 }

@@ -1,5 +1,6 @@
 // lib/main.dart
 // Main entry point for the TracDefg Flutter application.
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:hive_flutter/hive_flutter.dart';
@@ -56,7 +57,9 @@ void main() async {
   final savedUrl = prefs.getString('traccarServerUrl');
   final savedLanguageCode = prefs.getString('saved_language_code');
 
-  runApp(TraccarApp(initialUrl: savedUrl, initialLanguageCode: savedLanguageCode));
+  runApp(
+    TraccarApp(initialUrl: savedUrl, initialLanguageCode: savedLanguageCode),
+  );
 }
 
 class TraccarApp extends StatelessWidget {
@@ -74,7 +77,9 @@ class TraccarApp extends StatelessWidget {
         Provider<api.ApiClient>(
           create: (_) {
             final client = api.ApiClient(
-              basePath: initialUrl != null ? '$initialUrl/api' : AppConstants.traccarApiUrl, // Use constant default
+              basePath: initialUrl != null
+                  ? '$initialUrl/api'
+                  : AppConstants.traccarApiUrl, // Use constant default
             );
 
             // CRITICAL FIX: Add the Accept header here to force JSON response from the server.
@@ -85,7 +90,9 @@ class TraccarApp extends StatelessWidget {
             // (expired session) responses and attempts auto-relogin first.
             client.client = AuthInterceptingClient(
               onUnauthorized: () async {
-                debugPrint('AuthInterceptingClient: 401 detected, attempting auto-relogin...');
+                debugPrint(
+                  'AuthInterceptingClient: 401 detected, attempting auto-relogin...',
+                );
 
                 // Try auto-relogin using saved credentials
                 final prefs = await SharedPreferences.getInstance();
@@ -96,15 +103,27 @@ class TraccarApp extends StatelessWidget {
                   try {
                     // POST /session is excluded from interception, so this is safe
                     final sessionApi = api.SessionApi(client);
-                    final response = await sessionApi.postSessionWithHttpInfo(email, password);
+                    final response = await sessionApi.postSessionWithHttpInfo(
+                      email,
+                      password,
+                    );
 
                     final setCookieHeader = response.headers['set-cookie'];
                     if (setCookieHeader != null) {
-                      final jSessionId = setCookieHeader.split(';').firstWhere((s) => s.startsWith('JSESSIONID='), orElse: () => '').split('=').last;
+                      final jSessionId = setCookieHeader
+                          .split(';')
+                          .firstWhere(
+                            (s) => s.startsWith('JSESSIONID='),
+                            orElse: () => '',
+                          )
+                          .split('=')
+                          .last;
                       if (jSessionId.isNotEmpty) {
                         await prefs.setString('jSessionId', jSessionId);
                         await prefs.setString('userJson', response.body);
-                        debugPrint('Auto-relogin succeeded! New session acquired.');
+                        debugPrint(
+                          'Auto-relogin succeeded! New session acquired.',
+                        );
 
                         // Update the TraccarProvider with the fresh session
                         final provider = TraccarProvider.instance;
@@ -114,12 +133,18 @@ class TraccarApp extends StatelessWidget {
                         // This is critical when the session expired silently (e.g. app
                         // backgrounded for a week) and the interceptor catches the first 401.
                         try {
-                          await provider?.fetchInitialData().timeout(const Duration(seconds: 15));
-                          debugPrint('Data re-fetched after interceptor auto-relogin.');
+                          await provider?.fetchInitialData().timeout(
+                            const Duration(seconds: 15),
+                          );
+                          debugPrint(
+                            'Data re-fetched after interceptor auto-relogin.',
+                          );
                         } catch (fetchError) {
                           // Data re-fetch failed, but we have a valid session now.
                           // The WebSocket will connect and push updates shortly.
-                          debugPrint('Data re-fetch after interceptor auto-relogin failed: $fetchError');
+                          debugPrint(
+                            'Data re-fetch after interceptor auto-relogin failed: $fetchError',
+                          );
                         }
 
                         return; // Don't redirect — the app can continue
@@ -144,16 +169,27 @@ class TraccarApp extends StatelessWidget {
           },
         ),
         // Provide the authentication service.
-        Provider<AuthService>(create: (context) => AuthService(apiClient: context.read<api.ApiClient>())),
+        Provider<AuthService>(
+          create: (context) =>
+              AuthService(apiClient: context.read<api.ApiClient>()),
+        ),
         // Provide the WebSocket service.
         Provider<WebSocketService>(create: (_) => WebSocketService()),
         // Provide the main TraccarProvider for state management.
         ChangeNotifierProvider<TraccarProvider>(
-          create: (context) => TraccarProvider(apiClient: context.read<api.ApiClient>(), webSocketService: context.read<WebSocketService>(), authService: context.read<AuthService>()),
+          create: (context) => TraccarProvider(
+            apiClient: context.read<api.ApiClient>(),
+            webSocketService: context.read<WebSocketService>(),
+            authService: context.read<AuthService>(),
+          ),
         ),
-        ChangeNotifierProvider<MapStyleProvider>(create: (_) => MapStyleProvider()),
+        ChangeNotifierProvider<MapStyleProvider>(
+          create: (_) => MapStyleProvider(),
+        ),
         ChangeNotifierProvider<ThemeProvider>(create: (_) => ThemeProvider()),
-        ChangeNotifierProvider<SettingsProvider>(create: (_) => SettingsProvider()),
+        ChangeNotifierProvider<SettingsProvider>(
+          create: (_) => SettingsProvider(),
+        ),
       ],
       // Changed MaterialApp to GetMaterialApp to correctly handle GetX localization.
       child: Consumer2<ThemeProvider, SettingsProvider>(
@@ -166,14 +202,25 @@ class TraccarApp extends StatelessWidget {
             themeMode: themeProvider.themeMode,
             builder: (context, child) {
               final data = MediaQuery.of(context);
+              final brightness = Theme.of(context).brightness;
               return MediaQuery(
-                data: data.copyWith(textScaler: TextScaler.linear(settingsProvider.fontSizeScale)),
-                child: child!,
+                data: data.copyWith(
+                  textScaler: TextScaler.linear(settingsProvider.fontSizeScale),
+                ),
+                // Make every Cupertino widget (incl. CupertinoNavigationBar)
+                // follow the app theme's brightness so day/night mode works
+                // even when dark mode is forced from settings.
+                child: CupertinoTheme(
+                  data: CupertinoThemeData(brightness: brightness),
+                  child: child!,
+                ),
               );
             },
             // Configure localization for the app using GetX properties.
             translations: LocalizationService(),
-            locale: initialLanguageCode != null ? LocalizationService.getLocaleFromLang(initialLanguageCode!) : Get.deviceLocale ?? LocalizationService.fallbackLocale,
+            locale: initialLanguageCode != null
+                ? LocalizationService.getLocaleFromLang(initialLanguageCode!)
+                : Get.deviceLocale ?? LocalizationService.fallbackLocale,
             fallbackLocale: LocalizationService.fallbackLocale,
 
             // Define all the application routes.

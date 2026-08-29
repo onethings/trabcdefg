@@ -88,7 +88,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   int _getTimerColor(int remainingSecs) {
     if (remainingSecs <= 0) return 0xFF9E9E9E; // grey when expired
     final remainingMinutes = (remainingSecs / 60).ceil();
-    final sorted = _colorThresholds.keys.toList()..sort((a, b) => b.compareTo(a));
+    final sorted = _colorThresholds.keys.toList()
+      ..sort((a, b) => b.compareTo(a));
     for (final min in sorted) {
       if (remainingMinutes >= min) {
         return _colorThresholds[min]!;
@@ -103,18 +104,30 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       builder: (ctx) => Container(
         height: 500,
         padding: const EdgeInsets.symmetric(vertical: 12),
-        color: CupertinoColors.systemBackground,
+        color: Theme.of(ctx).colorScheme.surface,
         child: SafeArea(
           top: false,
           child: Column(
             children: [
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 8,
+                ),
                 child: Row(
                   children: [
-                    Icon(CupertinoIcons.info_circle, color: Theme.of(context).colorScheme.primary),
+                    Icon(
+                      CupertinoIcons.info_circle,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
                     const SizedBox(width: 10),
-                    const Text('How to Use Notifications', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
+                    const Text(
+                      'How to Use Notifications',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 18,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -164,7 +177,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               ),
               CupertinoButton(
                 onPressed: () => Navigator.pop(ctx),
-                child: Text('sharedAccept'.tr, style: const TextStyle(fontWeight: FontWeight.w700)),
+                child: Text(
+                  'sharedAccept'.tr,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
               ),
             ],
           ),
@@ -177,7 +193,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(title, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+        Text(
+          title,
+          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+        ),
         const SizedBox(height: 4),
         Text(body, style: const TextStyle(fontSize: 13, height: 1.4)),
       ],
@@ -191,31 +210,59 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     final isDark = theme.brightness == Brightness.dark;
 
     // Filter events
-    final displayedEvents = provider.events.where((e) => _isEventVisible(e, provider)).toList();
+    final displayedEvents = provider.events
+        .where((e) => _isEventVisible(e, provider))
+        .toList();
 
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: AppBar(
-        title: Text('notificationsTitle'.tr, style: const TextStyle(fontWeight: FontWeight.w800, letterSpacing: -0.5)),
+        title: Text(
+          'notificationsTitle'.tr,
+          style: const TextStyle(
+            fontWeight: FontWeight.w800,
+            letterSpacing: -0.5,
+          ),
+        ),
         backgroundColor: Colors.transparent,
         elevation: 0,
         surfaceTintColor: Colors.transparent,
         flexibleSpace: ClipRRect(
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-            child: Container(color: (isDark ? Colors.black : Colors.white).withValues(alpha: 0.1)),
+            child: Container(
+              color: (isDark ? Colors.black : Colors.white).withValues(
+                alpha: 0.1,
+              ),
+            ),
           ),
         ),
         actions: [
-          IconButton(icon: const Icon(CupertinoIcons.info_circle), tooltip: 'How to use Notifications', onPressed: () => _showHelpDialog(context)),
-          IconButton(icon: const Icon(Icons.tune_rounded), tooltip: 'Notification Settings', onPressed: _openSettings),
+          IconButton(
+            icon: const Icon(CupertinoIcons.info_circle),
+            tooltip: 'How to use Notifications',
+            onPressed: () => _showHelpDialog(context),
+          ),
+          IconButton(
+            icon: const Icon(Icons.tune_rounded),
+            tooltip: 'Notification Settings',
+            onPressed: _openSettings,
+          ),
         ],
       ),
       body: Stack(
         children: [
           Container(
             decoration: BoxDecoration(
-              gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [theme.colorScheme.primary.withValues(alpha: 0.08), theme.colorScheme.surface, theme.colorScheme.secondary.withValues(alpha: 0.05)]),
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  theme.colorScheme.primary.withValues(alpha: 0.08),
+                  theme.colorScheme.surface,
+                  theme.colorScheme.secondary.withValues(alpha: 0.05),
+                ],
+              ),
             ),
           ),
           SafeArea(
@@ -224,23 +271,36 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.notifications_none_rounded, size: 64, color: Colors.grey.withValues(alpha: 0.5)),
+                        Icon(
+                          Icons.notifications_none_rounded,
+                          size: 64,
+                          color: Colors.grey.withValues(alpha: 0.5),
+                        ),
                         const SizedBox(height: 16),
-                        Text('dashboardNoEvents'.tr, style: const TextStyle(color: Colors.grey)),
+                        Text(
+                          'dashboardNoEvents'.tr,
+                          style: const TextStyle(color: Colors.grey),
+                        ),
                       ],
                     ),
                   )
                 : ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 12,
+                    ),
                     itemCount: displayedEvents.length,
                     itemBuilder: (context, index) {
                       // Show latest events first
-                      final event = displayedEvents[displayedEvents.length - 1 - index];
+                      final event =
+                          displayedEvents[displayedEvents.length - 1 - index];
                       return _EventCard(
                         event: event,
                         provider: provider,
                         remainingSecs: _computeRemainingSecs(event.eventTime),
-                        timerColor: _getTimerColor(_computeRemainingSecs(event.eventTime)),
+                        timerColor: _getTimerColor(
+                          _computeRemainingSecs(event.eventTime),
+                        ),
                         timerDurationSec: _timerDurationSec,
                         cardFieldsOrder: _cardFieldsOrder,
                         visibleFields: _visibleFields,
@@ -266,7 +326,15 @@ class _EventCard extends StatelessWidget {
   final List<String> cardFieldsOrder;
   final List<String> visibleFields;
 
-  const _EventCard({required this.event, required this.provider, required this.remainingSecs, required this.timerColor, required this.timerDurationSec, required this.cardFieldsOrder, required this.visibleFields});
+  const _EventCard({
+    required this.event,
+    required this.provider,
+    required this.remainingSecs,
+    required this.timerColor,
+    required this.timerDurationSec,
+    required this.cardFieldsOrder,
+    required this.visibleFields,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -276,18 +344,29 @@ class _EventCard extends StatelessWidget {
     // Fetch data once
     String? deviceName;
     if (event.deviceId != null) {
-      final device = provider.devices.cast<api.Device?>().firstWhere((d) => d?.id == event.deviceId, orElse: () => null);
+      final device = provider.devices.cast<api.Device?>().firstWhere(
+        (d) => d?.id == event.deviceId,
+        orElse: () => null,
+      );
       deviceName = device?.name;
     }
     final geofenceName = provider.getGeofenceName(event.geofenceId);
     final eventType = (event.type ?? 'unknownEvent').tr;
-    final timeStr = DateFormat.yMMMd().add_jm().format(event.eventTime?.toLocal() ?? DateTime.now());
+    final timeStr = DateFormat.yMMMd().add_jm().format(
+      event.eventTime?.toLocal() ?? DateTime.now(),
+    );
 
     final hasTimer = event.eventTime != null;
     final isExpired = remainingSecs <= 0;
 
     // Compute visible fields: respect both order and visibility toggle
-    final shownFields = cardFieldsOrder.where((f) => this.visibleFields.contains(f) && _fieldAvailable(f, deviceName, geofenceName)).toList();
+    final shownFields = cardFieldsOrder
+        .where(
+          (f) =>
+              this.visibleFields.contains(f) &&
+              _fieldAvailable(f, deviceName, geofenceName),
+        )
+        .toList();
     final fieldCount = shownFields.length;
 
     // Dynamic sizing
@@ -318,16 +397,34 @@ class _EventCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: (isDark ? Colors.white : Colors.black).withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: hasTimer && !isExpired ? Color(timerColor).withValues(alpha: 0.3) : Colors.grey.withValues(alpha: 0.1), width: hasTimer && !isExpired ? 1.5 : 1.0),
+        border: Border.all(
+          color: hasTimer && !isExpired
+              ? Color(timerColor).withValues(alpha: 0.3)
+              : Colors.grey.withValues(alpha: 0.1),
+          width: hasTimer && !isExpired ? 1.5 : 1.0,
+        ),
       ),
       child: Row(
-        crossAxisAlignment: fieldCount <= 1 ? CrossAxisAlignment.center : CrossAxisAlignment.start,
+        crossAxisAlignment: fieldCount <= 1
+            ? CrossAxisAlignment.center
+            : CrossAxisAlignment.start,
         children: [
           // Icon
           Container(
             padding: EdgeInsets.all(iconSize > 24 ? 14 : 12),
-            decoration: BoxDecoration(color: hasTimer && !isExpired ? Color(timerColor).withValues(alpha: 0.15) : theme.colorScheme.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(16)),
-            child: Icon(_getEventIcon(event.type), size: iconSize, color: hasTimer && !isExpired ? Color(timerColor) : theme.colorScheme.primary),
+            decoration: BoxDecoration(
+              color: hasTimer && !isExpired
+                  ? Color(timerColor).withValues(alpha: 0.15)
+                  : theme.colorScheme.primary.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Icon(
+              _getEventIcon(event.type),
+              size: iconSize,
+              color: hasTimer && !isExpired
+                  ? Color(timerColor)
+                  : theme.colorScheme.primary,
+            ),
           ),
           const SizedBox(width: 16),
           // Content — built dynamically from cardFields order
@@ -335,12 +432,27 @@ class _EventCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                for (final field in shownFields) ...[if (shownFields.indexOf(field) > 0) SizedBox(height: spacing), _buildField(field, eventType, deviceName, geofenceName, timeStr, titleSize, bodySize, theme)],
+                for (final field in shownFields) ...[
+                  if (shownFields.indexOf(field) > 0) SizedBox(height: spacing),
+                  _buildField(
+                    field,
+                    eventType,
+                    deviceName,
+                    geofenceName,
+                    timeStr,
+                    titleSize,
+                    bodySize,
+                    theme,
+                  ),
+                ],
               ],
             ),
           ),
           // Timer
-          if (hasTimer) ...[const SizedBox(width: 12), _buildTimerBadge(context)],
+          if (hasTimer) ...[
+            const SizedBox(width: 12),
+            _buildTimerBadge(context),
+          ],
         ],
       ),
     );
@@ -360,33 +472,61 @@ class _EventCard extends StatelessWidget {
     }
   }
 
-  Widget _buildField(String field, String eventType, String? deviceName, String? geofenceName, String timeStr, double titleSize, double bodySize, ThemeData theme) {
+  Widget _buildField(
+    String field,
+    String eventType,
+    String? deviceName,
+    String? geofenceName,
+    String timeStr,
+    double titleSize,
+    double bodySize,
+    ThemeData theme,
+  ) {
     switch (field) {
       case 'type':
         return Text(
           eventType,
-          style: TextStyle(fontWeight: FontWeight.w800, fontSize: titleSize, letterSpacing: -0.3),
+          style: TextStyle(
+            fontWeight: FontWeight.w800,
+            fontSize: titleSize,
+            letterSpacing: -0.3,
+          ),
         );
       case 'deviceName':
         return Text(
           deviceName!,
-          style: TextStyle(fontWeight: FontWeight.w700, fontSize: bodySize, color: theme.colorScheme.primary),
+          style: TextStyle(
+            fontWeight: FontWeight.w700,
+            fontSize: bodySize,
+            color: theme.colorScheme.primary,
+          ),
         );
       case 'geofenceName':
         return Row(
           children: [
-            Icon(Icons.flag_rounded, size: bodySize - 2, color: theme.colorScheme.secondary),
+            Icon(
+              Icons.flag_rounded,
+              size: bodySize - 2,
+              color: theme.colorScheme.secondary,
+            ),
             const SizedBox(width: 4),
             Text(
               geofenceName!,
-              style: TextStyle(fontSize: bodySize, fontWeight: FontWeight.w500, color: theme.colorScheme.secondary),
+              style: TextStyle(
+                fontSize: bodySize,
+                fontWeight: FontWeight.w500,
+                color: theme.colorScheme.secondary,
+              ),
             ),
           ],
         );
       case 'time':
         return Text(
           timeStr,
-          style: TextStyle(fontSize: bodySize, color: theme.colorScheme.onSurfaceVariant),
+          style: TextStyle(
+            fontSize: bodySize,
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
         );
       default:
         return const SizedBox.shrink();
@@ -396,7 +536,9 @@ class _EventCard extends StatelessWidget {
   Widget _buildTimerBadge(BuildContext context) {
     final color = Color(timerColor);
     final isExpired = remainingSecs <= 0;
-    final timeStr = NotificationSettingsService.formatDuration(Duration(seconds: remainingSecs < 0 ? 0 : remainingSecs));
+    final timeStr = NotificationSettingsService.formatDuration(
+      Duration(seconds: remainingSecs < 0 ? 0 : remainingSecs),
+    );
 
     return Container(
       constraints: const BoxConstraints(minWidth: 68),
@@ -409,11 +551,20 @@ class _EventCard extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(isExpired ? Icons.timer_off_rounded : Icons.timer_outlined, size: 16, color: isExpired ? Colors.grey : color),
+          Icon(
+            isExpired ? Icons.timer_off_rounded : Icons.timer_outlined,
+            size: 16,
+            color: isExpired ? Colors.grey : color,
+          ),
           const SizedBox(height: 2),
           Text(
             timeStr,
-            style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13, fontFeatures: const [FontFeature.tabularFigures()], color: isExpired ? Colors.grey : color),
+            style: TextStyle(
+              fontWeight: FontWeight.w900,
+              fontSize: 13,
+              fontFeatures: const [FontFeature.tabularFigures()],
+              color: isExpired ? Colors.grey : color,
+            ),
           ),
         ],
       ),

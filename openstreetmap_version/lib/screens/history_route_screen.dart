@@ -544,6 +544,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
               () => Text(
                 _currentAddressRx.value.isEmpty ? 'sharedLocating'.tr : _currentAddressRx.value,
                 style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface),
+                textAlign: TextAlign.center,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),

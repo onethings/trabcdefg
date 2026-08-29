@@ -65,7 +65,8 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
 
   bool _checkIsStale(Device device, Position? position) {
     final DateTime now = DateTime.now().toUtc();
-    final DateTime? lastUpdate = position?.fixTime?.toUtc() ?? device.lastUpdate?.toUtc();
+    final DateTime? lastUpdate =
+        position?.fixTime?.toUtc() ?? device.lastUpdate?.toUtc();
     return lastUpdate == null || now.difference(lastUpdate).inMinutes >= 10;
   }
 
@@ -99,17 +100,25 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
   }
 
   void _updateMapMarkers() async {
-    if (_mapController == null || _currentDevicePosition == null || !_isStyleLoaded) {
+    if (_mapController == null ||
+        _currentDevicePosition == null ||
+        !_isStyleLoaded) {
       return;
     }
 
     // 1. 在 await 之前，優先把需要從 context 拿的資料提取出來
     final double markerScale = context.read<SettingsProvider>().markerSizeScale;
 
-    final bool isStale = _checkIsStale(widget.selectedDevice, _currentDevicePosition);
+    final bool isStale = _checkIsStale(
+      widget.selectedDevice,
+      _currentDevicePosition,
+    );
     final String category = widget.selectedDevice.category ?? 'default';
-    final String effectiveStatus = isStale ? 'offline' : (widget.selectedDevice.status ?? 'unknown');
-    final String iconKey = 'marker_${category.toLowerCase()}_${effectiveStatus.toLowerCase()}';
+    final String effectiveStatus = isStale
+        ? 'offline'
+        : (widget.selectedDevice.status ?? 'unknown');
+    final String iconKey =
+        'marker_${category.toLowerCase()}_${effectiveStatus.toLowerCase()}';
 
     // 這裡是異步操作（Async Gap 開始）
     await _ensureIconLoaded(iconKey);
@@ -120,19 +129,38 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
     await _mapController!.clearSymbols();
     await _mapController!.addSymbol(
       SymbolOptions(
-        geometry: LatLng(_currentDevicePosition!.latitude!.toDouble(), _currentDevicePosition!.longitude!.toDouble()),
-        iconImage: _loadedIcons.contains(iconKey) ? iconKey : 'marker_default_unknown',
+        geometry: LatLng(
+          _currentDevicePosition!.latitude!.toDouble(),
+          _currentDevicePosition!.longitude!.toDouble(),
+        ),
+        iconImage: _loadedIcons.contains(iconKey)
+            ? iconKey
+            : 'marker_default_unknown',
         iconRotate: _currentDevicePosition!.course?.toDouble() ?? 0.0,
         iconSize: 3.8 * markerScale, // ✨ 2. 這裡改用剛才提取的本地變數，不再使用 context
       ),
     );
 
     if (_isCameraLocked) {
-      _mapController!.animateCamera(CameraUpdate.newCameraPosition(CameraPosition(target: LatLng(_currentDevicePosition!.latitude!.toDouble() - _mapCenterOffset, _currentDevicePosition!.longitude!.toDouble()), zoom: _currentZoom)));
+      _mapController!.animateCamera(
+        CameraUpdate.newCameraPosition(
+          CameraPosition(
+            target: LatLng(
+              _currentDevicePosition!.latitude!.toDouble() - _mapCenterOffset,
+              _currentDevicePosition!.longitude!.toDouble(),
+            ),
+            zoom: _currentZoom,
+          ),
+        ),
+      );
     }
   }
 
-  Future<void> _fetchStreetName(double lat, double lon, Position? position) async {
+  Future<void> _fetchStreetName(
+    double lat,
+    double lon,
+    Position? position,
+  ) async {
     // Traccar 伺服器通常不帶地址，直接使用 Offline Geocoder (which internally handles Hive/DB/Nominatim)
     try {
       final offlineResult = await OfflineAddressService.getAddress(lat, lon);
@@ -142,7 +170,10 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
     } catch (e) {
       debugPrint("Offline lookup error: $e");
       if (mounted) {
-        setState(() => _currentStreetName = "Location: ${lat.toStringAsFixed(4)}, ${lon.toStringAsFixed(4)}");
+        setState(
+          () => _currentStreetName =
+              "Location: ${lat.toStringAsFixed(4)}, ${lon.toStringAsFixed(4)}",
+        );
       }
     }
   }
@@ -150,17 +181,27 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: CupertinoNavigationBar(middle: Text(widget.selectedDevice.name ?? 'mapLiveRoutes'.tr)),
+      appBar: CupertinoNavigationBar(
+        middle: Text(widget.selectedDevice.name ?? 'mapLiveRoutes'.tr),
+      ),
       body: Consumer<TraccarProvider>(
         builder: (context, traccarProvider, child) {
-          final lastPosition = traccarProvider.positions.firstWhere((pos) => pos.deviceId == widget.selectedDevice.id, orElse: () => Position());
+          final lastPosition = traccarProvider.positions.firstWhere(
+            (pos) => pos.deviceId == widget.selectedDevice.id,
+            orElse: () => Position(),
+          );
 
-          if (_currentDevicePosition?.latitude != lastPosition.latitude || _currentDevicePosition?.longitude != lastPosition.longitude) {
+          if (_currentDevicePosition?.latitude != lastPosition.latitude ||
+              _currentDevicePosition?.longitude != lastPosition.longitude) {
             _currentDevicePosition = lastPosition;
             WidgetsBinding.instance.addPostFrameCallback((_) {
               _updateMapMarkers();
               if (lastPosition.latitude != null) {
-                _fetchStreetName(lastPosition.latitude!.toDouble(), lastPosition.longitude!.toDouble(), lastPosition);
+                _fetchStreetName(
+                  lastPosition.latitude!.toDouble(),
+                  lastPosition.longitude!.toDouble(),
+                  lastPosition,
+                );
               }
             });
           }
@@ -168,8 +209,17 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
           return Stack(
             children: [
               MapLibreMap(
-                key: ValueKey(Provider.of<MapStyleProvider>(context).isSatelliteMode),
-                initialCameraPosition: CameraPosition(target: LatLng((lastPosition.latitude?.toDouble() ?? 0.0) - _mapCenterOffset, lastPosition.longitude?.toDouble() ?? 0.0), zoom: _currentZoom),
+                key: ValueKey(
+                  Provider.of<MapStyleProvider>(context).isSatelliteMode,
+                ),
+                initialCameraPosition: CameraPosition(
+                  target: LatLng(
+                    (lastPosition.latitude?.toDouble() ?? 0.0) -
+                        _mapCenterOffset,
+                    lastPosition.longitude?.toDouble() ?? 0.0,
+                  ),
+                  zoom: _currentZoom,
+                ),
                 styleString: Provider.of<MapStyleProvider>(context).styleString,
                 onCameraMove: (position) {
                   _currentZoom = position.zoom;
@@ -183,7 +233,8 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
                   _loadedIcons.clear();
                   _updateMapMarkers();
                 },
-                onCameraTrackingDismissed: () => setState(() => _isCameraLocked = false),
+                onCameraTrackingDismissed: () =>
+                    setState(() => _isCameraLocked = false),
               ),
               Positioned(
                 top: 16,
@@ -193,9 +244,17 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
                   mini: true,
                   backgroundColor: Colors.white,
                   onPressed: () {
-                    Provider.of<MapStyleProvider>(context, listen: false).toggleMapType();
+                    Provider.of<MapStyleProvider>(
+                      context,
+                      listen: false,
+                    ).toggleMapType();
                   },
-                  child: Icon(Provider.of<MapStyleProvider>(context).isSatelliteMode ? Icons.map : Icons.satellite_alt, color: Colors.blue),
+                  child: Icon(
+                    Provider.of<MapStyleProvider>(context).isSatelliteMode
+                        ? Icons.map
+                        : Icons.satellite_alt,
+                    color: Colors.blue,
+                  ),
                 ),
               ),
               Positioned(
@@ -206,11 +265,23 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
                   mini: true,
                   onPressed: () {
                     setState(() => _isCameraLocked = true);
-                    if (_currentDevicePosition != null && _mapController != null) {
-                      _mapController!.animateCamera(CameraUpdate.newLatLng(LatLng(_currentDevicePosition!.latitude!.toDouble() - _mapCenterOnset, _currentDevicePosition!.longitude!.toDouble())));
+                    if (_currentDevicePosition != null &&
+                        _mapController != null) {
+                      _mapController!.animateCamera(
+                        CameraUpdate.newLatLng(
+                          LatLng(
+                            _currentDevicePosition!.latitude!.toDouble() -
+                                _mapCenterOnset,
+                            _currentDevicePosition!.longitude!.toDouble(),
+                          ),
+                        ),
+                      );
                     }
                   },
-                  child: Icon(_isCameraLocked ? Icons.gps_fixed : Icons.gps_not_fixed, color: _isCameraLocked ? Colors.blue : Colors.grey),
+                  child: Icon(
+                    _isCameraLocked ? Icons.gps_fixed : Icons.gps_not_fixed,
+                    color: _isCameraLocked ? Colors.blue : Colors.grey,
+                  ),
                 ),
               ),
               Positioned(
@@ -222,10 +293,20 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
                   backgroundColor: Colors.white,
                   onPressed: () async {
                     final prefs = await SharedPreferences.getInstance();
-                    await prefs.setInt('selectedDeviceId', widget.selectedDevice.id!);
-                    await prefs.setString('selectedDeviceName', widget.selectedDevice.name ?? '');
+                    await prefs.setInt(
+                      'selectedDeviceId',
+                      widget.selectedDevice.id!,
+                    );
+                    await prefs.setString(
+                      'selectedDeviceName',
+                      widget.selectedDevice.name ?? '',
+                    );
                     if (context.mounted) {
-                      Navigator.of(context, rootNavigator: true).push(MaterialPageRoute(builder: (context) => const MonthlyMileageScreen()));
+                      Navigator.of(context, rootNavigator: true).push(
+                        MaterialPageRoute(
+                          builder: (context) => const MonthlyMileageScreen(),
+                        ),
+                      );
                     }
                   },
                   child: const Icon(Icons.route, color: Colors.blue),
@@ -242,19 +323,36 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
   Widget _buildBottomSheet(BuildContext context) {
     return Consumer<TraccarProvider>(
       builder: (context, provider, child) {
-        final lastPosition = provider.positions.firstWhere((p) => p.deviceId == widget.selectedDevice.id, orElse: () => Position());
+        final lastPosition = provider.positions.firstWhere(
+          (p) => p.deviceId == widget.selectedDevice.id,
+          orElse: () => Position(),
+        );
         final bool isStale = _checkIsStale(widget.selectedDevice, lastPosition);
-        final attributes = lastPosition.attributes as Map<String, dynamic>? ?? {};
+        final attributes =
+            lastPosition.attributes as Map<String, dynamic>? ?? {};
         final bool isIgnitionOn = attributes['ignition'] == true;
 
-        final Color themeColor = isStale ? Colors.blueGrey.shade300 : (isIgnitionOn ? const Color(0xFF10B981) : const Color(0xFFD97706));
+        final Color themeColor = isStale
+            ? Colors.blueGrey.shade300
+            : (isIgnitionOn
+                  ? const Color(0xFF10B981)
+                  : const Color(0xFFD97706));
 
         return Container(
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
           decoration: BoxDecoration(
             color: Theme.of(context).colorScheme.surface,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(24.0)),
-            boxShadow: [BoxShadow(color: Theme.of(context).brightness == Brightness.dark ? Colors.black.withValues(alpha: 0.4) : Colors.black12, blurRadius: 20)],
+            borderRadius: const BorderRadius.vertical(
+              top: Radius.circular(24.0),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? Colors.black.withValues(alpha: 0.4)
+                    : Colors.black12,
+                blurRadius: 20,
+              ),
+            ],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -265,7 +363,10 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
                   width: 40,
                   height: 4,
                   margin: const EdgeInsets.only(bottom: 16),
-                  decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2)),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(2),
+                  ),
                 ),
               ),
               Row(
@@ -280,16 +381,38 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
                             Expanded(
                               child: Text(
                                 widget.selectedDevice.name ?? 'Unknown',
-                                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface),
+                                style: TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurface,
+                                ),
                               ),
                             ),
                             IconButton(
-                              icon: Icon(provider.isFavorite(widget.selectedDevice.id!) ? CupertinoIcons.heart_fill : CupertinoIcons.heart, color: provider.isFavorite(widget.selectedDevice.id!) ? Colors.red : Colors.grey),
-                              onPressed: () => provider.toggleFavorite(widget.selectedDevice.id!),
+                              icon: Icon(
+                                provider.isFavorite(widget.selectedDevice.id!)
+                                    ? CupertinoIcons.heart_fill
+                                    : CupertinoIcons.heart,
+                                color:
+                                    provider.isFavorite(
+                                      widget.selectedDevice.id!,
+                                    )
+                                    ? Colors.red
+                                    : Colors.grey,
+                              ),
+                              onPressed: () => provider.toggleFavorite(
+                                widget.selectedDevice.id!,
+                              ),
                             ),
                             IconButton(
-                              icon: const Icon(Icons.navigation_rounded, color: Colors.blue),
-                              onPressed: () => _navigateToGoogleMaps(lastPosition),
+                              icon: const Icon(
+                                Icons.navigation_rounded,
+                                color: Colors.blue,
+                              ),
+                              onPressed: () =>
+                                  _navigateToGoogleMaps(lastPosition),
                               tooltip: 'Navigate',
                             ),
                           ],
@@ -298,7 +421,12 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
                         // Display either API or Offline street name
                         Text(
                           _currentStreetName,
-                          style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7), fontSize: 14, fontWeight: FontWeight.w500),
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.onSurface
+                                .withValues(alpha: 0.7),
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -306,11 +434,25 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
                     ),
                   ),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(color: themeColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: themeColor.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                     child: Text(
-                      isStale ? 'deviceStatusOffline'.tr : (isIgnitionOn ? 'positionIgnition'.tr : 'alarmParking'.tr),
-                      style: TextStyle(color: themeColor, fontWeight: FontWeight.bold, fontSize: 12),
+                      isStale
+                          ? 'deviceStatusOffline'.tr
+                          : (isIgnitionOn
+                                ? 'positionIgnition'.tr
+                                : 'alarmParking'.tr),
+                      style: TextStyle(
+                        color: themeColor,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
                     ),
                   ),
                 ],
@@ -319,10 +461,27 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
-                  _buildInfoItem(Icons.speed, ((lastPosition.speed ?? 0) * 1.852).toStringAsFixed(1), 'km/h'),
+                  _buildInfoItem(
+                    Icons.speed,
+                    ((lastPosition.speed ?? 0) * 1.852).toStringAsFixed(1),
+                    'km/h',
+                  ),
                   // UPDATED: Precise Timestamp Formatting
-                  _buildInfoItem(CupertinoIcons.clock, widget.selectedDevice.lastUpdate != null ? DateFormat('yyyy-MM-dd HH:mm:ss').format(widget.selectedDevice.lastUpdate!.toLocal()) : '--', 'Last Update'),
-                  if (attributes.containsKey('batteryLevel')) _buildInfoItem(Icons.battery_std, '${attributes['batteryLevel']}%', 'Battery'),
+                  _buildInfoItem(
+                    CupertinoIcons.clock,
+                    widget.selectedDevice.lastUpdate != null
+                        ? DateFormat(
+                            'yyyy-MM-dd HH:mm:ss',
+                          ).format(widget.selectedDevice.lastUpdate!.toLocal())
+                        : '--',
+                    'Last Update',
+                  ),
+                  if (attributes.containsKey('batteryLevel'))
+                    _buildInfoItem(
+                      Icons.battery_std,
+                      '${attributes['batteryLevel']}%',
+                      'Battery',
+                    ),
                 ],
               ),
             ],
@@ -336,20 +495,39 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
     final isDark = Theme.of(Get.context!).brightness == Brightness.dark;
     return Column(
       children: [
-        Icon(icon, color: isDark ? Colors.blueGrey[200] : Colors.blueGrey[400], size: 20),
+        Icon(
+          icon,
+          color: isDark ? Colors.blueGrey[200] : Colors.blueGrey[400],
+          size: 20,
+        ),
         const SizedBox(height: 8),
         Text(
           value,
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Theme.of(Get.context!).colorScheme.onSurface),
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 15,
+            color: Theme.of(Get.context!).colorScheme.onSurface,
+          ),
         ),
-        Text(label, style: TextStyle(color: isDark ? Colors.white60 : Colors.grey[500], fontSize: 11)),
+        Text(
+          label,
+          style: TextStyle(
+            color: isDark ? Colors.white60 : Colors.grey[500],
+            fontSize: 11,
+          ),
+        ),
       ],
     );
   }
 
   void _onSymbolTapped(Symbol symbol) {
     if (mounted) {
-      showModalBottomSheet(context: context, isScrollControlled: true, backgroundColor: Colors.transparent, builder: (context) => _buildBottomSheet(context));
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (context) => _buildBottomSheet(context),
+      );
     }
   }
 
@@ -365,13 +543,24 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
     final uris = [
       Uri.parse('google.navigation:q=$latStr,$lngStr&mode=d'),
       Uri.parse('geo:0,0?q=$latStr,$lngStr'),
-      Uri.https('www.google.com', '/maps/dir/', {'api': '1', 'destination': '$latStr,$lngStr', 'travelmode': 'driving'}),
+      Uri.https('www.google.com', '/maps/dir/', {
+        'api': '1',
+        'destination': '$latStr,$lngStr',
+        'travelmode': 'driving',
+      }),
     ];
 
     for (final uri in uris) {
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-        return;
+      try {
+        // Don't gate on canLaunchUrl: it can return false on Android 11+ when
+        // the scheme isn't declared in <queries>, even though launchUrl works.
+        final launched = await launchUrl(
+          uri,
+          mode: LaunchMode.externalApplication,
+        );
+        if (launched) return;
+      } catch (e) {
+        debugPrint('Could not launch $uri: $e');
       }
     }
   }
