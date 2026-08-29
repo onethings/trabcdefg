@@ -307,18 +307,18 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     _addMarker(points.last, _endIconId);
 
     if (_positions.isNotEmpty) {
-      _playbackSymbol = await _mapController!.addSymbol(SymbolOptions(geometry: LatLng(_positions.first.latitude!.toDouble(), _positions.first.longitude!.toDouble()), iconImage: _playbackIconId, iconSize: 1.2, zIndex: 10));
+      _playbackSymbol = await _mapController!.addSymbol(SymbolOptions(geometry: LatLng(_positions.first.latitude!.toDouble(), _positions.first.longitude!.toDouble()), iconImage: _playbackIconId, iconSize: 1.8, zIndex: 10)); //1.2
     }
 
     for (int i = 0; i < _stopPoints.length; i++) {
-      await _mapController!.addSymbol(SymbolOptions(geometry: _stopPoints[i], iconImage: "pg_${i + 1}", iconSize: 1.2, iconAnchor: "center"));
+      await _mapController!.addSymbol(SymbolOptions(geometry: _stopPoints[i], iconImage: "pg_${i + 1}", iconSize: 3.5, iconAnchor: "center"));
     }
 
     _animateCameraToBounds();
   }
 
   void _addMarker(LatLng point, String iconId) {
-    _mapController?.addSymbol(SymbolOptions(geometry: point, iconImage: iconId, iconSize: 0.8, iconAnchor: "bottom"));
+    _mapController?.addSymbol(SymbolOptions(geometry: point, iconImage: iconId, iconSize: 1.8, iconAnchor: "bottom")); //0.8
   }
 
   void _togglePlayback() {

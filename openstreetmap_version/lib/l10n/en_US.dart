@@ -438,6 +438,8 @@ const Map<String, String> enUs = {
   "commandAlarmDismiss": "Dismiss Alarm",
   "commandSetTimezone": "Set Timezone",
   "commandRequestPhoto": "Request Photo",
+  "commandVideoStart": "Start Video",
+  "commandVideoStop": "Stop Video",
   "commandPowerOff": "Power Off Device",
   "commandRebootDevice": "Reboot Device",
   "commandFactoryReset": "Factory Reset",

@@ -438,6 +438,8 @@ const Map<String, String> arSA = {
   "commandAlarmDismiss": "إيقاف المنبه",
   "commandSetTimezone": "حدد المنطقة الزمنية",
   "commandRequestPhoto": "اطلب صورة",
+  "commandVideoStart": "Start Video",
+  "commandVideoStop": "Stop Video",
   "commandPowerOff": "اطفاء الجهاز",
   "commandRebootDevice": "أعد تشغيل الجهاز",
   "commandFactoryReset": "إعادة ضبط المصنع",

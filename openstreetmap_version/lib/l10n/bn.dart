@@ -436,6 +436,8 @@ const Map<String, String> bn = {
   "commandAlarmDismiss": "Dismiss Alarm",
   "commandSetTimezone": "টাইমজোন সেট করুন",
   "commandRequestPhoto": "Request Photo",
+  "commandVideoStart": "Start Video",
+  "commandVideoStop": "Stop Video",
   "commandPowerOff": "Power Off Device",
   "commandRebootDevice": "রিবুট ডিভাইস",
   "commandFactoryReset": "Factory Reset",

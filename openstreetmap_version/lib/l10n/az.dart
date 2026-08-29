@@ -436,6 +436,8 @@ const Map<String, String> az = {
   "commandAlarmDismiss": "Dismiss Alarm",
   "commandSetTimezone": "Saat qurşağını tənzimləmək",
   "commandRequestPhoto": "Şəkil tələb etmək",
+  "commandVideoStart": "Start Video",
+  "commandVideoStop": "Stop Video",
   "commandPowerOff": "Power Off Device",
   "commandRebootDevice": "Cihazı yenidən yükləmək",
   "commandFactoryReset": "Factory Reset",

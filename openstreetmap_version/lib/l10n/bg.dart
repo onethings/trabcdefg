@@ -436,6 +436,8 @@ const Map<String, String> bg = {
   "commandAlarmDismiss": "Dismiss Alarm",
   "commandSetTimezone": "Задай часова зона",
   "commandRequestPhoto": "Изискай снимка",
+  "commandVideoStart": "Start Video",
+  "commandVideoStop": "Stop Video",
   "commandPowerOff": "Изключи устройството",
   "commandRebootDevice": "Рестартирай устройството",
   "commandFactoryReset": "Factory Reset",

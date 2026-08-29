@@ -436,6 +436,8 @@ const Map<String, String> af = {
   "commandAlarmDismiss": "Dismiss Alarm",
   "commandSetTimezone": "Stel Tydsone",
   "commandRequestPhoto": "Versoek Foto",
+  "commandVideoStart": "Start Video",
+  "commandVideoStop": "Stop Video",
   "commandPowerOff": "Skakel Toestel Af",
   "commandRebootDevice": "Herbegin Toestel",
   "commandFactoryReset": "Factory Reset",
@@ -664,5 +666,5 @@ const Map<String, String> af = {
   "searchOsm": "Soek OSM",
   "dashboardDeviceStatus": "Enhetsstatus",
   "dashboardNoDevices": "Ingen enheter funnet",
-  "justNow": "Akkurat nå"
+  "justNow": "Akkurat nå",
 };
