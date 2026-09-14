@@ -12,8 +12,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:trabcdefg/providers/map_style_provider.dart';
 import 'package:trabcdefg/providers/settings_provider.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
-import 'package:trabcdefg/screens/settings/geofences_screen.dart'
-    hide AppMapType, TileCacheService;
+import 'package:trabcdefg/screens/settings/geofences_screen.dart' hide AppMapType, TileCacheService;
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
 import 'package:trabcdefg/widgets/offline_address_service.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -52,12 +51,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   bool _isFollowingDevice = false;
 
   // Reactive notifiers for seamless detail panel updates
-  final ValueNotifier<api.Device?> _selectedDeviceNotifier = ValueNotifier(
-    null,
-  );
-  final ValueNotifier<api.Position?> _selectedPositionNotifier = ValueNotifier(
-    null,
-  );
+  final ValueNotifier<api.Device?> _selectedDeviceNotifier = ValueNotifier(null);
+  final ValueNotifier<api.Position?> _selectedPositionNotifier = ValueNotifier(null);
   final ValueNotifier<String> _selectedAddressNotifier = ValueNotifier("");
 
   bool _isCacheInitialized = false;
@@ -94,9 +89,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     if (lastDeviceId != null && mounted) {
       final provider = Provider.of<TraccarProvider>(context, listen: false);
       if (provider.devices.isNotEmpty) {
-        final device = provider.devices.firstWhereOrNull(
-          (d) => d.id == lastDeviceId,
-        );
+        final device = provider.devices.firstWhereOrNull((d) => d.id == lastDeviceId);
         if (device != null) {
           setState(() {
             _currentDevice = device;
@@ -122,10 +115,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       if (mounted) {
-        final traccarProvider = Provider.of<TraccarProvider>(
-          context,
-          listen: false,
-        );
+        final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
         traccarProvider
             .fetchInitialData()
             .then((_) {
@@ -153,10 +143,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     _labelSymbols.clear();
 
     if (!mounted) return;
-    final traccarProvider = Provider.of<TraccarProvider>(
-      context,
-      listen: false,
-    );
+    final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
     await _mapController!.setSymbolIconAllowOverlap(true);
     await _mapController!.setSymbolIconIgnorePlacement(true);
     await _mapController!.setSymbolTextAllowOverlap(true);
@@ -169,9 +156,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       final lastDeviceId = prefs.getInt('selectedDeviceId');
 
       if (lastDeviceId != null) {
-        final device = traccarProvider.devices.firstWhereOrNull(
-          (d) => d.id == lastDeviceId,
-        );
+        final device = traccarProvider.devices.firstWhereOrNull((d) => d.id == lastDeviceId);
         if (device != null) {
           _onDeviceSelected(device, traccarProvider.positions);
         } else {
@@ -201,27 +186,10 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     }
 
     if (minLat != null && maxLat != null && minLng != null && maxLng != null) {
-      if ((maxLat - minLat).abs() < 0.0001 &&
-          (maxLng - minLng).abs() < 0.0001) {
-        _mapController!.animateCamera(
-          maplibre.CameraUpdate.newLatLngZoom(
-            maplibre.LatLng(minLat, minLng),
-            14.0,
-          ),
-        );
+      if ((maxLat - minLat).abs() < 0.0001 && (maxLng - minLng).abs() < 0.0001) {
+        _mapController!.animateCamera(maplibre.CameraUpdate.newLatLngZoom(maplibre.LatLng(minLat, minLng), 14.0));
       } else {
-        _mapController!.animateCamera(
-          maplibre.CameraUpdate.newLatLngBounds(
-            maplibre.LatLngBounds(
-              southwest: maplibre.LatLng(minLat, minLng),
-              northeast: maplibre.LatLng(maxLat, maxLng),
-            ),
-            left: 50,
-            right: 50,
-            top: 100,
-            bottom: 100,
-          ),
-        );
+        _mapController!.animateCamera(maplibre.CameraUpdate.newLatLngBounds(maplibre.LatLngBounds(southwest: maplibre.LatLng(minLat, minLng), northeast: maplibre.LatLng(maxLat, maxLng)), left: 50, right: 50, top: 100, bottom: 100));
       }
     }
   }
@@ -252,26 +220,12 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
     // 💡 優化：在任何 await 異步操作之前，先安全地讀取變數並存為區域變數
     // 這樣可以完美避開「跨異步間隙使用 BuildContext」的 linter 報錯
-    final double scale = Provider.of<SettingsProvider>(
-      context,
-      listen: false,
-    ).markerSizeScale;
+    final double scale = Provider.of<SettingsProvider>(context, listen: false).markerSizeScale;
 
     if (_currentDevice != null && _isFollowingDevice) {
-      final currentPos = provider.positions.firstWhereOrNull(
-        (p) => p.deviceId == _currentDevice!.id,
-      );
-      if (currentPos != null &&
-          currentPos.latitude != null &&
-          currentPos.longitude != null) {
-        _mapController?.animateCamera(
-          maplibre.CameraUpdate.newLatLng(
-            maplibre.LatLng(
-              currentPos.latitude!.toDouble(),
-              currentPos.longitude!.toDouble(),
-            ),
-          ),
-        );
+      final currentPos = provider.positions.firstWhereOrNull((p) => p.deviceId == _currentDevice!.id);
+      if (currentPos != null && currentPos.latitude != null && currentPos.longitude != null) {
+        _mapController?.animateCamera(maplibre.CameraUpdate.newLatLng(maplibre.LatLng(currentPos.latitude!.toDouble(), currentPos.longitude!.toDouble())));
       }
     }
 
@@ -290,39 +244,21 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
       final String category = device.category ?? 'default';
       final String status = device.status ?? 'unknown';
-      final String baseIconKey =
-          'marker_${category.toLowerCase()}_${status.toLowerCase()}';
+      final String baseIconKey = 'marker_${category.toLowerCase()}_${status.toLowerCase()}';
 
       final String plate = device.name ?? '';
       final String customLabelId = "label_$plate";
 
       await _iconService.ensureIconLoaded(_mapController, baseIconKey);
-      await _iconService.ensureLabelIconLoaded(
-        _mapController,
-        plate,
-        customLabelId,
-      );
+      await _iconService.ensureLabelIconLoaded(_mapController, plate, customLabelId);
 
-      final latLng = maplibre.LatLng(
-        pos.latitude!.toDouble(),
-        pos.longitude!.toDouble(),
-      );
+      final latLng = maplibre.LatLng(pos.latitude!.toDouble(), pos.longitude!.toDouble());
       final deviceData = {'deviceId': deviceId.toString()};
 
       // 設備圖標：存在就原地更新，不存在才新增
       final iconSymbol = _deviceSymbols[deviceId];
       if (iconSymbol != null) {
-        await _mapController!.updateSymbol(
-          iconSymbol,
-          maplibre.SymbolOptions(
-            geometry: latLng,
-            iconImage: baseIconKey,
-            iconRotate: pos.course?.toDouble() ?? 0.0,
-            iconSize: 4.0 * scale,
-            iconAnchor: 'center',
-            zIndex: 10,
-          ),
-        );
+        await _mapController!.updateSymbol(iconSymbol, maplibre.SymbolOptions(geometry: latLng, iconImage: baseIconKey, iconRotate: pos.course?.toDouble() ?? 0.0, iconSize: 4.0 * scale, iconAnchor: 'center', zIndex: 10));
       } else {
         _deviceSymbols[deviceId] = await _mapController!.addSymbol(
           maplibre.SymbolOptions(
@@ -340,38 +276,14 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       // 名稱標籤：同樣「新增或原地更新」
       final labelSymbol = _labelSymbols[deviceId];
       if (labelSymbol != null) {
-        await _mapController!.updateSymbol(
-          labelSymbol,
-          maplibre.SymbolOptions(
-            geometry: latLng,
-            iconImage: customLabelId,
-            iconRotate: 0.0,
-            iconOffset: const Offset(0, 15),
-            iconSize: 1.2,
-            iconAnchor: 'top',
-            zIndex: 5,
-          ),
-        );
+        await _mapController!.updateSymbol(labelSymbol, maplibre.SymbolOptions(geometry: latLng, iconImage: customLabelId, iconRotate: 0.0, iconOffset: const Offset(0, 15), iconSize: 1.2, iconAnchor: 'top', zIndex: 5));
       } else {
-        _labelSymbols[deviceId] = await _mapController!.addSymbol(
-          maplibre.SymbolOptions(
-            geometry: latLng,
-            iconImage: customLabelId,
-            iconRotate: 0.0,
-            iconOffset: const Offset(0, 15),
-            iconSize: 1.2,
-            iconAnchor: 'top',
-            zIndex: 5,
-          ),
-          deviceData,
-        );
+        _labelSymbols[deviceId] = await _mapController!.addSymbol(maplibre.SymbolOptions(geometry: latLng, iconImage: customLabelId, iconRotate: 0.0, iconOffset: const Offset(0, 15), iconSize: 1.2, iconAnchor: 'top', zIndex: 5), deviceData);
       }
     }
 
     // 清除已經沒有位置資料（或已被移除）的設備 marker
-    final staleIds = _deviceSymbols.keys
-        .where((id) => !visibleDeviceIds.contains(id))
-        .toList();
+    final staleIds = _deviceSymbols.keys.where((id) => !visibleDeviceIds.contains(id)).toList();
     for (final id in staleIds) {
       final iconSymbol = _deviceSymbols.remove(id);
       if (iconSymbol != null) {
@@ -400,9 +312,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       builder: (BuildContext context) {
         return CupertinoAlertDialog(
           title: Text('Delete Device'.tr),
-          content: Text(
-            'Are you sure you want to delete the device "${device.name}"?'.tr,
-          ),
+          content: Text('Are you sure you want to delete the device "${device.name}"?'.tr),
           actions: <Widget>[
             CupertinoDialogAction(
               child: Text('Cancel'.tr),
@@ -429,10 +339,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
   Future<void> _deleteDevice(int deviceId) async {
     if (!mounted) return;
-    final traccarProvider = Provider.of<TraccarProvider>(
-      context,
-      listen: false,
-    );
+    final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
     final devicesApi = api.DevicesApi(traccarProvider.apiClient);
 
     try {
@@ -442,34 +349,15 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
       await traccarProvider.fetchInitialData();
 
-      Get.snackbar(
-        'Success'.tr,
-        'Device deleted successfully.'.tr,
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.green.shade100,
-      );
+      Get.snackbar('Success'.tr, 'Device deleted successfully.'.tr, snackPosition: SnackPosition.BOTTOM, backgroundColor: Colors.green.shade100);
     } on api.ApiException catch (e) {
-      Get.snackbar(
-        'Error'.tr,
-        'Failed to delete device: ${e.message}'.tr,
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.red.shade100,
-      );
+      Get.snackbar('Error'.tr, 'Failed to delete device: ${e.message}'.tr, snackPosition: SnackPosition.BOTTOM, backgroundColor: Colors.red.shade100);
     } catch (e) {
-      Get.snackbar(
-        'Error'.tr,
-        'An unknown error occurred.'.tr,
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.red.shade100,
-      );
+      Get.snackbar('Error'.tr, 'An unknown error occurred.'.tr, snackPosition: SnackPosition.BOTTOM, backgroundColor: Colors.red.shade100);
     }
   }
 
-  void _navigateToDevice(
-    int direction,
-    List<api.Device> devices,
-    List<api.Position> positions,
-  ) {
+  void _navigateToDevice(int direction, List<api.Device> devices, List<api.Position> positions) {
     if (devices.isEmpty) return;
     int currentIndex = devices.indexWhere((d) => d.id == _currentDevice?.id);
     int nextIndex = (currentIndex + direction) % devices.length;
@@ -484,28 +372,17 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     _onDeviceSelected(nextDevice, positions, forceShowPanel: false);
   }
 
-  void _onDeviceSelected(
-    api.Device device,
-    List<api.Position> allPositions, {
-    bool forceShowPanel = false,
-  }) async {
+  void _onDeviceSelected(api.Device device, List<api.Position> allPositions, {bool forceShowPanel = false}) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt('selectedDeviceId', device.id!);
     await prefs.setString('selectedDeviceName', device.name!);
 
-    final position = allPositions.firstWhere(
-      (p) => p.deviceId == device.id,
-      orElse: () =>
-          api.Position(deviceId: device.id, latitude: 0.0, longitude: 0.0),
-    );
+    final position = allPositions.firstWhere((p) => p.deviceId == device.id, orElse: () => api.Position(deviceId: device.id, latitude: 0.0, longitude: 0.0));
 
     String? immediateAddress;
 
     if (position.latitude != null && position.longitude != null) {
-      immediateAddress = OfflineAddressService.getAddressFromCache(
-        position.latitude!.toDouble(),
-        position.longitude!.toDouble(),
-      );
+      immediateAddress = OfflineAddressService.getAddressFromCache(position.latitude!.toDouble(), position.longitude!.toDouble());
     }
 
     _selectedDeviceNotifier.value = device;
@@ -521,30 +398,15 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     }
 
     if (device.id != null && mounted) {
-      Provider.of<TraccarProvider>(
-        context,
-        listen: false,
-      ).prefetchDeviceHistory(device.id!);
+      Provider.of<TraccarProvider>(context, listen: false).prefetchDeviceHistory(device.id!);
     }
 
-    if (position.latitude != null &&
-        position.longitude != null &&
-        position.latitude != 0.0) {
-      _mapController!.animateCamera(
-        maplibre.CameraUpdate.newLatLng(
-          maplibre.LatLng(
-            position.latitude!.toDouble(),
-            position.longitude!.toDouble(),
-          ),
-        ),
-      );
+    if (position.latitude != null && position.longitude != null && position.latitude != 0.0) {
+      _mapController!.animateCamera(maplibre.CameraUpdate.newLatLng(maplibre.LatLng(position.latitude!.toDouble(), position.longitude!.toDouble())));
 
       if (immediateAddress == null) {
         try {
-          String addr = await OfflineAddressService.getAddress(
-            position.latitude!.toDouble(),
-            position.longitude!.toDouble(),
-          );
+          String addr = await OfflineAddressService.getAddress(position.latitude!.toDouble(), position.longitude!.toDouble());
 
           if (mounted) {
             _selectedAddressNotifier.value = addr;
@@ -556,8 +418,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
         } catch (e) {
           debugPrint("Geocoder error: $e");
           if (mounted) {
-            _selectedAddressNotifier.value =
-                "Location: ${position.latitude!.toStringAsFixed(4)}, ${position.longitude!.toStringAsFixed(4)}";
+            _selectedAddressNotifier.value = "Location: ${position.latitude!.toStringAsFixed(4)}, ${position.longitude!.toStringAsFixed(4)}";
             _showDeviceDetailPanel(device, position);
           }
         }
@@ -578,10 +439,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     }
   }
 
-  void _showMoreOptionsDialog(
-    api.Device device,
-    api.Position? currentPosition,
-  ) {
+  void _showMoreOptionsDialog(api.Device device, api.Position? currentPosition) {
     showCupertinoModalPopup<void>(
       context: context,
       builder: (BuildContext context) => Material(
@@ -600,33 +458,22 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                       device.name ?? 'More Options'.tr,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w600,
-                      ),
+                      style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
                     ),
                   ),
                   ListTile(
                     title: Text('sharedCreateGeofence'.tr),
                     onTap: () {
                       Navigator.of(context).pop();
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const AddGeofenceScreen(),
-                        ),
-                      );
+                      Navigator.push(context, MaterialPageRoute(builder: (context) => const AddGeofenceScreen()));
                     },
                   ),
                   ListTile(
                     title: Text('linkGoogleMaps'.tr),
                     onTap: () {
                       Navigator.of(context).pop();
-                      if (currentPosition?.latitude != null &&
-                          currentPosition?.longitude != null) {
-                        final url = Uri.parse(
-                          'https://maps.google.com/maps?q=${currentPosition!.latitude!.toDouble()},${currentPosition.longitude!.toDouble()}',
-                        );
+                      if (currentPosition?.latitude != null && currentPosition?.longitude != null) {
+                        final url = Uri.parse('https://maps.google.com/maps?q=${currentPosition!.latitude!.toDouble()},${currentPosition.longitude!.toDouble()}');
                         _launchUrl(url);
                       }
                     },
@@ -635,11 +482,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                     title: Text('linkAppleMaps'.tr),
                     onTap: () {
                       Navigator.of(context).pop();
-                      if (currentPosition?.latitude != null &&
-                          currentPosition?.longitude != null) {
-                        final url = Uri.parse(
-                          'https://maps.apple.com/?q=${currentPosition!.latitude!.toDouble()},${currentPosition.longitude!.toDouble()}',
-                        );
+                      if (currentPosition?.latitude != null && currentPosition?.longitude != null) {
+                        final url = Uri.parse('https://maps.apple.com/?q=${currentPosition!.latitude!.toDouble()},${currentPosition.longitude!.toDouble()}');
                         _launchUrl(url);
                       }
                     },
@@ -648,11 +492,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                     title: Text('linkStreetView'.tr),
                     onTap: () {
                       Navigator.of(context).pop();
-                      if (currentPosition?.latitude != null &&
-                          currentPosition?.longitude != null) {
-                        final url = Uri.parse(
-                          'google.streetview:cbll=${currentPosition!.latitude!.toDouble()},${currentPosition.longitude!.toDouble()}',
-                        );
+                      if (currentPosition?.latitude != null && currentPosition?.longitude != null) {
+                        final url = Uri.parse('google.streetview:cbll=${currentPosition!.latitude!.toDouble()},${currentPosition.longitude!.toDouble()}');
                         _launchUrl(url);
                       }
                     },
@@ -672,11 +513,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                       if (!mounted) return;
 
                       // 3. 使用安全存下來的 navigator 導頁
-                      navigator.push(
-                        MaterialPageRoute(
-                          builder: (context) => const ShareDeviceScreen(),
-                        ),
-                      );
+                      navigator.push(MaterialPageRoute(builder: (context) => const ShareDeviceScreen()));
                     },
                   ),
                 ],
@@ -688,10 +525,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     );
   }
 
-  void _showDeviceDetailPanel(
-    api.Device device,
-    api.Position? currentPosition,
-  ) {
+  void _showDeviceDetailPanel(api.Device device, api.Position? currentPosition) {
     if (_isPanelOpen && _bottomSheetController != null) {
       return;
     }
@@ -699,9 +533,9 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     setState(() {
       _panelOpenNotifier.value = true;
     });
-    _bottomSheetController = _scaffoldKey.currentState!.showBottomSheet((
-      context,
-    ) {
+    // Transparent background + no elevation: the sheet itself is invisible, so
+    // only the panel's own rounded card is drawn on top of the map.
+    _bottomSheetController = _scaffoldKey.currentState!.showBottomSheet(backgroundColor: Colors.transparent, elevation: 0, (context) {
       return ValueListenableBuilder<api.Device?>(
         valueListenable: _selectedDeviceNotifier,
         builder: (context, currentDev, _) {
@@ -718,17 +552,13 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                     position: currentPos ?? api.Position(),
                     address: currentAddr,
                     formattedDate: _formatDate(currentPos?.fixTime),
-                    onMoreOptionsPressed: () =>
-                        _showMoreOptionsDialog(currentDev, currentPos),
+                    onMoreOptionsPressed: () => _showMoreOptionsDialog(currentDev, currentPos),
                     onDeletePressed: () {
                       _bottomSheetController?.close();
                       _showDeleteConfirmationDialog(currentDev);
                     },
                     onRefresh: () async {
-                      final traccarProvider = Provider.of<TraccarProvider>(
-                        context,
-                        listen: false,
-                      );
+                      final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
                       await traccarProvider.fetchInitialData();
                     },
                   );
@@ -751,10 +581,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     });
   }
 
-  api.Position? _findPositionOrNull(
-    List<api.Position> positions,
-    int? deviceId,
-  ) {
+  api.Position? _findPositionOrNull(List<api.Position> positions, int? deviceId) {
     if (deviceId == null) return null;
     try {
       return positions.firstWhere((p) => p.deviceId == deviceId);
@@ -780,10 +607,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     }
   }
 
-  Widget _buildDeviceListDrawer(
-    BuildContext context,
-    TraccarProvider traccarProvider,
-  ) {
+  Widget _buildDeviceListDrawer(BuildContext context, TraccarProvider traccarProvider) {
     final devices = traccarProvider.devices.toList();
     devices.sort((a, b) {
       final aFav = traccarProvider.isFavorite(a.id!);
@@ -797,29 +621,16 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       child: Column(
         children: [
           DrawerHeader(
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.primary,
-            ),
+            decoration: BoxDecoration(color: Theme.of(context).colorScheme.primary),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   'trabcdefg',
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.onPrimary,
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: TextStyle(color: Theme.of(context).colorScheme.onPrimary, fontSize: 24, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 8),
-                Text(
-                  traccarProvider.currentUser?.email ?? 'Logged in user'.tr,
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.onPrimary
-                        .withValues(alpha: 0.8),
-                    fontSize: 14,
-                  ),
-                ),
+                Text(traccarProvider.currentUser?.email ?? 'Logged in user'.tr, style: TextStyle(color: Theme.of(context).colorScheme.onPrimary.withValues(alpha: 0.8), fontSize: 14)),
               ],
             ),
           ),
@@ -828,23 +639,13 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
               itemCount: devices.length,
               itemBuilder: (context, index) {
                 final device = devices[index];
-                final position = _findPositionOrNull(
-                  traccarProvider.positions,
-                  device.id,
-                );
+                final position = _findPositionOrNull(traccarProvider.positions, device.id);
 
                 final speed = (position?.speed ?? 0.0).toStringAsFixed(1);
-                final isIgnitionOn =
-                    (position?.attributes
-                        as Map<String, dynamic>?)?['ignition'] ==
-                    true;
+                final isIgnitionOn = (position?.attributes as Map<String, dynamic>?)?['ignition'] == true;
 
                 return ListTile(
-                  leading: Icon(
-                    Icons.circle,
-                    color: _getStatusColor(device.status),
-                    size: 10,
-                  ),
+                  leading: Icon(Icons.circle, color: _getStatusColor(device.status), size: 10),
                   title: Text(
                     device.name ?? 'Unknown Device'.tr,
                     maxLines: 1,
@@ -855,11 +656,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                     children: [
                       if (double.parse(speed) > 0.0) Text('$speed km/h'),
                       const SizedBox(width: 12),
-                      Icon(
-                        Icons.key,
-                        color: isIgnitionOn ? Colors.green : Colors.red,
-                        size: 16,
-                      ),
+                      Icon(Icons.key, color: isIgnitionOn ? Colors.green : Colors.red, size: 16),
                     ],
                   ),
                   trailing: const Icon(CupertinoIcons.chevron_right),
@@ -867,11 +664,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                     Navigator.of(context).pop();
 
                     if (position != null) {
-                      _onDeviceSelected(
-                        device,
-                        traccarProvider.positions,
-                        forceShowPanel: true,
-                      );
+                      _onDeviceSelected(device, traccarProvider.positions, forceShowPanel: true);
                     }
                   },
                 );
@@ -888,35 +681,26 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     return Consumer2<TraccarProvider, MapStyleProvider>(
       builder: (context, traccarProvider, mapStyleProvider, child) {
         if (traccarProvider.isLoading && traccarProvider.devices.isEmpty) {
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
-          );
+          return const Scaffold(body: Center(child: CircularProgressIndicator()));
         }
 
         if (!_isCacheInitialized) {
-          return const Scaffold(
-            body: Center(child: Text('Initializing Map Assets...')),
-          );
+          return const Scaffold(body: Center(child: Text('Initializing Map Assets...')));
         }
 
         double initialLat = 0, initialLng = 0, initialZoom = 2.0;
 
         if (_currentDevice != null) {
-          final initialPosition = _findPositionOrNull(
-            traccarProvider.positions,
-            _currentDevice!.id,
-          );
+          final initialPosition = _findPositionOrNull(traccarProvider.positions, _currentDevice!.id);
 
-          if (initialPosition?.latitude != null &&
-              initialPosition?.longitude != null) {
+          if (initialPosition?.latitude != null && initialPosition?.longitude != null) {
             initialLat = initialPosition!.latitude!.toDouble();
             initialLng = initialPosition.longitude!.toDouble();
             initialZoom = 15.0;
           }
         } else if (traccarProvider.positions.isNotEmpty) {
           final api.Position firstPosition = traccarProvider.positions.first;
-          if (firstPosition.latitude != null &&
-              firstPosition.longitude != null) {
+          if (firstPosition.latitude != null && firstPosition.longitude != null) {
             initialLat = firstPosition.latitude!.toDouble();
             initialLng = firstPosition.longitude!.toDouble();
             initialZoom = 5.0;
@@ -934,38 +718,24 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
               surfaceTintColor: Colors.transparent,
               title: null,
               flexibleSpace: null,
-              iconTheme: IconThemeData(
-                color: Theme.of(context).brightness == Brightness.dark
-                    ? Colors.white
-                    : Colors.black,
-              ),
+              iconTheme: IconThemeData(color: Theme.of(context).brightness == Brightness.dark ? Colors.white : Colors.black),
             ),
-            drawer: traccarProvider.devices.length > 1
-                ? _buildDeviceListDrawer(context, traccarProvider)
-                : null,
+            drawer: traccarProvider.devices.length > 1 ? _buildDeviceListDrawer(context, traccarProvider) : null,
             body: Stack(
               children: [
                 maplibre.MapLibreMap(
                   key: ValueKey(mapStyleProvider.isSatelliteMode),
-                  initialCameraPosition:
-                      _lastCameraPosition ??
-                      maplibre.CameraPosition(
-                        target: maplibre.LatLng(initialLat, initialLng),
-                        zoom: initialZoom,
-                      ),
+                  initialCameraPosition: _lastCameraPosition ?? maplibre.CameraPosition(target: maplibre.LatLng(initialLat, initialLng), zoom: initialZoom),
                   styleString: mapStyleProvider.styleString,
                   compassEnabled: false,
                   onCameraMove: (position) {
                     _lastCameraPosition = position;
                     _zoomDebounce?.cancel();
-                    _zoomDebounce = Timer(
-                      const Duration(milliseconds: 300),
-                      () {
-                        SharedPreferences.getInstance().then((prefs) {
-                          prefs.setDouble('map_zoom_level', position.zoom);
-                        });
-                      },
-                    );
+                    _zoomDebounce = Timer(const Duration(milliseconds: 300), () {
+                      SharedPreferences.getInstance().then((prefs) {
+                        prefs.setDouble('map_zoom_level', position.zoom);
+                      });
+                    });
 
                     if (_isFollowingDevice) {
                       setState(() {
@@ -983,17 +753,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                       final deviceId = int.tryParse(deviceIdString ?? '');
 
                       if (deviceId != null && mounted) {
-                        final traccarProvider = Provider.of<TraccarProvider>(
-                          context,
-                          listen: false,
-                        );
-                        _onDeviceSelected(
-                          traccarProvider.devices.firstWhere(
-                            (d) => d.id == deviceId,
-                          ),
-                          traccarProvider.positions,
-                          forceShowPanel: true,
-                        );
+                        final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
+                        _onDeviceSelected(traccarProvider.devices.firstWhere((d) => d.id == deviceId), traccarProvider.positions, forceShowPanel: true);
                       }
                     });
                   },
@@ -1010,69 +771,35 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                   },
                 ),
                 Positioned(
-                  top:
-                      MediaQuery.of(context).padding.top +
-                      kToolbarHeight +
-                      8, //12
+                  top: MediaQuery.of(context).padding.top + kToolbarHeight + 8, //12
                   right: 16,
                   child: Column(
                     children: [
-                      _buildMapControl(
-                        mapStyleProvider.isSatelliteMode
-                            ? Icons.satellite_alt
-                            : Icons.map,
-                        () => mapStyleProvider.toggleMapType(),
-                        "btn_style",
-                        isActive: mapStyleProvider.isSatelliteMode,
-                      ),
+                      _buildMapControl(mapStyleProvider.isSatelliteMode ? Icons.satellite_alt : Icons.map, () => mapStyleProvider.toggleMapType(), "btn_style", isActive: mapStyleProvider.isSatelliteMode),
                       const SizedBox(height: 12),
-                      _buildMapControl(
-                        Icons.explore_rounded,
-                        () => _mapController?.animateCamera(
-                          maplibre.CameraUpdate.bearingTo(0),
-                        ),
-                        "btn_compass",
-                      ),
+                      _buildMapControl(Icons.explore_rounded, () => _mapController?.animateCamera(maplibre.CameraUpdate.bearingTo(0)), "btn_compass"),
                       const SizedBox(height: 12),
                       _buildMapControl(Icons.my_location_rounded, () {
                         if (_currentDevice != null) {
-                          final pos = traccarProvider.getPosition(
-                            _currentDevice!.id!,
-                          );
+                          final pos = traccarProvider.getPosition(_currentDevice!.id!);
                           if (pos != null) {
-                            _onDeviceSelected(
-                              _currentDevice!,
-                              traccarProvider.positions,
-                              forceShowPanel: true,
-                            );
+                            _onDeviceSelected(_currentDevice!, traccarProvider.positions, forceShowPanel: true);
                           }
                         }
                       }, "btn_myloc"),
                       const SizedBox(height: 12),
-                      _buildMapControl(
-                        Icons.zoom_out_map_rounded,
-                        () => _zoomToFitAll(traccarProvider),
-                        "btn_zoom",
-                      ),
+                      _buildMapControl(Icons.zoom_out_map_rounded, () => _zoomToFitAll(traccarProvider), "btn_zoom"),
                     ],
                   ),
                 ),
-                if (_isStyleLoaded)
-                  _DataUpdateListener(
-                    data: traccarProvider.positions,
-                    onUpdate: () => _scheduleMarkerUpdate(traccarProvider),
-                  ),
-                if (traccarProvider.isLoading &&
-                    traccarProvider.devices.isEmpty)
-                  const Center(child: CircularProgressIndicator()),
+                if (_isStyleLoaded) _DataUpdateListener(data: traccarProvider.positions, onUpdate: () => _scheduleMarkerUpdate(traccarProvider)),
+                if (traccarProvider.isLoading && traccarProvider.devices.isEmpty) const Center(child: CircularProgressIndicator()),
 
                 // Device navigation bar
                 Positioned(
                   left: 0,
                   right: 0,
-                  bottom:
-                      MediaQuery.of(context).padding.bottom +
-                      (_panelOpenNotifier.value ? 230 : 30), //280 : 80
+                  bottom: MediaQuery.of(context).padding.bottom + (_panelOpenNotifier.value ? 230 : 30), //280 : 80
                   child: Material(
                     color: Colors.transparent,
                     child: Row(
@@ -1083,25 +810,9 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               if (traccarProvider.devices.length > 1) ...[
-                                _buildMapControl(
-                                  Icons.chevron_left_rounded,
-                                  () => _navigateToDevice(
-                                    -1,
-                                    traccarProvider.devices,
-                                    traccarProvider.positions,
-                                  ),
-                                  "btn_prev_device",
-                                ),
+                                _buildMapControl(Icons.chevron_left_rounded, () => _navigateToDevice(-1, traccarProvider.devices, traccarProvider.positions), "btn_prev_device"),
                                 const SizedBox(width: 28),
-                                _buildMapControl(
-                                  CupertinoIcons.chevron_right,
-                                  () => _navigateToDevice(
-                                    1,
-                                    traccarProvider.devices,
-                                    traccarProvider.positions,
-                                  ),
-                                  "btn_next_device",
-                                ),
+                                _buildMapControl(CupertinoIcons.chevron_right, () => _navigateToDevice(1, traccarProvider.devices, traccarProvider.positions), "btn_next_device"),
                               ],
                             ],
                           ),
@@ -1111,21 +822,9 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              _buildMapControl(
-                                Icons.add_rounded,
-                                () => _mapController?.animateCamera(
-                                  maplibre.CameraUpdate.zoomIn(),
-                                ),
-                                "btn_zoom_in",
-                              ),
+                              _buildMapControl(Icons.add_rounded, () => _mapController?.animateCamera(maplibre.CameraUpdate.zoomIn()), "btn_zoom_in"),
                               const SizedBox(height: 14), //4
-                              _buildMapControl(
-                                Icons.remove_rounded,
-                                () => _mapController?.animateCamera(
-                                  maplibre.CameraUpdate.zoomOut(),
-                                ),
-                                "btn_zoom_out",
-                              ),
+                              _buildMapControl(Icons.remove_rounded, () => _mapController?.animateCamera(maplibre.CameraUpdate.zoomOut()), "btn_zoom_out"),
                             ],
                           ),
                         ),
@@ -1141,13 +840,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     );
   }
 
-  Widget _buildMapControl(
-    IconData icon,
-    VoidCallback onTap,
-    String heroTag, {
-    bool isActive = false,
-    bool isToggle = false,
-  }) {
+  Widget _buildMapControl(IconData icon, VoidCallback onTap, String heroTag, {bool isActive = false, bool isToggle = false}) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final colorScheme = Theme.of(context).colorScheme;
 
@@ -1159,21 +852,9 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           // 環境光（ambient）：較大、較柔，營造按鍵浮起的層次
-          BoxShadow(
-            color: isDark
-                ? Colors.black.withValues(alpha: 0.6)
-                : Colors.black.withValues(alpha: 0.32),
-            blurRadius: 16,
-            offset: const Offset(0, 6),
-          ),
+          BoxShadow(color: isDark ? Colors.black.withValues(alpha: 0.6) : Colors.black.withValues(alpha: 0.32), blurRadius: 16, offset: const Offset(0, 6)),
           // 主光（key light）：較小、較實，貼合按鍵邊緣增加立體感
-          BoxShadow(
-            color: isDark
-                ? Colors.black.withValues(alpha: 0.42)
-                : Colors.black.withValues(alpha: 0.2),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          ),
+          BoxShadow(color: isDark ? Colors.black.withValues(alpha: 0.42) : Colors.black.withValues(alpha: 0.2), blurRadius: 4, offset: const Offset(0, 2)),
         ],
       ),
       child: ClipRRect(
@@ -1185,16 +866,9 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
             height: 44,
             decoration: BoxDecoration(
               // 不透明背景：避免外層陰影從半透明處透進按鍵內部
-              color: isActive
-                  ? colorScheme.primary
-                  : (isDark ? const Color(0xFF1C1C1E) : Colors.white),
+              color: isActive ? colorScheme.primary : (isDark ? const Color(0xFF1C1C1E) : Colors.white),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: isDark
-                    ? Colors.white.withValues(alpha: 0.1)
-                    : Colors.black.withValues(alpha: 0.05),
-                width: 0.5,
-              ),
+              border: Border.all(color: isDark ? Colors.white.withValues(alpha: 0.1) : Colors.black.withValues(alpha: 0.05), width: 0.5),
             ),
             child: Material(
               color: Colors.transparent,
@@ -1206,13 +880,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                 child: Center(
                   child: Hero(
                     tag: heroTag,
-                    child: Icon(
-                      icon,
-                      color: isActive
-                          ? colorScheme.onPrimary
-                          : (isDark ? Colors.white70 : Colors.black87),
-                      size: isToggle ? 24 : 20,
-                    ),
+                    child: Icon(icon, color: isActive ? colorScheme.onPrimary : (isDark ? Colors.white70 : Colors.black87), size: isToggle ? 24 : 20),
                   ),
                 ),
               ),
