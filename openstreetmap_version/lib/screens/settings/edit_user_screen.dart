@@ -89,7 +89,8 @@ class _EditUserScreenState extends State<EditUserScreen> {
   void _logout() {
     final traccarProvider = context.read<TraccarProvider>();
     traccarProvider.clearSessionAndData();
-    Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
+    // 同上：這頁也在 CupertinoTabView 的巢狀 Navigator 裡，必須走 rootNavigator
+    Navigator.of(context, rootNavigator: true).pushNamedAndRemoveUntil('/login', (route) => false);
   }
 
   Future<void> _updateUser() async {

@@ -216,7 +216,6 @@ class LocalizationService extends Translations {
     'de': de,
     'el': el,
     'en_US': enUs,
-    // 'en': enUS,
     'es': es,
     'et': et,
     'fa': fa,

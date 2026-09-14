@@ -1,0 +1,39 @@
+{
+  "version": 8,
+  "name": "ESRI-World-Imagery-Satellite",
+  "metadata": {
+    "maputnik:renderer": "mlgljs",
+    "usage": "MapScreen 衛星模式（AppMapType.satellite）使用的底圖"
+  },
+  "sources": {
+    "esriImagery": {
+      "type": "raster",
+      "tiles": [
+        "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+      ],
+      "tileSize": 256,
+      "minzoom": 0,
+      "maxzoom": 19,
+      "attribution": "© <a href=\"https://www.esri.com/\">Esri</a>, Maxar, Earthstar Geographics, and the GIS User Community"
+    }
+  },
+  "layers": [
+    {
+      "id": "background",
+      "type": "background",
+      "paint": {
+        "background-color": "#000000"
+      }
+    },
+    {
+      "id": "esri-satellite",
+      "type": "raster",
+      "source": "esriImagery",
+      "minzoom": 0,
+      "maxzoom": 22,
+      "paint": {
+        "raster-opacity": 1
+      }
+    }
+  ]
+}

@@ -3,6 +3,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
@@ -21,6 +22,18 @@ import '../services/marker_icon_service.dart';
 import '../services/tile_cache_service.dart';
 import '../widgets/device_detail_panel.dart';
 import 'share_device_screen.dart';
+
+// ── 地圖浮動控制：尺寸／動畫常數 ─────────────────────────────────────
+// 集中管理原本散落在 _buildMapControl 與兩個 Positioned 裡的魔術數字，
+// 之後要調整密度或手感只需要改這裡。
+const double _kControlSize = 44; // 觸控目標（iOS HIG 建議最小 44pt）
+const double _kControlRadius = 12; // 方形控制鈕圓角
+const double _kPillRadius = 22; // 切換列膠囊圓角
+const double _kEdgeInset = 16; // 與螢幕邊緣的安全距離
+const double _kControlGap = 12; // 控制群之間的間距
+const double _kGlassBlurSigma = 10; // 毛玻璃模糊強度
+const Duration _kSymbolTapGuard = Duration(milliseconds: 300); // marker 點擊防誤判窗口
+const Duration _kCameraEventGrace = Duration(milliseconds: 250); // 相機事件滯後寬限
 
 class MapScreen extends StatefulWidget {
   final api.Device? selectedDevice;
@@ -49,6 +62,19 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   final ValueNotifier<bool> _panelOpenNotifier = ValueNotifier(false);
   bool get _isPanelOpen => _panelOpenNotifier.value;
   bool _isFollowingDevice = false;
+
+  // 底部控制列（裝置切換 + 縮放）的定位策略：
+  // 面板開啟時把它放進 sheet 的 Column、排在面板「上方」；
+  // 面板關閉時才畫在 Stack 底部。用佈局保證不重疊，不需要量測面板高度。
+
+  /// 是否正在播放「程式觸發」的相機動畫。MapLibre 的 onCameraMove 分不出
+  /// 使用者手勢與 animateCamera，必須靠這個旗標才不會把自己的動畫誤判成拖曳。
+  bool _isCameraAnimating = false;
+  Timer? _cameraAnimationGraceTimer;
+
+  /// 最近一次點擊 marker 的時間：用來擋掉緊接在 onSymbolTapped 之後的
+  /// onMapClick，否則剛打開的面板會被立刻關閉。
+  DateTime? _lastSymbolTapAt;
 
   // Reactive notifiers for seamless detail panel updates
   final ValueNotifier<api.Device?> _selectedDeviceNotifier = ValueNotifier(null);
@@ -102,6 +128,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   @override
   void dispose() {
     _zoomDebounce?.cancel();
+    _cameraAnimationGraceTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     _httpClient.close();
     _panelOpenNotifier.dispose();
@@ -169,6 +196,90 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     }
   }
 
+  /// 所有「程式觸發」的相機移動都必須走這裡。
+  /// 為什麼？MapLibre 的 onCameraMove 無法區分使用者手勢與 animateCamera，
+  /// 過去點裝置開面板時，緊接的鏡頭動畫會立刻觸發 onCameraMove 而把
+  /// _isFollowingDevice 關掉（並印出 Auto-Follow disabled by user gesture）。
+  /// 這裡在動畫期間（含結束後一小段事件滯後）標記 _isCameraAnimating，
+  /// 讓 onCameraMove 能正確忽略自己造成的位移。
+  Future<void> _animateCamera(maplibre.CameraUpdate update) async {
+    final controller = _mapController;
+    if (controller == null) return;
+
+    _cameraAnimationGraceTimer?.cancel();
+    _isCameraAnimating = true;
+    try {
+      await controller.animateCamera(update);
+    } catch (e) {
+      debugPrint('Camera animation failed: $e');
+    } finally {
+      // platform channel 的相機事件可能比 Future 晚到，留一點寬限再解除
+      _cameraAnimationGraceTimer?.cancel();
+      _cameraAnimationGraceTimer = Timer(_kCameraEventGrace, () {
+        _isCameraAnimating = false;
+      });
+    }
+  }
+
+  /// 「我的位置」按鈕：跟隨中再按一次 = 取消跟隨（面板保持開啟）；
+  /// 未跟隨時按下 = 鏡頭回到目前裝置並重新跟隨。
+  void _toggleFollowCurrentDevice() {
+    final device = _currentDevice;
+    if (device == null) return;
+
+    if (_isFollowingDevice) {
+      setState(() {
+        _isFollowingDevice = false;
+      });
+      return;
+    }
+
+    final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
+    if (device.id == null || traccarProvider.getPosition(device.id!) == null) return;
+    _onDeviceSelected(device, traccarProvider.positions, forceShowPanel: true);
+  }
+
+  /// 指定裝置在清單中的位置（1-based，找不到時回 1），給切換列顯示「n / N」。
+  int _deviceIndexIn(List<api.Device> devices, api.Device? device) {
+    final index = devices.indexWhere((d) => d.id == device?.id);
+    return index < 0 ? 1 : index + 1;
+  }
+
+  /// 底部控制列本體（裝置切換 + 縮放）。
+  /// 面板開／關兩條繪製路徑都用這個 builder，所以永遠長得一樣。
+  Widget _buildBottomControls(TraccarProvider traccarProvider, api.Device? currentDevice) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Expanded(
+          child: Align(
+            alignment: Alignment.bottomCenter,
+            child: traccarProvider.devices.length > 1
+                ? _DeviceSwitcherBar(
+                    deviceName: currentDevice?.name,
+                    index: _deviceIndexIn(traccarProvider.devices, currentDevice),
+                    total: traccarProvider.devices.length,
+                    onPrevious: () => _navigateToDevice(-1, traccarProvider.devices, traccarProvider.positions),
+                    onNext: () => _navigateToDevice(1, traccarProvider.devices, traccarProvider.positions),
+                  )
+                : const SizedBox.shrink(),
+          ),
+        ),
+        // 縮放：兩顆按鈕合成一顆膠囊（一組陰影 + 一條分隔線）
+        _GlassSurface(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _GlassIconButton(icon: Icons.add_rounded, label: 'mapZoomIn'.tr, onTap: () => _animateCamera(maplibre.CameraUpdate.zoomIn())),
+              const _GlassDivider(),
+              _GlassIconButton(icon: Icons.remove_rounded, label: 'mapZoomOut'.tr, onTap: () => _animateCamera(maplibre.CameraUpdate.zoomOut())),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
   void _zoomToFitAll(TraccarProvider provider) {
     if (provider.positions.isEmpty || _mapController == null) return;
 
@@ -187,9 +298,9 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
     if (minLat != null && maxLat != null && minLng != null && maxLng != null) {
       if ((maxLat - minLat).abs() < 0.0001 && (maxLng - minLng).abs() < 0.0001) {
-        _mapController!.animateCamera(maplibre.CameraUpdate.newLatLngZoom(maplibre.LatLng(minLat, minLng), 14.0));
+        _animateCamera(maplibre.CameraUpdate.newLatLngZoom(maplibre.LatLng(minLat, minLng), 14.0));
       } else {
-        _mapController!.animateCamera(maplibre.CameraUpdate.newLatLngBounds(maplibre.LatLngBounds(southwest: maplibre.LatLng(minLat, minLng), northeast: maplibre.LatLng(maxLat, maxLng)), left: 50, right: 50, top: 100, bottom: 100));
+        _animateCamera(maplibre.CameraUpdate.newLatLngBounds(maplibre.LatLngBounds(southwest: maplibre.LatLng(minLat, minLng), northeast: maplibre.LatLng(maxLat, maxLng)), left: 50, right: 50, top: 100, bottom: 100));
       }
     }
   }
@@ -225,7 +336,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     if (_currentDevice != null && _isFollowingDevice) {
       final currentPos = provider.positions.firstWhereOrNull((p) => p.deviceId == _currentDevice!.id);
       if (currentPos != null && currentPos.latitude != null && currentPos.longitude != null) {
-        _mapController?.animateCamera(maplibre.CameraUpdate.newLatLng(maplibre.LatLng(currentPos.latitude!.toDouble(), currentPos.longitude!.toDouble())));
+        _animateCamera(maplibre.CameraUpdate.newLatLng(maplibre.LatLng(currentPos.latitude!.toDouble(), currentPos.longitude!.toDouble())));
       }
     }
 
@@ -402,7 +513,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     }
 
     if (position.latitude != null && position.longitude != null && position.latitude != 0.0) {
-      _mapController!.animateCamera(maplibre.CameraUpdate.newLatLng(maplibre.LatLng(position.latitude!.toDouble(), position.longitude!.toDouble())));
+      _animateCamera(maplibre.CameraUpdate.newLatLng(maplibre.LatLng(position.latitude!.toDouble(), position.longitude!.toDouble())));
 
       if (immediateAddress == null) {
         try {
@@ -547,20 +658,30 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                 builder: (context, currentAddr, _) {
                   if (currentDev == null) return const SizedBox.shrink();
 
-                  return DeviceDetailPanel(
-                    device: currentDev,
-                    position: currentPos ?? api.Position(),
-                    address: currentAddr,
-                    formattedDate: _formatDate(currentPos?.fixTime),
-                    onMoreOptionsPressed: () => _showMoreOptionsDialog(currentDev, currentPos),
-                    onDeletePressed: () {
-                      _bottomSheetController?.close();
-                      _showDeleteConfirmationDialog(currentDev);
-                    },
-                    onRefresh: () async {
-                      final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
-                      await traccarProvider.fetchInitialData();
-                    },
+                  // 控制列與面板放在同一個 Column：控制列永遠排在面板上方，
+                  // 由佈局保證不會被面板遮住（不需要量測面板高度）。
+                  return Consumer<TraccarProvider>(
+                    builder: (context, panelProvider, _) => Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Padding(padding: const EdgeInsets.fromLTRB(_kEdgeInset, 0, _kEdgeInset, _kControlGap), child: _buildBottomControls(panelProvider, currentDev)),
+                        DeviceDetailPanel(
+                          device: currentDev,
+                          position: currentPos ?? api.Position(),
+                          address: currentAddr,
+                          formattedDate: _formatDate(currentPos?.fixTime),
+                          onMoreOptionsPressed: () => _showMoreOptionsDialog(currentDev, currentPos),
+                          onDeletePressed: () {
+                            _bottomSheetController?.close();
+                            _showDeleteConfirmationDialog(currentDev);
+                          },
+                          onRefresh: () async {
+                            final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
+                            await traccarProvider.fetchInitialData();
+                          },
+                        ),
+                      ],
+                    ),
                   );
                 },
               );
@@ -685,7 +806,19 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
         }
 
         if (!_isCacheInitialized) {
-          return const Scaffold(body: Center(child: Text('Initializing Map Assets...')));
+          // 純文字對使用者沒有「正在載入」的感覺，改成與主題一致的進度指示
+          return Scaffold(
+            body: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const CircularProgressIndicator(),
+                  const SizedBox(height: _kControlGap),
+                  Text('Initializing Map Assets...'.tr, style: Theme.of(context).textTheme.bodySmall),
+                ],
+              ),
+            ),
+          );
         }
 
         double initialLat = 0, initialLng = 0, initialZoom = 2.0;
@@ -737,11 +870,14 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                       });
                     });
 
+                    // 程式自己觸發的鏡頭動畫不算「使用者拖曳」，
+                    // 否則點裝置/按我的位置後，跟隨模式會馬上被自己的動畫關掉。
+                    if (_isCameraAnimating) return;
+
                     if (_isFollowingDevice) {
                       setState(() {
                         _isFollowingDevice = false;
                       });
-                      debugPrint("Smart Auto-Follow disabled by user gesture");
                     }
                   },
                   onStyleLoadedCallback: _onStyleLoaded,
@@ -749,6 +885,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                     _mapController = controller;
 
                     _mapController!.onSymbolTapped.add((symbol) {
+                      // 記下時間：緊接而來的 onMapClick 需要靠它避免把面板關掉
+                      _lastSymbolTapAt = DateTime.now();
                       final deviceIdString = symbol.data?['deviceId'];
                       final deviceId = int.tryParse(deviceIdString ?? '');
 
@@ -759,6 +897,12 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                     });
                   },
                   onMapClick: (point, latLng) {
+                    // 點在 marker 上時，MapLibre 可能同時送出 onSymbolTapped 與
+                    // onMapClick；不在這裡擋掉的話，剛打開的面板會被立刻關閉。
+                    final lastSymbolTap = _lastSymbolTapAt;
+                    if (lastSymbolTap != null && DateTime.now().difference(lastSymbolTap) < _kSymbolTapGuard) {
+                      return;
+                    }
                     if (_isFollowingDevice) {
                       setState(() {
                         _isFollowingDevice = false;
@@ -770,68 +914,30 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                     }
                   },
                 ),
+                // 右側控制列：四顆按鈕共用「一塊」毛玻璃面板（一組陰影），
+                // 取代原本每顆按鈕各自 2 層陰影、共 8 層互相疊加的視覺噪音。
                 Positioned(
-                  top: MediaQuery.of(context).padding.top + kToolbarHeight + 8, //12
-                  right: 16,
-                  child: Column(
-                    children: [
-                      _buildMapControl(mapStyleProvider.isSatelliteMode ? Icons.satellite_alt : Icons.map, () => mapStyleProvider.toggleMapType(), "btn_style", isActive: mapStyleProvider.isSatelliteMode),
-                      const SizedBox(height: 12),
-                      _buildMapControl(Icons.explore_rounded, () => _mapController?.animateCamera(maplibre.CameraUpdate.bearingTo(0)), "btn_compass"),
-                      const SizedBox(height: 12),
-                      _buildMapControl(Icons.my_location_rounded, () {
-                        if (_currentDevice != null) {
-                          final pos = traccarProvider.getPosition(_currentDevice!.id!);
-                          if (pos != null) {
-                            _onDeviceSelected(_currentDevice!, traccarProvider.positions, forceShowPanel: true);
-                          }
-                        }
-                      }, "btn_myloc"),
-                      const SizedBox(height: 12),
-                      _buildMapControl(Icons.zoom_out_map_rounded, () => _zoomToFitAll(traccarProvider), "btn_zoom"),
-                    ],
-                  ),
-                ),
-                if (_isStyleLoaded) _DataUpdateListener(data: traccarProvider.positions, onUpdate: () => _scheduleMarkerUpdate(traccarProvider)),
-                if (traccarProvider.isLoading && traccarProvider.devices.isEmpty) const Center(child: CircularProgressIndicator()),
-
-                // Device navigation bar
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: MediaQuery.of(context).padding.bottom + (_panelOpenNotifier.value ? 230 : 30), //280 : 80
-                  child: Material(
-                    color: Colors.transparent,
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.end,
+                  top: MediaQuery.of(context).padding.top + kToolbarHeight + _kEdgeInset,
+                  right: _kEdgeInset,
+                  child: _GlassSurface(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        Expanded(
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              if (traccarProvider.devices.length > 1) ...[
-                                _buildMapControl(Icons.chevron_left_rounded, () => _navigateToDevice(-1, traccarProvider.devices, traccarProvider.positions), "btn_prev_device"),
-                                const SizedBox(width: 28),
-                                _buildMapControl(CupertinoIcons.chevron_right, () => _navigateToDevice(1, traccarProvider.devices, traccarProvider.positions), "btn_next_device"),
-                              ],
-                            ],
-                          ),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.only(right: 16),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              _buildMapControl(Icons.add_rounded, () => _mapController?.animateCamera(maplibre.CameraUpdate.zoomIn()), "btn_zoom_in"),
-                              const SizedBox(height: 14), //4
-                              _buildMapControl(Icons.remove_rounded, () => _mapController?.animateCamera(maplibre.CameraUpdate.zoomOut()), "btn_zoom_out"),
-                            ],
-                          ),
-                        ),
+                        _GlassIconButton(icon: mapStyleProvider.isSatelliteMode ? Icons.satellite_alt : Icons.map, label: 'mapLayerToggle'.tr, isActive: mapStyleProvider.isSatelliteMode, onTap: () => mapStyleProvider.toggleMapType()),
+                        const _GlassDivider(),
+                        _GlassIconButton(icon: Icons.explore_rounded, label: 'mapCompass'.tr, onTap: () => _animateCamera(maplibre.CameraUpdate.bearingTo(0))),
+                        const _GlassDivider(),
+                        _GlassIconButton(icon: _isFollowingDevice ? Icons.my_location_rounded : Icons.location_searching_rounded, label: 'mapFollowDevice'.tr, isActive: _isFollowingDevice, haptic: true, onTap: _toggleFollowCurrentDevice),
+                        const _GlassDivider(),
+                        _GlassIconButton(icon: Icons.zoom_out_map_rounded, label: 'mapFitAll'.tr, onTap: () => _zoomToFitAll(traccarProvider)),
                       ],
                     ),
                   ),
                 ),
+                if (_isStyleLoaded) _DataUpdateListener(data: traccarProvider.positions, onUpdate: () => _scheduleMarkerUpdate(traccarProvider)),
+                // 底部控制列（僅面板關閉時）：面板開啟時改由 sheet 內部繪製，
+                // 兩者用同一個 builder，所以永遠不會互相遮住。
+                if (!_isPanelOpen) Positioned(left: _kEdgeInset, right: _kEdgeInset, bottom: MediaQuery.of(context).padding.bottom + _kControlGap, child: _buildBottomControls(traccarProvider, _currentDevice)),
               ],
             ),
           ),
@@ -839,54 +945,203 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       },
     );
   }
+}
 
-  Widget _buildMapControl(IconData icon, VoidCallback onTap, String heroTag, {bool isActive = false, bool isToggle = false}) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final colorScheme = Theme.of(context).colorScheme;
+// ── 毛玻璃 UI 基礎元件 ──────────────────────────────────────────────
+// 為什麼要抽出來？原本每顆控制鈕各自畫 2 層陰影與自己的模糊，一群按鈕
+// 疊在一起會互相汙染；抽成 _GlassSurface 後「一群按鈕共用一塊玻璃、一組陰影」。
 
-    // 陰影放在最外層 Container，畫在 44x44 按鍵框「外面」，才不會被圓角裁剪
+/// 毛玻璃的顏色與陰影。全部取自 Theme.colorScheme，
+/// 所以 App 內任一個 theme preset（含強制日夜間）都會跟著正確。
+class _GlassPalette {
+  final Color fill;
+  final Color border;
+  final List<BoxShadow> shadows;
+
+  const _GlassPalette({required this.fill, required this.border, required this.shadows});
+
+  factory _GlassPalette.of(BuildContext context) {
+    final ColorScheme colorScheme = Theme.of(context).colorScheme;
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return _GlassPalette(
+      // 接近不透明的底色：避免外層陰影從半透明處透進按鈕內部
+      fill: (isDark ? colorScheme.surfaceContainerHighest : colorScheme.surface).withValues(alpha: 0.94),
+      border: colorScheme.outlineVariant.withValues(alpha: 0.5),
+      shadows: [
+        // 環境光（ambient）：較大、較柔，營造浮起的層次
+        BoxShadow(
+          color: Colors.black.withValues(alpha: isDark ? 0.6 : 0.32),
+          blurRadius: 16,
+          offset: const Offset(0, 6),
+        ),
+        // 主光（key light）：較小、較實，貼合邊緣增加立體感
+        BoxShadow(
+          color: Colors.black.withValues(alpha: isDark ? 0.42 : 0.2),
+          blurRadius: 4,
+          offset: const Offset(0, 2),
+        ),
+      ],
+    );
+  }
+}
+
+/// 毛玻璃面板容器：陰影 → 圓角裁切 → 背景模糊 → 底色/邊框。
+class _GlassSurface extends StatelessWidget {
+  final Widget child;
+  final double borderRadius;
+  final EdgeInsetsGeometry? padding;
+
+  const _GlassSurface({required this.child, this.borderRadius = _kControlRadius, this.padding});
+
+  @override
+  Widget build(BuildContext context) {
+    final _GlassPalette palette = _GlassPalette.of(context);
+
     return Container(
-      width: 44,
-      height: 44,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          // 環境光（ambient）：較大、較柔，營造按鍵浮起的層次
-          BoxShadow(color: isDark ? Colors.black.withValues(alpha: 0.6) : Colors.black.withValues(alpha: 0.32), blurRadius: 16, offset: const Offset(0, 6)),
-          // 主光（key light）：較小、較實，貼合按鍵邊緣增加立體感
-          BoxShadow(color: isDark ? Colors.black.withValues(alpha: 0.42) : Colors.black.withValues(alpha: 0.2), blurRadius: 4, offset: const Offset(0, 2)),
-        ],
-      ),
+      // 陰影畫在圓角裁切「外面」，否則會被 ClipRRect 裁掉
+      decoration: BoxDecoration(borderRadius: BorderRadius.circular(borderRadius), boxShadow: palette.shadows),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(borderRadius),
         child: BackdropFilter(
-          filter: ui.ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          filter: ui.ImageFilter.blur(sigmaX: _kGlassBlurSigma, sigmaY: _kGlassBlurSigma),
           child: Container(
-            width: 44,
-            height: 44,
+            padding: padding,
             decoration: BoxDecoration(
-              // 不透明背景：避免外層陰影從半透明處透進按鍵內部
-              color: isActive ? colorScheme.primary : (isDark ? const Color(0xFF1C1C1E) : Colors.white),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: isDark ? Colors.white.withValues(alpha: 0.1) : Colors.black.withValues(alpha: 0.05), width: 0.5),
+              color: palette.fill,
+              borderRadius: BorderRadius.circular(borderRadius),
+              border: Border.all(color: palette.border, width: 0.5),
             ),
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTap: onTap,
-                borderRadius: BorderRadius.circular(12),
-                splashColor: colorScheme.primary.withValues(alpha: 0.1),
-                highlightColor: colorScheme.primary.withValues(alpha: 0.05),
-                child: Center(
-                  child: Hero(
-                    tag: heroTag,
-                    child: Icon(icon, color: isActive ? colorScheme.onPrimary : (isDark ? Colors.white70 : Colors.black87), size: isToggle ? 24 : 20),
-                  ),
-                ),
+            // InkWell 需要 Material ancestor，用 transparency 不影響底色
+            child: Material(type: MaterialType.transparency, child: child),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 玻璃面板內的 0.5pt 內縮分隔線（對齊 app_theme.dart 的 iOS 分隔線語彙）。
+class _GlassDivider extends StatelessWidget {
+  const _GlassDivider();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(width: _kControlSize * 0.6, height: 0.5, color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.6));
+  }
+}
+
+/// 玻璃面板內的圖示按鈕（44pt 觸控目標）。
+/// 為什麼要自己做按壓回饋？app_theme.dart 已把 highlight/splash 設為透明、
+/// splashFactory 設為 NoSplash，InkWell 不會有任何視覺反應，
+/// 所以改用 AnimatedScale 做「按下縮小」的微互動（iOS 扁平感不退讓）。
+class _GlassIconButton extends StatefulWidget {
+  final IconData icon;
+  final VoidCallback? onTap;
+  final String label;
+  final bool isActive;
+  final bool haptic;
+  const _GlassIconButton({required this.icon, required this.onTap, required this.label, this.isActive = false, this.haptic = false});
+
+  @override
+  State<_GlassIconButton> createState() => _GlassIconButtonState();
+}
+
+class _GlassIconButtonState extends State<_GlassIconButton> {
+  bool _pressed = false;
+
+  void _setPressed(bool value) {
+    if (_pressed == value || !mounted) return;
+    setState(() => _pressed = value);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme colorScheme = Theme.of(context).colorScheme;
+
+    return Semantics(
+      button: true,
+      label: widget.label,
+      child: InkWell(
+        onTap: widget.onTap == null
+            ? null
+            : () {
+                // 只在重要動作（切換裝置、跟隨）給觸覺回饋，避免整頁一直震
+                if (widget.haptic) HapticFeedback.selectionClick();
+                widget.onTap!.call();
+              },
+        onTapDown: (_) => _setPressed(true),
+        onTapUp: (_) => _setPressed(false),
+        onTapCancel: () => _setPressed(false),
+        borderRadius: BorderRadius.circular(_kControlRadius - 3),
+        splashColor: Colors.transparent,
+        highlightColor: Colors.transparent,
+        child: SizedBox(
+          width: _kControlSize,
+          height: _kControlSize,
+          child: AnimatedScale(
+            scale: _pressed ? 0.92 : 1.0,
+            duration: const Duration(milliseconds: 120),
+            curve: Curves.easeOut,
+            child: Padding(
+              padding: const EdgeInsets.all(3),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                curve: Curves.easeOut,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(color: widget.isActive ? colorScheme.primary : Colors.transparent, borderRadius: BorderRadius.circular(_kControlRadius - 3)),
+                child: Icon(widget.icon, size: 20, color: widget.isActive ? colorScheme.onPrimary : colorScheme.onSurface.withValues(alpha: 0.82)),
               ),
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// 裝置快速切換列：單一玻璃膠囊（左箭頭｜裝置名稱 + n/N｜右箭頭）。
+/// 原本兩顆獨立按鈕中間留 28px 空白浮在底部，跟明細面板分不出層級；
+/// 合併成膠囊後視覺更集中，也能一眼看出「現在在看第幾台」。
+class _DeviceSwitcherBar extends StatelessWidget {
+  final String? deviceName;
+  final int index;
+  final int total;
+  final VoidCallback onPrevious;
+  final VoidCallback onNext;
+
+  const _DeviceSwitcherBar({required this.deviceName, required this.index, required this.total, required this.onPrevious, required this.onNext});
+
+  @override
+  Widget build(BuildContext context) {
+    final TextTheme textTheme = Theme.of(context).textTheme;
+    final ColorScheme colorScheme = Theme.of(context).colorScheme;
+
+    return _GlassSurface(
+      borderRadius: _kPillRadius,
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _GlassIconButton(icon: Icons.chevron_left_rounded, label: 'devicePrevious'.tr, haptic: true, onTap: onPrevious),
+          ConstrainedBox(
+            constraints: const BoxConstraints(minWidth: 92, maxWidth: 132),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  deviceName ?? 'Unknown Device'.tr,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: textTheme.labelLarge?.copyWith(fontSize: 14, color: colorScheme.onSurface),
+                ),
+                Text('$index / $total', style: textTheme.labelSmall?.copyWith(color: colorScheme.onSurfaceVariant)),
+              ],
+            ),
+          ),
+          _GlassIconButton(icon: Icons.chevron_right_rounded, label: 'deviceNext'.tr, haptic: true, onTap: onNext),
+        ],
       ),
     );
   }
