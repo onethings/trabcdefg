@@ -151,6 +151,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(30))),
       backgroundColor: Colors.transparent,
       builder: (context) => _ServerPickerSheet(
+        initialUrl: _serverUrlController.text,
         onSelected: (url) {
           _serverUrlController.text = url;
           SharedPreferences.getInstance().then((prefs) {
@@ -381,15 +382,30 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
 
 class _ServerPickerSheet extends StatefulWidget {
   final Function(String) onSelected;
-  const _ServerPickerSheet({required this.onSelected});
+  final String? initialUrl;
+  const _ServerPickerSheet({required this.onSelected, this.initialUrl});
 
   @override
   State<_ServerPickerSheet> createState() => _ServerPickerSheetState();
 }
 
 class _ServerPickerSheetState extends State<_ServerPickerSheet> {
-  final _textController = TextEditingController();
-  String _inputQuery = '';
+  late final TextEditingController _textController;
+  late String _inputQuery;
+
+  @override
+  void initState() {
+    super.initState();
+    // Pre-fill the field only when the current URL is a custom (non-official)
+    // one, so a typo can be corrected without retyping the whole address.
+    final initial = widget.initialUrl?.trim() ?? '';
+    final isCustom = initial.isNotEmpty && !AppConstants.officialServers.contains(initial);
+    _textController = TextEditingController(text: isCustom ? initial : '');
+    if (isCustom) {
+      _textController.selection = TextSelection.collapsed(offset: initial.length);
+    }
+    _inputQuery = isCustom ? initial : '';
+  }
 
   @override
   void dispose() {

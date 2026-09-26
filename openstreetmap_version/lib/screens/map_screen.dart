@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/cupertino.dart';
@@ -34,6 +35,8 @@ const double _kControlGap = 12; // 控制群之間的間距
 const double _kGlassBlurSigma = 10; // 毛玻璃模糊強度
 const Duration _kSymbolTapGuard = Duration(milliseconds: 300); // marker 點擊防誤判窗口
 const Duration _kCameraEventGrace = Duration(milliseconds: 250); // 相機事件滯後寬限
+const int _kMaxTrailPoints = 3000; // 選取裝置軌跡最多保留的點數（避免長時間跟車吃掉記憶體）
+const double _kAddressRefreshMeters = 50; // 裝置移動超過此距離才重算地址，避免 geocode 風暴
 
 class MapScreen extends StatefulWidget {
   final api.Device? selectedDevice;
@@ -63,6 +66,17 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   bool get _isPanelOpen => _panelOpenNotifier.value;
   bool _isFollowingDevice = false;
 
+  // ── 選取裝置的即時軌跡 ─────────────────────────────────────────────
+  // 從「使用者選取該車的那一刻」開始累積，換車就清空重來。
+  // 線圖層一定在 symbol 之前建立，所以永遠畫在 marker 底下。
+  maplibre.Line? _trailLine;
+  String? _trailColorHex;
+  final List<maplibre.LatLng> _trailPoints = [];
+  int? _trailDeviceId;
+
+  /// 上次查地址的座標：位移超過 [_kAddressRefreshMeters] 才重查。
+  maplibre.LatLng? _lastAddressLookupPoint;
+
   // 底部控制列（裝置切換 + 縮放）的定位策略：
   // 面板開啟時把它放進 sheet 的 Column、排在面板「上方」；
   // 面板關閉時才畫在 Stack 底部。用佈局保證不重疊，不需要量測面板高度。
@@ -84,10 +98,26 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   bool _isCacheInitialized = false;
   Timer? _zoomDebounce;
 
+  // Drawer 搜尋：可依車牌（name）、IMEI（uniqueId）、設備 ID 即時過濾。
+  final TextEditingController _drawerSearchController = TextEditingController();
+  String _drawerSearchQuery = '';
+
+  // Drawer 車列表排序：使用者選過的模式會被記住（SharedPreferences），下次開啟沿用。
+  static const String _kDrawerSortModeKey = 'drawer_device_sort_mode';
+  _DrawerSortMode _drawerSortMode = _DrawerSortMode.favorite;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+
+    _drawerSearchController.addListener(() {
+      final String query = _drawerSearchController.text;
+      if (query == _drawerSearchQuery) return;
+      setState(() => _drawerSearchQuery = query);
+    });
+
+    _loadDrawerSortMode();
 
     _iconService = MarkerIconService(loadedIcons: _loadedIcons);
     _cacheService.init().then((_) {
@@ -131,6 +161,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     _cameraAnimationGraceTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     _httpClient.close();
+    _drawerSearchController.dispose();
     _panelOpenNotifier.dispose();
     _selectedDeviceNotifier.dispose();
     _selectedPositionNotifier.dispose();
@@ -165,16 +196,28 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       _isStyleLoaded = true;
     });
     _loadedIcons.clear();
-    // 樣式重建後舊 controller 的 symbol 已失效，必須清掉增量狀態
+    // 樣式重建後舊 controller 的 symbol 與軌跡線都已失效，必須清掉增量狀態
     _deviceSymbols.clear();
     _labelSymbols.clear();
+    _trailLine = null;
+    _trailPoints.clear();
+    _lastAddressLookupPoint = null;
 
     if (!mounted) return;
     final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
+    // 顏色要先在 await 之前取好，避免跨異步間隙使用 BuildContext
+    final String trailColorHex = _toHexColor(Theme.of(context).colorScheme.primary);
     await _mapController!.setSymbolIconAllowOverlap(true);
     await _mapController!.setSymbolIconIgnorePlacement(true);
     await _mapController!.setSymbolTextAllowOverlap(true);
     await _mapController!.setSymbolTextIgnorePlacement(true);
+
+    // 軌跡線必須在 symbol 之前建立，線圖層才會落在 marker 底下
+    _trailColorHex = trailColorHex;
+    await _createTrailLine(const <maplibre.LatLng>[], trailColorHex);
+    // 樣式重建後從「目前選取裝置」重新播種軌跡（換車才會清空，這裡不清）
+    _trailDeviceId = _currentDevice?.id;
+    _pushTrailGeometry();
 
     await _scheduleMarkerUpdate(traccarProvider);
 
@@ -185,7 +228,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       if (lastDeviceId != null) {
         final device = traccarProvider.devices.firstWhereOrNull((d) => d.id == lastDeviceId);
         if (device != null) {
-          _onDeviceSelected(device, traccarProvider.positions);
+          _onDeviceSelected(device, traccarProvider.positions, follow: false);
         } else {
           _zoomToFitAll(traccarProvider);
         }
@@ -239,6 +282,15 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     _onDeviceSelected(device, traccarProvider.positions, forceShowPanel: true);
   }
 
+  /// 只回傳「地圖上看得到」的裝置：有定位資料（緯度不為 null）才算。
+  /// 切換列只在這些裝置之間移動，沒有定位數據的車會自動跳過。
+  List<api.Device> _navigableDevices(TraccarProvider provider) {
+    return provider.devices.where((device) {
+      final pos = _findPositionOrNull(provider.positions, device.id);
+      return pos != null && pos.latitude != null;
+    }).toList();
+  }
+
   /// 指定裝置在清單中的位置（1-based，找不到時回 1），給切換列顯示「n / N」。
   int _deviceIndexIn(List<api.Device> devices, api.Device? device) {
     final index = devices.indexWhere((d) => d.id == device?.id);
@@ -248,19 +300,21 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   /// 底部控制列本體（裝置切換 + 縮放）。
   /// 面板開／關兩條繪製路徑都用這個 builder，所以永遠長得一樣。
   Widget _buildBottomControls(TraccarProvider traccarProvider, api.Device? currentDevice) {
+    // 切換列只在「有定位數據」的裝置之間移動，沒數據的車直接跳過。
+    final List<api.Device> navigableDevices = _navigableDevices(traccarProvider);
     return Row(
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
         Expanded(
           child: Align(
             alignment: Alignment.bottomCenter,
-            child: traccarProvider.devices.length > 1
+            child: navigableDevices.length > 1
                 ? _DeviceSwitcherBar(
                     deviceName: currentDevice?.name,
-                    index: _deviceIndexIn(traccarProvider.devices, currentDevice),
-                    total: traccarProvider.devices.length,
-                    onPrevious: () => _navigateToDevice(-1, traccarProvider.devices, traccarProvider.positions),
-                    onNext: () => _navigateToDevice(1, traccarProvider.devices, traccarProvider.positions),
+                    index: _deviceIndexIn(navigableDevices, currentDevice),
+                    total: navigableDevices.length,
+                    onPrevious: () => _navigateToDevice(-1, traccarProvider),
+                    onNext: () => _navigateToDevice(1, traccarProvider),
                   )
                 : const SizedBox.shrink(),
           ),
@@ -333,12 +387,9 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     // 這樣可以完美避開「跨異步間隙使用 BuildContext」的 linter 報錯
     final double scale = Provider.of<SettingsProvider>(context, listen: false).markerSizeScale;
 
-    if (_currentDevice != null && _isFollowingDevice) {
-      final currentPos = provider.positions.firstWhereOrNull((p) => p.deviceId == _currentDevice!.id);
-      if (currentPos != null && currentPos.latitude != null && currentPos.longitude != null) {
-        _animateCamera(maplibre.CameraUpdate.newLatLng(maplibre.LatLng(currentPos.latitude!.toDouble(), currentPos.longitude!.toDouble())));
-      }
-    }
+    // 選取的裝置：軌跡累積 + 跟隨鏡頭 + 明細面板同步
+    // 這是選取之後「持續跟隨」的唯一來源，每次位置更新都會跑一次。
+    _updateSelectedDeviceLive(provider);
 
     // 🚀 效能優化：不再「整批清空 + 重畫」所有 marker。
     // 改為「新增 / 原地更新 / 移除」：已有 marker 的設備用 updateSymbol 直接搬移，
@@ -411,6 +462,110 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     }
   }
 
+  /// 讓「目前選取的裝置」保持即時：累積軌跡、跟隨鏡頭、同步明細面板。
+  /// 選取當下只是把鏡頭帶過去一次，真正的持續跟隨靠這裡。
+  void _updateSelectedDeviceLive(TraccarProvider provider) {
+    final int? currentDeviceId = _currentDevice?.id;
+    if (currentDeviceId == null) return;
+
+    final api.Position? currentPos = provider.getPosition(currentDeviceId);
+    if (currentPos == null || currentPos.latitude == null || currentPos.longitude == null) return;
+
+    final maplibre.LatLng currentLatLng = maplibre.LatLng(currentPos.latitude!.toDouble(), currentPos.longitude!.toDouble());
+
+    // 軌跡：只累積目前選取裝置的移動
+    if (currentPos.deviceId == _trailDeviceId) {
+      _appendTrailPoint(currentLatLng);
+    }
+
+    // 跟隨鏡頭
+    if (_isFollowingDevice) {
+      _animateCamera(maplibre.CameraUpdate.newLatLng(currentLatLng));
+    }
+
+    // 明細面板：位置/地址跟著車跑（面板沒開也先更新，打開時就是最新的）
+    if (_selectedDeviceNotifier.value?.id == currentDeviceId) {
+      _selectedPositionNotifier.value = currentPos;
+      if (_isPanelOpen) {
+        _maybeRefreshPanelAddress(currentPos, currentLatLng);
+      }
+    }
+  }
+
+  // ── 選取裝置的軌跡線 ──────────────────────────────────────────────
+
+  /// 建立軌跡線圖層。正常情況會在 symbol 之前用「空幾何」先建立，這樣線才會
+  /// 畫在 marker 底下；樣式重建後舊的 Line 已失效，所以要重新呼叫。
+  Future<void> _createTrailLine(List<maplibre.LatLng> geometry, String colorHex) async {
+    final controller = _mapController;
+    if (controller == null) return;
+    try {
+      _trailLine = await controller.addLine(maplibre.LineOptions(geometry: geometry, lineColor: colorHex, lineWidth: 4.0, lineJoin: 'round'));
+    } catch (e) {
+      debugPrint('Trail line creation failed: $e');
+    }
+  }
+
+  /// 追加一個軌跡點：同一位置不重複加，有點變化才更新線圖層。
+  void _appendTrailPoint(maplibre.LatLng point) {
+    if (_trailPoints.isNotEmpty) {
+      final maplibre.LatLng last = _trailPoints.last;
+      if (last.latitude == point.latitude && last.longitude == point.longitude) return;
+    }
+
+    _trailPoints.add(point);
+    // 長時間跟車時限制點數，避免 list 無限成長
+    if (_trailPoints.length > _kMaxTrailPoints) {
+      _trailPoints.removeRange(0, _trailPoints.length - _kMaxTrailPoints);
+    }
+    _pushTrailGeometry();
+  }
+
+  void _pushTrailGeometry() {
+    final controller = _mapController;
+    if (controller == null) return;
+
+    final List<maplibre.LatLng> geometry = List<maplibre.LatLng>.of(_trailPoints);
+    final line = _trailLine;
+    if (line != null) {
+      controller.updateLine(line, maplibre.LineOptions(geometry: geometry));
+      return;
+    }
+
+    // 退路：上一行若建立空線失敗，這裡改用延遲建立。
+    // 缺點是線會被畫在 marker 上層，但至少軌跡不會整條消失。
+    final String? colorHex = _trailColorHex;
+    if (colorHex == null || geometry.length < 2) return;
+    _createTrailLine(geometry, colorHex);
+  }
+
+  /// 面板開啟時讓地址跟著車跑。位移小於 [_kAddressRefreshMeters] 就沿用舊值，
+  /// 避免每次位置更新都打一次地理編碼。
+  Future<void> _maybeRefreshPanelAddress(api.Position position, maplibre.LatLng latLng) async {
+    final maplibre.LatLng? last = _lastAddressLookupPoint;
+    if (last != null && _metersBetween(last, latLng) < _kAddressRefreshMeters) return;
+    _lastAddressLookupPoint = latLng;
+
+    try {
+      final String addr = await OfflineAddressService.getAddress(latLng.latitude, latLng.longitude);
+      if (!mounted) return;
+      // 查詢期間可能已經換車，避免把舊車的地址寫到新車的面板上
+      if (_selectedDeviceNotifier.value?.id != position.deviceId) return;
+      _selectedAddressNotifier.value = addr;
+    } catch (e) {
+      debugPrint("Geocoder error: $e");
+    }
+  }
+
+  /// 兩點間的概略距離（公尺）。只用來判斷要不要重查地址，不需要高精度。
+  double _metersBetween(maplibre.LatLng a, maplibre.LatLng b) {
+    const double earthRadius = 6371000;
+    final double dLat = (b.latitude - a.latitude) * math.pi / 180;
+    final double dLng = (b.longitude - a.longitude) * math.pi / 180;
+    final double h = math.sin(dLat / 2) * math.sin(dLat / 2) + math.cos(a.latitude * math.pi / 180) * math.cos(b.latitude * math.pi / 180) * math.sin(dLng / 2) * math.sin(dLng / 2);
+    return 2 * earthRadius * math.asin(math.min(1, math.sqrt(h)));
+  }
+
   PersistentBottomSheetController? _bottomSheetController;
   String _formatDate(DateTime? date) {
     if (date == null) return 'N/A';
@@ -468,79 +623,98 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     }
   }
 
-  void _navigateToDevice(int direction, List<api.Device> devices, List<api.Position> positions) {
+  void _navigateToDevice(int direction, TraccarProvider provider) {
+    // 沒有定位數據的裝置不會顯示在地圖上，切換時直接跳過它們。
+    final List<api.Device> devices = _navigableDevices(provider);
     if (devices.isEmpty) return;
-    int currentIndex = devices.indexWhere((d) => d.id == _currentDevice?.id);
-    int nextIndex = (currentIndex + direction) % devices.length;
-    if (nextIndex < 0) nextIndex = devices.length - 1;
+
+    final int currentIndex = devices.indexWhere((d) => d.id == _currentDevice?.id);
+    int nextIndex;
+    if (currentIndex < 0) {
+      // 目前裝置不在可見清單中（例如沒有定位）：往後切從頭、往前切從尾端開始。
+      nextIndex = direction > 0 ? 0 : devices.length - 1;
+    } else {
+      nextIndex = (currentIndex + direction) % devices.length;
+      if (nextIndex < 0) nextIndex = devices.length - 1;
+    }
 
     final nextDevice = devices[nextIndex];
     setState(() {
       _currentDevice = nextDevice;
-      _isFollowingDevice = true;
     });
 
-    _onDeviceSelected(nextDevice, positions, forceShowPanel: false);
+    // 直接跟隨切換到的車：鏡頭立刻回到它的「現在」位置，之後每次位置更新
+    // 都由 _updateSelectedDeviceLive 持續跟隨，軌跡也從這一刻重新開始。
+    _onDeviceSelected(nextDevice, provider.positions, forceShowPanel: false, follow: true);
   }
 
-  void _onDeviceSelected(api.Device device, List<api.Position> allPositions, {bool forceShowPanel = false}) async {
+  /// 唯一的「選取裝置」入口：上/下台車、點地圖 marker、Drawer 列表全部走這裡。
+  ///
+  /// - 一律取 [_positionMap] 裡最即時的位置（WebSocket 會同步寫入），
+  ///   避免拿到舊快照、停在「車輛移動前」的位置。
+  /// - `follow: true` 時直接開啟跟隨並立刻把鏡頭帶到現在位置，之後由
+  ///   [_updateSelectedDeviceLive] 隨每次位置更新持續跟隨。
+  /// - 軌跡從「選取那一刻」重新開始：換車清空，同一台車再次選取（例如按
+  ///   「我的位置」恢復跟隨）則保留既有軌跡。
+  void _onDeviceSelected(api.Device device, List<api.Position> allPositions, {bool forceShowPanel = false, bool follow = true}) async {
+    final bool deviceChanged = _selectedDeviceNotifier.value?.id != device.id;
+
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt('selectedDeviceId', device.id!);
     await prefs.setString('selectedDeviceName', device.name!);
 
-    final position = allPositions.firstWhere((p) => p.deviceId == device.id, orElse: () => api.Position(deviceId: device.id, latitude: 0.0, longitude: 0.0));
+    if (!mounted) return;
+    final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
 
-    String? immediateAddress;
+    final position = traccarProvider.getPosition(device.id!) ?? allPositions.firstWhere((p) => p.deviceId == device.id, orElse: () => api.Position(deviceId: device.id, latitude: 0.0, longitude: 0.0));
 
-    if (position.latitude != null && position.longitude != null) {
-      immediateAddress = OfflineAddressService.getAddressFromCache(position.latitude!.toDouble(), position.longitude!.toDouble());
-    }
+    final bool hasFix = position.latitude != null && position.longitude != null && position.latitude != 0.0;
+    final maplibre.LatLng? latLng = hasFix ? maplibre.LatLng(position.latitude!.toDouble(), position.longitude!.toDouble()) : null;
+
+    final String? immediateAddress = latLng == null ? null : OfflineAddressService.getAddressFromCache(latLng.latitude, latLng.longitude);
 
     _selectedDeviceNotifier.value = device;
     _selectedPositionNotifier.value = position;
-    _selectedAddressNotifier.value = immediateAddress ?? "Loading...";
+    _selectedAddressNotifier.value = immediateAddress ?? (hasFix ? "Loading..." : "No GPS Signal");
 
-    if (forceShowPanel) {
-      _isFollowingDevice = true;
+    if (follow && !_isFollowingDevice) {
+      setState(() => _isFollowingDevice = true);
+    }
+
+    // 軌跡：換車就從現在這個位置重新累積
+    if (deviceChanged) {
+      _trailDeviceId = device.id;
+      _trailPoints.clear();
+      _lastAddressLookupPoint = null;
+    }
+    if (latLng != null) {
+      _appendTrailPoint(latLng);
     }
 
     if (forceShowPanel || _isPanelOpen) {
       _showDeviceDetailPanel(device, position);
     }
 
-    if (device.id != null && mounted) {
-      Provider.of<TraccarProvider>(context, listen: false).prefetchDeviceHistory(device.id!);
+    if (device.id != null) {
+      traccarProvider.prefetchDeviceHistory(device.id!);
     }
 
-    if (position.latitude != null && position.longitude != null && position.latitude != 0.0) {
-      _animateCamera(maplibre.CameraUpdate.newLatLng(maplibre.LatLng(position.latitude!.toDouble(), position.longitude!.toDouble())));
+    if (latLng == null) return;
 
-      if (immediateAddress == null) {
-        try {
-          String addr = await OfflineAddressService.getAddress(position.latitude!.toDouble(), position.longitude!.toDouble());
+    await _animateCamera(maplibre.CameraUpdate.newLatLng(latLng));
+    // 立刻用最新資料跑一次 marker / 跟隨流程，不用等下一次位置更新
+    await _scheduleMarkerUpdate(traccarProvider);
 
-          if (mounted) {
-            _selectedAddressNotifier.value = addr;
+    if (immediateAddress != null) return;
 
-            if (forceShowPanel || _isPanelOpen) {
-              _showDeviceDetailPanel(device, position);
-            }
-          }
-        } catch (e) {
-          debugPrint("Geocoder error: $e");
-          if (mounted) {
-            _selectedAddressNotifier.value = "Location: ${position.latitude!.toStringAsFixed(4)}, ${position.longitude!.toStringAsFixed(4)}";
-            _showDeviceDetailPanel(device, position);
-          }
-        }
-      }
-    } else {
-      if (mounted) {
-        _selectedAddressNotifier.value = "No GPS Signal";
-        if (forceShowPanel || _isPanelOpen) {
-          _showDeviceDetailPanel(device, position);
-        }
-      }
+    try {
+      final String addr = await OfflineAddressService.getAddress(latLng.latitude, latLng.longitude);
+      if (!mounted) return;
+      _selectedAddressNotifier.value = addr;
+    } catch (e) {
+      debugPrint("Geocoder error: $e");
+      if (!mounted) return;
+      _selectedAddressNotifier.value = "Location: ${latLng.latitude.toStringAsFixed(4)}, ${latLng.longitude.toStringAsFixed(4)}";
     }
   }
 
@@ -724,73 +898,155 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       case 'idle':
         return Colors.orange;
       default:
-        return Colors.black;
+        // 這個顏色現在會套在車號文字上，寫死黑色在深色模式會看不見，
+        // 所以改跟著主題的 onSurface。
+        return Theme.of(context).colorScheme.onSurface;
     }
   }
 
+  /// 讀回使用者上次選的排序模式。讀不到（第一次用、或模式被改過名）就維持預設值。
+  Future<void> _loadDrawerSortMode() async {
+    final prefs = await SharedPreferences.getInstance();
+    final String? stored = prefs.getString(_kDrawerSortModeKey);
+    final mode = _DrawerSortMode.values.firstWhereOrNull((m) => m.name == stored);
+    if (mode != null && mounted) {
+      setState(() => _drawerSortMode = mode);
+    }
+  }
+
+  void _setDrawerSortMode(_DrawerSortMode mode) {
+    if (mode == _drawerSortMode) return;
+    setState(() => _drawerSortMode = mode);
+    SharedPreferences.getInstance().then((prefs) => prefs.setString(_kDrawerSortModeKey, mode.name));
+  }
+
   Widget _buildDeviceListDrawer(BuildContext context, TraccarProvider traccarProvider) {
-    final devices = traccarProvider.devices.toList();
+    final String query = _drawerSearchQuery.trim().toLowerCase();
+
+    // 依車牌（name）/ IMEI（uniqueId）/ 設備 ID 即時過濾
+    final devices = traccarProvider.devices.where((device) {
+      if (query.isEmpty) return true;
+      final String name = (device.name ?? '').toLowerCase();
+      final String uniqueId = (device.uniqueId ?? '').toLowerCase();
+      final String deviceId = (device.id ?? '').toString();
+      return name.contains(query) || uniqueId.contains(query) || deviceId.contains(query);
+    }).toList();
+
+    // 速度排序會用到每台車的當前速度；先在這裡一次算好（O(n)），
+    // 不要在 comparator 裡重複掃 positions 清單。
+    final Map<int, double> speedByDeviceId = {
+      for (final device in devices)
+        if (device.id != null) device.id!: (_findPositionOrNull(traccarProvider.positions, device.id)?.speed ?? 0.0).toDouble(),
+    };
+
     devices.sort((a, b) {
+      // 最愛（關注）永遠排最前面 —— 三種模式都一樣
       final aFav = traccarProvider.isFavorite(a.id!);
       final bFav = traccarProvider.isFavorite(b.id!);
-      if (aFav && !bFav) return -1;
-      if (!aFav && bFav) return 1;
-      return 0;
+      if (aFav != bFav) return aFav ? -1 : 1;
+
+      switch (_drawerSortMode) {
+        case _DrawerSortMode.favorite:
+          break;
+        case _DrawerSortMode.online:
+          final bool aOnline = a.status == 'online';
+          final bool bOnline = b.status == 'online';
+          if (aOnline != bOnline) return aOnline ? -1 : 1;
+          break;
+        case _DrawerSortMode.speed:
+          final int bySpeed = (speedByDeviceId[b.id] ?? 0).compareTo(speedByDeviceId[a.id] ?? 0);
+          if (bySpeed != 0) return bySpeed;
+          break;
+      }
+
+      // 同分時用車號決定順序。Dart 的 List.sort 不穩定，
+      // 沒有這個 tie-break 的話，同速度的車每次 rebuild 順序都會亂跳。
+      return (a.name ?? '').compareTo(b.name ?? '');
     });
 
     return Drawer(
       child: Column(
         children: [
-          DrawerHeader(
-            decoration: BoxDecoration(color: Theme.of(context).colorScheme.primary),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'trabcdefg',
-                  style: TextStyle(color: Theme.of(context).colorScheme.onPrimary, fontSize: 24, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 8),
-                Text(traccarProvider.currentUser?.email ?? 'Logged in user'.tr, style: TextStyle(color: Theme.of(context).colorScheme.onPrimary.withValues(alpha: 0.8), fontSize: 14)),
-              ],
+          // 原本的 App 名稱／用戶名稱換成搜尋框，可直接搜車牌、IMEI、設備 ID。
+          SafeArea(
+            bottom: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(_kEdgeInset, _kEdgeInset, _kEdgeInset, 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _drawerSearchController,
+                      textInputAction: TextInputAction.search,
+                      decoration: InputDecoration(
+                        hintText: 'sharedSearchDevices'.tr,
+                        prefixIcon: const Icon(CupertinoIcons.search),
+                        suffixIcon: _drawerSearchQuery.isEmpty ? null : IconButton(icon: const Icon(Icons.close_rounded), tooltip: 'Cancel'.tr, onPressed: () => _drawerSearchController.clear()),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide.none),
+                        filled: true,
+                        fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  // 排序模式：圖示就是目前模式，點一下可切換，選擇會被記住。
+                  PopupMenuButton<_DrawerSortMode>(
+                    initialValue: _drawerSortMode,
+                    tooltip: 'sharedSortBy'.tr,
+                    onSelected: _setDrawerSortMode,
+                    itemBuilder: (context) => [
+                      for (final mode in _DrawerSortMode.values)
+                        PopupMenuItem<_DrawerSortMode>(
+                          value: mode,
+                          child: Row(children: [Icon(mode.icon, size: 18), const SizedBox(width: 12), Text(mode.labelKey.tr)]),
+                        ),
+                    ],
+                    child: SizedBox(width: 44, height: 44, child: Icon(_drawerSortMode.icon, color: Theme.of(context).colorScheme.onSurface)),
+                  ),
+                ],
+              ),
             ),
           ),
           Expanded(
-            child: ListView.builder(
-              itemCount: devices.length,
-              itemBuilder: (context, index) {
-                final device = devices[index];
-                final position = _findPositionOrNull(traccarProvider.positions, device.id);
+            child: devices.isEmpty
+                ? Center(child: Text('sharedNoData'.tr))
+                : ListView.builder(
+                    itemCount: devices.length,
+                    itemBuilder: (context, index) {
+                      final device = devices[index];
+                      final position = _findPositionOrNull(traccarProvider.positions, device.id);
 
-                final speed = (position?.speed ?? 0.0).toStringAsFixed(1);
-                final isIgnitionOn = (position?.attributes as Map<String, dynamic>?)?['ignition'] == true;
+                      final speed = (position?.speed ?? 0.0).toStringAsFixed(1);
+                      final isIgnitionOn = (position?.attributes as Map<String, dynamic>?)?['ignition'] == true;
 
-                return ListTile(
-                  leading: Icon(Icons.circle, color: _getStatusColor(device.status), size: 10),
-                  title: Text(
-                    device.name ?? 'Unknown Device'.tr,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontWeight: FontWeight.w500),
+                      // 一台車一行：車號 + 速度/鑰匙都在同一行。
+                      // 狀態不再用圓點表示，直接把車號文字上色（_getStatusColor）。
+                      return ListTile(
+                        title: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                device.name ?? 'Unknown Device'.tr,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(fontWeight: FontWeight.w500, color: _getStatusColor(device.status)),
+                              ),
+                            ),
+                            if (double.parse(speed) > 0.0) ...[const SizedBox(width: 8), Text('$speed km/h', style: Theme.of(context).textTheme.bodySmall)],
+                            const SizedBox(width: 8),
+                            Icon(Icons.key, color: isIgnitionOn ? Colors.green : Colors.red, size: 16),
+                          ],
+                        ),
+                        onTap: () {
+                          Navigator.of(context).pop();
+
+                          if (position != null) {
+                            _onDeviceSelected(device, traccarProvider.positions, forceShowPanel: true);
+                          }
+                        },
+                      );
+                    },
                   ),
-                  subtitle: Row(
-                    children: [
-                      if (double.parse(speed) > 0.0) Text('$speed km/h'),
-                      const SizedBox(width: 12),
-                      Icon(Icons.key, color: isIgnitionOn ? Colors.green : Colors.red, size: 16),
-                    ],
-                  ),
-                  trailing: const Icon(CupertinoIcons.chevron_right),
-                  onTap: () {
-                    Navigator.of(context).pop();
-
-                    if (position != null) {
-                      _onDeviceSelected(device, traccarProvider.positions, forceShowPanel: true);
-                    }
-                  },
-                );
-              },
-            ),
           ),
         ],
       ),
@@ -934,7 +1190,10 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                     ),
                   ),
                 ),
-                if (_isStyleLoaded) _DataUpdateListener(data: traccarProvider.positions, onUpdate: () => _scheduleMarkerUpdate(traccarProvider)),
+                // 用 positionsRevision（遞增版本號）而不是 positions 清單：
+                // Provider 的 WebSocket 是 in-place 改同一個 List，
+                // 比對清單參考永遠相等，不會觸發更新。
+                if (_isStyleLoaded) _DataUpdateListener(data: traccarProvider.positionsRevision, onUpdate: () => _scheduleMarkerUpdate(traccarProvider)),
                 // 底部控制列（僅面板關閉時）：面板開啟時改由 sheet 內部繪製，
                 // 兩者用同一個 builder，所以永遠不會互相遮住。
                 if (!_isPanelOpen) Positioned(left: _kEdgeInset, right: _kEdgeInset, bottom: MediaQuery.of(context).padding.bottom + _kControlGap, child: _buildBottomControls(traccarProvider, _currentDevice)),
@@ -1169,3 +1428,28 @@ class _DataUpdateListenerState extends State<_DataUpdateListener> {
   @override
   Widget build(BuildContext context) => const SizedBox.shrink();
 }
+
+/// Drawer 車列表的排序模式。
+/// 注意：`name` 會被寫進 SharedPreferences，改名等於讓使用者的既有設定失效
+/// （讀不到時自動退回 favorite），要改請一併考慮相容性。
+enum _DrawerSortMode {
+  /// 最愛（關注）優先 —— 原本就有的排序行為。
+  favorite('sharedPriority', Icons.star_rounded),
+
+  /// 在線的車排在最前面。
+  online('dashboardOnline', Icons.wifi_tethering_rounded),
+
+  /// 速度高 → 低。
+  speed('positionSpeed', Icons.speed_rounded);
+
+  const _DrawerSortMode(this.labelKey, this.icon);
+
+  /// 直接沿用既有 l10n key，不需要新增字串到 60 多個語系檔。
+  final String labelKey;
+
+  final IconData icon;
+}
+
+/// 把顏色轉成 MapLibre 需要的 `#RRGGBB` 字串。
+/// 軌跡線要用主題色（不像回放頁可以寫死色碼），所以需要這個轉換。
+String _toHexColor(Color color) => '#${color.toARGB32().toRadixString(16).padLeft(8, '0').substring(2)}';

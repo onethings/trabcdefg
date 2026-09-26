@@ -23,6 +23,7 @@ import 'package:trabcdefg/models/route_positions_hive.dart';
 import 'package:trabcdefg/providers/map_style_provider.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
+import 'package:trabcdefg/src/utils/position_cleaner.dart';
 import 'package:trabcdefg/widgets/offline_address_service.dart';
 
 enum OSMMapType { normal, satellite }
@@ -195,8 +196,13 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
       final p1 = allPositions[i];
       final p2 = allPositions[i + 1];
 
-      if (p1.serverTime != null && p2.serverTime != null) {
-        final diff = p2.serverTime!.difference(p1.serverTime!);
+      // Use the recording time, not serverTime: backfilled records are stored
+      // long after they happened and would look like a stop.
+      final recordedAt1 = PositionCleaner.recordingTime(p1);
+      final recordedAt2 = PositionCleaner.recordingTime(p2);
+
+      if (recordedAt1 != null && recordedAt2 != null) {
+        final diff = recordedAt2.difference(recordedAt1);
         if (diff.inMinutes >= 5) {
           _stopPoints.add(LatLng(p1.latitude!.toDouble(), p1.longitude!.toDouble()));
         }
@@ -226,6 +232,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     });
 
     List<api.Position> fetchedPositions = [];
+    bool fetchedFromNetwork = false;
     final hiveKey = '$_deviceId-${DateFormat('yyyy-MM-dd').format(_historyFrom!)}';
 
     try {
@@ -249,26 +256,33 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
         if (!mounted) {
           return;
         }
+        fetchedFromNetwork = true;
         final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
 
         fetchedPositions = await api.PositionsApi(traccarProvider.apiClient).getPositions(deviceId: _deviceId, from: _historyFrom!.toUtc(), to: _historyTo!.toUtc()) ?? [];
-
-        if (fetchedPositions.isNotEmpty) {
-          await routeBox.put(hiveKey, RoutePositionsHive(dateKey: hiveKey, positionsJson: RoutePositionsHive.toJsonList(fetchedPositions), cachedAt: DateTime.now()));
-        }
       }
 
-      final originalPositions = List<api.Position>.from(fetchedPositions);
-      final filteredPositions = fetchedPositions.where((p) => (p.speed ?? 0) > 0).toList();
-      if (filteredPositions.isNotEmpty) {
-        fetchedPositions = filteredPositions;
+      // 補傳 (backfilled) batches arrive unordered, duplicated and with GPS
+      // spikes, which made the replay jump forwards and then backwards. Clean
+      // the track before caching so the next load is already usable.
+      final cleanedPositions = PositionCleaner.clean(fetchedPositions);
+      if (cleanedPositions.length != fetchedPositions.length) {
+        developer.log('Cleaned track: ${fetchedPositions.length} -> ${cleanedPositions.length} points', name: 'HistoryRouteScreen');
+      }
+      if (fetchedFromNetwork && cleanedPositions.isNotEmpty) {
+        await routeBox.put(hiveKey, RoutePositionsHive(dateKey: hiveKey, positionsJson: RoutePositionsHive.toJsonList(cleanedPositions), cachedAt: DateTime.now()));
       }
 
-      _calculateStops(originalPositions);
+      // Stops are detected on the cleaned track (still including stationary
+      // points), while playback skips the idle samples as before.
+      _calculateStops(cleanedPositions);
+
+      final movingPositions = cleanedPositions.where((p) => (p.speed ?? 0) > 0).toList();
+      final playbackPositions = movingPositions.isNotEmpty ? movingPositions : cleanedPositions;
 
       if (mounted) {
         setState(() {
-          _positions = fetchedPositions;
+          _positions = playbackPositions;
           _isLoading = false;
         });
 
@@ -552,7 +566,8 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
             Obx(() {
               final int idx = _playbackPositionRx.value.floor().clamp(0, max(0, _positions.length - 1));
               final pos = _positions.isEmpty ? null : _positions[idx];
-              final time = pos != null ? DateFormat('HH:mm:ss').format(pos.serverTime!.toLocal()) : "--:--:--";
+              final recordedAt = pos == null ? null : PositionCleaner.recordingTime(pos);
+              final time = recordedAt != null ? DateFormat('HH:mm:ss').format(recordedAt.toLocal()) : "--:--:--";
               final speed = pos != null ? ((pos.speed ?? 0) * 1.852).toStringAsFixed(1) : "0.0";
               final distance = _getDistanceFormatted(idx);
               return Row(

@@ -24,17 +24,35 @@ class DeviceDetailsScreen extends StatelessWidget {
   // 2. Define a function to fetch all required data
   Future<DeviceData> _fetchDeviceAndPositions(BuildContext context, int deviceId) async {
     final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
-    final devicesApi = api.DevicesApi(traccarProvider.apiClient);
-    final positionsApi = api.PositionsApi(traccarProvider.apiClient);
 
-    // Fetch the device details
-    final deviceList = await devicesApi.getDevices(id: deviceId);
-    final device = deviceList!.first; // Assuming the ID is unique and returns one device
+    // Resolve the device, preferring the list the provider already loaded at
+    // login / over the WebSocket. Traccar 4.x does not support all `/devices`
+    // query parameters, so the cached list is the most reliable source.
+    api.Device? device = _findDevice(traccarProvider.devices, deviceId);
 
-    // Fetch the latest position
-    final positions = await positionsApi.getPositions(deviceId: deviceId);
+    if (device == null) {
+      final devicesApi = api.DevicesApi(traccarProvider.apiClient);
+      final deviceList = await devicesApi.getDevices(id: deviceId);
+      device = deviceList == null ? null : _findDevice(deviceList, deviceId);
+    }
 
-    return DeviceData(device, positions);
+    if (device == null) {
+      throw Exception('Device $deviceId not found');
+    }
+
+    // Fetch the latest position in a server-version-safe way. Traccar 4.x
+    // rejects `/positions?deviceId=...` without `from`/`to` with a 400
+    // (NullPointerException in DateUtil.parseDate).
+    final position = await traccarProvider.fetchLatestPosition(deviceId);
+
+    return DeviceData(device, position == null ? null : [position]);
+  }
+
+  api.Device? _findDevice(List<api.Device> devices, int deviceId) {
+    for (final device in devices) {
+      if (device.id == deviceId) return device;
+    }
+    return null;
   }
 
   // 3. A dedicated row for copyable content (the phone number)

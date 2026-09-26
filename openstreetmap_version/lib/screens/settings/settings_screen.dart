@@ -351,7 +351,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final traccarProvider = context.read<TraccarProvider>();
 
     return Scaffold(
-      appBar: CupertinoNavigationBar(middle: Text('settingsTitle'.tr), automaticallyImplyLeading: false),
+      //   appBar: CupertinoNavigationBar(middle: Text('settingsTitle'.tr), automaticallyImplyLeading: false),
       body: SafeArea(
         child: Column(
           children: [

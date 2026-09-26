@@ -24,6 +24,16 @@ class TraccarProvider with ChangeNotifier {
   List<api.Device> _devices = [];
   List<api.Position> _positions = [];
   final Map<int, api.Position> _positionMap = {};
+
+  /// 位置資料版本號：每次 positions 有變動就 +1。
+  ///
+  /// 為什麼需要這個？因為 WebSocket 更新是 **in-place 修改同一個 List**
+  /// （見 [_listenToWebSocket] 的 positions 分支），清單本身的參考永遠不變；
+  /// 任何靠「清單參考是否改變」判斷要不要重畫地圖的地方都會失效。
+  /// 有這個遞增數字，map_screen 才能可靠地在每次位置更新後重畫 marker。
+  int _positionsRevision = 0;
+  int get positionsRevision => _positionsRevision;
+
   List<api.Event> _events = [];
   Map<int, api.Event> _latestDeviceEvent = {};
   List<api.Geofence> _geofences = [];
@@ -68,6 +78,80 @@ class TraccarProvider with ChangeNotifier {
     } catch (_) {
       return false;
     }
+  }
+
+  /// Whether the server is a legacy Traccar 4.x instance.
+  ///
+  /// Traccar 4.x `/api/positions` requires `from` and `to` whenever `deviceId`
+  /// is supplied. Without them the server calls `DateUtil.parseDate(null)`,
+  /// which throws a NullPointerException and the request fails with
+  /// `Application 400: ... < DateUtil:63 < PositionResource:67`.
+  /// Newer servers simply return the last known position instead.
+  bool get isLegacyServer {
+    if (_serverVersion == null) return false; // unknown -> try the modern call first
+    return !isVersionAtLeast('5.0');
+  }
+
+  /// Fetches the latest known position of a single [deviceId] in a way that
+  /// works on every Traccar version, 4.x included. Falls back to the position
+  /// already received over the WebSocket when every request fails.
+  Future<api.Position?> fetchLatestPosition(int deviceId) async {
+    if (_serverVersion == null) {
+      await fetchServerVersion();
+    }
+
+    // Modern servers accept `/positions?deviceId=...` without a time range.
+    if (!isLegacyServer) {
+      final direct = _firstPositionForDevice(await _requestPositions(deviceId: deviceId), deviceId);
+      if (direct != null) return direct;
+    }
+
+    // `/positions` without parameters returns the last known position of every
+    // device and is supported by all server versions.
+    final initial = _firstPositionForDevice(await _requestPositions(), deviceId);
+    if (initial != null) return initial;
+
+    // Last network resort: legacy servers can only filter by device together
+    // with an explicit time range, so ask for the recent history instead.
+    final now = DateTime.now().toUtc();
+    final recent = _latestPositionForDevice(await _requestPositions(deviceId: deviceId, from: now.subtract(const Duration(days: 7)), to: now.add(const Duration(minutes: 5))), deviceId);
+    if (recent != null) return recent;
+
+    // Offline, empty or slow server — use whatever the WebSocket delivered.
+    return getPosition(deviceId);
+  }
+
+  /// Runs a `/positions` request, returning null when it fails for any reason.
+  Future<List<api.Position>?> _requestPositions({int? deviceId, DateTime? from, DateTime? to}) async {
+    try {
+      final positionsApi = api.PositionsApi(apiClient);
+      return await positionsApi.getPositions(deviceId: deviceId, from: from, to: to) ?? [];
+    } catch (e) {
+      debugPrint('Positions request failed (deviceId: $deviceId, from: $from, to: $to): $e');
+      return null;
+    }
+  }
+
+  api.Position? _firstPositionForDevice(List<api.Position>? positions, int deviceId) {
+    if (positions == null) return null;
+    for (final position in positions) {
+      if (position.deviceId == deviceId) return position;
+    }
+    return null;
+  }
+
+  api.Position? _latestPositionForDevice(List<api.Position>? positions, int deviceId) {
+    if (positions == null) return null;
+    api.Position? latest;
+    for (final position in positions) {
+      if (position.deviceId != deviceId) continue;
+      final fixTime = position.fixTime;
+      final latestFixTime = latest?.fixTime;
+      if (latest == null || (fixTime != null && (latestFixTime == null || fixTime.isAfter(latestFixTime)))) {
+        latest = position;
+      }
+    }
+    return latest;
   }
 
   Set<int> _favoriteDeviceIds = {};
@@ -145,6 +229,7 @@ class TraccarProvider with ChangeNotifier {
             }
           }
         }
+        _positionsRevision++;
         notifyListeners();
       }
 
@@ -224,6 +309,7 @@ class TraccarProvider with ChangeNotifier {
     _devices = [];
     _positions = [];
     _positionMap.clear();
+    _positionsRevision++;
     _events = [];
     _latestDeviceEvent = {};
     _geofences = [];
@@ -277,6 +363,7 @@ class TraccarProvider with ChangeNotifier {
           _positionMap[pos.deviceId!] = pos;
         }
       }
+      _positionsRevision++;
     } finally {
       _isLoading = false;
       notifyListeners();
