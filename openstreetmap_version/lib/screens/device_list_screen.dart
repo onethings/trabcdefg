@@ -303,7 +303,7 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
         }
       },
       child: ListView.builder(
-        padding: const EdgeInsets.fromLTRB(0, 4, 0, 54),
+        padding: const EdgeInsets.fromLTRB(0, 4, 0, 84),
         itemCount: filteredDevices.length,
         itemBuilder: (context, index) {
           final device = filteredDevices[index];
