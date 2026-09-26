@@ -642,7 +642,7 @@ const Map<String, String> sw = {
   "dashboardOnline": "Imeunganishwa",
   "dashboardMoving": "Inatembea",
   "dashboardOffline": "Haikuunganishwa",
-  "dashboardTotalDistance": "Umbali Wote Leo",
+  "dashboardTodayDistance": "Umbali wa leo",
   "dashboardRecentActivity": "Shughuli za Hivi Karibuni",
   "dashboardNoEvents": "Hakuna matukio ya hivi karibuni.",
   "deviceOnline": "Kifaa Kimeunganishwa",

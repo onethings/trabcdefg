@@ -642,7 +642,7 @@ const Map<String, String> ca = {
   "dashboardOnline": "En línia",
   "dashboardMoving": "En moviment",
   "dashboardOffline": "Fora de línia",
-  "dashboardTotalDistance": "Distància total d'avui",
+  "dashboardTodayDistance": "Quilometratge d'avui",
   "dashboardRecentActivity": "Activitat Recent",
   "dashboardNoEvents": "No hi ha esdeveniments recents.",
   "deviceOnline": "Dispositiu en línia",

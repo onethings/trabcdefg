@@ -662,7 +662,7 @@ const Map<String, String> enUs = {
   "dashboardOnline": "Online",
   "dashboardMoving": "Moving",
   "dashboardOffline": "Offline",
-  "dashboardTotalDistance": "Today's Distance",
+  "dashboardTodayDistance": "Today's Distance",
   // ── Detail Panel 狀態列（油量 / 當日油耗）──
   "dashboardFuelLevel": "Fuel Level",
   "dashboardSpentFuel": "Fuel Used Today",

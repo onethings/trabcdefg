@@ -642,7 +642,7 @@ const Map<String, String> si = {
   "dashboardOnline": "සම්බන්ධයි",
   "dashboardMoving": "ගමන් කරමින්",
   "dashboardOffline": "සම්බන්ධ වී නැත",
-  "dashboardTotalDistance": "අද මුළු දුර",
+  "dashboardTodayDistance": "අද දුර",
   "dashboardRecentActivity": "මෑත කාලීන ක්‍රියාකාරකම්",
   "dashboardNoEvents": "මෑත කාලීන සිදුවීම් නැත.",
   "deviceOnline": "උපාංගය සම්බන්ධයි",

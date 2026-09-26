@@ -642,7 +642,7 @@ const Map<String, String> et = {
   "dashboardOnline": "Sees",
   "dashboardMoving": "Liigub",
   "dashboardOffline": "Väljas",
-  "dashboardTotalDistance": "Tänane koguvahemaa",
+  "dashboardTodayDistance": "Täna läbitud vahemaa",
   "dashboardRecentActivity": "Viimased tegevused",
   "dashboardNoEvents": "Viimased sündmused puuduvad.",
   "deviceOnline": "Seade on võrgus",

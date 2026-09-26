@@ -642,7 +642,7 @@ const Map<String, String> hi = {
   "dashboardOnline": "ऑनलाइन",
   "dashboardMoving": "चल रहा है",
   "dashboardOffline": "ऑफलाइन",
-  "dashboardTotalDistance": "आज की कुल दूरी",
+  "dashboardTodayDistance": "आज की दूरी",
   "dashboardRecentActivity": "हाल की गतिविधि",
   "dashboardNoEvents": "कोई हाल की घटना नहीं।",
   "deviceOnline": "डिवाइस ऑनलाइन",

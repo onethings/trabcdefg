@@ -642,7 +642,7 @@ const Map<String, String> ml = {
   "dashboardOnline": "ഓൺലൈൻ",
   "dashboardMoving": "നീങ്ങിക്കൊണ്ടിരിക്കുന്നു",
   "dashboardOffline": "ഓഫ്‌ലൈൻ",
-  "dashboardTotalDistance": "ഇന്നത്തെ ആകെ ദൂരം",
+  "dashboardTodayDistance": "ഇന്ന് യാത്ര ചെയ്ത ദൂരം",
   "dashboardRecentActivity": "സമീപകാല പ്രവർത്തനങ്ങൾ",
   "dashboardNoEvents": "സമീപകാല സംഭവങ്ങൾ ഒന്നുമില്ല.",
   "deviceOnline": "ഉപകരണം ഓൺലൈനിലാണ്",

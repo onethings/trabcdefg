@@ -60,14 +60,17 @@ class _GroupsScreenState extends State<GroupsScreen> {
           }
         },
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () async {
-          final newGroup = await Navigator.push(context, MaterialPageRoute(builder: (context) => const AddGroupScreen()));
-          if (newGroup != null) {
-            _fetchGroups();
-          }
-        },
-        child: const Icon(CupertinoIcons.add),
+      floatingActionButton: Transform.translate(
+        offset: const Offset(0, -45), // 往上移動 45px
+        child: FloatingActionButton(
+          onPressed: () async {
+            final newGroup = await Navigator.push(context, MaterialPageRoute(builder: (context) => const AddGroupScreen()));
+            if (newGroup != null) {
+              _fetchGroups();
+            }
+          },
+          child: const Icon(CupertinoIcons.add),
+        ),
       ),
     );
   }

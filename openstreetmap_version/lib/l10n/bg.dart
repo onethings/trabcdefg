@@ -644,7 +644,7 @@ const Map<String, String> bg = {
   "dashboardOnline": "На линия",
   "dashboardMoving": "В движение",
   "dashboardOffline": "Извън линия",
-  "dashboardTotalDistance": "Общо разстояние за днес",
+  "dashboardTodayDistance": "Дневен пробег",
   "dashboardRecentActivity": "Скорошна активност",
   "dashboardNoEvents": "Няма скорошни събития.",
   "deviceOnline": "Устройството е онлайн",

@@ -660,7 +660,7 @@ const Map<String, String> zhTw = {
   "dashboardOnline": "上線",
   "dashboardMoving": "移動中",
   "dashboardOffline": "離線",
-  "dashboardTotalDistance": "今日里程",
+  "dashboardTodayDistance": "今日里程",
   // ── Detail Panel 狀態列（油量 / 當日油耗）──
   "dashboardFuelLevel": "油量",
   "dashboardSpentFuel": "今日油耗",

@@ -64,7 +64,7 @@ class DashboardScreen extends StatelessWidget {
                     const SizedBox(height: 24),
                     _buildStatusSection(context, onlineCount, movingCount, offlineCount, totalCount),
                     const SizedBox(height: 24),
-                    _buildSummaryCard(context, 'dashboardTotalDistance'.tr, '${totalKm.toStringAsFixed(1)} ${"km".tr}', Icons.auto_graph_rounded, theme.colorScheme.primary),
+                    _buildSummaryCard(context, 'dashboardTodayDistance'.tr, '${totalKm.toStringAsFixed(1)} ${"km".tr}', Icons.auto_graph_rounded, theme.colorScheme.primary),
                     const SizedBox(height: 24),
                     Text('sharedAlarms'.tr, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 12),

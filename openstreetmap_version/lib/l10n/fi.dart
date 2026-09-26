@@ -642,7 +642,7 @@ const Map<String, String> fi = {
   "dashboardOnline": "Online",
   "dashboardMoving": "Liikkeellä",
   "dashboardOffline": "Offline",
-  "dashboardTotalDistance": "Tämän päivän kokonaismatka",
+  "dashboardTodayDistance": "Tänään kuljettu matka",
   "dashboardRecentActivity": "Viimeaikainen toiminta",
   "dashboardNoEvents": "Ei viimeaikaisia tapahtumia.",
   "deviceOnline": "Laite linjoilla",

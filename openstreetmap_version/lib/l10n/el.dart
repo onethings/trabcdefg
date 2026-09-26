@@ -642,7 +642,7 @@ const Map<String, String> el = {
   "dashboardOnline": "Σε σύνδεση",
   "dashboardMoving": "Σε κίνηση",
   "dashboardOffline": "Εκτός σύνδεσης",
-  "dashboardTotalDistance": "Συνολική απόσταση σήμερα",
+  "dashboardTodayDistance": "Συνολική απόσταση σήμερα",
   "dashboardRecentActivity": "Πρόσφατη δραστηριότητα",
   "dashboardNoEvents": "Δεν υπάρχουν πρόσφατα γεγονότα.",
   "deviceOnline": "Συσκευή σε σύνδεση",

@@ -4,8 +4,7 @@ import 'dart:developer' as developer; // For production-safe logging
 import 'dart:io';
 
 import 'package:csv/csv.dart';
-import 'package:excel/excel.dart'
-    as excel_lib; // FIX: camelCase to lower_case_with_underscores
+import 'package:excel/excel.dart' as excel_lib; // FIX: camelCase to lower_case_with_underscores
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -37,10 +36,7 @@ class _DevicesScreenState extends State<DevicesScreen> {
   }
 
   void _fetchDevices() {
-    final traccarProvider = Provider.of<TraccarProvider>(
-      context,
-      listen: false,
-    );
+    final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
     final devicesApi = api.DevicesApi(traccarProvider.apiClient);
     setState(() {
       _devicesFuture = devicesApi.getDevices().then((devices) {
@@ -53,106 +49,56 @@ class _DevicesScreenState extends State<DevicesScreen> {
 
   void _filterDevices(String query) {
     setState(() {
-      _filteredDevices = _allDevices
-          .where(
-            (device) =>
-                device.name!.toLowerCase().contains(query.toLowerCase()) ||
-                device.uniqueId!.toLowerCase().contains(query.toLowerCase()),
-          )
-          .toList();
+      _filteredDevices = _allDevices.where((device) => device.name!.toLowerCase().contains(query.toLowerCase()) || device.uniqueId!.toLowerCase().contains(query.toLowerCase())).toList();
     });
   }
 
   void _deleteDevice(int deviceId) async {
     try {
-      final traccarProvider = Provider.of<TraccarProvider>(
-        context,
-        listen: false,
-      );
+      final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
       final apiClient = traccarProvider.apiClient;
 
       final path = '/devices/$deviceId';
-      final response = await apiClient.invokeAPI(
-        path,
-        'DELETE',
-        [],
-        {},
-        <String, String>{},
-        <String, String>{},
-        'application/json',
-      );
+      final response = await apiClient.invokeAPI(path, 'DELETE', [], {}, <String, String>{}, <String, String>{}, 'application/json');
 
       // FIX: Guard BuildContext usage across an async gap using mounted check
       if (!mounted) return;
 
       if (response.statusCode == 204) {
         _fetchDevices();
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('deviceDeleteSuccess'.tr)));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('deviceDeleteSuccess'.tr)));
       } else {
         // FIX: Replaced print() with production-safe developer.log()
-        developer.log(
-          'Server responded with status code: ${response.statusCode}',
-          name: 'DevicesScreen',
-        );
-        developer.log(
-          'Server response body: ${response.body}',
-          name: 'DevicesScreen',
-        );
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'deviceDeleteFailed'.trParams({
-                'error':
-                    'Server responded with status code: ${response.statusCode}',
-              }),
-            ),
-          ),
-        );
+        developer.log('Server responded with status code: ${response.statusCode}', name: 'DevicesScreen');
+        developer.log('Server response body: ${response.body}', name: 'DevicesScreen');
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('deviceDeleteFailed'.trParams({'error': 'Server responded with status code: ${response.statusCode}'}))));
       }
     } catch (e) {
       // FIX: Replaced print() with developer.log()
       developer.log('Caught an exception: $e', name: 'DevicesScreen', error: e);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('deviceDeleteFailed'.trParams({'error': e.toString()})),
-        ),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('deviceDeleteFailed'.trParams({'error': e.toString()}))));
     }
   }
 
   void _editDevice(api.Device device) async {
-    final updatedDevice = await Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => AddDeviceScreen(device: device)),
-    );
+    final updatedDevice = await Navigator.push(context, MaterialPageRoute(builder: (context) => AddDeviceScreen(device: device)));
 
     // FIX: Guard BuildContext usage across async gap
     if (!mounted) return;
 
     if (updatedDevice != null) {
       try {
-        final traccarProvider = Provider.of<TraccarProvider>(
-          context,
-          listen: false,
-        );
+        final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
         final devicesApi = api.DevicesApi(traccarProvider.apiClient);
         await devicesApi.putDevicesId(updatedDevice.id!, updatedDevice);
 
         if (!mounted) return;
         _fetchDevices();
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('deviceUpdateSuccess'.tr)));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('deviceUpdateSuccess'.tr)));
       } catch (e) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'deviceUpdateFailed'.trParams({'error': e.toString()}),
-            ),
-          ),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('deviceUpdateFailed'.trParams({'error': e.toString()}))));
       }
     }
   }
@@ -161,8 +107,7 @@ class _DevicesScreenState extends State<DevicesScreen> {
 
   void _exportDevicesToCsv() async {
     if (_allDevices.isEmpty) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('sharedNoData'.tr)));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('sharedNoData'.tr)));
       return;
     }
 
@@ -184,15 +129,12 @@ class _DevicesScreenState extends State<DevicesScreen> {
     final xFile = XFile(path, mimeType: 'text/csv');
 
     // FIX: Replaced deprecated static Share class call with updated instanced SharePlus signature
-    await SharePlus.instance.share(
-      ShareParams(files: [xFile], text: 'Device list export'),
-    );
+    await SharePlus.instance.share(ShareParams(files: [xFile], text: 'Device list export'));
   }
 
   void _exportDevicesToXlsx() async {
     if (_allDevices.isEmpty) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('sharedNoData'.tr)));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('sharedNoData'.tr)));
       return;
     }
 
@@ -223,28 +165,16 @@ class _DevicesScreenState extends State<DevicesScreen> {
     if (!mounted) return;
 
     if (bytes == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'errorGeneral'.trParams({'error': 'Failed to encode Excel file'}),
-          ),
-        ),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('errorGeneral'.trParams({'error': 'Failed to encode Excel file'}))));
       return;
     }
 
     await file.writeAsBytes(bytes);
 
-    final xFile = XFile(
-      path,
-      mimeType:
-          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    );
+    final xFile = XFile(path, mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
 
     // FIX: Replaced deprecated static Share class call with updated instanced SharePlus signature
-    await SharePlus.instance.share(
-      ShareParams(files: [xFile], text: 'Device list export'),
-    );
+    await SharePlus.instance.share(ShareParams(files: [xFile], text: 'Device list export'));
   }
 
   void _showExportFormatSelectionDialog() {
@@ -263,13 +193,7 @@ class _DevicesScreenState extends State<DevicesScreen> {
               children: <Widget>[
                 Padding(
                   padding: const EdgeInsets.only(bottom: 8),
-                  child: Text(
-                    'Export Format'.tr,
-                    style: const TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
+                  child: Text('Export Format'.tr, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
                 ),
                 ListTile(
                   leading: const Icon(Icons.description),
@@ -309,10 +233,7 @@ class _DevicesScreenState extends State<DevicesScreen> {
               decoration: InputDecoration(
                 hintText: 'sharedSearch'.tr,
                 prefixIcon: const Icon(CupertinoIcons.search),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(20),
-                  borderSide: BorderSide.none,
-                ),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide.none),
                 filled: true,
                 fillColor: Colors.white,
               ),
@@ -320,12 +241,7 @@ class _DevicesScreenState extends State<DevicesScreen> {
             ),
           ),
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.download),
-            onPressed: _showExportFormatSelectionDialog,
-          ),
-        ],
+        actions: [IconButton(icon: const Icon(Icons.download), onPressed: _showExportFormatSelectionDialog)],
       ),
       body: FutureBuilder<List<api.Device>?>(
         future: _devicesFuture,
@@ -333,11 +249,7 @@ class _DevicesScreenState extends State<DevicesScreen> {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           } else if (snapshot.hasError) {
-            return Center(
-              child: Text(
-                'errorGeneral'.trParams({'error': snapshot.error.toString()}),
-              ),
-            );
+            return Center(child: Text('errorGeneral'.trParams({'error': snapshot.error.toString()})));
           } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
             return Center(child: Text('sharedNoData'.tr));
           } else {
@@ -351,24 +263,12 @@ class _DevicesScreenState extends State<DevicesScreen> {
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      IconButton(
-                        icon: const Icon(CupertinoIcons.pencil),
-                        onPressed: () => _editDevice(device),
-                      ),
-                      IconButton(
-                        icon: const Icon(CupertinoIcons.trash),
-                        onPressed: () => _deleteDevice(device.id!),
-                      ),
+                      IconButton(icon: const Icon(CupertinoIcons.pencil), onPressed: () => _editDevice(device)),
+                      IconButton(icon: const Icon(CupertinoIcons.trash), onPressed: () => _deleteDevice(device.id!)),
                       IconButton(
                         icon: const Icon(Icons.link),
                         onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) =>
-                                  ConnectionsScreen(deviceId: device.id!),
-                            ),
-                          );
+                          Navigator.push(context, MaterialPageRoute(builder: (context) => ConnectionsScreen(deviceId: device.id!)));
                         },
                       ),
                     ],
@@ -379,17 +279,17 @@ class _DevicesScreenState extends State<DevicesScreen> {
           }
         },
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () async {
-          final newDevice = await Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const AddDeviceScreen()),
-          );
-          if (newDevice != null) {
-            _fetchDevices();
-          }
-        },
-        child: const Icon(CupertinoIcons.add),
+      floatingActionButton: Transform.translate(
+        offset: const Offset(0, -45), // 往上移動 45px
+        child: FloatingActionButton(
+          onPressed: () async {
+            final newDevice = await Navigator.push(context, MaterialPageRoute(builder: (context) => const AddDeviceScreen()));
+            if (newDevice != null) {
+              _fetchDevices();
+            }
+          },
+          child: const Icon(CupertinoIcons.add),
+        ),
       ),
     );
   }

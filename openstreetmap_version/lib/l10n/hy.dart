@@ -642,7 +642,7 @@ const Map<String, String> hy = {
   "dashboardOnline": "Առցանց",
   "dashboardMoving": "Շարժման մեջ",
   "dashboardOffline": "Անցանց",
-  "dashboardTotalDistance": "Այսօրվա ընդհանուր հեռավորությունը",
+  "dashboardTodayDistance": "Այսօր հեռավորությունը",
   "dashboardRecentActivity": "Վերջին գործողությունները",
   "dashboardNoEvents": "Վերջին իրադարձությունները բացակայում են:",
   "deviceOnline": "Սարքը առցանց է",

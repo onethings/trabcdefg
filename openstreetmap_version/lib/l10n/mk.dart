@@ -642,7 +642,7 @@ const Map<String, String> mk = {
   "dashboardOnline": "Онлајн",
   "dashboardMoving": "Во движење",
   "dashboardOffline": "Офлајн",
-  "dashboardTotalDistance": "Вкупно растојание денес",
+  "dashboardTodayDistance": "Денешно растојание",
   "dashboardRecentActivity": "Неодамнешна активност",
   "dashboardNoEvents": "Нема неодамнешни настани.",
   "deviceOnline": "Уредот е онлајн",

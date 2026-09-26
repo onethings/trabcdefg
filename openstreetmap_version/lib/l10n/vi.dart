@@ -642,7 +642,7 @@ const Map<String, String> vi = {
   "dashboardOnline": "Trực tuyến",
   "dashboardMoving": "Đang di chuyển",
   "dashboardOffline": "Ngoại tuyến",
-  "dashboardTotalDistance": "Tổng quãng đường hôm nay",
+  "dashboardTodayDistance": "Quãng đường hôm nay",
   "dashboardRecentActivity": "Hoạt động gần đây",
   "dashboardNoEvents": "Không có sự kiện gần đây.",
   "deviceOnline": "Thiết bị trực tuyến",

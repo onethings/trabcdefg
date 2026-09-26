@@ -642,7 +642,7 @@ const Map<String, String> id = {
   "dashboardOnline": "Online",
   "dashboardMoving": "Bergerak",
   "dashboardOffline": "Offline",
-  "dashboardTotalDistance": "Total Jarak Hari Ini",
+  "dashboardTodayDistance": "Jarak Hari Ini",
   "dashboardRecentActivity": "Aktivitas Terkini",
   "dashboardNoEvents": "Tidak ada kejadian terbaru.",
   "deviceOnline": "Perangkat Online",

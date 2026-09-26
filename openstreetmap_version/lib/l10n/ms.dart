@@ -642,7 +642,7 @@ const Map<String, String> ms = {
   "dashboardOnline": "Dalam Talian",
   "dashboardMoving": "Bergerak",
   "dashboardOffline": "Luar Talian",
-  "dashboardTotalDistance": "Jumlah Jarak Hari Ini",
+  "dashboardTodayDistance": "Jarak Hari Ini",
   "dashboardRecentActivity": "Aktiviti Terkini",
   "dashboardNoEvents": "Tiada acara terkini.",
   "deviceOnline": "Peranti Dalam Talian",

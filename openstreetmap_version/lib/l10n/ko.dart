@@ -642,7 +642,7 @@ const Map<String, String> ko = {
   "dashboardOnline": "온라인",
   "dashboardMoving": "이동 중",
   "dashboardOffline": "오프라인",
-  "dashboardTotalDistance": "오늘의 총 주행거리",
+  "dashboardTodayDistance": "오늘 주행거리",
   "dashboardRecentActivity": "최근 활동",
   "dashboardNoEvents": "최근 이벤트가 없습니다.",
   "deviceOnline": "기기 온라인",

@@ -642,7 +642,7 @@ const Map<String, String> km = {
   "dashboardOnline": "អនឡាញ",
   "dashboardMoving": "កំពុងធ្វើចលនា",
   "dashboardOffline": "ក្រៅបណ្តាញ",
-  "dashboardTotalDistance": "ចម្ងាយសរុបថ្ងៃនេះ",
+  "dashboardTodayDistance": "ចម្ងាយថ្ងៃនេះ",
   "dashboardRecentActivity": "សកម្មភាពថ្មីៗ",
   "dashboardNoEvents": "មិនមានព្រឹត្តិការណ៍ថ្មីៗទេ។",
   "deviceOnline": "ឧបករណ៍អនឡាញ",

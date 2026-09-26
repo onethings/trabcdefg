@@ -642,7 +642,7 @@ const Map<String, String> he = {
   "dashboardOnline": "מחובר",
   "dashboardMoving": "בתנועה",
   "dashboardOffline": "לא מחובר",
-  "dashboardTotalDistance": "מרחק כולל להיום",
+  "dashboardTodayDistance": "מרחק היום",
   "dashboardRecentActivity": "פעילות אחרונה",
   "dashboardNoEvents": "אין אירועים אחרונים.",
   "deviceOnline": "מכשיר מחובר",

@@ -642,7 +642,7 @@ const Map<String, String> sq = {
   "dashboardOnline": "Online",
   "dashboardMoving": "Në lëvizje",
   "dashboardOffline": "Offline",
-  "dashboardTotalDistance": "Distanca Totale Sot",
+  "dashboardTodayDistance": "Distanca e sotme",
   "dashboardRecentActivity": "Aktiviteti i Fundit",
   "dashboardNoEvents": "Nuk ka ngjarje të fundit.",
   "deviceOnline": "Pajisja Online",

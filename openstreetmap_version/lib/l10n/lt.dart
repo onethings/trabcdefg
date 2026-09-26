@@ -642,7 +642,7 @@ const Map<String, String> lt = {
   "dashboardOnline": "Prisijungęs",
   "dashboardMoving": "Juda",
   "dashboardOffline": "Neprisijungęs",
-  "dashboardTotalDistance": "Šios dienos bendras atstumas",
+  "dashboardTodayDistance": "Šiandien nuvažiuotas atstumas",
   "dashboardRecentActivity": "Naujausia veikla",
   "dashboardNoEvents": "Naujausių įvykių nėra.",
   "deviceOnline": "Įrenginis prisijungęs",

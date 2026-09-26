@@ -61,14 +61,17 @@ class _MaintenanceScreenState extends State<MaintenanceScreen> {
           }
         },
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () async {
-          final newMaintenance = await Navigator.push(context, MaterialPageRoute(builder: (context) => const AddMaintenanceScreen()));
-          if (newMaintenance != null) {
-            _fetchMaintenance();
-          }
-        },
-        child: const Icon(CupertinoIcons.add),
+      floatingActionButton: Transform.translate(
+        offset: const Offset(0, -45), // 往上移動 45px
+        child: FloatingActionButton(
+          onPressed: () async {
+            final newMaintenance = await Navigator.push(context, MaterialPageRoute(builder: (context) => const AddMaintenanceScreen()));
+            if (newMaintenance != null) {
+              _fetchMaintenance();
+            }
+          },
+          child: const Icon(CupertinoIcons.add),
+        ),
       ),
     );
   }

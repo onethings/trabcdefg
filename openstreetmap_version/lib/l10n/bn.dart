@@ -644,7 +644,7 @@ const Map<String, String> bn = {
   "dashboardOnline": "অনলাইন",
   "dashboardMoving": "চলমান",
   "dashboardOffline": "অফলাইন",
-  "dashboardTotalDistance": "আজকের মোট দূরত্ব",
+  "dashboardTodayDistance": "আজকের দূরত্ব ",
   "dashboardRecentActivity": "সাম্প্রতিক কার্যক্রম",
   "dashboardNoEvents": "কোনো সাম্প্রতিক ঘটনা নেই।",
   "deviceOnline": "ডিভাইস অনলাইন",

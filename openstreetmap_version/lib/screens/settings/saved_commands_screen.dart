@@ -62,14 +62,17 @@ class _SavedCommandsScreenState extends State<SavedCommandsScreen> {
           }
         },
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () async {
-          final newCommand = await Navigator.push(context, MaterialPageRoute(builder: (context) => const AddSavedCommandScreen()));
-          if (newCommand != null) {
-            _fetchCommands();
-          }
-        },
-        child: const Icon(CupertinoIcons.add),
+      floatingActionButton: Transform.translate(
+        offset: const Offset(0, -45),
+        child: FloatingActionButton(
+          onPressed: () async {
+            final newCommand = await Navigator.push(context, MaterialPageRoute(builder: (context) => const AddSavedCommandScreen()));
+            if (newCommand != null) {
+              _fetchCommands();
+            }
+          },
+          child: const Icon(CupertinoIcons.add),
+        ),
       ),
     );
   }

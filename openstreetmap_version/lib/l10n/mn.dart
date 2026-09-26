@@ -642,7 +642,7 @@ const Map<String, String> mn = {
   "dashboardOnline": "Онлайн",
   "dashboardMoving": "Хөдөлж байна",
   "dashboardOffline": "Офлайн",
-  "dashboardTotalDistance": "Өнөөдрийн нийт зай",
+  "dashboardTodayDistance": "Өнөөдрийн нийт зай",
   "dashboardRecentActivity": "Сүүлийн үеийн үйл ажиллагаа",
   "dashboardNoEvents": "Сүүлийн үеийн үйл явдал байхгүй.",
   "deviceOnline": "Төхөөрөмж онлайн байна",

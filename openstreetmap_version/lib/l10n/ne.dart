@@ -642,7 +642,7 @@ const Map<String, String> ne = {
   "dashboardOnline": "अनलाइन",
   "dashboardMoving": "चल्दै",
   "dashboardOffline": "अफलाइन",
-  "dashboardTotalDistance": "आजको कुल दूरी",
+  "dashboardTodayDistance": "आजको दूरी",
   "dashboardRecentActivity": "हालैका गतिविधि",
   "dashboardNoEvents": "हालै कुनै घटनाहरू छैनन्।",
   "deviceOnline": "डिभाइस अनलाइन छ",

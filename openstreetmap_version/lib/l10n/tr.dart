@@ -642,7 +642,7 @@ const Map<String, String> tr = {
   "dashboardOnline": "Çevrimiçi",
   "dashboardMoving": "Hareket halinde",
   "dashboardOffline": "Çevrimdışı",
-  "dashboardTotalDistance": "Bugünkü Toplam Mesafe",
+  "dashboardTodayDistance": "Bugün Mesafe",
   "dashboardRecentActivity": "Son Etkinlikler",
   "dashboardNoEvents": "Son etkinlik yok.",
   "deviceOnline": "Cihaz Çevrimiçi",

@@ -642,7 +642,7 @@ const Map<String, String> sr = {
   "dashboardOnline": "Na mreži",
   "dashboardMoving": "U pokretu",
   "dashboardOffline": "Van mreže",
-  "dashboardTotalDistance": "Ukupna distanca danas",
+  "dashboardTodayDistance": "Danasnja udaljenost",
   "dashboardRecentActivity": "Nedavna aktivnost",
   "dashboardNoEvents": "Nema nedavnih događaja.",
   "deviceOnline": "Uređaj je na mreži",

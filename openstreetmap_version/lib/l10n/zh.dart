@@ -663,7 +663,7 @@ const Map<String, String> zhCN = {
   "dashboardOnline": "在线",
   "dashboardMoving": "移动中",
   "dashboardOffline": "离线",
-  "dashboardTotalDistance": "今日里程",
+  "dashboardTodayDistance": "今日里程",
   // ── Detail Panel 状态列（油量 / 今日油耗）──
   "dashboardFuelLevel": "油量",
   "dashboardSpentFuel": "今日油耗",

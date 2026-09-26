@@ -642,7 +642,7 @@ const Map<String, String> ru = {
   "dashboardOnline": "В сети",
   "dashboardMoving": "В движении",
   "dashboardOffline": "Не в сети",
-  "dashboardTotalDistance": "Общий путь сегодня",
+  "dashboardTodayDistance": "Сегодняшнее расстояние",
   "dashboardRecentActivity": "Последние события",
   "dashboardNoEvents": "Нет недавних событий.",
   "deviceOnline": "Устройство в сети",

@@ -642,7 +642,7 @@ const Map<String, String> fa = {
   "dashboardOnline": "آنلاین",
   "dashboardMoving": "در حال حرکت",
   "dashboardOffline": "آفلاین",
-  "dashboardTotalDistance": "مسافت کل امروز",
+  "dashboardTodayDistance": "مسافت امروز",
   "dashboardRecentActivity": "فعالیت‌های اخیر",
   "dashboardNoEvents": "رویداد اخیری وجود ندارد.",
   "deviceOnline": "دستگاه آنلاین است",

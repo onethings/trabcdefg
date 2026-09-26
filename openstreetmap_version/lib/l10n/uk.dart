@@ -642,7 +642,7 @@ const Map<String, String> uk = {
   "dashboardOnline": "В мережі",
   "dashboardMoving": "У русі",
   "dashboardOffline": "Поза мережею",
-  "dashboardTotalDistance": "Загальний шлях сьогодні",
+  "dashboardTodayDistance": "Сьогоднішня відстань",
   "dashboardRecentActivity": "Останні події",
   "dashboardNoEvents": "Немає нещодавніх подій.",
   "deviceOnline": "Пристрій в мережі",

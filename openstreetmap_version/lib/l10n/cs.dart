@@ -642,7 +642,7 @@ const Map<String, String> cs = {
   "dashboardOnline": "Online",
   "dashboardMoving": "V pohybu",
   "dashboardOffline": "Offline",
-  "dashboardTotalDistance": "Dnešní celková vzdálenost",
+  "dashboardTodayDistance": "Dnešní kilometry",
   "dashboardRecentActivity": "Nedávná aktivita",
   "dashboardNoEvents": "Žádné nedávné události.",
   "deviceOnline": "Zařízení online",

@@ -642,7 +642,7 @@ const Map<String, String> ro = {
   "dashboardOnline": "Online",
   "dashboardMoving": "În mișcare",
   "dashboardOffline": "Offline",
-  "dashboardTotalDistance": "Distanța totală astăzi",
+  "dashboardTodayDistance": "Distanță astăzi",
   "dashboardRecentActivity": "Activitate recentă",
   "dashboardNoEvents": "Nu există evenimente recente.",
   "deviceOnline": "Dispozitiv Online",

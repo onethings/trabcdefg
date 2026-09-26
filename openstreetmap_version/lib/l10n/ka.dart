@@ -642,7 +642,7 @@ const Map<String, String> ka = {
   "dashboardOnline": "ონლაინ",
   "dashboardMoving": "მოძრაობს",
   "dashboardOffline": "ხაზგარეშე",
-  "dashboardTotalDistance": "დღევანდელი ჯამური მანძილი",
+  "dashboardTodayDistance": "დღეს მანძილი",
   "dashboardRecentActivity": "ბოლო აქტივობა",
   "dashboardNoEvents": "ბოლო მოვლენები არ არის.",
   "deviceOnline": "მოწყობილობა ხაზზეა",

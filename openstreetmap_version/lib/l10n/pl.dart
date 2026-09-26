@@ -642,7 +642,7 @@ const Map<String, String> pl = {
   "dashboardOnline": "Online",
   "dashboardMoving": "W ruchu",
   "dashboardOffline": "Offline",
-  "dashboardTotalDistance": "Dzisiejszy dystans całkowity",
+  "dashboardTodayDistance": "Dystans dzisiejszy",
   "dashboardRecentActivity": "Ostatnia aktywność",
   "dashboardNoEvents": "Brak ostatnich zdarzeń.",
   "deviceOnline": "Urządzenie online",

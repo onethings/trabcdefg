@@ -644,7 +644,7 @@ const Map<String, String> af = {
   "dashboardOnline": "Aanlyn",
   "dashboardMoving": "Bewegend",
   "dashboardOffline": "Vanlyn",
-  "dashboardTotalDistance": "Vandag se Totale Afstand",
+  "dashboardTodayDistance": "Vandag",
   "dashboardRecentActivity": "Onlangse Aktiwiteit",
   "dashboardNoEvents": "Geen onlangse gebeure nie.",
   "deviceOnline": "Toestel Aanlyn",

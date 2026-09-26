@@ -642,7 +642,7 @@ const Map<String, String> kk = {
   "dashboardOnline": "Онлайн",
   "dashboardMoving": "Қозғалыста",
   "dashboardOffline": "Офлайн",
-  "dashboardTotalDistance": "Бүгінгі жалпы қашықтық",
+  "dashboardTodayDistance": "Бүгінгі қашықтық",
   "dashboardRecentActivity": "Соңғы әрекеттер",
   "dashboardNoEvents": "Соңғы оқиғалар жоқ.",
   "deviceOnline": "Құрылғы желіде",

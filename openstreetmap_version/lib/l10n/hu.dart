@@ -642,7 +642,7 @@ const Map<String, String> hu = {
   "dashboardOnline": "Online",
   "dashboardMoving": "Mozgásban",
   "dashboardOffline": "Offline",
-  "dashboardTotalDistance": "Mai teljes távolság",
+  "dashboardTodayDistance": "Mai távolság",
   "dashboardRecentActivity": "Legutóbbi tevékenység",
   "dashboardNoEvents": "Nincsenek legutóbbi események.",
   "deviceOnline": "Eszköz online",

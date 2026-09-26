@@ -642,7 +642,7 @@ const Map<String, String> tk = {
   "dashboardOnline": "Onlaýn",
   "dashboardMoving": "Hereketde",
   "dashboardOffline": "Offlaýn",
-  "dashboardTotalDistance": "Şu günki umumy aralyk",
+  "dashboardTodayDistance": "Şu günki aralyk",
   "dashboardRecentActivity": "Soňky işjeňlik",
   "dashboardNoEvents": "Soňky wakalar ýok.",
   "deviceOnline": "Enjam onlaýn",

@@ -642,7 +642,7 @@ const Map<String, String> nb = {
   "dashboardOnline": "Online",
   "dashboardMoving": "I bevegelse",
   "dashboardOffline": "Offline",
-  "dashboardTotalDistance": "Total distanse i dag",
+  "dashboardTodayDistance": "Dagens distanse",
   "dashboardRecentActivity": "Nylig aktivitet",
   "dashboardNoEvents": "Ingen nylige hendelser.",
   "deviceOnline": "Enhet online",

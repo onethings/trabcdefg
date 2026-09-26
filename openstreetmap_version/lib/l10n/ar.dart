@@ -642,7 +642,7 @@ const Map<String, String> ar = {
   "dashboardOnline": "متصل",
   "dashboardMoving": "يتحرك",
   "dashboardOffline": "غير متصل",
-  "dashboardTotalDistance": "إجمالي المسافة اليوم",
+  "dashboardTodayDistance": "مسافة اليوم",
   "dashboardRecentActivity": "النشاطات الأخيرة",
   "dashboardNoEvents": "لا توجد أحداث حديثة.",
   "deviceOnline": "الجهاز متصل",

@@ -642,7 +642,7 @@ const Map<String, String> uz = {
   "dashboardOnline": "Onlayn",
   "dashboardMoving": "Harakatda",
   "dashboardOffline": "Oflayn",
-  "dashboardTotalDistance": "Bugungi umumiy masofa",
+  "dashboardTodayDistance": "Bugungi masofa",
   "dashboardRecentActivity": "Oxirgi faollik",
   "dashboardNoEvents": "Yaqin orada voqealar sodir bo‘lmadi.",
   "deviceOnline": "Qurilma onlayn",

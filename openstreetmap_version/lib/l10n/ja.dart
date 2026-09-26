@@ -642,7 +642,7 @@ const Map<String, String> ja = {
   "dashboardOnline": "オンライン",
   "dashboardMoving": "移動中",
   "dashboardOffline": "オフライン",
-  "dashboardTotalDistance": "本日の総走行距離",
+  "dashboardTodayDistance": "今日の距離",
   "dashboardRecentActivity": "最近のイベント",
   "dashboardNoEvents": "最近のイベントはありません。",
   "deviceOnline": "デバイス オンライン",

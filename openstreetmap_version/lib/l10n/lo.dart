@@ -642,7 +642,7 @@ const Map<String, String> lo = {
   "dashboardOnline": "ອອນລາຍ",
   "dashboardMoving": "ກຳລັງເຄື່ອນທີ່",
   "dashboardOffline": "ອອຟລາຍ",
-  "dashboardTotalDistance": "ໄລຍະທາງລວມມື້ນີ້",
+  "dashboardTodayDistance": "ລະດັບລວມໃນມື້ນີ້",
   "dashboardRecentActivity": "ກິດຈະກຳຫວ່າງມໍ່ໆນີ້",
   "dashboardNoEvents": "ບໍ່ມີເຫດການຫວ່າງມໍ່ໆນີ້.",
   "deviceOnline": "ອຸປະກອນອອນລາຍ",

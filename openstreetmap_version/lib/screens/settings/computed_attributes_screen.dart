@@ -60,14 +60,17 @@ class _ComputedAttributesScreenState extends State<ComputedAttributesScreen> {
           }
         },
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () async {
-          final newAttribute = await Navigator.push(context, MaterialPageRoute(builder: (context) => const AddComputedAttributeScreen()));
-          if (newAttribute != null) {
-            _fetchComputedAttributes();
-          }
-        },
-        child: const Icon(CupertinoIcons.add),
+      floatingActionButton: Transform.translate(
+        offset: const Offset(0, -45), // 往上移動 45px
+        child: FloatingActionButton(
+          onPressed: () async {
+            final newAttribute = await Navigator.push(context, MaterialPageRoute(builder: (context) => const AddComputedAttributeScreen()));
+            if (newAttribute != null) {
+              _fetchComputedAttributes();
+            }
+          },
+          child: const Icon(CupertinoIcons.add),
+        ),
       ),
     );
   }

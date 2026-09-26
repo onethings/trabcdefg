@@ -113,14 +113,17 @@ class _DriversScreenState extends State<DriversScreen> {
           }
         },
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () async {
-          final newDriver = await Navigator.push(context, MaterialPageRoute(builder: (context) => const AddDriverScreen()));
-          if (newDriver != null) {
-            _fetchDrivers();
-          }
-        },
-        child: const Icon(CupertinoIcons.add),
+      floatingActionButton: Transform.translate(
+        offset: const Offset(0, -45), // 往上移動 45px
+        child: FloatingActionButton(
+          onPressed: () async {
+            final newDriver = await Navigator.push(context, MaterialPageRoute(builder: (context) => const AddDriverScreen()));
+            if (newDriver != null) {
+              _fetchDrivers();
+            }
+          },
+          child: const Icon(CupertinoIcons.add),
+        ),
       ),
     );
   }

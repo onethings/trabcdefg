@@ -303,7 +303,7 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
         }
       },
       child: ListView.builder(
-        padding: const EdgeInsets.symmetric(vertical: 4),
+        padding: const EdgeInsets.fromLTRB(0, 4, 0, 54),
         itemCount: filteredDevices.length,
         itemBuilder: (context, index) {
           final device = filteredDevices[index];
@@ -473,7 +473,7 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
     final mileage = _mileageMap[deviceId];
     if (mileage == null) return const SizedBox.shrink();
 
-    final mileageLabel = _mileageDays == 1 ? 'dashboardTotalDistance'.tr : '${'dashboardTotalDistance'.tr} (3 ${'sharedDays'.tr})';
+    final mileageLabel = _mileageDays == 1 ? 'dashboardTodayDistance'.tr : '${'dashboardTodayDistance'.tr} (3 ${'sharedDays'.tr})';
 
     if (isCompact) {
       return Text(
@@ -538,7 +538,7 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
                           children: [
                             Icon(CupertinoIcons.checkmark, size: 18, color: _mileageDays == 1 ? null : Colors.transparent),
                             const SizedBox(width: 8),
-                            Text('dashboardTotalDistance'.tr),
+                            Text('dashboardTodayDistance'.tr),
                           ],
                         ),
                       ),
@@ -548,7 +548,7 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
                           children: [
                             Icon(CupertinoIcons.checkmark, size: 18, color: _mileageDays == 3 ? null : Colors.transparent),
                             const SizedBox(width: 8),
-                            Text('${'dashboardTotalDistance'.tr} (3 ${'sharedDays'.tr})'),
+                            Text('${'dashboardTodayDistance'.tr} (3 ${'sharedDays'.tr})'),
                           ],
                         ),
                       ),

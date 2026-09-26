@@ -642,7 +642,7 @@ const Map<String, String> lv = {
   "dashboardOnline": "Tiešsaistē",
   "dashboardMoving": "Kustībā",
   "dashboardOffline": "Bezsaistē",
-  "dashboardTotalDistance": "Kopējais attālums šodien",
+  "dashboardTodayDistance": "Šodienas attālums",
   "dashboardRecentActivity": "Pēdējās aktivitātes",
   "dashboardNoEvents": "Nav pēdējo notikumu.",
   "deviceOnline": "Ierīce ir tiešsaistē",

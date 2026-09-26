@@ -192,8 +192,7 @@ const Map<String, String> ptBr = {
   "userTemporary": "Temporário",
   "userTerms": "Termos do Serviço",
   "userPrivacy": "Política de Privacidade",
-  "userTermsPrompt":
-      "Ao clicar em Aceitar, você concorda com nossos Termos de Serviço e confirma que leu nossa Política de Privacidade.",
+  "userTermsPrompt": "Ao clicar em Aceitar, você concorda com nossos Termos de Serviço e confirma que leu nossa Política de Privacidade.",
   "userTermsAccepted": "Termos do Aceite",
   "userBilling": "Faturamento",
   "loginTitle": "Login",
@@ -228,8 +227,7 @@ const Map<String, String> ptBr = {
   "deviceStatusOffline": "Desconectado",
   "deviceStatusUnknown": "Desconhecido",
   "deviceRegisterFirst": "Registre seu primeiro dispositivo",
-  "deviceIdentifierHelp":
-      "IMEI, número de serial ou outro ID. Precisa ser um identificador único para os relatórios do dispositivo  no servidor.",
+  "deviceIdentifierHelp": "IMEI, número de serial ou outro ID. Precisa ser um identificador único para os relatórios do dispositivo  no servidor.",
   "deviceShare": "Dispositivo Compartilhado",
   "groupDialog": "Grupo",
   "groupParent": "Grupo",
@@ -251,8 +249,7 @@ const Map<String, String> ptBr = {
   "settingsDarkMode": "Modo Escuro",
   "settingsTotpEnable": "Habilitar One-time Password",
   "settingsTotpForce": "Forçar One-time Password",
-  "settingsServiceWorkerUpdateInterval":
-      "Intervalo de atualização do ServiceWorker",
+  "settingsServiceWorkerUpdateInterval": "Intervalo de atualização do ServiceWorker",
   "settingsUpdateAvailable": "Existe uma atualização disponível.",
   "settingsSupport": "Suporte",
   "reportTitle": "Relatórios",
@@ -645,7 +642,7 @@ const Map<String, String> ptBr = {
   "dashboardOnline": "Online",
   "dashboardMoving": "Em movimento",
   "dashboardOffline": "Offline",
-  "dashboardTotalDistance": "Distância total hoje",
+  "dashboardTodayDistance": "Distância de hoje",
   "dashboardRecentActivity": "Atividade recente",
   "dashboardNoEvents": "Sem eventos recentes.",
   "deviceOnline": "Dispositivo online",

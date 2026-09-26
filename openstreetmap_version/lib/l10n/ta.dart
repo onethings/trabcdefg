@@ -642,7 +642,7 @@ const Map<String, String> ta = {
   "dashboardOnline": "ஆன்லைன்",
   "dashboardMoving": "இயக்கத்தில்",
   "dashboardOffline": "ஆஃப்லைன்",
-  "dashboardTotalDistance": "இன்றைய மொத்த தூரம்",
+  "dashboardTodayDistance": "இன்று பயணித்த தூரம்",
   "dashboardRecentActivity": "சமீபத்திய செயல்பாடு",
   "dashboardNoEvents": "சமீபத்திய நிகழ்வுகள் எதுவும் இல்லை.",
   "deviceOnline": "சாதனம் ஆன்லைனில் உள்ளது",

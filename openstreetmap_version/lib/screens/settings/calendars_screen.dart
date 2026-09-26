@@ -57,14 +57,17 @@ class _CalendarsScreenState extends State<CalendarsScreen> {
           }
         },
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () async {
-          final newCalendar = await Navigator.push(context, MaterialPageRoute(builder: (context) => const AddCalendarScreen()));
-          if (newCalendar != null) {
-            _fetchCalendars();
-          }
-        },
-        child: const Icon(CupertinoIcons.add),
+      floatingActionButton: Transform.translate(
+        offset: const Offset(0, -45), // 往上移動 45px
+        child: FloatingActionButton(
+          onPressed: () async {
+            final newCalendar = await Navigator.push(context, MaterialPageRoute(builder: (context) => const AddCalendarScreen()));
+            if (newCalendar != null) {
+              _fetchCalendars();
+            }
+          },
+          child: const Icon(CupertinoIcons.add),
+        ),
       ),
     );
   }

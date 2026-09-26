@@ -93,7 +93,7 @@ class _ServerInfoScreenState extends State<ServerInfoScreen> {
     return RefreshIndicator(
       onRefresh: _fetchServerInfo,
       child: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + MediaQuery.paddingOf(context).bottom + kBottomNavigationBarHeight),
         children: [
           _buildSectionHeader(''),
           _buildInfoTile(Icons.cloud, 'ServerUrl'.tr, Provider.of<TraccarProvider>(context, listen: false).apiClient.basePath),

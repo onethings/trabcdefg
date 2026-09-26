@@ -642,7 +642,7 @@ const Map<String, String> gl = {
   "dashboardOnline": "En liña",
   "dashboardMoving": "En movemento",
   "dashboardOffline": "Fóra de liña",
-  "dashboardTotalDistance": "Distancia total hoxe",
+  "dashboardTodayDistance": "Distancia de hoxe",
   "dashboardRecentActivity": "Actividade recente",
   "dashboardNoEvents": "Non hai eventos recentes.",
   "deviceOnline": "Dispositivo en liña",

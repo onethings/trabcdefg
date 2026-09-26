@@ -644,7 +644,7 @@ const Map<String, String> az = {
   "dashboardOnline": "Onlayn",
   "dashboardMoving": "Hərəkətdə",
   "dashboardOffline": "Offlayn",
-  "dashboardTotalDistance": "Bugünkü Ümumi Məsafə",
+  "dashboardTodayDistance": "Bugünkü məsafə",
   "dashboardRecentActivity": "Son Fəaliyyət",
   "dashboardNoEvents": "Son hadisə yoxdur.",
   "deviceOnline": "Cihaz Onlayndır",
