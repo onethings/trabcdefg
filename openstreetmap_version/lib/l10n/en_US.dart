@@ -1,4 +1,4 @@
-// lib/l10n/en_US.dart
+// lib/l10n/en_us.dart
 
 const Map<String, String> enUs = {
   "sharedLoading": "Loading...",

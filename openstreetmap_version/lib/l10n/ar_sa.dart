@@ -1,4 +1,4 @@
-// lib/l10n/ar_SA.dart
+// lib/l10n/ar_sa.dart
 
 const Map<String, String> arSA = {
   "sharedLoading": "جاري التحميل...",
