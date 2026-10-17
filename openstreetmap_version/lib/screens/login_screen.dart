@@ -28,6 +28,8 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   bool _isLoading = false;
   bool _obscurePassword = true;
   String _version = "";
+  String? _serverVersion;
+  int _serverVersionRequest = 0;
 
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
@@ -36,6 +38,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   void initState() {
     super.initState();
     _loadVersion();
+    _loadSavedServerUrl();
     _animationController = AnimationController(vsync: this, duration: const Duration(milliseconds: 1000));
     _fadeAnimation = CurvedAnimation(parent: _animationController, curve: Curves.easeIn);
     _animationController.forward();
@@ -44,6 +47,47 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   Future<void> _loadVersion() async {
     final info = await PackageInfo.fromPlatform();
     setState(() => _version = "${info.version}+${info.buildNumber}");
+  }
+
+  /// The server URL is never shown to the user, so the last chosen server
+  /// (QR scan or manual entry) has to be restored here.
+  Future<void> _loadSavedServerUrl() async {
+    final prefs = await SharedPreferences.getInstance();
+    final saved = prefs.getString('traccarServerUrl');
+    if (!mounted) return;
+    if (saved != null && saved.isNotEmpty) {
+      setState(() => _serverUrlController.text = saved);
+    }
+    await _loadServerVersion(_serverUrlController.text);
+  }
+
+  String _normalizedServerUrl(String raw) {
+    var serverUrl = raw.trim().isEmpty ? AppConstants.traccarServerUrl : raw.trim();
+    if (!serverUrl.startsWith('http://') && !serverUrl.startsWith('https://')) {
+      final isLocal = RegExp(r'^(localhost|127\.|192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)').hasMatch(serverUrl);
+      serverUrl = (isLocal ? 'http://' : 'https://') + serverUrl;
+    }
+    return serverUrl.replaceFirst(RegExp(r'/+$'), '');
+  }
+
+  Future<void> _loadServerVersion(String serverUrl) async {
+    final request = ++_serverVersionRequest;
+    if (mounted) setState(() => _serverVersion = null);
+
+    try {
+      final client = api.ApiClient(basePath: '${_normalizedServerUrl(serverUrl)}/api');
+      final server = await api.ServerApi(client).getServer();
+      if (!mounted || request != _serverVersionRequest) return;
+      setState(() => _serverVersion = server?.version);
+    } catch (e) {
+      debugPrint('Failed to fetch server version for login screen: $e');
+    }
+  }
+
+  /// Friendly label for the configured server, e.g. "demo3.traccar.org".
+  String get _serverHostLabel {
+    final raw = _serverUrlController.text.trim().isEmpty ? AppConstants.traccarServerUrl : _serverUrlController.text.trim();
+    return raw.replaceFirst(RegExp(r'^https?://'), '').replaceAll(RegExp(r'/+$'), '');
   }
 
   @override
@@ -58,27 +102,17 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   Future<void> _login() async {
     setState(() => _isLoading = true);
     try {
-      String serverUrl = _serverUrlController.text.trim();
-      if (serverUrl.isEmpty) {
-        throw Exception('Please enter a server URL'.tr);
-      }
+      final prefs = await SharedPreferences.getInstance();
 
-      // Auto-append scheme if missing
-      if (!serverUrl.startsWith('http://') && !serverUrl.startsWith('https://')) {
-        // If it looks like a local IP or localhost, default to http, else https
-        final isLocal = RegExp(r'^(localhost|127\.|192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)').hasMatch(serverUrl);
-        serverUrl = (isLocal ? 'http://' : 'https://') + serverUrl;
-      }
-
-      // Remove trailing slash
-      while (serverUrl.endsWith('/')) {
-        serverUrl = serverUrl.substring(0, serverUrl.length - 1);
-      }
+      // The server address is optional for the user: fall back to the last
+      // saved server and finally to the built-in default, so an untouched
+      // login form always works.
+      final savedServerUrl = _serverUrlController.text.trim().isEmpty ? prefs.getString('traccarServerUrl') ?? '' : _serverUrlController.text;
+      final serverUrl = _normalizedServerUrl(savedServerUrl);
 
       _serverUrlController.text = serverUrl;
       final newApiClient = api.ApiClient(basePath: '$serverUrl/api');
 
-      final prefs = await SharedPreferences.getInstance();
       await prefs.setString('traccarServerUrl', serverUrl);
 
       // Guard checking asynchronous gap before utilizing BuildContext
@@ -87,7 +121,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       final traccarProvider = context.read<TraccarProvider>();
 
       authService.apiClient = newApiClient;
-      traccarProvider.apiClient = newApiClient;
+      traccarProvider.updateApiClient(newApiClient);
 
       await authService.login(_emailController.text, _passwordController.text);
 
@@ -122,9 +156,10 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       // Other 4xx / 5xx — show the server-provided message
       Get.snackbar('Error'.tr, e.message, snackPosition: SnackPosition.BOTTOM);
     } on api.ApiException catch (_) {
-      // Network-level failure (DNS / TLS / connection refused / timeout)
+      // Network-level failure (DNS / TLS / connection refused / timeout).
+      // No URL talk here — the user never sets the server address.
       if (mounted) {
-        Get.snackbar('Error'.tr, 'Could not connect to server. Please check the URL and your network.'.tr, snackPosition: SnackPosition.BOTTOM);
+        Get.snackbar('Error'.tr, 'serverUnreachable'.tr, snackPosition: SnackPosition.BOTTOM);
       }
     } catch (e) {
       if (mounted) {
@@ -132,15 +167,6 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  void _handleQrScan(BuildContext context) async {
-    final result = await Navigator.of(context).push<String>(MaterialPageRoute(builder: (context) => const QrScannerScreen()));
-    if (result != null) {
-      _serverUrlController.text = result;
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('traccarServerUrl', result);
     }
   }
 
@@ -152,11 +178,12 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       backgroundColor: Colors.transparent,
       builder: (context) => _ServerPickerSheet(
         initialUrl: _serverUrlController.text,
-        onSelected: (url) {
-          _serverUrlController.text = url;
-          SharedPreferences.getInstance().then((prefs) {
-            prefs.setString('traccarServerUrl', url);
-          });
+        onSelected: (url) async {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('traccarServerUrl', url);
+          if (!mounted) return;
+          setState(() => _serverUrlController.text = url);
+          await _loadServerVersion(url);
         },
       ),
     );
@@ -236,15 +263,6 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
           padding: const EdgeInsets.all(24),
           child: Column(
             children: [
-              _buildTextField(
-                controller: _serverUrlController,
-                label: 'ServerUrl'.tr,
-                icon: Icons.lan_outlined,
-                readOnly: true,
-                onTap: () => _showServerDialog(context),
-                suffix: IconButton(icon: const Icon(Icons.qr_code_scanner_rounded, size: 20), onPressed: () => _handleQrScan(context)),
-              ),
-              const SizedBox(height: 16),
               _buildTextField(controller: _emailController, label: 'userEmail'.tr, icon: Icons.alternate_email_rounded),
               const SizedBox(height: 16),
               _buildTextField(
@@ -331,9 +349,21 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       top: 10,
       right: 10,
       child: SafeArea(
-        child: IconButton(
-          onPressed: () => _showLanguageDialog(context),
-          icon: Icon(Icons.translate_rounded, color: theme.colorScheme.primary),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Discreet entry point for technicians only — the server address
+            // itself stays out of the login flow.
+            IconButton(
+              onPressed: () => _showServerDialog(context),
+              tooltip: 'SelectServer'.tr,
+              icon: Icon(Icons.settings_outlined, size: 20, color: theme.colorScheme.primary.withValues(alpha: 0.5)),
+            ),
+            IconButton(
+              onPressed: () => _showLanguageDialog(context),
+              icon: Icon(Icons.translate_rounded, color: theme.colorScheme.primary),
+            ),
+          ],
         ),
       ),
     );
@@ -346,8 +376,28 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       right: 24,
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          Text('v $_version', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withValues(alpha: 0.4))),
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              GestureDetector(
+                onTap: () => _showServerDialog(context),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.cloud_outlined, size: 13, color: theme.colorScheme.onSurface.withValues(alpha: 0.35)),
+                    const SizedBox(width: 4),
+                    Text(_serverHostLabel, style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withValues(alpha: 0.35), fontSize: 11)),
+                  ],
+                ),
+              ),
+              if (_serverVersion != null) ...[const SizedBox(height: 2), Text('${'settingsServerVersion'.tr}: $_serverVersion', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withValues(alpha: 0.35), fontSize: 11))],
+              const SizedBox(height: 2),
+              Text('v $_version', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withValues(alpha: 0.4))),
+            ],
+          ),
           Row(
             children: [
               _buildThemeDot(themeProvider, AppThemePreset.obsidian, const Color(0xFF1A1A1A)),
@@ -413,6 +463,13 @@ class _ServerPickerSheetState extends State<_ServerPickerSheet> {
     super.dispose();
   }
 
+  Future<void> _scanQrCode(BuildContext context) async {
+    final result = await Navigator.of(context).push<String>(MaterialPageRoute(builder: (_) => const QrScannerScreen()));
+    if (result == null || result.isEmpty || !mounted) return;
+    widget.onSelected(result);
+    Navigator.pop(context);
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -438,8 +495,30 @@ class _ServerPickerSheetState extends State<_ServerPickerSheet> {
               const SizedBox(height: 12),
               _buildHandle(),
               const SizedBox(height: 16),
-              Text('ServerUrl'.tr, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 12),
+              Text('SelectServer'.tr, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 16),
+
+              // Scanning the QR code is the easiest path for users who cannot
+              // read or type a server address.
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                child: SizedBox(
+                  width: double.infinity,
+                  height: 56,
+                  child: ElevatedButton.icon(
+                    onPressed: () => _scanQrCode(context),
+                    icon: const Icon(Icons.qr_code_scanner_rounded),
+                    label: Text('serverScanQr'.tr, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: theme.colorScheme.primary,
+                      foregroundColor: theme.colorScheme.onPrimary,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      elevation: 0,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
 
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20.0),
@@ -473,7 +552,7 @@ class _ServerPickerSheetState extends State<_ServerPickerSheet> {
                     if (showCustomOption)
                       ListTile(
                         leading: const Icon(Icons.add_link, color: Colors.blue),
-                        title: Text('Use custom URL'.tr),
+                        title: Text('CustomServerURL'.tr),
                         subtitle: Text(_inputQuery),
                         onTap: () {
                           widget.onSelected(_inputQuery);

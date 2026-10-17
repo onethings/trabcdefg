@@ -6,6 +6,7 @@ import 'package:get/get.dart';
 import 'package:provider/provider.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
+import 'package:trabcdefg/widgets/command_attributes_form.dart';
 
 class AddSavedCommandScreen extends StatefulWidget {
   const AddSavedCommandScreen({super.key});
@@ -19,12 +20,17 @@ class AddSavedCommandScreenState extends State<AddSavedCommandScreen> {
   String? _description;
   String? _selectedType;
   bool _noQueue = false;
+  final CommandAttributeControllers _attributeControllers =
+      CommandAttributeControllers();
   late Future<List<api.CommandType>?> _commandTypesFuture;
 
   @override
   void initState() {
     super.initState();
-    final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
+    final traccarProvider = Provider.of<TraccarProvider>(
+      context,
+      listen: false,
+    );
     // Correct way to instantiate CommandsApi with the authenticated client
     final commandsApi = api.CommandsApi(traccarProvider.apiClient);
     setState(() {
@@ -32,14 +38,35 @@ class AddSavedCommandScreenState extends State<AddSavedCommandScreen> {
     });
   }
 
+  @override
+  void dispose() {
+    _attributeControllers.dispose();
+    super.dispose();
+  }
+
   void _saveCommand() async {
     if (_formKey.currentState!.validate()) {
       _formKey.currentState!.save();
 
-      final newCommand = api.Command(description: _description!, type: _selectedType!, attributes: {'noQueue': _noQueue});
+      // Server switching must survive the device being offline, so it is
+      // always queued instead of being dropped.
+      final isSetConnection = _selectedType == 'setConnection';
+      final Map<String, dynamic> attributes = {
+        'noQueue': isSetConnection ? false : _noQueue,
+        ...buildCommandAttributes(_selectedType, _attributeControllers),
+      };
+
+      final newCommand = api.Command(
+        description: _description!,
+        type: _selectedType!,
+        attributes: attributes,
+      );
 
       try {
-        final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
+        final traccarProvider = Provider.of<TraccarProvider>(
+          context,
+          listen: false,
+        );
         // Correct way to instantiate CommandsApi with the authenticated client
         final commandsApi = api.CommandsApi(traccarProvider.apiClient);
         await commandsApi.postCommands(newCommand);
@@ -48,12 +75,17 @@ class AddSavedCommandScreenState extends State<AddSavedCommandScreen> {
         if (!mounted) return;
 
         Navigator.of(context).pop(true);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${'sharedSavedCommand'.tr} ${'sharedSaved'.tr}')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${'sharedSavedCommand'.tr} ${'sharedSaved'.tr}'),
+          ),
+        );
       } catch (e) {
         // Guard against using BuildContext across async gaps
         if (!mounted) return;
 
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${'errorGeneral'.tr}: $e')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('${'errorGeneral'.tr}: $e')));
       }
     }
   }
@@ -61,7 +93,9 @@ class AddSavedCommandScreenState extends State<AddSavedCommandScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: CupertinoNavigationBar(middle: Text('${'sharedAdd'.tr} ${'sharedSavedCommand'.tr}')),
+      appBar: CupertinoNavigationBar(
+        middle: Text('${'sharedAdd'.tr} ${'sharedSavedCommand'.tr}'),
+      ),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(16.0),
@@ -70,7 +104,10 @@ class AddSavedCommandScreenState extends State<AddSavedCommandScreen> {
             child: ListView(
               children: [
                 TextFormField(
-                  decoration: InputDecoration(labelText: '${'sharedDescription'.tr} (${'sharedRequired'.tr})'),
+                  decoration: InputDecoration(
+                    labelText:
+                        '${'sharedDescription'.tr} (${'sharedRequired'.tr})',
+                  ),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
                       return 'sharedPleaseEnterDescription'.tr;
@@ -92,17 +129,23 @@ class AddSavedCommandScreenState extends State<AddSavedCommandScreen> {
                     } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
                       return Center(child: Text('sharedNoData'.tr));
                     } else {
-                      final commandTypes = snapshot.data!.map((type) => type.type!).toList();
+                      final commandTypes = snapshot.data!
+                          .map((type) => type.type!)
+                          .toList();
                       _selectedType ??= commandTypes.first;
                       return DropdownButtonFormField<String>(
                         decoration: InputDecoration(labelText: 'sharedType'.tr),
                         initialValue: _selectedType, // Fixed deprecation
                         items: commandTypes.map((String value) {
-                          return DropdownMenuItem<String>(value: value, child: Text(_getTranslatedCommandType(value)));
+                          return DropdownMenuItem<String>(
+                            value: value,
+                            child: Text(_getTranslatedCommandType(value)),
+                          );
                         }).toList(),
                         onChanged: (String? newValue) {
                           setState(() {
                             _selectedType = newValue;
+                            _attributeControllers.clear();
                           });
                         },
                         validator: (value) {
@@ -115,16 +158,24 @@ class AddSavedCommandScreenState extends State<AddSavedCommandScreen> {
                     }
                   },
                 ),
+                CommandAttributeFields(
+                  type: _selectedType,
+                  controllers: _attributeControllers,
+                ),
                 const SizedBox(height: 20),
                 Row(
                   children: [
                     Checkbox(
-                      value: _noQueue,
-                      onChanged: (bool? value) {
-                        setState(() {
-                          _noQueue = value ?? false;
-                        });
-                      },
+                      value: _selectedType == 'setConnection'
+                          ? false
+                          : _noQueue,
+                      onChanged: _selectedType == 'setConnection'
+                          ? null
+                          : (bool? value) {
+                              setState(() {
+                                _noQueue = value ?? false;
+                              });
+                            },
                     ),
                     Text('commandNoQueue'.tr),
                   ],
@@ -145,7 +196,10 @@ class AddSavedCommandScreenState extends State<AddSavedCommandScreen> {
               },
               child: Text('sharedCancel'.tr),
             ),
-            ElevatedButton(onPressed: _saveCommand, child: Text('sharedSave'.tr)),
+            ElevatedButton(
+              onPressed: _saveCommand,
+              child: Text('sharedSave'.tr),
+            ),
           ],
         ),
       ),
@@ -160,6 +214,8 @@ class AddSavedCommandScreenState extends State<AddSavedCommandScreen> {
         return 'commandDeviceIdentification'.tr;
       case 'positionSingle':
         return 'commandPositionSingle'.tr;
+      case 'message':
+        return 'commandMessage'.tr;
       case 'positionPeriodic':
         return 'commandPositionPeriodic'.tr;
       case 'positionStop':
@@ -178,6 +234,10 @@ class AddSavedCommandScreenState extends State<AddSavedCommandScreen> {
         return 'commandSetTimezone'.tr;
       case 'requestPhoto':
         return 'commandRequestPhoto'.tr;
+      case 'videoStart':
+        return 'commandVideoStart'.tr;
+      case 'videoStop':
+        return 'commandVideoStop'.tr;
       case 'powerOff':
         return 'commandPowerOff'.tr;
       case 'rebootDevice':

@@ -59,6 +59,10 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
   final Map<DateTime, api.ReportSummary> _dailySummaries = {};
   bool _isCalendarLoading = false;
   double _currentZoom = 14.0;
+  // 切換地圖樣式時整個 MapLibreMap 會重建，這裡保留重建前的鏡頭，
+  // 新地圖才會沿用同一個位置與縮放，而不是重新取景。
+  CameraPosition? _lastCameraPosition;
+  bool _keepCameraOnStyleReload = false;
 
   // 地圖資源
   static const String _playbackIconId = "playback_arrow";
@@ -87,9 +91,22 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
 
   Future<void> _onStyleLoaded() async {
     await _loadCustomIconsToMap();
-    if (_positions.isNotEmpty) {
-      _drawFullRoute();
+    if (_positions.isEmpty) {
+      return;
     }
+    // 切換樣式只是把被清掉的圖層重畫一次，鏡頭必須維持原樣；
+    // 只有首次載入才自動取景。
+    final bool keepCamera = _keepCameraOnStyleReload;
+    _keepCameraOnStyleReload = false;
+    await _drawFullRoute(fitBounds: !keepCamera);
+  }
+
+  void _toggleMapType() {
+    // MapLibreMap 會因為 style 變更而整張重建，先記下目前鏡頭，
+    // 重建後才會用同一個位置與縮放還原，不會跳到別的 zoom。
+    _lastCameraPosition = _mapController?.cameraPosition ?? _lastCameraPosition;
+    _keepCameraOnStyleReload = true;
+    Provider.of<MapStyleProvider>(context, listen: false).toggleMapType();
   }
 
   Future<void> _loadCustomIconsToMap() async {
@@ -303,7 +320,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
 
   // --- 繪製與動畫播放 ---
 
-  Future<void> _drawFullRoute() async {
+  Future<void> _drawFullRoute({bool fitBounds = true}) async {
     if (_mapController == null || _positions.isEmpty) {
       return;
     }
@@ -328,7 +345,9 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
       await _mapController!.addSymbol(SymbolOptions(geometry: _stopPoints[i], iconImage: "pg_${i + 1}", iconSize: 3.5, iconAnchor: "center"));
     }
 
-    _animateCameraToBounds();
+    if (fitBounds) {
+      _animateCameraToBounds();
+    }
   }
 
   void _addMarker(LatLng point, String iconId) {
@@ -340,37 +359,53 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
       return;
     }
 
-    setState(() {
-      _isPlaying = !_isPlaying;
-    });
-
     if (_isPlaying) {
       _playbackTimer?.cancel();
-
-      _playbackTimer = Timer.periodic(const Duration(milliseconds: 32), (timer) {
-        if (!mounted) {
-          timer.cancel();
-          return;
-        }
-
-        final double maxLimit = max(0, _positions.length - 1).toDouble();
-
-        if (_playbackPositionRx.value >= maxLimit) {
-          _playbackPositionRx.value = maxLimit;
-          timer.cancel();
-          if (mounted) {
-            setState(() => _isPlaying = false);
-          }
-        } else {
-          double increment = 0.05 * _playbackSpeed;
-          _playbackPositionRx.value = (_playbackPositionRx.value + increment).clamp(0.0, maxLimit);
-
-          _updatePlaybackUI();
-        }
-      });
-    } else {
-      _playbackTimer?.cancel();
+      setState(() => _isPlaying = false);
+      return;
     }
+
+    final double maxLimit = max(0, _positions.length - 1).toDouble();
+    final bool isNewPlayback = _playbackPositionRx.value == 0 || _playbackPositionRx.value >= maxLimit;
+    if (_playbackPositionRx.value >= maxLimit) {
+      _playbackPositionRx.value = 0;
+      _lastCameraUpdateTick = 0;
+      _updatePlaybackUI();
+    }
+
+    if (isNewPlayback) {
+      _followUser = true;
+      final startPoint = LatLng(_positions.first.latitude!.toDouble(), _positions.first.longitude!.toDouble());
+      _mapController?.animateCamera(CameraUpdate.newLatLngZoom(startPoint, 16.0), duration: const Duration(milliseconds: 800));
+    }
+
+    setState(() {
+      _isPlaying = true;
+    });
+
+    _playbackTimer?.cancel();
+
+    _playbackTimer = Timer.periodic(const Duration(milliseconds: 32), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+
+      final double maxLimit = max(0, _positions.length - 1).toDouble();
+
+      if (_playbackPositionRx.value >= maxLimit) {
+        _playbackPositionRx.value = maxLimit;
+        timer.cancel();
+        if (mounted) {
+          setState(() => _isPlaying = false);
+        }
+      } else {
+        double increment = 0.05 * _playbackSpeed;
+        _playbackPositionRx.value = (_playbackPositionRx.value + increment).clamp(0.0, maxLimit);
+
+        _updatePlaybackUI();
+      }
+    });
   }
 
   int _lastCameraUpdateTick = 0;
@@ -482,9 +517,10 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
             key: ValueKey(Provider.of<MapStyleProvider>(context).isSatelliteMode),
             onMapCreated: (c) => _mapController = c,
             onStyleLoadedCallback: _onStyleLoaded,
-            initialCameraPosition: CameraPosition(target: const LatLng(0, 0), zoom: _currentZoom),
+            initialCameraPosition: _lastCameraPosition ?? CameraPosition(target: const LatLng(0, 0), zoom: _currentZoom),
             styleString: Provider.of<MapStyleProvider>(context).getStyle(Theme.of(context).brightness),
             onCameraMove: (position) {
+              _lastCameraPosition = position;
               _currentZoom = position.zoom;
               SharedPreferences.getInstance().then((prefs) {
                 prefs.setDouble('history_zoom_level', position.zoom);
@@ -505,7 +541,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
               children: [
                 _mapFab(Icons.calendar_month, _showCalendarDialog, "btn_cal"),
                 const SizedBox(height: 12),
-                _mapFab(Provider.of<MapStyleProvider>(context).isSatelliteMode ? Icons.map : Icons.satellite_alt, () => Provider.of<MapStyleProvider>(context, listen: false).toggleMapType(), "btn_style"),
+                _mapFab(Provider.of<MapStyleProvider>(context).isSatelliteMode ? Icons.map : Icons.satellite_alt, _toggleMapType, "btn_style"),
                 const SizedBox(height: 12),
                 _mapFab(
                   Icons.center_focus_strong,

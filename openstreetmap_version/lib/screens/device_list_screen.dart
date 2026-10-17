@@ -24,7 +24,6 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
   final _searchController = TextEditingController();
   String _searchQuery = '';
   int _selectedStatus = 0;
-  bool _isCompactView = false; // 控制樣式切換的變數
   bool _showMileage = false;
   int _mileageDays = 1; // 1 = today, 3 = last 3 days
   final Map<int, double> _mileageMap = {}; // deviceId -> distance in km
@@ -38,7 +37,6 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
   @override
   void initState() {
     super.initState();
-    _loadViewPreference(); // 初始化時讀取樣式設定
     _loadMileagePreference();
     _setupTimeagoLocales();
     _searchController.addListener(() {
@@ -48,23 +46,6 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
     // 定時器：每分鐘刷新一次，更新 TimeAgo 與離線狀態
     _refreshTimer = Timer.periodic(const Duration(minutes: 1), (_) {
       if (mounted) setState(() {});
-    });
-  }
-
-  // 讀取 Shared Preferences
-  Future<void> _loadViewPreference() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _isCompactView = prefs.getBool('isCompactView') ?? false;
-    });
-  }
-
-  // 儲存並切換樣式
-  Future<void> _toggleViewMode() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _isCompactView = !_isCompactView;
-      prefs.setBool('isCompactView', _isCompactView);
     });
   }
 
@@ -196,15 +177,15 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
     timeago.setLocaleMessages('my', MyMessages()); // 關鍵修正：註冊 Myanmar 語系
   }
 
-  Widget _buildAddressWidget(num? lat, num? lon, {required bool isCompact}) {
+  Widget _buildAddressWidget(num? lat, num? lon) {
     if (lat == null || lon == null) {
-      return _addressText('sharedNoData'.tr, isCompact);
+      return _addressText('sharedNoData'.tr);
     }
     final cacheKey = "${lat.toStringAsFixed(5)}_${lon.toStringAsFixed(5)}";
     if (_addressCache.containsKey(cacheKey)) {
-      return _addressText(_addressCache[cacheKey]!, isCompact);
+      return _addressText(_addressCache[cacheKey]!);
     }
-    return FutureBuilder<String>(future: _getAddressAsync(lat, lon, cacheKey), builder: (context, snapshot) => _addressText(snapshot.data ?? '...', isCompact));
+    return FutureBuilder<String>(future: _getAddressAsync(lat, lon, cacheKey), builder: (context, snapshot) => _addressText(snapshot.data ?? '...'));
   }
 
   Future<String> _getAddressAsync(num lat, num lon, String cacheKey) async {
@@ -217,48 +198,28 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
     return address;
   }
 
-  Widget _addressText(String text, bool isCompact) {
-    if (isCompact) {
-      return Text(
-        text,
-        style: TextStyle(fontSize: 10, color: Theme.of(context).colorScheme.secondary),
-        maxLines: 2,
-        overflow: TextOverflow.ellipsis,
-      );
-    } else {
-      return Row(
-        children: [
-          Icon(CupertinoIcons.location_solid, size: 14, color: Theme.of(context).colorScheme.outline),
-          const SizedBox(width: 6),
-          Expanded(
-            child: Text(
-              text,
-              style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        ],
-      );
-    }
-  }
+  Widget _addressText(String text) => Text(
+    text,
+    style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12),
+    maxLines: 1,
+    overflow: TextOverflow.ellipsis,
+  );
 
   @override
   Widget build(BuildContext context) {
     final traccarProvider = Provider.of<TraccarProvider>(context);
 
     return Scaffold(
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      appBar: AppBar(
-        automaticallyImplyLeading: false,
-        backgroundColor: Theme.of(context).colorScheme.surface,
-        elevation: 0,
-        toolbarHeight: 0,
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(115.0),
-          child: Column(children: [_buildSearchBar(), _buildFilterAndToggle()]),
+      body: SafeArea(
+        bottom: false,
+        child: Column(
+          children: [
+            _buildSearchBar(),
+            _buildFilterAndToggle(traccarProvider),
+            Expanded(child: _buildBody(traccarProvider)),
+          ],
         ),
       ),
-      body: _buildBody(traccarProvider),
     );
   }
 
@@ -272,11 +233,7 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
     final filteredDevices = provider.devices.where((device) {
       final matchesQuery = (device.name ?? '').toLowerCase().contains(_searchQuery.toLowerCase());
       final position = provider.getPosition(device.id!);
-      final DateTime? lastUpdate = position?.fixTime?.toUtc() ?? device.lastUpdate?.toUtc();
-
-      // 10 分鐘離線演算法機制
-      final bool isStale = lastUpdate == null || now.difference(lastUpdate).inMinutes >= 10;
-      String effectiveStatus = isStale ? 'offline' : (device.status ?? 'unknown');
+      final effectiveStatus = _deviceStatus(device, position, now);
 
       final String? filterStatus = _getStatusText(_selectedStatus);
       final bool matchesFilter = (_selectedStatus == 0) || (_selectedStatus == 4 && provider.isFavorite(device.id!)) || (filterStatus == effectiveStatus);
@@ -292,8 +249,6 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
       return 0; // 保持原有順序（通常是 API 返回的順序）
     });
 
-    if (filteredDevices.isEmpty) return Center(child: Text('sharedNoData'.tr));
-
     return RefreshIndicator(
       onRefresh: () async {
         await provider.fetchInitialData();
@@ -303,85 +258,146 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
         }
       },
       child: ListView.builder(
-        padding: const EdgeInsets.fromLTRB(0, 4, 0, 84),
-        itemCount: filteredDevices.length,
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(12, 4, 12, 100),
+        itemCount: filteredDevices.isEmpty ? 1 : filteredDevices.length,
         itemBuilder: (context, index) {
+          if (filteredDevices.isEmpty) {
+            return Padding(
+              padding: const EdgeInsets.only(top: 80),
+              child: Center(
+                child: Column(
+                  children: [
+                    Icon(Icons.search_off_rounded, size: 40, color: Theme.of(context).colorScheme.outline),
+                    const SizedBox(height: 12),
+                    Text('sharedNoData'.tr, style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.outline)),
+                  ],
+                ),
+              ),
+            );
+          }
           final device = filteredDevices[index];
           final position = provider.getPosition(device.id!);
-
-          // 根據切換狀態決定顯示哪種卡片
-          return _isCompactView ? _buildCompactListItem(device, position, provider) : _buildStandardCard(device, position, provider);
+          return _buildDeviceCard(device, position, provider, now);
         },
       ),
     );
   }
 
-  // --- 樣式 A: 標準大卡片 ---
-  Widget _buildStandardCard(api.Device device, api.Position? position, TraccarProvider provider) {
-    bool isFavorite = provider.isFavorite(device.id!);
-    final Map<String, dynamic> attributes = (position?.attributes as Map<String, dynamic>?) ?? {};
+  String _deviceStatus(api.Device device, api.Position? position, DateTime now) {
+    final lastUpdate = position?.fixTime?.toUtc() ?? device.lastUpdate?.toUtc();
+    if (lastUpdate == null || now.difference(lastUpdate).inMinutes >= 10) return 'offline';
+    final status = device.status;
+    return status == 'online' || status == 'offline' ? status! : 'unknown';
+  }
+
+  Widget _buildDeviceCard(api.Device device, api.Position? position, TraccarProvider provider, DateTime now) {
+    final isFavorite = provider.isFavorite(device.id!);
+    final theme = Theme.of(context);
+    final status = _deviceStatus(device, position, now);
+    final statusLabel = switch (status) {
+      'online' => 'deviceStatusOnline'.tr,
+      'offline' => 'deviceStatusOffline'.tr,
+      _ => 'deviceStatusUnknown'.tr,
+    };
+    final statusColor = switch (status) {
+      'online' => const Color(0xFF1B9A59),
+      'offline' => theme.colorScheme.outline,
+      _ => Colors.orange.shade700,
+    };
+    final attributes = position?.attributes is Map<String, dynamic> ? position!.attributes as Map<String, dynamic> : <String, dynamic>{};
     final bool isIgnitionOn = attributes['ignition'] == true;
     final double speedKmH = (position?.speed ?? 0.0) * 1.852;
-    final DateTime now = DateTime.now().toUtc();
     final DateTime? lastUpdate = position?.fixTime?.toUtc() ?? device.lastUpdate?.toUtc();
-    final bool isStale = lastUpdate == null || now.difference(lastUpdate).inMinutes >= 10;
+    final isStale = status == 'offline';
+    final lastSeen = lastUpdate == null ? '--' : timeago.format(lastUpdate, locale: Get.locale?.languageCode ?? 'zh');
 
-    Color statusColor = isStale ? Colors.blueGrey.shade300 : (isIgnitionOn ? const Color(0xFF10B981) : Colors.amber.shade700);
-
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5), borderRadius: BorderRadius.circular(16)),
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+      color: theme.colorScheme.surface,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: InkWell(
+        borderRadius: BorderRadius.circular(16),
         onTap: () => Get.to(() => LiveTrackingMapScreen(selectedDevice: device)),
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(14),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(CupertinoIcons.car_fill, color: statusColor),
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(color: statusColor.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(14)),
+                    child: Icon(CupertinoIcons.car_fill, color: statusColor, size: 22),
+                  ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Expanded(
                               child: Text(
                                 device.name ?? '...',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 14, //16
-                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, fontSize: 16),
                               ),
                             ),
                             IconButton(
-                              icon: Icon(isFavorite ? CupertinoIcons.heart_fill : CupertinoIcons.heart, color: isFavorite ? Colors.red : Colors.grey, size: 20),
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints(),
+                              visualDensity: VisualDensity.compact,
+                              padding: const EdgeInsets.only(left: 8),
+                              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                              icon: Icon(isFavorite ? CupertinoIcons.heart_fill : CupertinoIcons.heart, color: isFavorite ? theme.colorScheme.error : theme.colorScheme.outline, size: 20),
                               onPressed: () => provider.toggleFavorite(device.id!),
                             ),
                           ],
                         ),
-                        Text(
-                          lastUpdate != null
-                              ? timeago.format(
-                                  lastUpdate,
-                                  locale: Get.locale?.languageCode ?? 'zh', // 改為讀取 GetX 當前語系
-                                )
-                              : '--',
-                          style: TextStyle(fontSize: 9, color: Theme.of(context).colorScheme.outline),
+                        Row(
+                          children: [
+                            Container(
+                              width: 7,
+                              height: 7,
+                              decoration: BoxDecoration(color: statusColor, shape: BoxShape.circle),
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              statusLabel,
+                              style: theme.textTheme.bodySmall?.copyWith(color: statusColor, fontWeight: FontWeight.w600),
+                            ),
+                          ],
                         ),
                       ],
                     ),
                   ),
-                  _AccTimerBadge(speed: speedKmH, isStale: isStale, isOn: isIgnitionOn, lastUpdate: lastUpdate, baseColor: statusColor, isCompact: false),
+                  const SizedBox(width: 8),
+                  _AccTimerBadge(speed: speedKmH, isStale: isStale, isOn: isIgnitionOn, lastUpdate: lastUpdate, baseColor: statusColor),
                 ],
               ),
-              const Divider(height: 20),
-              _buildAddressWidget(position?.latitude, position?.longitude, isCompact: false),
-              if (_showMileage) ...[const SizedBox(height: 4), _buildMileageWidget(device.id!)],
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Icon(CupertinoIcons.location_solid, size: 14, color: theme.colorScheme.outline),
+                  const SizedBox(width: 7),
+                  Expanded(child: _buildAddressWidget(position?.latitude, position?.longitude)),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Icon(Icons.schedule_rounded, size: 13, color: theme.colorScheme.outline),
+                  const SizedBox(width: 5),
+                  Expanded(
+                    child: Text(lastSeen, style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.outline, fontSize: 11)),
+                  ),
+                  if (_showMileage) _buildMileageWidget(device.id!),
+                ],
+              ),
             ],
           ),
         ),
@@ -389,98 +405,12 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
     );
   }
 
-  // --- 樣式 B: 緊湊列表 (一頁 9 台) ---
-  Widget _buildCompactListItem(api.Device device, api.Position? position, TraccarProvider provider) {
-    bool isFavorite = provider.isFavorite(device.id!);
-    final Map<String, dynamic> attributes = (position?.attributes as Map<String, dynamic>?) ?? {};
-    final bool isIgnitionOn = attributes['ignition'] == true;
-    final double speedKmH = (position?.speed ?? 0.0) * 1.852;
-    final DateTime now = DateTime.now().toUtc();
-    final DateTime? lastUpdate = position?.fixTime?.toUtc() ?? device.lastUpdate?.toUtc();
-    final bool isStale = lastUpdate == null || now.difference(lastUpdate).inMinutes >= 10;
-
-    Color statusColor = isStale ? Colors.grey : (isIgnitionOn ? const Color(0xFF10B981) : Colors.orange);
-
-    return Container(
-      height: _showMileage ? 88 : 72,
-      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
-      decoration: BoxDecoration(color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3), borderRadius: BorderRadius.circular(8)),
-      child: InkWell(
-        onTap: () => Get.to(() => LiveTrackingMapScreen(selectedDevice: device)),
-        child: Row(
-          children: [
-            Container(
-              width: 5,
-              decoration: BoxDecoration(
-                color: statusColor,
-                borderRadius: const BorderRadius.horizontal(left: Radius.circular(8)),
-              ),
-            ),
-            const SizedBox(width: 8),
-            IconButton(
-              icon: Icon(isFavorite ? CupertinoIcons.heart_fill : CupertinoIcons.heart, color: isFavorite ? Colors.red : Colors.grey, size: 18),
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(),
-              onPressed: () => provider.toggleFavorite(device.id!),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              flex: 3,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    device.name ?? '...',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 11, //13
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  Text(
-                    lastUpdate != null
-                        ? timeago.format(
-                            lastUpdate,
-                            locale: Get.locale?.languageCode ?? 'zh', // 改為讀取 GetX 當前語系
-                          )
-                        : '--',
-                    style: TextStyle(fontSize: 9, color: Theme.of(context).colorScheme.outline),
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              flex: 4,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildAddressWidget(position?.latitude, position?.longitude, isCompact: true),
-                  if (_showMileage) ...[const SizedBox(height: 2), _buildMileageWidget(device.id!, isCompact: true)],
-                ],
-              ),
-            ),
-            _AccTimerBadge(speed: speedKmH, isStale: isStale, isOn: isIgnitionOn, lastUpdate: lastUpdate, baseColor: statusColor, isCompact: true),
-          ],
-        ),
-      ),
-    );
-  }
-
   // --- 里程顯示 Widget ---
-  Widget _buildMileageWidget(int deviceId, {bool isCompact = false}) {
+  Widget _buildMileageWidget(int deviceId) {
     final mileage = _mileageMap[deviceId];
     if (mileage == null) return const SizedBox.shrink();
 
     final mileageLabel = _mileageDays == 1 ? 'dashboardTodayDistance'.tr : '${'dashboardTodayDistance'.tr} (3 ${'sharedDays'.tr})';
-
-    if (isCompact) {
-      return Text(
-        '${mileage.toStringAsFixed(1)} ${'sharedKm'.tr}',
-        style: TextStyle(fontSize: 9, color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w500),
-      );
-    }
 
     return Row(
       children: [
@@ -494,94 +424,110 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
     );
   }
 
-  // --- 輔助 Widget: 標籤與按鈕 ---
-  Widget _buildFilterAndToggle() {
+  Widget _buildFilterAndToggle(TraccarProvider provider) {
+    final now = DateTime.now().toUtc();
+    final counts = List<int>.filled(5, 0);
+    for (final device in provider.devices) {
+      counts[0]++;
+      final status = _deviceStatus(device, provider.getPosition(device.id!), now);
+      switch (status) {
+        case 'online':
+          counts[1]++;
+        case 'offline':
+          counts[2]++;
+        default:
+          counts[3]++;
+      }
+      if (provider.isFavorite(device.id!)) counts[4]++;
+    }
     final labels = ['deviceStatusAll'.tr, 'deviceStatusOnline'.tr, 'deviceStatusOffline'.tr, 'deviceStatusUnknown'.tr, 'deviceStatusFavorite'.tr];
-    return Row(
-      children: [
-        Expanded(
-          child: SizedBox(
-            height: 50,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              itemCount: labels.length,
-              itemBuilder: (context, i) => Padding(
-                padding: const EdgeInsets.only(right: 6),
-                child: ChoiceChip(
-                  label: Text(labels[i], style: TextStyle(fontSize: 11, color: _selectedStatus == i ? Theme.of(context).colorScheme.onPrimary : Theme.of(context).colorScheme.onSurface)),
-                  selected: _selectedStatus == i,
-                  selectedColor: Theme.of(context).colorScheme.primary,
-                  backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
-                  side: BorderSide.none,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                  onSelected: (_) => setState(() => _selectedStatus = i),
-                ),
-              ),
+
+    return SizedBox(
+      height: 48,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        itemCount: labels.length,
+        itemBuilder: (context, index) {
+          final selected = _selectedStatus == index;
+          return Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: ChoiceChip(
+              label: Text('${labels[index]}  ${counts[index]}'),
+              selected: selected,
+              showCheckmark: false,
+              labelStyle: TextStyle(fontSize: 12, fontWeight: selected ? FontWeight.w600 : FontWeight.w500, color: selected ? Theme.of(context).colorScheme.onPrimary : Theme.of(context).colorScheme.onSurfaceVariant),
+              selectedColor: Theme.of(context).colorScheme.primary,
+              backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.65),
+              side: BorderSide.none,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+              onSelected: (_) => setState(() => _selectedStatus = index),
             ),
-          ),
-        ),
-        // 里程切換按鈕
-        if (_showMileage)
-          Padding(
-            padding: const EdgeInsets.only(right: 4),
-            child: _isLoadingMileage
-                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                : PopupMenuButton<int>(
-                    icon: Icon(Icons.route, color: Theme.of(context).colorScheme.primary, size: 22),
-                    tooltip: '里程天數設定',
-                    onSelected: _setMileageDays,
-                    itemBuilder: (_) => [
-                      PopupMenuItem(
-                        value: 1,
-                        child: Row(
-                          children: [
-                            Icon(CupertinoIcons.checkmark, size: 18, color: _mileageDays == 1 ? null : Colors.transparent),
-                            const SizedBox(width: 8),
-                            Text('dashboardTodayDistance'.tr),
-                          ],
-                        ),
-                      ),
-                      PopupMenuItem(
-                        value: 3,
-                        child: Row(
-                          children: [
-                            Icon(CupertinoIcons.checkmark, size: 18, color: _mileageDays == 3 ? null : Colors.transparent),
-                            const SizedBox(width: 8),
-                            Text('${'dashboardTodayDistance'.tr} (3 ${'sharedDays'.tr})'),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-          ),
-        // 里程顯示開關按鈕
-        IconButton(
-          icon: Icon(_showMileage ? Icons.route : Icons.route_outlined, color: _showMileage ? Theme.of(context).colorScheme.primary : null),
-          onPressed: _toggleMileage,
-          tooltip: "切換里程顯示",
-        ),
-        // 切換樣式按鈕
-        IconButton(icon: Icon(_isCompactView ? Icons.view_agenda_outlined : Icons.view_headline_rounded), onPressed: _toggleViewMode, tooltip: "切換顯示樣式"),
-        const SizedBox(width: 8),
-      ],
+          );
+        },
+      ),
     );
   }
 
   Widget _buildSearchBar() {
+    final theme = Theme.of(context);
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
       child: SizedBox(
-        height: 40,
-        child: TextField(
-          controller: _searchController,
-          decoration: InputDecoration(
-            hintText: 'sharedSearchDevices'.tr,
-            prefixIcon: const Icon(CupertinoIcons.search, size: 20),
-            filled: true,
-            fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-          ),
+        height: 46,
+        child: Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _searchController,
+                decoration: InputDecoration(
+                  hintText: 'sharedSearchDevices'.tr,
+                  prefixIcon: const Icon(CupertinoIcons.search, size: 20),
+                  suffixIcon: _searchQuery.isEmpty ? null : IconButton(onPressed: _searchController.clear, icon: const Icon(Icons.close_rounded, size: 18)),
+                  filled: true,
+                  fillColor: theme.colorScheme.surfaceContainerHighest,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+                ),
+              ),
+            ),
+            IconButton(
+              onPressed: _toggleMileage,
+              tooltip: 'dashboardTodayDistance'.tr,
+              visualDensity: VisualDensity.compact,
+              constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+              icon: _isLoadingMileage ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : Icon(_showMileage ? Icons.route : Icons.route_outlined, color: _showMileage ? theme.colorScheme.primary : null),
+            ),
+            if (_showMileage)
+              PopupMenuButton<int>(
+                tooltip: 'dashboardTodayDistance'.tr,
+                onSelected: _setMileageDays,
+                constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+                icon: Icon(Icons.calendar_month_outlined, color: theme.colorScheme.primary),
+                itemBuilder: (_) => [
+                  PopupMenuItem(
+                    value: 1,
+                    child: Row(
+                      children: [
+                        Icon(Icons.check, size: 18, color: _mileageDays == 1 ? theme.colorScheme.primary : Colors.transparent),
+                        const SizedBox(width: 8),
+                        Text('dashboardTodayDistance'.tr),
+                      ],
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: 3,
+                    child: Row(
+                      children: [
+                        Icon(Icons.check, size: 18, color: _mileageDays == 3 ? theme.colorScheme.primary : Colors.transparent),
+                        const SizedBox(width: 8),
+                        Text('${'dashboardTodayDistance'.tr} (3 ${'sharedDays'.tr})'),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+          ],
         ),
       ),
     );
@@ -597,9 +543,8 @@ class _AccTimerBadge extends StatefulWidget {
   final bool isOn;
   final DateTime? lastUpdate;
   final Color baseColor;
-  final bool isCompact;
 
-  const _AccTimerBadge({required this.speed, required this.isStale, required this.isOn, required this.lastUpdate, required this.baseColor, required this.isCompact});
+  const _AccTimerBadge({required this.speed, required this.isStale, required this.isOn, required this.lastUpdate, required this.baseColor});
 
   @override
   _AccTimerBadgeState createState() => _AccTimerBadgeState();
@@ -641,11 +586,7 @@ class _AccTimerBadgeState extends State<_AccTimerBadge> {
 
   @override
   Widget build(BuildContext context) {
-    return widget.isCompact ? _buildCompact() : _buildStandard();
-  }
-
-  Widget _buildStandard() {
-    bool isMoving = !widget.isStale && widget.speed > 2;
+    final isMoving = !widget.isStale && widget.speed > 2;
     String timerText = "";
     if (!widget.isStale && widget.isOn && widget.lastUpdate != null && !isMoving) {
       final now = DateTime.now().toUtc();
@@ -659,42 +600,6 @@ class _AccTimerBadgeState extends State<_AccTimerBadge> {
       child: Text(
         isMoving ? "${widget.speed.toStringAsFixed(0)} ${'sharedKmh'.tr}" : (widget.isStale ? 'deviceStatusOfflineUpper'.tr : (widget.isOn ? "${'deviceStatusAccOn'.tr}$timerText" : 'alarmParking'.tr)),
         style: TextStyle(color: isMoving ? Colors.green : widget.baseColor, fontWeight: FontWeight.bold, fontSize: 11),
-      ),
-    );
-  }
-
-  Widget _buildCompact() {
-    if (widget.isStale) {
-      return Padding(
-        padding: const EdgeInsets.only(right: 8),
-        child: Text(
-          'deviceStatusOfflineUpper'.tr,
-          style: const TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.bold),
-        ),
-      );
-    }
-    if (widget.speed > 2) {
-      return Padding(
-        padding: const EdgeInsets.only(right: 8),
-        child: Text(
-          "${widget.speed.toStringAsFixed(0)} ${'sharedKmh'.tr}",
-          style: const TextStyle(fontSize: 10, color: Colors.green, fontWeight: FontWeight.bold),
-        ),
-      );
-    }
-
-    String timeStr = "";
-    if (widget.isOn && widget.lastUpdate != null) {
-      final now = DateTime.now().toUtc();
-      final d = now.difference(widget.lastUpdate!);
-      timeStr = "\n${d.inMinutes}m ${d.inSeconds % 60}s";
-    }
-    return Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: Text(
-        widget.isOn ? "${'deviceStatusAccOn'.tr}$timeStr" : 'alarmParking'.tr,
-        textAlign: TextAlign.center,
-        style: TextStyle(fontSize: 9, color: widget.baseColor, fontWeight: FontWeight.bold),
       ),
     );
   }

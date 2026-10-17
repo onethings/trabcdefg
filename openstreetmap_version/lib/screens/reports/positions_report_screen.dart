@@ -132,7 +132,6 @@ class _PositionsReportScreenState extends State<PositionsReportScreen> {
   void _onMapCreated(maplibre.MapLibreMapController c) {
     _mapController = c;
     _mapReady = true;
-    _updateMap();
   }
 
   Future<void> _updateMap() async {
@@ -169,7 +168,7 @@ class _PositionsReportScreenState extends State<PositionsReportScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final mapStyle = Provider.of<MapStyleProvider>(context).styleString;
+    final mapStyle = Provider.of<MapStyleProvider>(context).getStyle(Theme.of(context).brightness);
     return Scaffold(
       appBar: CupertinoNavigationBar(
         middle: Text('${'reportPositions'.tr}: ${_deviceName ?? ''}'),
@@ -186,6 +185,7 @@ class _PositionsReportScreenState extends State<PositionsReportScreen> {
                     height: 250,
                     child: maplibre.MapLibreMap(
                       onMapCreated: _onMapCreated,
+                      onStyleLoadedCallback: _updateMap,
                       styleString: mapStyle,
                       initialCameraPosition: maplibre.CameraPosition(target: maplibre.LatLng(_items.first.latitude, _items.first.longitude), zoom: 12),
                     ),

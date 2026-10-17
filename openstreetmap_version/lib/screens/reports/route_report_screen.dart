@@ -358,7 +358,7 @@ class _RouteReportScreenState extends State<RouteReportScreen> {
                   onMapCreated: (c) => _mapController = c,
                   onStyleLoadedCallback: _onStyleLoaded,
                   initialCameraPosition: maplibre.CameraPosition(target: initialCenter, zoom: 14.0),
-                  styleString: mapProvider.styleString,
+                  styleString: mapProvider.getStyle(Theme.of(context).brightness),
                 ),
                 Positioned(
                   top: 10,

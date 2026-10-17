@@ -78,7 +78,7 @@ class _SplashScreenState extends State<SplashScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Image.asset('assets/images/appstore.png', width: 180, height: 180, fit: BoxFit.contain),
+            Image.asset('assets/images/logo.png', width: 180, height: 180, fit: BoxFit.contain),
             const SizedBox(height: 24),
             const CircularProgressIndicator(),
           ],

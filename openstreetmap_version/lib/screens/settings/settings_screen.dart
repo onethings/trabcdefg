@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:trabcdefg/providers/settings_provider.dart';
 import 'package:trabcdefg/providers/theme_provider.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
@@ -31,6 +32,16 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
+  late final Future<PackageInfo> _packageInfo = PackageInfo.fromPlatform();
+  late final Future<SharedPreferences> _preferences = SharedPreferences.getInstance();
+  late final Future<String?> _serverVersion;
+
+  @override
+  void initState() {
+    super.initState();
+    _serverVersion = context.read<TraccarProvider>().fetchServerVersion();
+  }
+
   // Method to show the language selection dialog with more recognizable names
   void _showLanguageSelectionDialog() {
     final Map<String, String> languageNames = {
@@ -346,148 +357,269 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  Widget _settingsSection({required String title, required List<Widget> children}) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(left: 4, bottom: 10),
+            child: Text(
+              title,
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(color: colorScheme.onSurface.withValues(alpha: 0.7), fontWeight: FontWeight.w700),
+            ),
+          ),
+          Card(
+            clipBehavior: Clip.antiAlias,
+            margin: EdgeInsets.zero,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+            child: Column(
+              children: [
+                for (var i = 0; i < children.length; i++) ...[if (i > 0) const Divider(indent: 60, height: 1), children[i]],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _settingsTile({required IconData icon, required String title, required VoidCallback onTap}) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 3),
+      leading: Container(
+        width: 36,
+        height: 36,
+        decoration: BoxDecoration(color: colorScheme.primaryContainer, borderRadius: BorderRadius.circular(11)),
+        child: Icon(icon, size: 19, color: colorScheme.onPrimaryContainer),
+      ),
+      title: Text(title),
+      trailing: Icon(CupertinoIcons.chevron_right, size: 16, color: colorScheme.onSurface.withValues(alpha: 0.35)),
+      onTap: onTap,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final traccarProvider = context.read<TraccarProvider>();
+    final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
-      //   appBar: CupertinoNavigationBar(middle: Text('settingsTitle'.tr), automaticallyImplyLeading: false),
       body: SafeArea(
-        child: Column(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
           children: [
-            Expanded(
-              child: ListView(
+            Container(
+              height: 148,
+              padding: const EdgeInsets.fromLTRB(22, 20, 18, 20),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(colors: [colorScheme.primary, colorScheme.secondary], begin: Alignment.topLeft, end: Alignment.bottomRight),
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: Stack(
+                clipBehavior: Clip.hardEdge,
                 children: [
-                  ListTile(
-                    leading: const Icon(CupertinoIcons.doc_text),
-                    title: Text('reportTitle'.tr),
-                    trailing: const Icon(CupertinoIcons.chevron_right),
-                    onTap: () {
-                      Navigator.push(context, MaterialPageRoute(builder: (context) => const ReportsScreen()));
-                    },
+                  Positioned(
+                    right: -28,
+                    top: -58,
+                    child: Container(
+                      width: 150,
+                      height: 150,
+                      decoration: BoxDecoration(shape: BoxShape.circle, color: colorScheme.onPrimary.withValues(alpha: 0.09)),
+                    ),
                   ),
-                  const Divider(),
-                  ListTile(leading: const Icon(CupertinoIcons.settings), title: Text('loginLanguage'.tr), onTap: _showLanguageSelectionDialog),
-                  ListTile(leading: const Icon(CupertinoIcons.sun_max), title: Text('settingsTheme'.tr), onTap: _showThemeSelectionDialog),
-                  ListTile(leading: const Icon(Icons.text_fields), title: Text('settingsFontSize'.tr), onTap: _showFontSizeDialog),
-                  ListTile(leading: const Icon(CupertinoIcons.location_solid), title: Text('settingsMarkerSize'.tr), onTap: _showMarkerSizeDialog),
-                  ListTile(
-                    leading: const Icon(CupertinoIcons.bell),
-                    title: Text('sharedNotifications'.tr),
-                    onTap: () {
-                      Navigator.push(context, MaterialPageRoute(builder: (context) => const NotificationPage()));
-                    },
+                  Positioned(
+                    right: 48,
+                    bottom: -74,
+                    child: Container(
+                      width: 138,
+                      height: 138,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(color: colorScheme.onPrimary.withValues(alpha: 0.15), width: 22),
+                      ),
+                    ),
                   ),
-                  ListTile(
-                    leading: const Icon(Icons.account_circle),
-                    title: Text('settingsUser'.tr),
-                    onTap: () {
-                      Navigator.push(context, MaterialPageRoute(builder: (context) => const EditUserScreen()));
-                    },
-                  ),
-                  ListTile(
-                    leading: const Icon(Icons.devices),
-                    title: Text('deviceTitle'.tr),
-                    onTap: () {
-                      Navigator.push(context, MaterialPageRoute(builder: (context) => const DevicesScreen()));
-                    },
-                  ),
-                  ListTile(
-                    leading: const Icon(CupertinoIcons.location_solid),
-                    title: Text('sharedGeofence'.tr),
-                    onTap: () {
-                      Navigator.push(context, MaterialPageRoute(builder: (context) => const GeofencesScreen()));
-                    },
-                  ),
-                  ListTile(
-                    leading: const Icon(CupertinoIcons.person_2),
-                    title: Text('settingsGroups'.tr),
-                    onTap: () {
-                      Navigator.push(context, MaterialPageRoute(builder: (context) => const GroupsScreen()));
-                    },
-                  ),
-                  ListTile(
-                    leading: const Icon(CupertinoIcons.person),
-                    title: Text('sharedDrivers'.tr),
-                    onTap: () {
-                      Navigator.push(context, MaterialPageRoute(builder: (context) => const DriversScreen()));
-                    },
-                  ),
-                  ListTile(
-                    leading: const Icon(CupertinoIcons.calendar_today),
-                    title: Text('sharedCalendars'.tr),
-                    onTap: () {
-                      Navigator.push(context, MaterialPageRoute(builder: (context) => const CalendarsScreen()));
-                    },
-                  ),
-                  ListTile(
-                    leading: const Icon(Icons.calculate),
-                    title: Text('sharedComputedAttributes'.tr),
-                    onTap: () {
-                      Navigator.push(context, MaterialPageRoute(builder: (context) => const ComputedAttributesScreen()));
-                    },
-                  ),
-                  ListTile(
-                    leading: const Icon(CupertinoIcons.wrench),
-                    title: Text('sharedMaintenance'.tr),
-                    onTap: () {
-                      Navigator.push(context, MaterialPageRoute(builder: (context) => const MaintenanceScreen()));
-                    },
-                  ),
-                  ListTile(
-                    leading: const Icon(Icons.save),
-                    title: Text('sharedSavedCommands'.tr),
-                    onTap: () {
-                      Navigator.push(context, MaterialPageRoute(builder: (context) => const SavedCommandsScreen()));
-                    },
-                  ),
-                  ListTile(
-                    leading: const Icon(CupertinoIcons.info_circle),
-                    title: Text('sharedInfoTitle'.tr),
-                    onTap: () {
-                      Navigator.push(context, MaterialPageRoute(builder: (context) => const ServerInfoScreen()));
-                    },
-                  ),
-                  ListTile(
-                    leading: const Icon(Icons.developer_mode),
-                    title: Text('sharedEmulator'.tr),
-                    onTap: () {
-                      Navigator.push(context, MaterialPageRoute(builder: (context) => const EmulatorScreen()));
-                    },
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(CupertinoIcons.slider_horizontal_3, color: colorScheme.onPrimary.withValues(alpha: 0.88), size: 25),
+                        const SizedBox(height: 12),
+                        Text(
+                          'settingsTitle'.tr,
+                          style: Theme.of(context).textTheme.headlineSmall?.copyWith(color: colorScheme.onPrimary, fontWeight: FontWeight.w700),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
             ),
+            _settingsSection(
+              title: 'reportTitle'.tr,
+              children: [
+                _settingsTile(
+                  icon: CupertinoIcons.doc_text,
+                  title: 'reportTitle'.tr,
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const ReportsScreen())),
+                ),
+              ],
+            ),
+            _settingsSection(
+              title: 'loginLanguage'.tr,
+              children: [
+                _settingsTile(icon: CupertinoIcons.globe, title: 'loginLanguage'.tr, onTap: _showLanguageSelectionDialog),
+                _settingsTile(icon: CupertinoIcons.sun_max, title: 'settingsTheme'.tr, onTap: _showThemeSelectionDialog),
+                _settingsTile(icon: Icons.text_fields, title: 'settingsFontSize'.tr, onTap: _showFontSizeDialog),
+                _settingsTile(icon: CupertinoIcons.location_solid, title: 'settingsMarkerSize'.tr, onTap: _showMarkerSizeDialog),
+              ],
+            ),
+            _settingsSection(
+              title: 'settingsUser'.tr,
+              children: [
+                _settingsTile(
+                  icon: CupertinoIcons.bell,
+                  title: 'sharedNotifications'.tr,
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const NotificationPage())),
+                ),
+                _settingsTile(
+                  icon: CupertinoIcons.person_crop_circle,
+                  title: 'settingsUser'.tr,
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const EditUserScreen())),
+                ),
+              ],
+            ),
+            _settingsSection(
+              title: 'deviceTitle'.tr,
+              children: [
+                _settingsTile(
+                  icon: Icons.devices,
+                  title: 'deviceTitle'.tr,
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const DevicesScreen())),
+                ),
+                _settingsTile(
+                  icon: CupertinoIcons.location_solid,
+                  title: 'sharedGeofence'.tr,
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const GeofencesScreen())),
+                ),
+                _settingsTile(
+                  icon: CupertinoIcons.person_2,
+                  title: 'settingsGroups'.tr,
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const GroupsScreen())),
+                ),
+                _settingsTile(
+                  icon: CupertinoIcons.person,
+                  title: 'sharedDrivers'.tr,
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const DriversScreen())),
+                ),
+                _settingsTile(
+                  icon: CupertinoIcons.calendar_today,
+                  title: 'sharedCalendars'.tr,
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const CalendarsScreen())),
+                ),
+                _settingsTile(
+                  icon: Icons.calculate,
+                  title: 'sharedComputedAttributes'.tr,
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const ComputedAttributesScreen())),
+                ),
+                _settingsTile(
+                  icon: CupertinoIcons.wrench,
+                  title: 'sharedMaintenance'.tr,
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const MaintenanceScreen())),
+                ),
+                _settingsTile(
+                  icon: Icons.save,
+                  title: 'sharedSavedCommands'.tr,
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const SavedCommandsScreen())),
+                ),
+                _settingsTile(
+                  icon: CupertinoIcons.info_circle,
+                  title: 'sharedInfoTitle'.tr,
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const ServerInfoScreen())),
+                ),
+                _settingsTile(
+                  icon: Icons.developer_mode,
+                  title: 'sharedEmulator'.tr,
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const EmulatorScreen())),
+                ),
+              ],
+            ),
             Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: ElevatedButton(
+              padding: const EdgeInsets.only(top: 28),
+              child: OutlinedButton.icon(
                 onPressed: () {
-                  // Clear session data and disconnect WebSocket（背景執行，不阻塞導頁）
                   traccarProvider.clearSessionAndData();
-
-                  // 注意：Settings 位於 CupertinoTabView 的「巢狀 Navigator」內，
-                  // 一定要指定 rootNavigator，否則 '/login' 這條命名路由找不到
-                  // → 按了完全沒反應。
                   Navigator.of(context, rootNavigator: true).pushNamedAndRemoveUntil('/login', (route) => false);
                 },
-                style: ElevatedButton.styleFrom(
-                  minimumSize: const Size.fromHeight(50), // Make the button full-width
-                  backgroundColor: Theme.of(context).colorScheme.error,
-                  foregroundColor: Theme.of(context).colorScheme.onError,
+                icon: const Icon(Icons.logout),
+                label: Text('loginLogout'.tr),
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size.fromHeight(52),
+                  foregroundColor: colorScheme.error,
+                  side: BorderSide(color: colorScheme.error.withValues(alpha: 0.35)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                 ),
-                child: Text('loginLogout'.tr),
               ),
             ),
             Padding(
-              padding: const EdgeInsets.only(bottom: 24.0),
-              child: FutureBuilder<PackageInfo>(
-                future: PackageInfo.fromPlatform(),
-                builder: (context, snapshot) {
-                  if (snapshot.hasData) {
-                    return Text('${'appVersion'.tr}: ${snapshot.data!.version}+${snapshot.data!.buildNumber}', style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5), fontSize: 12));
-                  }
-                  return const SizedBox.shrink();
-                },
+              padding: const EdgeInsets.only(top: 16),
+              child: Consumer<TraccarProvider>(
+                builder: (context, provider, _) => FutureBuilder<PackageInfo>(
+                  future: _packageInfo,
+                  builder: (context, packageSnapshot) => FutureBuilder<SharedPreferences>(
+                    future: _preferences,
+                    builder: (context, preferencesSnapshot) {
+                      final serverUrl = provider.apiClient.basePath.replaceFirst(RegExp(r'/api/?$'), '');
+                      final email = provider.currentUser?.email ?? preferencesSnapshot.data?.getString('saved_email') ?? '-';
+                      final secondaryText = TextStyle(color: colorScheme.onSurface.withValues(alpha: 0.58), fontSize: 12);
+
+                      return Card(
+                        margin: EdgeInsets.zero,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(CupertinoIcons.info_circle, size: 17, color: colorScheme.primary),
+                                  const SizedBox(width: 8),
+                                  Text('sharedInfoTitle'.tr, style: Theme.of(context).textTheme.titleSmall),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              Text('${'appVersion'.tr}: ${packageSnapshot.data == null ? '-' : '${packageSnapshot.data!.version}+${packageSnapshot.data!.buildNumber}'}', style: secondaryText),
+                              const SizedBox(height: 4),
+                              Text('${'settingsServer'.tr}: $serverUrl', style: secondaryText),
+                              const SizedBox(height: 4),
+                              FutureBuilder<String?>(
+                                future: _serverVersion,
+                                builder: (context, versionSnapshot) {
+                                  final version = versionSnapshot.data;
+                                  if (version == null) return const SizedBox.shrink();
+                                  return Padding(
+                                    padding: const EdgeInsets.only(bottom: 4),
+                                    child: Text('${'settingsServerVersion'.tr}: $version', style: secondaryText),
+                                  );
+                                },
+                              ),
+                              Text('${'userEmail'.tr}: $email', style: secondaryText),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
               ),
             ),
           ],

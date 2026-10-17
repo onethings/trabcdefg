@@ -51,6 +51,7 @@ class _EmulatorScreenState extends State<EmulatorScreen> {
 
   Future<void> _onStyleLoaded() async {
     _isStyleLoaded = true;
+    await _rebuildAllMarkers();
   }
 
   void _onMapCreated(MapLibreMapController controller) {
@@ -330,7 +331,7 @@ class _EmulatorScreenState extends State<EmulatorScreen> {
             onMapCreated: _onMapCreated,
             onStyleLoadedCallback: _onStyleLoaded,
             initialCameraPosition: const CameraPosition(target: LatLng(21.9162, 95.9560), zoom: 3.0),
-            styleString: mapProvider.styleString,
+            styleString: mapProvider.getStyle(Theme.of(context).brightness),
             onMapClick: (point, latLng) {
               _sendPosition(latLng);
             },

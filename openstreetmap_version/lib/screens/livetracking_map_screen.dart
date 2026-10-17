@@ -220,7 +220,7 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
                   ),
                   zoom: _currentZoom,
                 ),
-                styleString: Provider.of<MapStyleProvider>(context).styleString,
+                styleString: Provider.of<MapStyleProvider>(context).getStyle(Theme.of(context).brightness),
                 onCameraMove: (position) {
                   _currentZoom = position.zoom;
                   SharedPreferences.getInstance().then((prefs) {

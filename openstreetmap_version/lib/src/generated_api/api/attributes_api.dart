@@ -338,6 +338,72 @@ class AttributesApi {
     return null;
   }
 
+  /// Evaluate a Computed Attribute against the latest Device Position.
+  ///
+  /// Returns the computed scalar value, or null when the computation produces
+  /// no value.
+  ///
+  /// Parameters:
+  ///
+  /// * [int] deviceId (required):
+  ///
+  /// * [Attribute] attribute (required):
+  Future<Response> postAttributesComputedTestWithHttpInfo(
+    int deviceId,
+    Attribute attribute,
+  ) async {
+    // ignore: prefer_const_declarations
+    final path = r'/attributes/computed/test';
+
+    // ignore: prefer_final_locals
+    Object? postBody = attribute;
+
+    final queryParams = <QueryParam>[];
+    queryParams.addAll(_queryParams('', 'deviceId', deviceId));
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>['application/json'];
+
+    return apiClient.invokeAPI(
+      path,
+      'POST',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.first,
+    );
+  }
+
+  /// Evaluate a Computed Attribute against the latest Device Position.
+  ///
+  /// Returns the computed scalar value, or null when the computation produces
+  /// no value.
+  ///
+  /// Parameters:
+  ///
+  /// * [int] deviceId (required):
+  ///
+  /// * [Attribute] attribute (required):
+  Future<Object?> postAttributesComputedTest(
+    int deviceId,
+    Attribute attribute,
+  ) async {
+    final response = await postAttributesComputedTestWithHttpInfo(
+      deviceId,
+      attribute,
+    );
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    if (response.body.isNotEmpty &&
+        response.statusCode != HttpStatus.noContent) {
+      return json.decode(await _decodeBodyBytes(response)) as Object?;
+    }
+    return null;
+  }
+
   /// Update an Attribute
   ///
   /// Note: This method returns the HTTP [Response].
