@@ -47,6 +47,7 @@ dependencies:
 
   # --- Storage & Database ---
   shared_preferences: ^2.5.3
+  flutter_secure_storage: ^10.3.1
   path_provider: ^2.1.5
   hive: ^2.2.3
   hive_flutter: ^1.1.0

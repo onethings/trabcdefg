@@ -1,37 +1,165 @@
 // lib/services/http_interceptor.dart
-// A custom HTTP client that intercepts 401 Unauthorized responses
-// and triggers a callback to handle session expiration globally.
+// A custom HTTP client that intercepts 401 Unauthorized responses, renews the
+// server session once and retries the original request.
 
 import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
-/// Wraps an [http.Client] to intercept 401 responses.
+typedef SessionIdProvider = String? Function();
+typedef SessionRefresher = Future<bool> Function();
+
+/// Wraps an [http.Client] to handle expired sessions.
 ///
-/// When the server returns 401 for any request, [onUnauthorized] is called
-/// (via a microtask) so the app can redirect to the login screen.
+/// When the server returns 401 for a request:
+/// 1. [refreshSession] is invoked exactly once, even if many requests fail
+///    concurrently (single-flight).
+/// 2. If the refresh succeeds, the original request is retried once with the
+///    new session cookie.
+/// 3. If the refresh fails, [onUnauthorized] is invoked once so the app can
+///    clear its state and return to the login screen.
 ///
-/// Login requests (POST /session) are explicitly excluded from interception
-/// because a 401 there means "invalid credentials", not "expired session".
+/// Login requests (POST /session) are excluded because a 401 there means
+/// "invalid credentials", not "expired session".
 class AuthInterceptingClient extends http.BaseClient {
   final http.Client _inner;
-  final void Function()? onUnauthorized;
+  final SessionIdProvider? sessionIdProvider;
+  final SessionRefresher? refreshSession;
+  final Future<void> Function()? onUnauthorized;
 
-  AuthInterceptingClient({http.Client? inner, this.onUnauthorized}) : _inner = inner ?? http.Client();
+  Completer<bool>? _refreshCompleter;
+  Completer<void>? _unauthorizedCompleter;
+
+  AuthInterceptingClient({
+    http.Client? inner,
+    this.sessionIdProvider,
+    this.refreshSession,
+    this.onUnauthorized,
+  }) : _inner = inner ?? http.Client();
 
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
-    final response = await _inner.send(request);
+    final isLoginRequest = _isLoginRequest(request);
 
-    // Intercept 401, but skip login requests (POST /session) since
-    // a 401 there means "wrong email/password", not an expired session.
-    if (response.statusCode == 401 && onUnauthorized != null) {
-      final isLoginRequest = request.method == 'POST' && request.url.path.endsWith('/session');
-      if (!isLoginRequest) {
-        Future.microtask(() => onUnauthorized!());
-      }
+    // Always send the latest session id; the default header on ApiClient can
+    // become stale after a silent re-login. Login itself must not send a stale
+    // cookie.
+    if (isLoginRequest) {
+      request.headers.remove('Cookie');
+    } else {
+      _applySessionCookie(request);
     }
 
-    return response;
+    final response = await _inner.send(request);
+
+    if (response.statusCode != 401 || isLoginRequest) {
+      return response;
+    }
+
+    if (refreshSession == null) {
+      await _notifyUnauthorized();
+      return response;
+    }
+
+    final refreshed = await _refreshOnce();
+    if (!refreshed) {
+      await _notifyUnauthorized();
+      return response;
+    }
+
+    final retryRequest = _cloneRequest(request);
+    if (retryRequest == null) {
+      // The request body cannot be replayed (e.g. multipart upload). The
+      // session is valid again, so the caller can retry on its own.
+      return response;
+    }
+
+    await _drain(response);
+    _applySessionCookie(retryRequest);
+
+    final retryResponse = await _inner.send(retryRequest);
+    if (retryResponse.statusCode == 401) {
+      await _notifyUnauthorized();
+    }
+    return retryResponse;
+  }
+
+  bool _isLoginRequest(http.BaseRequest request) =>
+      request.method == 'POST' && request.url.path.endsWith('/session');
+
+  void _applySessionCookie(http.BaseRequest request) {
+    final sessionId = sessionIdProvider?.call();
+    if (sessionId != null && sessionId.isNotEmpty) {
+      request.headers['Cookie'] = 'JSESSIONID=$sessionId';
+    }
+  }
+
+  /// Runs at most one refresh at a time; concurrent 401s await the same result.
+  Future<bool> _refreshOnce() {
+    final existing = _refreshCompleter;
+    if (existing != null) return existing.future;
+
+    final completer = Completer<bool>();
+    _refreshCompleter = completer;
+
+    Future(() async {
+      var refreshed = false;
+      try {
+        refreshed = await refreshSession!();
+      } catch (e) {
+        debugPrint('AuthInterceptingClient: session refresh failed: $e');
+      } finally {
+        _refreshCompleter = null;
+        if (!completer.isCompleted) completer.complete(refreshed);
+      }
+    });
+
+    return completer.future;
+  }
+
+  /// Runs [onUnauthorized] at most once for a burst of failures.
+  Future<void> _notifyUnauthorized() {
+    final existing = _unauthorizedCompleter;
+    if (existing != null) return existing.future;
+
+    final completer = Completer<void>();
+    _unauthorizedCompleter = completer;
+
+    Future(() async {
+      try {
+        await onUnauthorized?.call();
+      } catch (e) {
+        debugPrint('AuthInterceptingClient: onUnauthorized failed: $e');
+      } finally {
+        _unauthorizedCompleter = null;
+        if (!completer.isCompleted) completer.complete();
+      }
+    });
+
+    return completer.future;
+  }
+
+  /// Rebuilds a regular [http.Request] so it can be sent a second time.
+  /// Streamed requests (multipart/upload) cannot be replayed.
+  http.BaseRequest? _cloneRequest(http.BaseRequest request) {
+    if (request is! http.Request) return null;
+
+    return http.Request(request.method, request.url)
+      ..headers.addAll(request.headers)
+      ..bodyBytes = request.bodyBytes
+      ..encoding = request.encoding
+      ..followRedirects = request.followRedirects
+      ..maxRedirects = request.maxRedirects
+      ..persistentConnection = request.persistentConnection;
+  }
+
+  Future<void> _drain(http.StreamedResponse response) async {
+    try {
+      await response.stream.drain<void>();
+    } catch (_) {
+      // The response is being discarded; an error while draining is harmless.
+    }
   }
 
   @override

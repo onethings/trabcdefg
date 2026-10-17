@@ -30,8 +30,9 @@ import 'package:trabcdefg/screens/reports/summary_report_screen.dart';
 import 'package:trabcdefg/screens/reports/trips_report_screen.dart';
 import 'package:trabcdefg/screens/reset_password_screen.dart';
 import 'package:trabcdefg/screens/splash_screen.dart';
+import 'package:trabcdefg/services/api_client_factory.dart';
 import 'package:trabcdefg/services/auth_service.dart';
-import 'package:trabcdefg/services/http_interceptor.dart';
+import 'package:trabcdefg/services/auth_session_store.dart';
 import 'package:trabcdefg/services/localization_service.dart';
 import 'package:trabcdefg/services/websocket_service.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
@@ -51,6 +52,7 @@ void main() async {
     }(),
     SharedPreferences.getInstance(),
     initializeDateFormatting(),
+    AuthSessionStore.instance.load(),
   ]);
 
   final prefs = results[1] as SharedPreferences;
@@ -71,78 +73,13 @@ class TraccarApp extends StatelessWidget {
     // Use MultiProvider to provide multiple services to the widget tree.
     return MultiProvider(
       providers: [
-        // Provide the API client with the initial server URL.
+        // Provide the API client with the initial server URL. The factory adds
+        // the JSON Accept header and the shared 401 handling (single-flight
+        // re-login + one retry).
         Provider<api.ApiClient>(
-          create: (_) {
-            final client = api.ApiClient(
-              basePath: initialUrl != null ? '$initialUrl/api' : AppConstants.traccarApiUrl, // Use constant default
-            );
-
-            // CRITICAL FIX: Add the Accept header here to force JSON response from the server.
-            // This resolves the 'PK' (ZIP file) error.
-            client.addDefaultHeader('Accept', 'application/json');
-
-            // Wrap the HTTP client with an interceptor that detects 401
-            // (expired session) responses and attempts auto-relogin first.
-            client.client = AuthInterceptingClient(
-              onUnauthorized: () async {
-                debugPrint('AuthInterceptingClient: 401 detected, attempting auto-relogin...');
-
-                // Try auto-relogin using saved credentials
-                final prefs = await SharedPreferences.getInstance();
-                final email = prefs.getString('saved_email');
-                final password = prefs.getString('saved_password');
-
-                if (email != null && password != null) {
-                  try {
-                    // POST /session is excluded from interception, so this is safe
-                    final sessionApi = api.SessionApi(client);
-                    final response = await sessionApi.postSessionWithHttpInfo(email, password);
-
-                    final setCookieHeader = response.headers['set-cookie'];
-                    if (setCookieHeader != null) {
-                      final jSessionId = setCookieHeader.split(';').firstWhere((s) => s.startsWith('JSESSIONID='), orElse: () => '').split('=').last;
-                      if (jSessionId.isNotEmpty) {
-                        await prefs.setString('jSessionId', jSessionId);
-                        await prefs.setString('userJson', response.body);
-                        debugPrint('Auto-relogin succeeded! New session acquired.');
-
-                        // Update the TraccarProvider with the fresh session
-                        final provider = TraccarProvider.instance;
-                        provider?.setSessionId(jSessionId);
-
-                        // Re-fetch data so the UI immediately reflects the refreshed session.
-                        // This is critical when the session expired silently (e.g. app
-                        // backgrounded for a week) and the interceptor catches the first 401.
-                        try {
-                          await provider?.fetchInitialData().timeout(const Duration(seconds: 15));
-                          debugPrint('Data re-fetched after interceptor auto-relogin.');
-                        } catch (fetchError) {
-                          // Data re-fetch failed, but we have a valid session now.
-                          // The WebSocket will connect and push updates shortly.
-                          debugPrint('Data re-fetch after interceptor auto-relogin failed: $fetchError');
-                        }
-
-                        return; // Don't redirect — the app can continue
-                      }
-                    }
-                  } catch (e) {
-                    debugPrint('Auto-relogin failed in interceptor: $e');
-                  }
-                }
-
-                // Auto-relogin failed or no saved credentials — clear & redirect
-                debugPrint('Auto-relogin unavailable, redirecting to login.');
-                await prefs.remove('jSessionId');
-                await prefs.remove('userJson');
-                await prefs.remove('saved_email');
-                await prefs.remove('saved_password');
-                Get.offAllNamed('/login');
-              },
-            );
-
-            return client;
-          },
+          create: (_) => ApiClientFactory.create(
+            initialUrl != null ? '$initialUrl/api' : AppConstants.traccarApiUrl,
+          ),
         ),
         // Provide the authentication service.
         Provider<AuthService>(create: (context) => AuthService(apiClient: context.read<api.ApiClient>())),

@@ -11,8 +11,8 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:trabcdefg/src/utils/cupertino_pickers.dart';
-import 'package:trabcdefg/constants.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
+import 'package:trabcdefg/services/api_config.dart';
 
 class ShareDeviceScreen extends StatefulWidget {
   const ShareDeviceScreen({super.key});
@@ -81,8 +81,9 @@ class _ShareDeviceScreenState extends State<ShareDeviceScreen> {
 
     final expiration = DateTime(_selectedDate!.year, _selectedDate!.month, _selectedDate!.day, _selectedTime!.hour, _selectedTime!.minute).toUtc();
 
-    final url = Uri.parse('${AppConstants.traccarApiUrl}/devices/share');
     final traccarProvider = context.read<TraccarProvider>();
+    final apiConfig = ApiConfig.fromApiClient(traccarProvider.apiClient);
+    final url = apiConfig.uri('/devices/share');
     final headers = {'Content-Type': 'application/x-www-form-urlencoded', HttpHeaders.cookieHeader: 'JSESSIONID=${traccarProvider.sessionId}'};
     final requestBody = {'deviceId': _deviceId.toString(), 'expiration': expiration.toIso8601String()};
 
@@ -92,7 +93,7 @@ class _ShareDeviceScreenState extends State<ShareDeviceScreen> {
       if (response.statusCode == 200) {
         // Use the raw response body as the token string directly
         final String token = response.body;
-        final String link = '${AppConstants.traccarServerUrl}?token=$token';
+        final String link = '${apiConfig.serverUrl}?token=$token';
         setState(() {
           _shareLink = link;
           _linkController.text = _shareLink!;

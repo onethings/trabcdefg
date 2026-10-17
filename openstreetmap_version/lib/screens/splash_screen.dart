@@ -3,9 +3,8 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
-import 'package:trabcdefg/services/auth_service.dart';
+import 'package:trabcdefg/services/auth_session_store.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -21,51 +20,42 @@ class _SplashScreenState extends State<SplashScreen> {
     _checkLoginStatus();
   }
 
-  /// 🔥 每次打開 app 都用存的帳密重新登入（POST /session）拿「全新」token，
-  /// 不信任舊 session。只有自動登入成功才進主頁；伺服器當機/帳密無效都擋在登入頁。
+  /// Resumes the session saved in secure storage. The password is never
+  /// persisted, so if the server rejects the session the user must log in
+  /// again instead of silently re-authenticating.
   Future<void> _checkLoginStatus() async {
-    final prefs = await SharedPreferences.getInstance();
-    final email = prefs.getString('saved_email');
-    final password = prefs.getString('saved_password');
+    await AuthSessionStore.instance.load();
+    final jSessionId = AuthSessionStore.instance.sessionId;
 
     if (!mounted) return;
 
-    // 沒有存帳密 → 登入頁
-    if (email == null || password == null) {
+    // No saved session → login page.
+    if (jSessionId == null || jSessionId.isEmpty) {
       Navigator.of(context).pushReplacementNamed('/login');
       return;
     }
 
     final traccarProvider = context.read<TraccarProvider>();
-    final authService = context.read<AuthService>();
+    traccarProvider.setSessionId(jSessionId);
+
     try {
-      // 每次啟動都重新登入，取得全新 session token
-      await authService.login(email, password);
-
-      final jSessionId = prefs.getString('jSessionId');
-      if (jSessionId != null) {
-        traccarProvider.setSessionId(jSessionId);
-      }
-
       await traccarProvider.fetchInitialData().timeout(const Duration(seconds: 10));
 
       if (mounted) {
         Navigator.of(context).pushReplacementNamed('/main');
       }
-    } on LoginException catch (e) {
-      // 帳密無效（401/400）→ 清除存的憑證，避免每次啟動都失敗
-      debugPrint('Splash auto-login rejected: $e');
-      await authService.logout();
-      if (mounted) {
-        Get.snackbar('Error'.tr, 'loginFailed'.tr, snackPosition: SnackPosition.BOTTOM);
-        Navigator.of(context).pushReplacementNamed('/login');
-      }
     } catch (e) {
-      // 🛑 伺服器當機 / 網路錯誤 → 保留憑證供下次自動重試，但先進登入頁，
-      // 不讓使用者進入 Devices/Map/Settings。
-      debugPrint('Splash auto-login failed (server unreachable?): $e');
+      // 401 is handled by the API client: it tries one silent re-login, then
+      // clears the session and redirects. For network/server failures the
+      // session is kept so the next launch can retry.
+      debugPrint('Splash session check failed: $e');
       if (mounted) {
-        Get.snackbar('Error'.tr, 'Could not connect to server. Please check your network and try again.'.tr, snackPosition: SnackPosition.BOTTOM);
+        final sessionExpired = AuthSessionStore.instance.sessionId == null;
+        Get.snackbar(
+          'Error'.tr,
+          sessionExpired ? 'Your session has expired. Please log in again.'.tr : 'Could not connect to server. Please check your network and try again.'.tr,
+          snackPosition: SnackPosition.BOTTOM,
+        );
         Navigator.of(context).pushReplacementNamed('/login');
       }
     }

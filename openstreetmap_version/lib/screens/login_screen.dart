@@ -10,6 +10,7 @@ import 'package:trabcdefg/constants.dart';
 import 'package:trabcdefg/providers/theme_provider.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
 import 'package:trabcdefg/screens/qr_scanner_screen.dart';
+import 'package:trabcdefg/services/api_client_factory.dart';
 import 'package:trabcdefg/services/auth_service.dart';
 import 'package:trabcdefg/services/localization_service.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
@@ -75,7 +76,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     if (mounted) setState(() => _serverVersion = null);
 
     try {
-      final client = api.ApiClient(basePath: '${_normalizedServerUrl(serverUrl)}/api');
+      final client = ApiClientFactory.create('${_normalizedServerUrl(serverUrl)}/api');
       final server = await api.ServerApi(client).getServer();
       if (!mounted || request != _serverVersionRequest) return;
       setState(() => _serverVersion = server?.version);
@@ -111,7 +112,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       final serverUrl = _normalizedServerUrl(savedServerUrl);
 
       _serverUrlController.text = serverUrl;
-      final newApiClient = api.ApiClient(basePath: '$serverUrl/api');
+      final newApiClient = ApiClientFactory.create('$serverUrl/api');
 
       await prefs.setString('traccarServerUrl', serverUrl);
 
@@ -120,13 +121,10 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       final authService = context.read<AuthService>();
       final traccarProvider = context.read<TraccarProvider>();
 
-      authService.apiClient = newApiClient;
+      authService.updateApiClient(newApiClient);
       traccarProvider.updateApiClient(newApiClient);
 
       await authService.login(_emailController.text, _passwordController.text);
-
-      final jSessionId = prefs.getString('jSessionId');
-      if (jSessionId != null) traccarProvider.setSessionId(jSessionId);
 
       await traccarProvider.fetchInitialData();
       // 🔥 Pre-fetch & cache server version at login so all screens
@@ -180,10 +178,16 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
         initialUrl: _serverUrlController.text,
         onSelected: (url) async {
           final prefs = await SharedPreferences.getInstance();
-          await prefs.setString('traccarServerUrl', url);
-          if (!mounted) return;
-          setState(() => _serverUrlController.text = url);
-          await _loadServerVersion(url);
+          final normalizedUrl = _normalizedServerUrl(url);
+          await prefs.setString('traccarServerUrl', normalizedUrl);
+          if (!context.mounted) return;
+          // Keep the app-wide clients in sync so pre-login screens such as
+          // password reset target the server the user just selected.
+          final client = ApiClientFactory.create('$normalizedUrl/api');
+          context.read<TraccarProvider>().updateApiClient(client);
+          context.read<AuthService>().updateApiClient(client);
+          setState(() => _serverUrlController.text = normalizedUrl);
+          await _loadServerVersion(normalizedUrl);
         },
       ),
     );

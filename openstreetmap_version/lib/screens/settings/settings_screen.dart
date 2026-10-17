@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:trabcdefg/providers/settings_provider.dart';
 import 'package:trabcdefg/providers/theme_provider.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
@@ -22,6 +21,7 @@ import 'package:trabcdefg/screens/settings/saved_commands_screen.dart';
 import 'package:trabcdefg/screens/settings/server_info_screen.dart';
 import 'package:trabcdefg/screens/settings/emulator_screen.dart';
 import 'package:trabcdefg/screens/reports/reports_screen.dart';
+import 'package:trabcdefg/services/auth_session_store.dart';
 import 'package:trabcdefg/services/localization_service.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -33,7 +33,6 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   late final Future<PackageInfo> _packageInfo = PackageInfo.fromPlatform();
-  late final Future<SharedPreferences> _preferences = SharedPreferences.getInstance();
   late final Future<String?> _serverVersion;
 
   @override
@@ -574,12 +573,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: Consumer<TraccarProvider>(
                 builder: (context, provider, _) => FutureBuilder<PackageInfo>(
                   future: _packageInfo,
-                  builder: (context, packageSnapshot) => FutureBuilder<SharedPreferences>(
-                    future: _preferences,
-                    builder: (context, preferencesSnapshot) {
-                      final serverUrl = provider.apiClient.basePath.replaceFirst(RegExp(r'/api/?$'), '');
-                      final email = provider.currentUser?.email ?? preferencesSnapshot.data?.getString('saved_email') ?? '-';
-                      final secondaryText = TextStyle(color: colorScheme.onSurface.withValues(alpha: 0.58), fontSize: 12);
+                  builder: (context, packageSnapshot) {
+                    final serverUrl = provider.apiClient.basePath.replaceFirst(RegExp(r'/api/?$'), '');
+                    final email = provider.currentUser?.email ?? AuthSessionStore.instance.email ?? '-';
+                    final secondaryText = TextStyle(color: colorScheme.onSurface.withValues(alpha: 0.58), fontSize: 12);
 
                       return Card(
                         margin: EdgeInsets.zero,
@@ -617,10 +614,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           ),
                         ),
                       );
-                    },
-                  ),
-                ),
+                },
               ),
+            ),
             ),
           ],
         ),

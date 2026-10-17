@@ -6,8 +6,10 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:trabcdefg/constants.dart';
+import 'package:provider/provider.dart';
+import 'package:trabcdefg/providers/traccar_provider.dart';
+import 'package:trabcdefg/services/api_config.dart';
+import 'package:trabcdefg/services/auth_session_store.dart';
 
 class NotificationPage extends StatefulWidget {
   final int? notificationId;
@@ -81,9 +83,11 @@ class _NotificationPageState extends State<NotificationPage> {
       _isLoading = true;
     });
 
+    final traccarProvider = context.read<TraccarProvider>();
+    final apiConfig = ApiConfig.fromApiClient(traccarProvider.apiClient);
+
     try {
-      final prefs = await SharedPreferences.getInstance();
-      _jSessionId = prefs.getString('jSessionId');
+      _jSessionId = traccarProvider.sessionId ?? AuthSessionStore.instance.sessionId;
       if (_jSessionId == null) {
         throw Exception('Session not found');
       }
@@ -94,7 +98,7 @@ class _NotificationPageState extends State<NotificationPage> {
       };
 
       final typesResponse = await http.get(
-        Uri.parse('${AppConstants.traccarApiUrl}/notifications/types'),
+        apiConfig.uri('/notifications/types'),
         headers: headers,
       );
       if (typesResponse.statusCode == 200) {
@@ -102,7 +106,7 @@ class _NotificationPageState extends State<NotificationPage> {
       }
 
       final notificatorsResponse = await http.get(
-        Uri.parse('${AppConstants.traccarApiUrl}/notifications/notificators'),
+        apiConfig.uri('/notifications/notificators'),
         headers: headers,
       );
       if (notificatorsResponse.statusCode == 200) {
@@ -110,7 +114,7 @@ class _NotificationPageState extends State<NotificationPage> {
       }
 
       final commandsResponse = await http.get(
-        Uri.parse('${AppConstants.traccarApiUrl}/commands'),
+        apiConfig.uri('/commands'),
         headers: headers,
       );
       if (commandsResponse.statusCode == 200) {
@@ -118,7 +122,7 @@ class _NotificationPageState extends State<NotificationPage> {
       }
 
       final calendarsResponse = await http.get(
-        Uri.parse('${AppConstants.traccarApiUrl}/calendars'),
+        apiConfig.uri('/calendars'),
         headers: headers,
       );
       if (calendarsResponse.statusCode == 200) {
@@ -127,9 +131,7 @@ class _NotificationPageState extends State<NotificationPage> {
 
       if (widget.notificationId != null) {
         final notificationResponse = await http.get(
-          Uri.parse(
-            '${AppConstants.traccarApiUrl}/notifications/${widget.notificationId}',
-          ),
+          apiConfig.uri('/notifications/${widget.notificationId}'),
           headers: headers,
         );
         if (notificationResponse.statusCode == 200) {
@@ -157,6 +159,9 @@ class _NotificationPageState extends State<NotificationPage> {
   Future<void> _saveNotification() async {
     if (_formKey.currentState?.validate() ?? false) {
       _formKey.currentState!.save();
+      final apiConfig = ApiConfig.fromApiClient(
+        context.read<TraccarProvider>().apiClient,
+      );
       final body = {
         'description': _descriptionController.text,
         'type': _selectedNotificationType,
@@ -177,15 +182,13 @@ class _NotificationPageState extends State<NotificationPage> {
 
         if (widget.notificationId == null) {
           response = await http.post(
-            Uri.parse('${AppConstants.traccarApiUrl}/notifications'),
+            apiConfig.uri('/notifications'),
             headers: headers,
             body: json.encode(body),
           );
         } else {
           response = await http.put(
-            Uri.parse(
-              '${AppConstants.traccarApiUrl}/notifications/${widget.notificationId}',
-            ),
+            apiConfig.uri('/notifications/${widget.notificationId}'),
             headers: headers,
             body: json.encode(body),
           );
@@ -205,6 +208,9 @@ class _NotificationPageState extends State<NotificationPage> {
   }
 
   Future<void> _testNotificators() async {
+    final apiConfig = ApiConfig.fromApiClient(
+      context.read<TraccarProvider>().apiClient,
+    );
     final body = {
       'type': _selectedNotificationType,
       'notificators': _selectedNotificators.join(','),
@@ -214,7 +220,7 @@ class _NotificationPageState extends State<NotificationPage> {
 
     try {
       final response = await http.post(
-        Uri.parse('${AppConstants.traccarApiUrl}/notifications/test'),
+        apiConfig.uri('/notifications/test'),
         headers: {
           'Content-Type': 'application/json',
           'Cookie': 'JSESSIONID=$_jSessionId',

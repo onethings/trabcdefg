@@ -3,7 +3,9 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:trabcdefg/constants.dart';
+import 'package:provider/provider.dart';
+import 'package:trabcdefg/providers/traccar_provider.dart';
+import 'package:trabcdefg/services/api_config.dart';
 
 class ResetPasswordScreen extends StatefulWidget {
   const ResetPasswordScreen({super.key});
@@ -23,14 +25,17 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
 
   Future<void> _resetPassword() async {
     final String email = _emailController.text;
-    final String url = '${AppConstants.traccarApiUrl}/password/reset';
+    final apiConfig = ApiConfig.fromApiClient(
+      context.read<TraccarProvider>().apiClient,
+    );
+    final Uri url = apiConfig.uri('/password/reset');
 
     // 1. 先把需要的 Messenger 和 Navigator 狀態提取出來
     final scaffoldMessenger = ScaffoldMessenger.of(context);
     final navigator = Navigator.of(context);
 
     try {
-      final response = await http.post(Uri.parse(url), headers: <String, String>{'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8'}, body: 'email=${Uri.encodeComponent(email)}');
+      final response = await http.post(url, headers: <String, String>{'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8'}, body: 'email=${Uri.encodeComponent(email)}');
 
       if (response.statusCode == 200) {
         // 使用先前存好的變數，不依賴 async gap 後的 context

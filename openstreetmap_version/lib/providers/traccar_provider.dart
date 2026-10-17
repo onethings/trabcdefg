@@ -2,6 +2,7 @@
 // Provider to manage Traccar API interactions and WebSocket connections.
 import 'package:flutter/material.dart';
 import 'package:trabcdefg/services/auth_service.dart';
+import 'package:trabcdefg/services/auth_session_store.dart';
 import 'package:trabcdefg/services/websocket_service.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
 import 'package:trabcdefg/storage/user_database_helper.dart';
@@ -188,6 +189,12 @@ class TraccarProvider with ChangeNotifier {
     // Wire up the session ID provider so WebSocket reconnects
     // always use the latest session ID, not a potentially stale one.
     webSocketService.sessionIdProvider = () => _sessionId;
+
+    // Keep the app in sync when the shared session is refreshed or cleared
+    // (e.g. by the global 401 interceptor).
+    final sessionStore = AuthSessionStore.instance;
+    sessionStore.onSessionUpdated = setSessionId;
+    sessionStore.onSessionCleared = clearLocalSession;
   }
 
   Future<void> _loadFavorites() async {
@@ -324,7 +331,11 @@ class TraccarProvider with ChangeNotifier {
     }
 
     await authService.logout();
+  }
 
+  /// Resets all in-memory state without touching the server. Used when the
+  /// session has already been cleared or rejected.
+  Future<void> clearLocalSession() async {
     _sessionId = null;
     _serverVersion = null;
     _devices = [];

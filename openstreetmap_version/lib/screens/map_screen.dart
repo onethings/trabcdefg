@@ -266,6 +266,68 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     }
   }
 
+  /// 量測 sheet 目前高度；尚未佈局（或面板關閉中）時回傳 null。
+  double? _measureDetailSheetHeight() {
+    final renderObject = _detailSheetKey.currentContext?.findRenderObject();
+    if (renderObject is RenderBox && renderObject.hasSize) {
+      return renderObject.size.height;
+    }
+    return null;
+  }
+
+  /// 把「sheet 蓋住的高度」套成地圖的底部 content inset。
+  ///
+  /// 為什麼不直接把目標座標往上偏移？MapLibre 的 content inset 是由原生端
+  /// 依目前方位角換算的，使用者旋轉地圖後仍然正確；手動換算經緯度只在
+  /// bearing = 0 時成立。套用後相機的「中心」就是面板上方那塊可視區的中心，
+  /// marker 不會被明細面板擋住。
+  Future<void> _syncSheetContentInset({bool animated = true}) async {
+    final controller = _mapController;
+    if (controller == null) return;
+
+    // sheet 由 showBottomSheet 建立，要等下一個 frame 才完成佈局；面板又會在
+    // 讀完偏好設定前先以最小高度出現，所以等到連續兩個 frame 高度相同才套用，
+    // 避免鏡頭先對到錯誤的中心再跳一次。
+    double? measured;
+    if (_isPanelOpen) {
+      for (int i = 0; i < 12; i++) {
+        await WidgetsBinding.instance.endOfFrame;
+        if (!mounted) return;
+        final double? next = _measureDetailSheetHeight();
+        if (next == null) continue;
+        if (next == measured) break;
+        measured = next;
+      }
+    }
+
+    final double bottomInset = _isPanelOpen ? (measured ?? _appliedBottomInset) : 0;
+    if ((bottomInset - _appliedBottomInset).abs() < 0.5) return;
+    _appliedBottomInset = bottomInset;
+
+    _cameraAnimationGraceTimer?.cancel();
+    _isCameraAnimating = true;
+    try {
+      await controller.updateContentInsets(EdgeInsets.only(bottom: bottomInset), animated);
+    } catch (e) {
+      debugPrint('Map content insets update failed: $e');
+    } finally {
+      _cameraAnimationGraceTimer?.cancel();
+      _cameraAnimationGraceTimer = Timer(_kCameraEventGrace, () {
+        _isCameraAnimating = false;
+      });
+    }
+  }
+
+  /// 面板內容高度變動（展開／收合、偏好設定載入完成）時重新同步 inset。
+  void _scheduleSheetInsetSync() {
+    if (_insetSyncScheduled) return;
+    _insetSyncScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _insetSyncScheduled = false;
+      if (mounted) _syncSheetContentInset();
+    });
+  }
+
   void _toggleMapType(MapStyleProvider mapStyleProvider) {
     final cameraPosition = _mapController?.cameraPosition;
     if (cameraPosition != null) {
@@ -658,6 +720,13 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   }
 
   PersistentBottomSheetController? _bottomSheetController;
+
+  /// 底部 sheet（切換列 + 明細面板）的量測目標：量到的實際高度會同步成
+  /// 地圖的底部 content inset，鏡頭中心才會落在面板上方的可視區中央。
+  final GlobalKey _detailSheetKey = GlobalKey();
+  double _appliedBottomInset = 0;
+  bool _insetSyncScheduled = false;
+
   String _formatDate(DateTime? date) {
     if (date == null) return 'N/A';
     return DateFormat.yMd().add_Hms().format(date.toLocal());
@@ -792,6 +861,9 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
     if (latLng == null) return;
 
+    // 先讓地圖可視範圍扣掉明細面板（含上方切換列），鏡頭再對準裝置，
+    // marker 才會落在「面板上緣 ~ 地圖頂部」的正中央，而不是被面板遮住。
+    await _syncSheetContentInset(animated: false);
     await _animateCamera(zoomToMax ? maplibre.CameraUpdate.newLatLngZoom(latLng, _kMaxMapZoom) : maplibre.CameraUpdate.newLatLng(latLng));
     // 立刻用最新資料跑一次 marker / 跟隨流程，不用等下一次位置更新
     await _scheduleMarkerUpdate(traccarProvider);
@@ -925,27 +997,37 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
                   // 控制列與面板放在同一個 Column：控制列永遠排在面板上方，
                   // 由佈局保證不會被面板遮住（不需要量測面板高度）。
+                  // 這裡量的是「控制列 + 面板」整塊高度，同步給地圖的底部 inset。
                   return Consumer<TraccarProvider>(
-                    builder: (context, panelProvider, _) => Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Padding(padding: const EdgeInsets.fromLTRB(_kEdgeInset, 0, _kEdgeInset, _kControlGap), child: _buildBottomControls(panelProvider, currentDev)),
-                        DeviceDetailPanel(
-                          device: currentDev,
-                          position: currentPos ?? api.Position(),
-                          address: currentAddr,
-                          formattedDate: _formatDate(currentPos?.fixTime),
-                          onMoreOptionsPressed: () => _showMoreOptionsDialog(currentDev, currentPos),
-                          onDeletePressed: () {
-                            _bottomSheetController?.close();
-                            _showDeleteConfirmationDialog(currentDev);
-                          },
-                          onRefresh: () async {
-                            final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
-                            await traccarProvider.fetchInitialData();
-                          },
+                    builder: (context, panelProvider, _) => NotificationListener<SizeChangedLayoutNotification>(
+                      onNotification: (_) {
+                        _scheduleSheetInsetSync();
+                        return true;
+                      },
+                      child: SizeChangedLayoutNotifier(
+                        child: Column(
+                          key: _detailSheetKey,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Padding(padding: const EdgeInsets.fromLTRB(_kEdgeInset, 0, _kEdgeInset, _kControlGap), child: _buildBottomControls(panelProvider, currentDev)),
+                            DeviceDetailPanel(
+                              device: currentDev,
+                              position: currentPos ?? api.Position(),
+                              address: currentAddr,
+                              formattedDate: _formatDate(currentPos?.fixTime),
+                              onMoreOptionsPressed: () => _showMoreOptionsDialog(currentDev, currentPos),
+                              onDeletePressed: () {
+                                _bottomSheetController?.close();
+                                _showDeleteConfirmationDialog(currentDev);
+                              },
+                              onRefresh: () async {
+                                final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
+                                await traccarProvider.fetchInitialData();
+                              },
+                            ),
+                          ],
                         ),
-                      ],
+                      ),
                     ),
                   );
                 },
@@ -963,6 +1045,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
           _bottomSheetController = null;
           _isFollowingDevice = false;
         });
+        // 面板收起來後把底部 inset 還原，地圖中心回到整個可視區中央。
+        _syncSheetContentInset();
       }
     });
   }
@@ -1239,6 +1323,12 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                   onStyleLoadedCallback: _onStyleLoaded,
                   onMapCreated: (controller) {
                     _mapController = controller;
+
+                    // 切換圖層會用新的 ValueKey 重建原生地圖，content inset 不會
+                    // 被保留；面板仍開著時把上次量到的高度補回去。
+                    if (_appliedBottomInset > 0) {
+                      controller.updateContentInsets(EdgeInsets.only(bottom: _appliedBottomInset));
+                    }
 
                     _mapController!.onSymbolTapped.add((symbol) {
                       // 記下時間：緊接而來的 onMapClick 需要靠它避免把面板關掉

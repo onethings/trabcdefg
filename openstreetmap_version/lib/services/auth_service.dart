@@ -1,5 +1,5 @@
 import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:trabcdefg/services/auth_session_store.dart';
 import 'package:trabcdefg/src/generated_api/api.dart';
 
 /// Thrown when the login request is rejected by the server.
@@ -14,12 +14,13 @@ class LoginException implements Exception {
 }
 
 class AuthService {
-  // FIX: Removed 'final' to allow the client to be updated
   ApiClient apiClient;
 
-  AuthService({required this.apiClient});
+  final AuthSessionStore _sessionStore;
 
-  // FIX: Method to replace the entire ApiClient instance
+  AuthService({required this.apiClient, AuthSessionStore? sessionStore})
+    : _sessionStore = sessionStore ?? AuthSessionStore.instance;
+
   void updateApiClient(ApiClient newClient) {
     apiClient = newClient;
   }
@@ -31,24 +32,21 @@ class AuthService {
     // throw on non-2xx status codes, so the status must be handled here.
     final response = await sessionApi.postSessionWithHttpInfo(email, password);
 
-    // 200 — credentials accepted: persist the fresh session + credentials.
+    // 200 — credentials accepted: persist the session (never the password).
     if (response.statusCode == 200) {
-      final setCookieHeader = response.headers['set-cookie'];
-      if (setCookieHeader == null) {
-        throw const LoginException(500, 'Server did not return a session cookie.');
+      final jSessionId = extractSessionId(response.headers);
+      if (jSessionId == null) {
+        throw const LoginException(
+          500,
+          'Server did not return a valid session cookie.',
+        );
       }
 
-      final jSessionId = setCookieHeader.split(';').firstWhere((s) => s.startsWith('JSESSIONID='), orElse: () => '').split('=').last;
-      if (jSessionId.isEmpty) {
-        throw const LoginException(500, 'Server returned an invalid session cookie.');
-      }
-
-      // Save the session ID and credentials for auto-login / auto-relogin
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('jSessionId', jSessionId);
-      await prefs.setString('userJson', response.body);
-      await prefs.setString('saved_email', email);
-      await prefs.setString('saved_password', password);
+      await _sessionStore.saveCredentials(
+        sessionId: jSessionId,
+        email: email,
+        password: password,
+      );
       return;
     }
 
@@ -59,41 +57,65 @@ class AuthService {
 
     // 400 — bad request; surface the server message (e.g. "Account has expired").
     if (response.statusCode == 400) {
-      throw LoginException(400, response.body.isNotEmpty ? response.body : 'Bad request.');
+      throw LoginException(
+        400,
+        response.body.isNotEmpty ? response.body : 'Bad request.',
+      );
     }
 
     // Any other unexpected status.
-    throw LoginException(response.statusCode, 'Login failed (HTTP ${response.statusCode}).');
+    throw LoginException(
+      response.statusCode,
+      'Login failed (HTTP ${response.statusCode}).',
+    );
   }
 
-  /// Attempts to re-login using saved credentials (email & password).
-  /// Returns `true` if the re-login succeeded, `false` if no saved credentials
-  /// exist or the credentials are invalid.
-  Future<bool> tryAutoRelogin() async {
-    final prefs = await SharedPreferences.getInstance();
-    final email = prefs.getString('saved_email');
-    final password = prefs.getString('saved_password');
+  /// Attempts to renew an expired session using credentials kept in memory.
+  ///
+  /// The password is never persisted, so this only works within the process
+  /// that performed the original login. After an app restart the user has to
+  /// sign in again.
+  Future<bool> tryAutoRelogin() =>
+      refreshSession(client: apiClient, store: _sessionStore);
 
+  /// Re-logs in through [client] and updates [store] with the new session id.
+  static Future<bool> refreshSession({
+    required ApiClient client,
+    required AuthSessionStore store,
+  }) async {
+    final email = store.email;
+    final password = store.password;
     if (email == null || password == null) return false;
 
     try {
-      await login(email, password);
-      debugPrint('Auto-relogin succeeded with saved credentials.');
+      final response = await SessionApi(client)
+          .postSessionWithHttpInfo(email, password);
+      if (response.statusCode != 200) return false;
+
+      final sessionId = extractSessionId(response.headers);
+      if (sessionId == null) return false;
+
+      await store.updateSession(sessionId);
+      debugPrint('Session refreshed successfully.');
       return true;
     } catch (e) {
-      debugPrint('Auto-relogin failed: $e');
-      // Saved credentials are no longer valid — clear them
-      await prefs.remove('saved_email');
-      await prefs.remove('saved_password');
+      debugPrint('Session refresh failed: $e');
       return false;
     }
   }
 
+  /// Extracts the JSESSIONID value from a response's `set-cookie` headers.
+  static String? extractSessionId(Map<String, String> headers) {
+    final setCookieHeaders = headers['set-cookie'] ?? headers['Set-Cookie'];
+    if (setCookieHeaders == null) return null;
+
+    // Multiple cookies may be joined with ", ". Match the first JSESSIONID.
+    final match = RegExp(r'(?:^|[,\s])JSESSIONID=([^;,\s]+)')
+        .firstMatch(setCookieHeaders);
+    return match?.group(1);
+  }
+
   Future<void> logout() async {
-    // Clear the session ID and saved credentials from storage
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('jSessionId');
-    await prefs.remove('saved_email');
-    await prefs.remove('saved_password');
+    await _sessionStore.clear();
   }
 }

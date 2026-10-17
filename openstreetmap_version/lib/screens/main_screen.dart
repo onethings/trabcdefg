@@ -8,7 +8,7 @@ import 'package:get/get.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
-import 'package:trabcdefg/services/auth_service.dart';
+import 'package:trabcdefg/services/auth_session_store.dart';
 import 'package:trabcdefg/screens/device_list_screen.dart';
 import 'package:trabcdefg/screens/map_screen.dart';
 import 'package:trabcdefg/screens/settings/settings_screen.dart';
@@ -54,58 +54,36 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
 
   /// Validates the server session when the app resumes from background.
   ///
-  /// If the JSESSIONID has expired (e.g. after a week), attempts auto-relogin
-  /// with saved credentials. On success, re-fetches all data. On failure,
-  /// redirects to the login screen.
+  /// A 401 is handled by the API client: it attempts one silent re-login with
+  /// the credentials still held in memory, retries the request, and clears the
+  /// session + redirects to login if that fails.
   Future<void> _validateSessionOnResume() async {
     if (!mounted) return;
 
     final traccarProvider = context.read<TraccarProvider>();
-    final authService = context.read<AuthService>();
+    final savedSessionId = AuthSessionStore.instance.sessionId;
 
     // Quick check: if there's no session ID stored, go to login
-    final prefs = await SharedPreferences.getInstance();
-    final savedSessionId = prefs.getString('jSessionId');
     if (savedSessionId == null) {
       if (mounted) Get.offAllNamed('/login');
       return;
     }
 
+    if (traccarProvider.sessionId != savedSessionId) {
+      traccarProvider.setSessionId(savedSessionId);
+    }
+
     try {
-      // Validate the session by calling GET /session
-      traccarProvider.apiClient.addDefaultHeader('Cookie', 'JSESSIONID=$savedSessionId');
+      // Validate the session by calling GET /session. The interceptor injects
+      // the current cookie and handles expiry/retry.
       final sessionApi = api.SessionApi(traccarProvider.apiClient);
       await sessionApi.getSession().timeout(const Duration(seconds: 10));
-
-      // Session is still valid — ensure WebSocket is connected with this session
-      if (traccarProvider.sessionId != savedSessionId) {
-        traccarProvider.setSessionId(savedSessionId);
-      }
       debugPrint('Session validated on resume — still active.');
     } catch (e) {
+      // A 401 already triggered the interceptor (re-login or redirect).
+      // Network/server errors should not discard a possibly valid session;
+      // the periodic health check handles outages.
       debugPrint('Session validation failed on resume: $e');
-
-      // Try auto-relogin with saved credentials
-      final reloginOk = await authService.tryAutoRelogin();
-      if (reloginOk && mounted) {
-        final freshSessionId = prefs.getString('jSessionId');
-        if (freshSessionId != null) {
-          traccarProvider.setSessionId(freshSessionId);
-          try {
-            await traccarProvider.fetchInitialData().timeout(const Duration(seconds: 15));
-            debugPrint('Data re-fetched after auto-relogin on resume.');
-            return;
-          } catch (fetchError) {
-            debugPrint('Data re-fetch after auto-relogin failed: $fetchError');
-          }
-        }
-      }
-
-      // Auto-relogin failed — redirect to login
-      if (mounted) {
-        debugPrint('Session expired and auto-relogin failed. Redirecting to login.');
-        Get.offAllNamed('/login');
-      }
     }
   }
 
