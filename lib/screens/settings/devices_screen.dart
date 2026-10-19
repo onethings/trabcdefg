@@ -386,8 +386,9 @@ class _DevicesScreenState extends State<DevicesScreen> {
           }
         },
       ),
-      floatingActionButton: Transform.translate(
-        offset: const Offset(0, -45), // 往上移動 45px
+      floatingActionButton: Padding(
+        // 用 Padding 上移：Transform 只改變繪製位置，會讓可點擊區域與畫面位置錯開。
+        padding: const EdgeInsets.only(bottom: 45),
         child: FloatingActionButton(
           onPressed: () async {
             final newDevice = await Navigator.push(context, MaterialPageRoute(builder: (context) => const AddDeviceScreen()));

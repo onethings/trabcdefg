@@ -255,8 +255,9 @@ class GeofencesScreenState extends State<GeofencesScreen> {
           }
         },
       ),
-      floatingActionButton: Transform.translate(
-        offset: const Offset(0, -45), // 往上移動 45px
+      floatingActionButton: Padding(
+        // 用 Padding 上移：Transform 只改變繪製位置，會讓可點擊區域與畫面位置錯開。
+        padding: const EdgeInsets.only(bottom: 45),
         child: FloatingActionButton(
           onPressed: () async {
             // 【核心修正】在任何 await 發生之前（完全同步的當下），把所有需要 context 的東西通通準備好！
