@@ -1,18 +1,26 @@
 // lib/screens/livetracking_map_screen.dart
-
 import 'dart:async';
+
+import 'package:flutter/foundation.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:flutter/services.dart';
+import 'package:get/get.dart';
+import 'package:intl/intl.dart'; // Required for the specific date format
+import 'package:maplibre_gl/maplibre_gl.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:timeago/timeago.dart' as timeago;
+import 'package:trabcdefg/l10n/timeago_my.dart';
+import 'package:url_launcher/url_launcher.dart'; // 新增 Myanmar TimeAgo
+import 'package:trabcdefg/providers/map_style_provider.dart';
+import 'package:trabcdefg/providers/settings_provider.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
 import 'package:trabcdefg/src/generated_api/api.dart';
-import 'package:flutter/services.dart';
-import 'dart:ui' as ui;
-import 'package:flutter/foundation.dart';
-import 'package:flutter/gestures.dart';
-import 'package:get/get.dart';
-import 'dart:typed_data';
+import 'package:trabcdefg/screens/monthly_mileage_screen.dart';
+import 'package:trabcdefg/widgets/offline_address_service.dart';
 
+// Offline address fallback via OfflineAddressService
 class LiveTrackingMapScreen extends StatefulWidget {
   final Device selectedDevice;
   const LiveTrackingMapScreen({super.key, required this.selectedDevice});
@@ -22,323 +30,159 @@ class LiveTrackingMapScreen extends StatefulWidget {
 }
 
 class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
-  final Completer<GoogleMapController> _controller = Completer();
-  final Set<Marker> _markers = {};
-  final Set<Polyline> _polylines = {};
-  final List<LatLng> _polylineCoordinates = [];
-  MapType _mapType = MapType.normal;
-  bool _isTrafficEnabled = false;
-  final Map<String, BitmapDescriptor> _markerIcons = {};
-  bool _isCameraLocked = true;
-
-  bool _customIconsLoaded = false;
-
-  // Fallback icon: The instantly available system default pin
-  final BitmapDescriptor _genericDefaultIcon = BitmapDescriptor.defaultMarker;
-
+  MapLibreMapController? _mapController;
   Position? _currentDevicePosition;
+  bool _isCameraLocked = true;
+  bool _isStyleLoaded = false;
+  double _currentZoom = 14.0;
+  final double _mapCenterOffset = 0.007;
+  final double _mapCenterOnset = 0.008;
 
-  static const CameraPosition _defaultCameraPosition = CameraPosition(
-    target: LatLng(0, 0),
-    zoom: 14.0,
-  );
+  String _currentStreetName = 'Fetching Address...'.tr;
+  final Set<String> _loadedIcons = {};
+
+  // Style strings moved to provider
 
   @override
   void initState() {
     super.initState();
+    _setupTimeagoLocales();
 
-    // Start icon loading immediately in the background
-    _loadMarkerIcons().then((_) {
-      if (mounted) {
-        setState(() {
-          _customIconsLoaded = true;
-          _updateMarkersOnMap(); // Explicitly redraw markers with new icons
-        });
-      }
-    });
+    // Initialize Offline DB on screen load
+    OfflineAddressService.initDatabase();
+    _loadZoomLevel();
   }
 
-  @override
-  void didUpdateWidget(covariant LiveTrackingMapScreen oldWidget) {
-    super.didUpdateWidget(oldWidget);
-
-    final traccarProvider = Provider.of<TraccarProvider>(
-      context,
-      listen: false,
-    );
-
-    final newPosition = traccarProvider.positions.firstWhere(
-      (pos) => pos.deviceId == widget.selectedDevice.id,
-      orElse: () => Position(),
-    );
-
-    // Only update the map if the position data has actually changed
-    if (newPosition.id != _currentDevicePosition?.id) {
-      _currentDevicePosition = newPosition;
-      _updateMap(newPosition);
-    }
-  }
-
-  @override
-  void dispose() {
-    _controller.future.then((controller) => controller.dispose());
-    super.dispose();
-  }
-
-  String _getTranslatedStatus(String? status) {
-    if (status == null) return 'N/A';
-
-    // Map the status string to the appropriate translation key
-    switch (status.toLowerCase()) {
-      case 'online':
-        return 'deviceStatusOnline'.tr;
-      case 'offline':
-        return 'deviceStatusOffline'.tr;
-      case 'idle':
-        // Note: You provided "alarmIdle" but "idle" is the status string.
-        // We'll use the 'idle' status for the 'Idle' translation.
-        return 'alarmIdle'.tr;
-      case 'static':
-        // Note: You provided "alarmParking" for the 'static' status.
-        return 'alarmParking'.tr;
-      case 'unknown':
-      default:
-        // Use the generic "Unknown" translation for both 'unknown' and any unmapped status.
-        return 'deviceStatusUnknown'.tr;
-    }
-  }
-
-  Future<void> _loadMarkerIcons() async {
-    const categories = [
-      'animal',
-      'arrow',
-      'bicycle',
-      'boat',
-      'bus',
-      'car',
-      'crane',
-      'default',
-      'helicopter',
-      'motorcycle',
-      'null',
-      'offroad',
-      'person',
-      'pickup',
-      'plane',
-      'scooter',
-      'ship',
-      'tractor',
-      'train',
-      'tram',
-      'trolleybus',
-      'truck',
-      'van',
-    ];
-    const statuses = ['online', 'offline', 'static', 'idle', 'unknown'];
-
-    for (final category in categories) {
-      for (final status in statuses) {
-        final iconPath = 'assets/images/marker_${category}_$status.png';
-        try {
-          final byteData = await rootBundle.load(iconPath);
-          final imageData = byteData.buffer.asUint8List();
-          final codec = await ui.instantiateImageCodec(
-            imageData,
-            targetHeight: 100,
-          );
-          final frameInfo = await codec.getNextFrame();
-          final image = frameInfo.image;
-          final byteDataResized = await image.toByteData(
-            format: ui.ImageByteFormat.png,
-          );
-          if (byteDataResized != null) {
-            final bitmap = BitmapDescriptor.fromBytes(
-              byteDataResized.buffer.asUint8List(),
-            );
-            _markerIcons['$category-$status'] = bitmap;
-          }
-        } catch (e) {
-          if (kDebugMode) {
-            // print('Could not load icon: $iconPath. Using fallback.');
-          }
-        }
-      }
-    }
-    // Load the specific 'default-unknown' icon for Tier 2 fallback
-    if (_markerIcons['default-unknown'] == null) {
-      _markerIcons['default-unknown'] = await _loadFallbackIcon();
-    }
-  }
-
-  Future<BitmapDescriptor> _loadFallbackIcon() async {
-    try {
-      final byteData = await rootBundle.load(
-        'assets/images/marker_default_unknown.png',
-      );
-      final imageData = byteData.buffer.asUint8List();
-      final codec = await ui.instantiateImageCodec(
-        imageData,
-        targetHeight: 100,
-      );
-      final frameInfo = await codec.getNextFrame();
-      final image = frameInfo.image;
-      final byteDataResized = await image.toByteData(
-        format: ui.ImageByteFormat.png,
-      );
-      return BitmapDescriptor.fromBytes(byteDataResized!.buffer.asUint8List());
-    } catch (e) {
-      // If even the dedicated custom fallback icon fails to load, return the system default
-      return _genericDefaultIcon;
-    }
-  }
-
-  BitmapDescriptor _getMarkerIcon(Device device) {
-    final status = device.status ?? 'unknown';
-    final category = device.category ?? 'default';
-    final key = '$category-$status';
-
-    // 1. Tier 1: Try to find the exact icon
-    if (_markerIcons.containsKey(key)) {
-      return _markerIcons[key]!;
-    }
-
-    // 2. Tier 2: Fall back to the preloaded 'default-unknown' custom icon.
-    final fallbackCustomIcon = _markerIcons['default-unknown'];
-    if (fallbackCustomIcon != null) {
-      return fallbackCustomIcon;
-    }
-
-    // 3. Tier 3: Final fallback: Always return the visible system default pin.
-    return _genericDefaultIcon;
-  }
-
-  void _updateMarkersOnMap() {
-    final traccarProvider = Provider.of<TraccarProvider>(
-      context,
-      listen: false,
-    );
-
-    final lastPosition = traccarProvider.positions.firstWhere(
-      (pos) => pos.deviceId == widget.selectedDevice.id,
-      orElse: () => Position(),
-    );
-
-    // Call the existing _updateMap to redraw the markers with the correct icons
-    if (lastPosition.latitude != null && lastPosition.longitude != null) {
-      _updateMap(lastPosition);
-    } else if (mounted) {
-      // Force a rebuild to ensure the next data pass uses the loaded icons
-      setState(() {});
-    }
-  }
-
-  void _updateMap(Position? currentPosition) {
-    if (currentPosition == null ||
-        currentPosition.latitude == null ||
-        currentPosition.longitude == null)
-      return;
-
-    final newPosition = LatLng(
-      currentPosition.latitude!.toDouble(),
-      currentPosition.longitude!.toDouble(),
-    );
-
-    setState(() {
-      _markers.clear();
-
-      // Add new position to polyline if different from the last point
-      if (_polylineCoordinates.isEmpty ||
-          _polylineCoordinates.last != newPosition) {
-        _polylineCoordinates.add(newPosition);
-      }
-
-      _markers.add(
-        Marker(
-          markerId: MarkerId(widget.selectedDevice.id!.toString()),
-          position: newPosition,
-          infoWindow: InfoWindow(
-            title: widget.selectedDevice.name ?? 'Device Location',
-          ),
-          icon: _getMarkerIcon(widget.selectedDevice),
-          rotation: currentPosition.course?.toDouble() ?? 0.0,
-        ),
-      );
-
-      _polylines.add(
-        Polyline(
-          polylineId: PolylineId(widget.selectedDevice.id!.toString()),
-          points: _polylineCoordinates,
-          color: Colors.blue,
-          width: 5,
-        ),
-      );
-    });
-
-    if (_isCameraLocked) {
-      _controller.future.then((controller) {
-        controller.animateCamera(CameraUpdate.newLatLng(newPosition));
+  Future<void> _loadZoomLevel() async {
+    final prefs = await SharedPreferences.getInstance();
+    final lastZoom = prefs.getDouble('live_tracking_zoom_level');
+    if (lastZoom != null) {
+      setState(() {
+        _currentZoom = lastZoom;
       });
     }
   }
 
-  void _toggleMapType() {
-    setState(() {
-      _mapType = _mapType == MapType.normal
-          ? MapType.satellite
-          : MapType.normal;
-    });
+  bool _checkIsStale(Device device, Position? position) {
+    final DateTime now = DateTime.now().toUtc();
+    final DateTime? lastUpdate =
+        position?.fixTime?.toUtc() ?? device.lastUpdate?.toUtc();
+    return lastUpdate == null || now.difference(lastUpdate).inMinutes >= 10;
   }
 
-  void _toggleTraffic() {
-    setState(() {
-      _isTrafficEnabled = !_isTrafficEnabled;
-    });
+  void _setupTimeagoLocales() {
+    timeago.setLocaleMessages('en_short', timeago.EnShortMessages());
+    timeago.setLocaleMessages('zh', timeago.ZhMessages());
+    timeago.setLocaleMessages('my', MyMessages()); // 關鍵修正：註冊 Myanmar 語系
   }
 
-  Future<void> _recenter(Position? lastPosition) async {
-    if (lastPosition == null ||
-        lastPosition.latitude == null ||
-        lastPosition.longitude == null)
+  void _onMapCreated(MapLibreMapController controller) {
+    _mapController = controller;
+    _mapController!.onSymbolTapped.add(_onSymbolTapped);
+  }
+
+  Future<void> _ensureIconLoaded(String iconKey) async {
+    if (_mapController == null || _loadedIcons.contains(iconKey)) {
       return;
+    }
+    try {
+      final String assetPath = 'assets/images/$iconKey.png';
+      final ByteData bytes = await rootBundle.load(assetPath);
+      final Uint8List list = bytes.buffer.asUint8List();
+      await _mapController!.addImage(iconKey, list);
+      _loadedIcons.add(iconKey);
+      await Future.delayed(const Duration(milliseconds: 50));
+    } catch (e) {
+      if (iconKey != 'marker_default_unknown') {
+        await _ensureIconLoaded('marker_default_unknown');
+      }
+    }
+  }
 
-    final controller = await _controller.future;
-    final position = LatLng(
-      lastPosition.latitude!.toDouble(),
-      lastPosition.longitude!.toDouble(),
+  void _updateMapMarkers() async {
+    if (_mapController == null ||
+        _currentDevicePosition == null ||
+        !_isStyleLoaded) {
+      return;
+    }
+
+    // 1. 在 await 之前，優先把需要從 context 拿的資料提取出來
+    final double markerScale = context.read<SettingsProvider>().markerSizeScale;
+
+    final bool isStale = _checkIsStale(
+      widget.selectedDevice,
+      _currentDevicePosition,
+    );
+    final String category = widget.selectedDevice.category ?? 'default';
+    final String effectiveStatus = isStale
+        ? 'offline'
+        : (widget.selectedDevice.status ?? 'unknown');
+    final String iconKey =
+        'marker_${category.toLowerCase()}_${effectiveStatus.toLowerCase()}';
+
+    // 這裡是異步操作（Async Gap 開始）
+    await _ensureIconLoaded(iconKey);
+
+    // Guard against context usage after await
+    if (!mounted) return;
+
+    await _mapController!.clearSymbols();
+    await _mapController!.addSymbol(
+      SymbolOptions(
+        geometry: LatLng(
+          _currentDevicePosition!.latitude!.toDouble(),
+          _currentDevicePosition!.longitude!.toDouble(),
+        ),
+        iconImage: _loadedIcons.contains(iconKey)
+            ? iconKey
+            : 'marker_default_unknown',
+        iconRotate: _currentDevicePosition!.course?.toDouble() ?? 0.0,
+        iconSize: 3.8 * markerScale, // ✨ 2. 這裡改用剛才提取的本地變數，不再使用 context
+      ),
     );
 
-    setState(() {
-      _isCameraLocked = true;
-    });
-
-    controller.animateCamera(CameraUpdate.newLatLngZoom(position, 17.0));
+    if (_isCameraLocked) {
+      _mapController!.animateCamera(
+        CameraUpdate.newCameraPosition(
+          CameraPosition(
+            target: LatLng(
+              _currentDevicePosition!.latitude!.toDouble() - _mapCenterOffset,
+              _currentDevicePosition!.longitude!.toDouble(),
+            ),
+            zoom: _currentZoom,
+          ),
+        ),
+      );
+    }
   }
 
-  Future<void> _zoomIn() async {
-    final controller = await _controller.future;
-    controller.animateCamera(CameraUpdate.zoomIn());
-  }
-
-  Future<void> _zoomOut() async {
-    final controller = await _controller.future;
-    controller.animateCamera(CameraUpdate.zoomOut());
+  Future<void> _fetchStreetName(
+    double lat,
+    double lon,
+    Position? position,
+  ) async {
+    // Traccar 伺服器通常不帶地址，直接使用 Offline Geocoder (which internally handles Hive/DB/Nominatim)
+    try {
+      final offlineResult = await OfflineAddressService.getAddress(lat, lon);
+      if (mounted) {
+        setState(() => _currentStreetName = offlineResult);
+      }
+    } catch (e) {
+      debugPrint("Offline lookup error: $e");
+      if (mounted) {
+        setState(
+          () => _currentStreetName =
+              "Location: ${lat.toStringAsFixed(4)}, ${lon.toStringAsFixed(4)}",
+        );
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          'mapLiveRoutes'.tr,
-        ), //widget.selectedDevice.name ?? 'mapLiveRoutes'.tr
-        actions: [
-          IconButton(icon: const Icon(Icons.layers), onPressed: _toggleMapType),
-          IconButton(
-            icon: const Icon(Icons.traffic),
-            color: _isTrafficEnabled ? Colors.blue : null,
-            onPressed: _toggleTraffic,
-          ),
-        ],
+      appBar: CupertinoNavigationBar(
+        middle: Text(widget.selectedDevice.name ?? 'mapLiveRoutes'.tr),
       ),
       body: Consumer<TraccarProvider>(
         builder: (context, traccarProvider, child) {
@@ -347,63 +191,125 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
             orElse: () => Position(),
           );
 
-          final initialCameraPosition =
-              lastPosition.latitude != null && lastPosition.longitude != null
-              ? CameraPosition(
-                  target: LatLng(
-                    lastPosition.latitude!.toDouble(),
-                    lastPosition.longitude!.toDouble(),
-                  ),
-                  zoom: 14.0,
-                )
-              : _defaultCameraPosition;
+          if (_currentDevicePosition?.latitude != lastPosition.latitude ||
+              _currentDevicePosition?.longitude != lastPosition.longitude) {
+            _currentDevicePosition = lastPosition;
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              _updateMapMarkers();
+              if (lastPosition.latitude != null) {
+                _fetchStreetName(
+                  lastPosition.latitude!.toDouble(),
+                  lastPosition.longitude!.toDouble(),
+                  lastPosition,
+                );
+              }
+            });
+          }
 
           return Stack(
             children: [
-              GoogleMap(
-                mapType: _mapType,
-                initialCameraPosition: initialCameraPosition,
-                markers: _markers,
-                polylines: _polylines,
-                onMapCreated: (GoogleMapController controller) {
-                  if (!_controller.isCompleted) {
-                    _controller.complete(controller);
-                    _updateMap(lastPosition);
-                  }
-                },
-                trafficEnabled: _isTrafficEnabled,
-                onCameraMoveStarted: () {
-                  setState(() {
-                    _isCameraLocked = false;
+              MapLibreMap(
+                key: ValueKey(
+                  Provider.of<MapStyleProvider>(context).isSatelliteMode,
+                ),
+                initialCameraPosition: CameraPosition(
+                  target: LatLng(
+                    (lastPosition.latitude?.toDouble() ?? 0.0) -
+                        _mapCenterOffset,
+                    lastPosition.longitude?.toDouble() ?? 0.0,
+                  ),
+                  zoom: _currentZoom,
+                ),
+                styleString: Provider.of<MapStyleProvider>(context).getStyle(Theme.of(context).brightness),
+                onCameraMove: (position) {
+                  _currentZoom = position.zoom;
+                  SharedPreferences.getInstance().then((prefs) {
+                    prefs.setDouble('live_tracking_zoom_level', position.zoom);
                   });
                 },
+                onMapCreated: _onMapCreated,
+                onStyleLoadedCallback: () {
+                  _isStyleLoaded = true;
+                  _loadedIcons.clear();
+                  _updateMapMarkers();
+                },
+                onCameraTrackingDismissed: () =>
+                    setState(() => _isCameraLocked = false),
               ),
               Positioned(
-                bottom: 16,
+                top: 16,
                 right: 16,
-                child: Column(
-                  children: [
-                    FloatingActionButton(
-                      heroTag: "zoomIn",
-                      mini: true,
-                      onPressed: _zoomIn,
-                      child: const Icon(Icons.add),
-                    ),
-                    const SizedBox(height: 8),
-                    FloatingActionButton(
-                      heroTag: "zoomOut",
-                      mini: true,
-                      onPressed: _zoomOut,
-                      child: const Icon(Icons.remove),
-                    ),
-                    const SizedBox(height: 8),
-                    FloatingActionButton(
-                      heroTag: "recenter",
-                      mini: true,
-                      onPressed: () => _recenter(lastPosition),
-                      child: const Icon(Icons.my_location),
-                    ),
-                  ],
+                child: FloatingActionButton(
+                  heroTag: 'map_layer_toggle_btn_${widget.selectedDevice.id}',
+                  mini: true,
+                  backgroundColor: Colors.white,
+                  onPressed: () {
+                    Provider.of<MapStyleProvider>(
+                      context,
+                      listen: false,
+                    ).toggleMapType();
+                  },
+                  child: Icon(
+                    Provider.of<MapStyleProvider>(context).isSatelliteMode
+                        ? Icons.map
+                        : Icons.satellite_alt,
+                    color: Colors.blue,
+                  ),
+                ),
+              ),
+              Positioned(
+                top: 80,
+                right: 16,
+                child: FloatingActionButton(
+                  heroTag: 'map_center_lock_btn_${widget.selectedDevice.id}',
+                  mini: true,
+                  onPressed: () {
+                    setState(() => _isCameraLocked = true);
+                    if (_currentDevicePosition != null &&
+                        _mapController != null) {
+                      _mapController!.animateCamera(
+                        CameraUpdate.newLatLng(
+                          LatLng(
+                            _currentDevicePosition!.latitude!.toDouble() -
+                                _mapCenterOnset,
+                            _currentDevicePosition!.longitude!.toDouble(),
+                          ),
+                        ),
+                      );
+                    }
+                  },
+                  child: Icon(
+                    _isCameraLocked ? Icons.gps_fixed : Icons.gps_not_fixed,
+                    color: _isCameraLocked ? Colors.blue : Colors.grey,
+                  ),
+                ),
+              ),
+              Positioned(
+                top: 144,
+                right: 16,
+                child: FloatingActionButton(
+                  heroTag: 'map_history_route_btn_${widget.selectedDevice.id}',
+                  mini: true,
+                  backgroundColor: Colors.white,
+                  onPressed: () async {
+                    final prefs = await SharedPreferences.getInstance();
+                    await prefs.setInt(
+                      'selectedDeviceId',
+                      widget.selectedDevice.id!,
+                    );
+                    await prefs.setString(
+                      'selectedDeviceName',
+                      widget.selectedDevice.name ?? '',
+                    );
+                    if (context.mounted) {
+                      Navigator.of(context, rootNavigator: true).push(
+                        MaterialPageRoute(
+                          builder: (context) => const MonthlyMileageScreen(),
+                        ),
+                      );
+                    }
+                  },
+                  child: const Icon(Icons.route, color: Colors.blue),
                 ),
               ),
             ],
@@ -418,79 +324,246 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
     return Consumer<TraccarProvider>(
       builder: (context, provider, child) {
         final lastPosition = provider.positions.firstWhere(
-          (pos) => pos.deviceId == widget.selectedDevice.id,
+          (p) => p.deviceId == widget.selectedDevice.id,
           orElse: () => Position(),
         );
-        final speedKmh = lastPosition.speed != null
-            ? (lastPosition.speed! * 1.852).toStringAsFixed(2)
-            : 'N/A';
+        final bool isStale = _checkIsStale(widget.selectedDevice, lastPosition);
         final attributes =
             lastPosition.attributes as Map<String, dynamic>? ?? {};
-        final translatedStatus = _getTranslatedStatus(
-          widget.selectedDevice.status,
-        );
+        final bool isIgnitionOn = attributes['ignition'] == true;
+
+        final Color themeColor = isStale
+            ? Colors.blueGrey.shade300
+            : (isIgnitionOn
+                  ? const Color(0xFF10B981)
+                  : const Color(0xFFD97706));
 
         return Container(
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(16.0)),
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            borderRadius: const BorderRadius.vertical(
+              top: Radius.circular(24.0),
+            ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black26,
-                blurRadius: 10.0,
-                offset: Offset(0, -5),
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? Colors.black.withValues(alpha: 0.4)
+                    : Colors.black12,
+                blurRadius: 20,
               ),
             ],
           ),
-          padding: const EdgeInsets.all(16.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                widget.selectedDevice.name ?? 'Unknown Device',
-                style: Theme.of(context).textTheme.headlineSmall,
-              ),
-              const SizedBox(height: 8.0),
-              Text('deviceStatus'.tr + ': $translatedStatus'),
-              const SizedBox(height: 4.0),
-              Text(
-                'deviceLastUpdate'.tr +
-                    ': ${lastPosition.deviceTime?.toLocal() ?? 'N/A'}',
-              ),
-              Text('positionSpeed'.tr + ': $speedKmh ' + 'sharedKmh'.tr),
-              const Divider(),
-              Text(
-                'deviceSecondaryInfo'.tr + ':',
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-              if (attributes.containsKey('batteryLevel'))
-                ListTile(
-                  leading: const Icon(Icons.battery_std),
-                  title: Text('positionBatteryLevel'.tr),
-                  subtitle: Text('${attributes['batteryLevel']}%'),
-                ),
-              if (attributes.containsKey('totalDistance'))
-                ListTile(
-                  leading: const Icon(Icons.directions_car),
-                  title: Text('deviceTotalDistance'.tr),
-                  subtitle: Text(
-                    '${(attributes['totalDistance'] / 1000).toStringAsFixed(2)} '+'sharedKm'.tr,
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(2),
                   ),
                 ),
-              if (attributes.containsKey('engineHours'))
-                ListTile(
-                  leading: const Icon(Icons.timer),
-                  title: Text('reportEngineHours'.tr),
-                  subtitle: Text(
-                    '${(attributes['engineHours'] / 3600).toStringAsFixed(2)} ' +
-                        'sharedHourAbbreviation'.tr,
+              ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                widget.selectedDevice.name ?? 'Unknown',
+                                style: TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurface,
+                                ),
+                              ),
+                            ),
+                            IconButton(
+                              icon: Icon(
+                                provider.isFavorite(widget.selectedDevice.id!)
+                                    ? CupertinoIcons.heart_fill
+                                    : CupertinoIcons.heart,
+                                color:
+                                    provider.isFavorite(
+                                      widget.selectedDevice.id!,
+                                    )
+                                    ? Colors.red
+                                    : Colors.grey,
+                              ),
+                              onPressed: () => provider.toggleFavorite(
+                                widget.selectedDevice.id!,
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(
+                                Icons.navigation_rounded,
+                                color: Colors.blue,
+                              ),
+                              onPressed: () =>
+                                  _navigateToGoogleMaps(lastPosition),
+                              tooltip: 'Navigate',
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        // Display either API or Offline street name
+                        Text(
+                          _currentStreetName,
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.onSurface
+                                .withValues(alpha: 0.7),
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
                   ),
-                ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: themeColor.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      isStale
+                          ? 'deviceStatusOffline'.tr
+                          : (isIgnitionOn
+                                ? 'positionIgnition'.tr
+                                : 'alarmParking'.tr),
+                      style: TextStyle(
+                        color: themeColor,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const Divider(height: 32),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _buildInfoItem(
+                    Icons.speed,
+                    ((lastPosition.speed ?? 0) * 1.852).toStringAsFixed(1),
+                    'km/h',
+                  ),
+                  // UPDATED: Precise Timestamp Formatting
+                  _buildInfoItem(
+                    CupertinoIcons.clock,
+                    widget.selectedDevice.lastUpdate != null
+                        ? DateFormat(
+                            'yyyy-MM-dd HH:mm:ss',
+                          ).format(widget.selectedDevice.lastUpdate!.toLocal())
+                        : '--',
+                    'Last Update',
+                  ),
+                  if (attributes.containsKey('batteryLevel'))
+                    _buildInfoItem(
+                      Icons.battery_std,
+                      '${attributes['batteryLevel']}%',
+                      'Battery',
+                    ),
+                ],
+              ),
             ],
           ),
         );
       },
     );
   }
+
+  Widget _buildInfoItem(IconData icon, String value, String label) {
+    final isDark = Theme.of(Get.context!).brightness == Brightness.dark;
+    return Column(
+      children: [
+        Icon(
+          icon,
+          color: isDark ? Colors.blueGrey[200] : Colors.blueGrey[400],
+          size: 20,
+        ),
+        const SizedBox(height: 8),
+        Text(
+          value,
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 15,
+            color: Theme.of(Get.context!).colorScheme.onSurface,
+          ),
+        ),
+        Text(
+          label,
+          style: TextStyle(
+            color: isDark ? Colors.white60 : Colors.grey[500],
+            fontSize: 11,
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _onSymbolTapped(Symbol symbol) {
+    if (mounted) {
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (context) => _buildBottomSheet(context),
+      );
+    }
+  }
+
+  Future<void> _navigateToGoogleMaps(Position position) async {
+    final lat = position.latitude?.toDouble();
+    final lng = position.longitude?.toDouble();
+    if (lat == null || lng == null || (lat == 0.0 && lng == 0.0)) return;
+
+    final latStr = lat.toStringAsFixed(6);
+    final lngStr = lng.toStringAsFixed(6);
+
+    // Try Google Maps navigation app scheme first, then geo: fallback, then web fallback
+    final uris = [
+      Uri.parse('google.navigation:q=$latStr,$lngStr&mode=d'),
+      Uri.parse('geo:0,0?q=$latStr,$lngStr'),
+      Uri.https('www.google.com', '/maps/dir/', {
+        'api': '1',
+        'destination': '$latStr,$lngStr',
+        'travelmode': 'driving',
+      }),
+    ];
+
+    for (final uri in uris) {
+      try {
+        // Don't gate on canLaunchUrl: it can return false on Android 11+ when
+        // the scheme isn't declared in <queries>, even though launchUrl works.
+        final launched = await launchUrl(
+          uri,
+          mode: LaunchMode.externalApplication,
+        );
+        if (launched) return;
+      } catch (e) {
+        debugPrint('Could not launch $uri: $e');
+      }
+    }
+  }
+
+  // _fetchUserEmailFromApi removed as Nominatim is handled by OfflineAddressService
 }

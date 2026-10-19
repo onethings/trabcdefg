@@ -21,6 +21,7 @@ class Geofence {
     this.attributes,
   });
 
+  /// Unique identifier for the geofence
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -29,6 +30,7 @@ class Geofence {
   ///
   int? id;
 
+  /// Human-readable name shown in lists and maps
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -37,6 +39,7 @@ class Geofence {
   ///
   String? name;
 
+  /// Details about the geofence for display in the UI
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -45,6 +48,7 @@ class Geofence {
   ///
   String? description;
 
+  /// Geofence area definition encoded as a WKT string
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -53,6 +57,7 @@ class Geofence {
   ///
   String? area;
 
+  /// Calendar identifier limiting when the geofence is active
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -61,6 +66,7 @@ class Geofence {
   ///
   int? calendarId;
 
+  /// Custom key-value pairs for integrations or UI overrides
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated

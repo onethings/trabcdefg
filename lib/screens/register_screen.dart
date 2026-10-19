@@ -1,10 +1,10 @@
 // lib/screens/register_screen.dart
+// A screen that allows users to register a new account.
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
-import 'package:trabcdefg/constants.dart';
-import 'package:get/get.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -33,42 +33,24 @@ class _RegisterScreenState extends State<RegisterScreen> {
     });
 
     try {
-      final usersApi = api.UsersApi(
-        Provider.of<TraccarProvider>(context, listen: false).apiClient,
-      );
+      final usersApi = api.UsersApi(Provider.of<TraccarProvider>(context, listen: false).apiClient);
 
-      final newUser = api.User(
-        name: _nameController.text,
-        email: _emailController.text,
-        password: _passwordController.text,
-      );
+      final newUser = api.User(name: _nameController.text, email: _emailController.text, password: _passwordController.text);
 
-      await usersApi.usersPost(newUser);
+      await usersApi.postUsers(newUser);
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Account created successfully! You can now log in.'),
-          ),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Account created successfully! You can now log in.')));
         Navigator.of(context).pop();
       }
     } on api.ApiException catch (e) {
       if (mounted) {
         String errorMessage = 'API error: Status Code ${e.code}, Details: ${e.toString()}';
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(errorMessage),
-          ),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(errorMessage)));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('An unexpected error occurred: $e'),
-          ),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('An unexpected error occurred: $e')));
       }
     } finally {
       if (mounted) {
@@ -82,7 +64,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Register')),
+      appBar: CupertinoNavigationBar(middle: const Text('Register')),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -101,12 +83,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               obscureText: true,
             ),
             const SizedBox(height: 20),
-            _isLoading
-                ? const CircularProgressIndicator()
-                : ElevatedButton(
-                    onPressed: _register,
-                    child: const Text('Register'),
-                  ),
+            _isLoading ? const CircularProgressIndicator() : ElevatedButton(onPressed: _register, child: const Text('Register')),
           ],
         ),
       ),

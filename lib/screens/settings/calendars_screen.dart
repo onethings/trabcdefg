@@ -1,17 +1,18 @@
 // calendars_screen.dart
-
+// A screen to display and manage calendars in the TracDefg app.
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:trabcdefg/src/generated_api/api.dart' as api;
-import 'package:trabcdefg/screens/settings/add_calendar_screen.dart';
-import 'package:trabcdefg/providers/traccar_provider.dart';
-import 'package:provider/provider.dart';
 import 'package:get/get.dart';
+import 'package:provider/provider.dart';
+import 'package:trabcdefg/providers/traccar_provider.dart';
+import 'package:trabcdefg/screens/settings/add_calendar_screen.dart';
+import 'package:trabcdefg/src/generated_api/api.dart' as api;
 
 class CalendarsScreen extends StatefulWidget {
   const CalendarsScreen({super.key});
 
   @override
-  _CalendarsScreenState createState() => _CalendarsScreenState();
+  State<CalendarsScreen> createState() => _CalendarsScreenState(); // <-- Changed return type here
 }
 
 class _CalendarsScreenState extends State<CalendarsScreen> {
@@ -28,16 +29,14 @@ class _CalendarsScreenState extends State<CalendarsScreen> {
     // Correct way to instantiate CalendarsApi with the authenticated client
     final calendarsApi = api.CalendarsApi(traccarProvider.apiClient);
     setState(() {
-      _calendarsFuture = calendarsApi.calendarsGet();
+      _calendarsFuture = calendarsApi.getCalendars();
     });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text('sharedCalendars'.tr),
-      ),
+      appBar: CupertinoNavigationBar(middle: Text('sharedCalendars'.tr)),
       body: FutureBuilder<List<api.Calendar>?>(
         future: _calendarsFuture,
         builder: (context, snapshot) {
@@ -52,27 +51,23 @@ class _CalendarsScreenState extends State<CalendarsScreen> {
               itemCount: snapshot.data!.length,
               itemBuilder: (context, index) {
                 final calendar = snapshot.data![index];
-                return ListTile(
-                  title: Text(calendar.name ?? 'sharedNoData'.tr),
-                );
+                return ListTile(title: Text(calendar.name ?? 'sharedNoData'.tr));
               },
             );
           }
         },
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () async {
-          final newCalendar = await Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => const AddCalendarScreen(),
-            ),
-          );
-          if (newCalendar != null) {
-            _fetchCalendars();
-          }
-        },
-        child: const Icon(Icons.add),
+      floatingActionButton: Transform.translate(
+        offset: const Offset(0, -45), // 往上移動 45px
+        child: FloatingActionButton(
+          onPressed: () async {
+            final newCalendar = await Navigator.push(context, MaterialPageRoute(builder: (context) => const AddCalendarScreen()));
+            if (newCalendar != null) {
+              _fetchCalendars();
+            }
+          },
+          child: const Icon(CupertinoIcons.add),
+        ),
       ),
     );
   }

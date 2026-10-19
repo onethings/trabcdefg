@@ -20,6 +20,7 @@ class Attribute {
     this.type,
   });
 
+  /// Unique computed attribute identifier
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -28,6 +29,7 @@ class Attribute {
   ///
   int? id;
 
+  /// Human readable name of the attribute
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -36,6 +38,7 @@ class Attribute {
   ///
   String? description;
 
+  /// Attribute name used in expressions
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -44,6 +47,7 @@ class Attribute {
   ///
   String? attribute;
 
+  /// Expression that defines how the attribute is calculated
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated

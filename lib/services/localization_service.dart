@@ -3,11 +3,10 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
 // Import all the language files.
 import 'package:trabcdefg/l10n/af.dart';
-import 'package:trabcdefg/l10n/ar_SA.dart';
 import 'package:trabcdefg/l10n/ar.dart';
+import 'package:trabcdefg/l10n/ar_sa.dart';
 import 'package:trabcdefg/l10n/az.dart';
 import 'package:trabcdefg/l10n/bg.dart';
 import 'package:trabcdefg/l10n/bn.dart';
@@ -16,8 +15,7 @@ import 'package:trabcdefg/l10n/cs.dart';
 import 'package:trabcdefg/l10n/da.dart';
 import 'package:trabcdefg/l10n/de.dart';
 import 'package:trabcdefg/l10n/el.dart';
-import 'package:trabcdefg/l10n/en_US.dart';
-import 'package:trabcdefg/l10n/en.dart';
+import 'package:trabcdefg/l10n/en_us.dart';
 import 'package:trabcdefg/l10n/es.dart';
 import 'package:trabcdefg/l10n/et.dart';
 import 'package:trabcdefg/l10n/fa.dart';
@@ -43,13 +41,14 @@ import 'package:trabcdefg/l10n/mk.dart';
 import 'package:trabcdefg/l10n/ml.dart';
 import 'package:trabcdefg/l10n/mn.dart';
 import 'package:trabcdefg/l10n/ms.dart';
+import 'package:trabcdefg/l10n/my.dart';
 import 'package:trabcdefg/l10n/nb.dart';
 import 'package:trabcdefg/l10n/ne.dart';
 import 'package:trabcdefg/l10n/nl.dart';
 import 'package:trabcdefg/l10n/nn.dart';
 import 'package:trabcdefg/l10n/pl.dart';
-import 'package:trabcdefg/l10n/pt_BR.dart';
 import 'package:trabcdefg/l10n/pt.dart';
+import 'package:trabcdefg/l10n/pt_br.dart';
 import 'package:trabcdefg/l10n/ro.dart';
 import 'package:trabcdefg/l10n/ru.dart';
 import 'package:trabcdefg/l10n/si.dart';
@@ -66,81 +65,81 @@ import 'package:trabcdefg/l10n/tr.dart';
 import 'package:trabcdefg/l10n/uk.dart';
 import 'package:trabcdefg/l10n/uz.dart';
 import 'package:trabcdefg/l10n/vi.dart';
-import 'package:trabcdefg/l10n/zh_TW.dart';
 import 'package:trabcdefg/l10n/zh.dart';
+import 'package:trabcdefg/l10n/zh_tw.dart';
 
 class LocalizationService extends Translations {
   static const fallbackLocale = Locale('en', 'US');
   static const _languageKey = 'saved_language_code';
 
   static final langs = [
-    'Afrikaans',
-    'العربية',
-    'Azərbaycan',
-    'Български',
-    'বাংলা',
-    'Català',
-    'Čeština',
-    'Dansk',
-    'Deutsch',
-    'Ελληνικά',
-    'English',
-    'Español',
-    'Eesti',
-    'فارسی',
-    'Suomi',
-    'Français',
-    'Galego',
-    'עברית',
-    'हिंदी',
-    'Hrvatski',
-    'Magyar',
-    'Հայերեն',
-    'Bahasa Indonesia',
-    'Italiano',
-    '日本語',
-    'ქართული',
-    'Қазақ',
-    'ភាសាខ្មែរ',
-    '한국어',
-    'ລາວ',
-    'Lietuvių',
-    'Latviešu',
-    'Македонски',
-    'മലയാളം',
-    'Монгол',
-    'Melayu',
-    'Norsk bokmål',
-    'नेपाली',
-    'Nederlands',
-    'Nynorsk',
-    'Polski',
-    'Português (Brasil)',
-    'Português',
-    'Română',
-    'Русский',
-    'සිංහල',
-    'Slovenčina',
-    'Slovenščina',
-    'Shqip',
-    'Srpski',
-    'Svenska',
-    'Kiswahili',
-    'தமிழ்',
-    'ไทย',
-    'Türkmen',
-    'Türkçe',
-    'Українська',
-    'Oʻzbekcha',
-    'Tiếng Việt',
-    '繁體中文',
-    '简体中文',
+    'Afrikaans', // af_ZA
+    'العربية', // ar_SA
+    'Azərbaycan', // az
+    'Български', // bg
+    'বাংলা', // bn
+    'Català', // ca
+    'Čeština', // cs
+    'Dansk', // da
+    'Deutsch', // de
+    'Ελληνικά', // el
+    'English', // en_US
+    'Español', // es
+    'Eesti', // et
+    'فارسی', // fa
+    'Suomi', // fi
+    'Français', // fr
+    'Galego', // gl
+    'עבריတ', // he
+    'हिंदी', // hi
+    'Hrvatski', // hr
+    'Magyar', // hu
+    'Հայերեն', // hy
+    'Bahasa Indonesia', // id
+    'Italiano', // it
+    '日本語', // ja
+    'ქართული', // ka
+    'Қазақ', // kk
+    'ភាសាខ្មဲរ', // km
+    '한국어', // ko
+    'ລາວ', // lo
+    'Lietuvių', // lt
+    'Latviešu', // lv
+    'Македонски', // mk
+    'മലയാളം', // ml
+    'Монгол', // mn
+    'Melayu', // ms
+    'Norsk bokmål', // nb
+    'नेपाली', // ne
+    'Nederlands', // nl
+    'Nynorsk', // nn
+    'Polski', // pl
+    'Português (Brasil)', // pt_BR
+    'Português', // pt
+    'Română', // ro
+    'Русский', // ru
+    'සිංහල', // si
+    'Slovenčina', // sk
+    'Slovenščina', // sl
+    'Shqip', // sq
+    'Srpski', // sr
+    'Svenska', // sv
+    'Kiswahili', // sw
+    'தமிழ்', // ta
+    'ไทย', // th
+    'Türkmen', // tk
+    'Türkçe', // tr
+    'Українська', // uk
+    'Oʻzbekcha', // uz
+    'Tiếng Việt', // vi
+    '繁體中文', // zh_TW
+    '简体中文', // zh
+    'မြန်မာဘာသာ', // my
   ];
 
   static final locales = [
     const Locale('af', 'ZA'),
     const Locale('ar', 'SA'),
-    const Locale('ar'), // Assuming this is for generic Arabic
     const Locale('az'),
     const Locale('bg'),
     const Locale('bn'),
@@ -150,7 +149,6 @@ class LocalizationService extends Translations {
     const Locale('de'),
     const Locale('el'),
     const Locale('en', 'US'),
-    const Locale('en'), // Assuming this is for generic English
     const Locale('es'),
     const Locale('et'),
     const Locale('fa'),
@@ -182,7 +180,7 @@ class LocalizationService extends Translations {
     const Locale('nn'),
     const Locale('pl'),
     const Locale('pt', 'BR'),
-    const Locale('pt'), // Assuming this is for generic Portuguese
+    const Locale('pt'),
     const Locale('ro'),
     const Locale('ru'),
     const Locale('si'),
@@ -200,75 +198,76 @@ class LocalizationService extends Translations {
     const Locale('uz'),
     const Locale('vi'),
     const Locale('zh', 'TW'),
-    const Locale('zh'), // Assuming this is for generic Chinese
+    const Locale('zh'),
+    const Locale('my'),
   ];
 
   @override
   Map<String, Map<String, String>> get keys => {
-        'af_ZA': af,
-        'ar_SA': arSA,
-        'ar': ar,
-        'az': az,
-        'bg': bg,
-        'bn': bn,
-        'ca': ca,
-        'cs': cs,
-        'da': da,
-        'de': de,
-        'el': el,
-        'en_US': en_US,
-        // 'en': enUS,
-        'es': es,
-        'et': et,
-        'fa': fa,
-        'fi': fi,
-        'fr': fr,
-        'gl': gl,
-        'he': he,
-        'hi': hi,
-        'hr': hr,
-        'hu': hu,
-        'hy': hy,
-        'id': id,
-        'it': it,
-        'ja': ja,
-        'ka': ka,
-        'kk': kk,
-        'km': km,
-        'ko': ko,
-        'lo': lo,
-        'lt': lt,
-        'lv': lv,
-        'mk': mk,
-        'ml': ml,
-        'mn': mn,
-        'ms': ms,
-        'nb': nb,
-        'ne': ne,
-        'nl': nl,
-        'nn': nn,
-        'pl': pl,
-        'pt_BR': ptBR,
-        'pt': pt,
-        'ro': ro,
-        'ru': ru,
-        'si': si,
-        'sk': sk,
-        'sl': sl,
-        'sq': sq,
-        'sr': sr,
-        'sv': sv,
-        'sw': sw,
-        'ta': ta,
-        'th': th,
-        'tk': tk,
-        'tr': tr,
-        'uk': uk,
-        'uz': uz,
-        'vi': vi,
-        'zh_TW': zhTW,
-        'zh': zhCN,
-      };
+    'af_ZA': af,
+    'ar_SA': arSA,
+    'ar': ar,
+    'az': az,
+    'bg': bg,
+    'bn': bn,
+    'ca': ca,
+    'cs': cs,
+    'da': da,
+    'de': de,
+    'el': el,
+    'en_US': enUs,
+    'es': es,
+    'et': et,
+    'fa': fa,
+    'fi': fi,
+    'fr': fr,
+    'gl': gl,
+    'he': he,
+    'hi': hi,
+    'hr': hr,
+    'hu': hu,
+    'hy': hy,
+    'id': id,
+    'it': it,
+    'ja': ja,
+    'ka': ka,
+    'kk': kk,
+    'km': km,
+    'ko': ko,
+    'lo': lo,
+    'lt': lt,
+    'lv': lv,
+    'mk': mk,
+    'ml': ml,
+    'mn': mn,
+    'ms': ms,
+    'nb': nb,
+    'ne': ne,
+    'nl': nl,
+    'nn': nn,
+    'pl': pl,
+    'pt_BR': ptBr,
+    'pt': pt,
+    'ro': ro,
+    'ru': ru,
+    'si': si,
+    'sk': sk,
+    'sl': sl,
+    'sq': sq,
+    'sr': sr,
+    'sv': sv,
+    'sw': sw,
+    'ta': ta,
+    'th': th,
+    'tk': tk,
+    'tr': tr,
+    'uk': uk,
+    'uz': uz,
+    'vi': vi,
+    'zh_TW': zhTw,
+    'zh': zhCN,
+    'my': my,
+  };
 
   // Method to save the selected locale to SharedPreferences
   static Future<void> saveLocale(Locale locale) async {
@@ -285,7 +284,7 @@ class LocalizationService extends Translations {
     }
     return null;
   }
-  
+
   // Method to convert a language code string to a Locale object
   static Locale getLocaleFromLang(String lang) {
     // This logic maps the language code to the correct Locale object.
@@ -416,6 +415,8 @@ class LocalizationService extends Translations {
         return const Locale('zh', 'TW');
       case 'zh':
         return const Locale('zh');
+      case 'my':
+        return const Locale('my');
       default:
         return Get.deviceLocale ?? fallbackLocale;
     }

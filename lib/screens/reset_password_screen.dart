@@ -1,10 +1,11 @@
 // lib/screens/reset_password_screen.dart
-
+// A screen that allows users to reset their password by entering their email address.
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:trabcdefg/constants.dart';
 import 'package:http/http.dart' as http;
-import 'dart:convert';
-import 'package:get/get.dart';
+import 'package:provider/provider.dart';
+import 'package:trabcdefg/providers/traccar_provider.dart';
+import 'package:trabcdefg/services/api_config.dart';
 
 class ResetPasswordScreen extends StatefulWidget {
   const ResetPasswordScreen({super.key});
@@ -24,42 +25,39 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
 
   Future<void> _resetPassword() async {
     final String email = _emailController.text;
-    final String url = '${AppConstants.traccarApiUrl}/password/reset';
+    final apiConfig = ApiConfig.fromApiClient(
+      context.read<TraccarProvider>().apiClient,
+    );
+    final Uri url = apiConfig.uri('/password/reset');
+
+    // 1. 先把需要的 Messenger 和 Navigator 狀態提取出來
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
 
     try {
-      final response = await http.post(
-        Uri.parse(url),
-        headers: <String, String>{
-          'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
-        },
-        body: 'email=${Uri.encodeComponent(email)}',
-      );
+      final response = await http.post(url, headers: <String, String>{'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8'}, body: 'email=${Uri.encodeComponent(email)}');
 
       if (response.statusCode == 200) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Password reset link sent successfully!')),
-          );
-          Future.delayed(const Duration(seconds: 2), () {
-            Navigator.of(context).pop();
-          });
-        }
-      } else {
-        if (mounted) {
-          String errorMessage = 'Failed to send reset link. Please try again.';
-          if (response.statusCode == 404) {
-             errorMessage = 'Email not found. Please check your email address.';
+        // 使用先前存好的變數，不依賴 async gap 後的 context
+        scaffoldMessenger.showSnackBar(const SnackBar(content: Text('Password reset link sent successfully!')));
+
+        Future.delayed(const Duration(seconds: 2), () {
+          // 這裡直接呼叫先前存好的 navigator，且此時畫面尚未 pop，安全度大幅提升
+          // 若想絕對萬無一失，這裡依然可以加上 if (context.mounted)
+          if (context.mounted) {
+            navigator.pop();
           }
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(errorMessage)),
-          );
+        });
+      } else {
+        String errorMessage = 'Failed to send reset link. Please try again.';
+        if (response.statusCode == 404) {
+          errorMessage = 'Email not found. Please check your email address.';
         }
+        scaffoldMessenger.showSnackBar(SnackBar(content: Text(errorMessage)));
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('An error occurred. Please check your connection.')),
-        );
+      if (context.mounted) {
+        scaffoldMessenger.showSnackBar(const SnackBar(content: Text('An error occurred. Please check your connection.')));
       }
     }
   }
@@ -67,7 +65,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Reset Password')),
+      appBar: CupertinoNavigationBar(middle: const Text('Reset Password')),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -77,10 +75,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
               decoration: const InputDecoration(labelText: 'Email'),
             ),
             const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: _resetPassword,
-              child: const Text('Send Reset Link'),
-            ),
+            ElevatedButton(onPressed: _resetPassword, child: const Text('Send Reset Link')),
           ],
         ),
       ),

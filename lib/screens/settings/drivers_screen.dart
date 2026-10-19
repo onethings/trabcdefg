@@ -1,17 +1,18 @@
 // drivers_screen.dart
-
+// A screen to display and manage drivers in the TracDefg app.
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:trabcdefg/src/generated_api/api.dart' as api;
-import 'package:trabcdefg/screens/settings/add_driver_screen.dart';
-import 'package:trabcdefg/providers/traccar_provider.dart';
-import 'package:provider/provider.dart';
 import 'package:get/get.dart';
+import 'package:provider/provider.dart';
+import 'package:trabcdefg/providers/traccar_provider.dart';
+import 'package:trabcdefg/screens/settings/add_driver_screen.dart';
+import 'package:trabcdefg/src/generated_api/api.dart' as api;
 
 class DriversScreen extends StatefulWidget {
   const DriversScreen({super.key});
 
   @override
-  _DriversScreenState createState() => _DriversScreenState();
+  State<DriversScreen> createState() => _DriversScreenState(); // <-- FIXED HERE
 }
 
 class _DriversScreenState extends State<DriversScreen> {
@@ -28,16 +29,14 @@ class _DriversScreenState extends State<DriversScreen> {
     // Correct way to instantiate DriversApi with the authenticated client
     final driversApi = api.DriversApi(traccarProvider.apiClient);
     setState(() {
-      _driversFuture = driversApi.driversGet();
+      _driversFuture = driversApi.getDrivers();
     });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text('sharedDrivers'.tr),
-      ),
+      appBar: CupertinoNavigationBar(middle: Text('sharedDrivers'.tr)),
       body: FutureBuilder<List<api.Driver>?>(
         future: _driversFuture,
         builder: (context, snapshot) {
@@ -59,15 +58,51 @@ class _DriversScreenState extends State<DriversScreen> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       IconButton(
-                        icon: const Icon(Icons.edit),
-                        onPressed: () {
-                          // TODO: Implement edit functionality
+                        icon: const Icon(CupertinoIcons.pencil),
+                        onPressed: () async {
+                          final updatedDriver = await Navigator.push(context, MaterialPageRoute(builder: (context) => AddDriverScreen(driver: driver)));
+
+                          if (updatedDriver != null && mounted) {
+                            _fetchDrivers();
+                          }
                         },
-                      ),
+                      ), // Added missing comma divider here
                       IconButton(
-                        icon: const Icon(Icons.delete),
-                        onPressed: () {
-                          // TODO: Implement delete functionality
+                        icon: const Icon(CupertinoIcons.trash),
+                        onPressed: () async {
+                          // FIX: Capture dependencies from BuildContext BEFORE the async gaps
+                          final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
+
+                          final bool? confirm = await Get.dialog<bool>(
+                            CupertinoAlertDialog(
+                              title: const Text('Delete Driver?'),
+                              content: Text('Are you sure you want to delete ${driver.name}?'),
+                              actions: [
+                                CupertinoDialogAction(onPressed: () => Get.back(result: false), child: Text('sharedCancel'.tr)),
+                                CupertinoDialogAction(
+                                  textStyle: const TextStyle(color: CupertinoColors.systemRed),
+                                  onPressed: () => Get.back(result: true),
+                                  child: const Text('Delete'),
+                                ),
+                              ],
+                            ),
+                          );
+
+                          if (confirm == true && driver.id != null) {
+                            try {
+                              // Uses the safely predefined variable instead of 'context' across the gap
+                              final driversApi = api.DriversApi(traccarProvider.apiClient);
+                              await driversApi.deleteDriversId(driver.id!);
+
+                              // FIX: Ensure the widget is still in the tree before setting state/refreshing
+                              if (!mounted) return;
+                              _fetchDrivers();
+
+                              Get.snackbar('Success', 'Driver deleted successfully');
+                            } catch (e) {
+                              Get.snackbar('Error', 'Failed to delete driver: $e');
+                            }
+                          }
                         },
                       ),
                     ],
@@ -78,19 +113,17 @@ class _DriversScreenState extends State<DriversScreen> {
           }
         },
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () async {
-          final newDriver = await Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => const AddDriverScreen(),
-            ),
-          );
-          if (newDriver != null) {
-            _fetchDrivers();
-          }
-        },
-        child: const Icon(Icons.add),
+      floatingActionButton: Transform.translate(
+        offset: const Offset(0, -45), // 往上移動 45px
+        child: FloatingActionButton(
+          onPressed: () async {
+            final newDriver = await Navigator.push(context, MaterialPageRoute(builder: (context) => const AddDriverScreen()));
+            if (newDriver != null) {
+              _fetchDrivers();
+            }
+          },
+          child: const Icon(CupertinoIcons.add),
+        ),
       ),
     );
   }

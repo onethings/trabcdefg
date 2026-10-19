@@ -1,20 +1,25 @@
-// lib/screens/reports/route_report_screen.dart
-
+// lib/screens/reports/route_report_screen.dart //Replay report
+// A screen to display route report on a map in the TracDefg app.
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
+
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import 'package:trabcdefg/src/generated_api/api.dart' as api;
-import 'package:trabcdefg/providers/traccar_provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:intl/intl.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:permission_handler/permission_handler.dart';
-import 'dart:ui' as ui;
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
+import 'package:http/http.dart' as http;
+import 'package:intl/intl.dart';
+import 'package:maplibre_gl/maplibre_gl.dart' as maplibre;
+import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:trabcdefg/providers/map_style_provider.dart';
+import 'package:trabcdefg/providers/traccar_provider.dart';
+import 'package:trabcdefg/src/generated_api/api.dart' as api;
+import 'package:trabcdefg/widgets/offline_address_service.dart';
 
 class RouteReport {
   final int id;
@@ -63,8 +68,8 @@ class RouteReport {
       serverTime: DateTime.parse(json['serverTime'] as String),
       deviceTime: DateTime.parse(json['deviceTime'] as String),
       fixTime: DateTime.parse(json['fixTime'] as String),
-      outdated: (json['outdated'] ?? false) as bool, // Handle null
-      valid: (json['valid'] ?? false) as bool, // Handle null
+      outdated: (json['outdated'] ?? false) as bool,
+      valid: (json['valid'] ?? false) as bool,
       latitude: (json['latitude'] as num).toDouble(),
       longitude: (json['longitude'] as num).toDouble(),
       altitude: (json['altitude'] as num).toDouble(),
@@ -89,26 +94,22 @@ class _RouteReportScreenState extends State<RouteReportScreen> {
   List<RouteReport> _routeReport = [];
   bool _isLoading = true;
   String? _deviceName;
-  final Completer<GoogleMapController> _controller = Completer();
-  final Set<Marker> _markers = {};
-  final Set<Polyline> _polylines = {};
-  late BitmapDescriptor _startIcon;
-  late BitmapDescriptor _endIcon;
-  MapType _currentMapType = MapType.normal;
+  maplibre.MapLibreMapController? _mapController;
+  final Set<String> _loadedIcons = {};
+  bool _isStyleLoaded = false;
+  maplibre.Symbol? _selectedMarker; // Marker for the currently tapped position card
+  final http.Client _httpClient = http.Client();
 
   @override
   void initState() {
     super.initState();
-    _loadMarkerIcons();
     _fetchRouteReport();
   }
 
-  Future<void> _loadMarkerIcons() async {
-    final Uint8List startIconBytes = (await rootBundle.load('assets/images/start.png')).buffer.asUint8List();
-    _startIcon = await BitmapDescriptor.fromBytes(startIconBytes);
-
-    final Uint8List endIconBytes = (await rootBundle.load('assets/images/destination.png')).buffer.asUint8List();
-    _endIcon = await BitmapDescriptor.fromBytes(endIconBytes);
+  @override
+  void dispose() {
+    _httpClient.close();
+    super.dispose();
   }
 
   Future<void> _fetchRouteReport() async {
@@ -116,22 +117,20 @@ class _RouteReportScreenState extends State<RouteReportScreen> {
       _isLoading = true;
     });
 
-    final traccarProvider = Provider.of<TraccarProvider>(
-      context,
-      listen: false,
-    );
+    final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
 
     final prefs = await SharedPreferences.getInstance();
     final deviceId = prefs.getInt('selectedDeviceId');
     final fromDateString = prefs.getString('historyFrom');
     final toDateString = prefs.getString('historyTo');
-    print('Fetched from SharedPreferences: deviceId=$deviceId, fromDate=$fromDateString, toDate=$toDateString');
+    debugPrint('Fetched from SharedPreferences: deviceId=$deviceId, fromDate=$fromDateString, toDate=$toDateString');
 
     if (deviceId == null || fromDateString == null || toDateString == null) {
+      if (!mounted) return;
       setState(() {
         _isLoading = false;
       });
-      print('Missing device ID or date range from SharedPreferences.');
+      debugPrint('Missing device ID or date range from SharedPreferences.');
       return;
     }
 
@@ -139,25 +138,21 @@ class _RouteReportScreenState extends State<RouteReportScreen> {
     final toDate = DateTime.tryParse(toDateString);
 
     if (fromDate == null || toDate == null) {
+      if (!mounted) return;
       setState(() {
         _isLoading = false;
       });
-      print('Failed to parse date strings.');
+      debugPrint('Failed to parse date strings.');
       return;
     }
 
     try {
       final apiClient = traccarProvider.apiClient;
-      final queryParams = [
-          api.QueryParam('from', fromDate.toIso8601String()),
-          api.QueryParam('to', toDate.toIso8601String()),
-          api.QueryParam('deviceId', deviceId.toString()),
-      ];
+      final queryParams = [api.QueryParam('from', fromDate.toIso8601String()), api.QueryParam('to', toDate.toIso8601String()), api.QueryParam('deviceId', deviceId.toString())];
       final path = '/reports/route';
       final headerParams = {'Accept': 'application/json'};
 
-      // final http.Response response = await apiClient.invokeAPI(
-            final response = await apiClient.invokeAPI(
+      final response = await apiClient.invokeAPI(
         path,
         'GET',
         queryParams,
@@ -173,134 +168,147 @@ class _RouteReportScreenState extends State<RouteReportScreen> {
           final decodedData = json.decode(response.body);
 
           if (decodedData is List && decodedData.isNotEmpty) {
-            _routeReport = decodedData
-                .map((e) => RouteReport.fromJson(e as Map<String, dynamic>))
-                .toList();
+            _routeReport = decodedData.map((e) => RouteReport.fromJson(e as Map<String, dynamic>)).toList();
 
             if (_routeReport.isNotEmpty) {
-              final device = traccarProvider.devices.firstWhere(
-                (d) => d.id == _routeReport.first.deviceId,
-                orElse: () => api.Device(),
-              );
+              final device = traccarProvider.devices.firstWhere((d) => d.id == _routeReport.first.deviceId, orElse: () => api.Device());
               _deviceName = device.name;
-              _createMarkersAndPolylines();
+              _createMapElements();
             }
           }
         } else {
-          print('Warning: Expected JSON, but received content type: $contentType');
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed to load route report. The server returned a file instead of JSON.'.tr)),
-          );
+          debugPrint('Warning: Expected JSON, but received content type: $contentType');
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to load route report. The server returned a file instead of JSON.'.tr)));
         }
       }
     } catch (e) {
-      print('Error fetching route report: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to load route report.'.tr)),
-      );
+      debugPrint('Error fetching route report: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to load route report.'.tr)));
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
-  void _createMarkersAndPolylines() {
-    _markers.clear();
-    _polylines.clear();
-
-    if (_routeReport.isEmpty) return;
-
-    final List<LatLng> polylinePoints = _routeReport
-        .map((p) => LatLng(p.latitude, p.longitude))
-        .toList();
-
-    _polylines.add(
-      Polyline(
-        polylineId: const PolylineId('route_path'),
-        points: polylinePoints,
-        color: Colors.blue,
-        width: 5,
-      ),
-    );
-
-    // Add start marker
-    final startPoint = _routeReport.first;
-    _markers.add(
-      Marker(
-        markerId: MarkerId('start_${startPoint.id}'),
-        position: LatLng(startPoint.latitude, startPoint.longitude),
-        infoWindow: InfoWindow(
-          title: 'Start'.tr,
-          snippet: '${'positionDeviceTime'.tr}: ${DateFormat('yyyy-MM-dd HH:mm').format(startPoint.deviceTime.toLocal())}',
-        ),
-        icon: _startIcon,
-      ),
-    );
-
-    // Add end marker
-    final endPoint = _routeReport.last;
-    _markers.add(
-      Marker(
-        markerId: MarkerId('end_${endPoint.id}'),
-        position: LatLng(endPoint.latitude, endPoint.longitude),
-        infoWindow: InfoWindow(
-          title: 'End'.tr,
-          snippet: '${'positionDeviceTime'.tr}: ${DateFormat('yyyy-MM-dd HH:mm').format(endPoint.deviceTime.toLocal())}',
-        ),
-        icon: _endIcon,
-      ),
-    );
+  Future<void> _onStyleLoaded() async {
+    _isStyleLoaded = true;
+    if (_routeReport.isNotEmpty) {
+      _createMapElements();
+    }
   }
 
-  Future<void> _animateToPosition(LatLng position) async {
-    final controller = await _controller.future;
-    controller.animateCamera(
-      CameraUpdate.newCameraPosition(
-        CameraPosition(
-          target: position,
-          zoom: 16,
-        ),
-      ),
-    );
+  Future<void> _createMapElements() async {
+    if (_mapController == null || !_isStyleLoaded || _routeReport.isEmpty) {
+      return;
+    }
+
+    await _mapController!.clearSymbols();
+    _selectedMarker = null; // symbols were just cleared
+    await _mapController!.clearLines();
+
+    final points = _routeReport.map((p) => maplibre.LatLng(p.latitude, p.longitude)).toList();
+
+    if (points.isNotEmpty) {
+      await _mapController!.addLine(maplibre.LineOptions(geometry: points, lineColor: "#0000FF", lineWidth: 4.0));
+
+      await _addMarker(points.first, "start_pin", "assets/images/start.png");
+      await _addMarker(points.last, "end_pin", "assets/images/destination.png");
+
+      _zoomToFit(points);
+    }
   }
 
-  void _showInfoWindowForMarker(MarkerId markerId) {
-    _controller.future.then((c) {
-      c.showMarkerInfoWindow(markerId);
-    });
+  Future<void> _addMarker(maplibre.LatLng point, String iconId, String assetPath) async {
+    if (!_loadedIcons.contains(iconId)) {
+      final ByteData bytes = await rootBundle.load(assetPath);
+      final Uint8List list = bytes.buffer.asUint8List();
+      await _mapController!.addImage(iconId, list);
+      _loadedIcons.add(iconId);
+    }
+
+    await _mapController!.addSymbol(maplibre.SymbolOptions(geometry: point, iconImage: iconId, iconSize: 1.4, iconAnchor: "bottom"));
   }
 
-  String _formatSpeed(double speed) {
-    return '${speed.toStringAsFixed(2)} ${'sharedKmh'.tr}';
+  void _zoomToFit(List<maplibre.LatLng> points) {
+    if (points.isEmpty) return;
+    double minLat = points.map((p) => p.latitude).reduce(min);
+    double maxLat = points.map((p) => p.latitude).reduce(max);
+    double minLng = points.map((p) => p.longitude).reduce(min);
+    double maxLng = points.map((p) => p.longitude).reduce(max);
+
+    _mapController?.animateCamera(maplibre.CameraUpdate.newLatLngBounds(maplibre.LatLngBounds(southwest: maplibre.LatLng(minLat, minLng), northeast: maplibre.LatLng(maxLat, maxLng)), left: 50, right: 50, top: 50, bottom: 50));
+  }
+
+  void _animateToPosition(maplibre.LatLng position) {
+    _mapController?.animateCamera(maplibre.CameraUpdate.newLatLng(position));
+  }
+
+  // Called when a Positions card is tapped: show only that position's marker on the map
+  // (instead of markers for every position), then move the camera to it.
+  Future<void> _onCardTap(int index) async {
+    if (index < 0 || index >= _routeReport.length) return;
+    final position = _routeReport[index];
+    await _showSelectedMarker(index);
+    _animateToPosition(maplibre.LatLng(position.latitude, position.longitude));
+  }
+
+  Future<void> _showSelectedMarker(int index) async {
+    if (_mapController == null || index < 0 || index >= _routeReport.length) return;
+
+    // Only one selected marker at a time: remove the previous one.
+    if (_selectedMarker != null) {
+      await _mapController!.removeSymbol(_selectedMarker!);
+      _selectedMarker = null;
+    }
+
+    final position = _routeReport[index];
+    // Use a numbered pin (p_1..p_50) so the map marker matches the "Position N" card.
+    final iconId = "p_${(index % 50) + 1}";
+    if (!_loadedIcons.contains(iconId)) {
+      final ByteData bytes = await rootBundle.load("assets/images/$iconId.png");
+      final Uint8List list = bytes.buffer.asUint8List();
+      await _mapController!.addImage(iconId, list);
+      _loadedIcons.add(iconId);
+    }
+
+    final symbol = await _mapController!.addSymbol(maplibre.SymbolOptions(geometry: maplibre.LatLng(position.latitude, position.longitude), iconImage: iconId, iconSize: 3.5, iconAnchor: "bottom", zIndex: 20));
+    _selectedMarker = symbol;
   }
 
   String _formatDateTime(DateTime dateTime) {
     return DateFormat('yyyy-MM-dd HH:mm:ss').format(dateTime.toLocal());
   }
 
+  String _formatSpeed(double speed) {
+    return '${(speed * 1.852).toStringAsFixed(2)} ${'sharedKmh'.tr}';
+  }
+
   Future<void> _exportToCsv() async {
     final status = await Permission.storage.request();
     if (!status.isGranted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Storage permission is required to save the file.'.tr)),
-      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Storage permission is required to save the file.'.tr)));
       return;
     }
 
     if (_routeReport.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No data to export.'.tr)),
-      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('No data to export.'.tr)));
       return;
     }
 
-    final csvHeader =
-        'id,deviceId,deviceTime,latitude,longitude,speed,address,protocol,serverTime,fixTime,outdated,valid,altitude,course,accuracy,network,attributes\n';
-    final csvRows = _routeReport.map((position) {
-      final attributesJson = json.encode(position.attributes);
-      return '${position.id},${position.deviceId},"${_formatDateTime(position.deviceTime)}",${position.latitude},${position.longitude},${position.speed},"${position.address ?? ''}",${position.protocol},"${_formatDateTime(position.serverTime)}","${_formatDateTime(position.fixTime)}",${position.outdated},${position.valid},${position.altitude},${position.course},${position.accuracy},${position.network ?? ''},"$attributesJson"';
-    }).join('\n');
+    final csvHeader = 'id,deviceId,deviceTime,latitude,longitude,speed,address,protocol,serverTime,fixTime,outdated,valid,altitude,course,accuracy,network,attributes\n';
+    final csvRows = _routeReport
+        .map((position) {
+          final attributesJson = json.encode(position.attributes);
+          return '${position.id},${position.deviceId},"${_formatDateTime(position.deviceTime)}",${position.latitude},${position.longitude},${position.speed},"${position.address ?? ''}",${position.protocol},"${_formatDateTime(position.serverTime)}","${_formatDateTime(position.fixTime)}",${position.outdated},${position.valid},${position.altitude},${position.course},${position.accuracy},${position.network ?? ''},"$attributesJson"';
+        })
+        .join('\n');
 
     final csvContent = csvHeader + csvRows;
     final directory = await getExternalStorageDirectory();
@@ -309,125 +317,111 @@ class _RouteReportScreenState extends State<RouteReportScreen> {
 
     try {
       await file.writeAsString(csvContent);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${'Report exported to'.tr} ${file.path}')),
-      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${'Report exported to'.tr} ${file.path}')));
     } catch (e) {
-      print('Error exporting CSV: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to export report.'.tr)),
-      );
+      debugPrint('Error exporting CSV: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to export report.'.tr)));
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return Scaffold(body: Center(child: Text('sharedLoading'.tr)));
+    }
+
+    if (_routeReport.isEmpty) {
+      return Scaffold(
+        appBar: CupertinoNavigationBar(middle: Text(_deviceName ?? 'reportReplay'.tr)),
+        body: Center(child: Text('sharedNoData'.tr)),
+      );
+    }
+
+    final mapProvider = Provider.of<MapStyleProvider>(context);
+    final initialCenter = _routeReport.isNotEmpty ? maplibre.LatLng(_routeReport.first.latitude, _routeReport.first.longitude) : const maplibre.LatLng(21.9162, 95.9560);
+
     return Scaffold(
-      appBar: AppBar(
-        title: Text('${'reportReplay'.tr}: ${_deviceName ?? ''}'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.download),
-            onPressed: _exportToCsv,
+      appBar: CupertinoNavigationBar(
+        middle: Text('${'reportReplay'.tr}: ${_deviceName ?? ''}'),
+        trailing: IconButton(icon: const Icon(CupertinoIcons.arrow_down_circle), onPressed: _exportToCsv),
+      ),
+      body: Column(
+        children: [
+          Expanded(
+            flex: 1,
+            child: Stack(
+              children: [
+                maplibre.MapLibreMap(
+                  key: ValueKey(mapProvider.isSatelliteMode),
+                  onMapCreated: (c) => _mapController = c,
+                  onStyleLoadedCallback: _onStyleLoaded,
+                  initialCameraPosition: maplibre.CameraPosition(target: initialCenter, zoom: 14.0),
+                  styleString: mapProvider.getStyle(Theme.of(context).brightness),
+                ),
+                Positioned(
+                  top: 10,
+                  right: 10,
+                  child: FloatingActionButton(mini: true, onPressed: () => mapProvider.toggleMapType(), child: Icon(mapProvider.isSatelliteMode ? Icons.map : Icons.satellite_alt)),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            flex: 1,
+            child: ListView.builder(
+              padding: const EdgeInsets.all(16.0),
+              itemCount: _routeReport.length,
+              itemBuilder: (context, index) {
+                final position = _routeReport[index];
+                return GestureDetector(
+                  onTap: () => _onCardTap(index),
+                  child: Card(
+                    elevation: 4,
+                    margin: const EdgeInsets.only(bottom: 16.0),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('${'reportPositions'.tr} ${index + 1}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                          const Divider(),
+                          ListTile(title: Text('positionDeviceTime'.tr), trailing: Text(_formatDateTime(position.deviceTime))),
+                          ListTile(title: Text('positionSpeed'.tr), trailing: Text(_formatSpeed(position.speed))),
+                          ListTile(
+                            title: Text(
+                              'positionAddress'.tr,
+                              style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            trailing: ConstrainedBox(
+                              constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.55),
+                              child: FutureBuilder<String>(
+                                future: position.address != null && position.address!.isNotEmpty ? Future.value(position.address) : OfflineAddressService.getAddress(position.latitude, position.longitude),
+                                builder: (context, snapshot) {
+                                  return Text(
+                                    snapshot.data ?? '...',
+                                    textAlign: TextAlign.right,
+                                    overflow: TextOverflow.ellipsis,
+                                    maxLines: 2,
+                                    style: TextStyle(fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface),
+                                  );
+                                },
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
           ),
         ],
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : Column(
-              children: [
-                Expanded(
-                  flex: 1,
-                  child: Stack(
-              children: [
-                GoogleMap(
-                    mapType: _currentMapType,
-                    initialCameraPosition: _routeReport.isNotEmpty
-                        ? CameraPosition(
-                            target: LatLng(_routeReport.first.latitude, _routeReport.first.longitude),
-                            zoom: 14,
-                          )
-                        : const CameraPosition(
-                            target: LatLng(21.9162, 95.9560), // Mandalay, Myanmar
-                            zoom: 14,
-                          ),
-                    onMapCreated: (GoogleMapController controller) {
-                      _controller.complete(controller);
-                    },
-                    markers: _markers,
-                    polylines: _polylines,
-                  ),
-                   Positioned(
-                  top: 10,
-                  right: 10,
-                  child: FloatingActionButton(
-                    mini: true,
-                    onPressed: () {
-                      setState(() {
-                        _currentMapType = _currentMapType == MapType.normal
-                            ? MapType.satellite
-                            : MapType.normal;
-                      });
-                    },
-                    child: Icon(
-                      _currentMapType == MapType.normal
-                          ? Icons.satellite_alt
-                          : Icons.map,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-                ),
-                Expanded(
-                  flex: 1,
-                  child: _routeReport.isEmpty
-                      ? Center(child: Text('No route data available for the selected period.'.tr))
-                      : ListView.builder(
-                          padding: const EdgeInsets.all(16.0),
-                          itemCount: _routeReport.length,
-                          itemBuilder: (context, index) {
-                            final position = _routeReport[index];
-                            return GestureDetector(
-                              onTap: () {
-                                _animateToPosition(LatLng(position.latitude, position.longitude));
-                              },
-                              child: Card(
-                                elevation: 4,
-                                margin: const EdgeInsets.only(bottom: 16.0),
-                                child: Padding(
-                                  padding: const EdgeInsets.all(16.0),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        '${'reportPositions'.tr} ${index + 1}',
-                                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                                      ),
-                                      const Divider(),
-                                      ListTile(
-                                        title: Text('positionDeviceTime'.tr),
-                                        trailing: Text(_formatDateTime(position.deviceTime)),
-                                      ),
-                                      ListTile(
-                                        title: Text('positionSpeed'.tr),
-                                        trailing: Text(_formatSpeed(position.speed)),
-                                      ),
-                                      if (position.address != null)
-                                        ListTile(
-                                          title: Text('positionAddress'.tr),
-                                          trailing: Text(position.address!),
-                                        ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                ),
-              ],
-            ),
     );
   }
 }

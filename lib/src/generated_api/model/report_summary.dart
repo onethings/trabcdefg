@@ -22,6 +22,7 @@ class ReportSummary {
     this.engineHours,
   });
 
+  /// Device identifier for the summary row
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -30,6 +31,7 @@ class ReportSummary {
   ///
   int? deviceId;
 
+  /// Human readable device name
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -74,6 +76,7 @@ class ReportSummary {
   ///
   num? spentFuel;
 
+  /// Engine hours accumulated for the report period
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated

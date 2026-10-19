@@ -1,11 +1,15 @@
+// notification_page.dart
+// A page to create or edit notifications in the TracDefg app.
+import 'dart:convert';
+
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
-import 'dart:convert';
-import 'package:trabcdefg/constants.dart';
-import 'package:trabcdefg/services/auth_service.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:get/get.dart';
+import 'package:trabcdefg/providers/traccar_provider.dart';
+import 'package:trabcdefg/services/api_config.dart';
+import 'package:trabcdefg/services/auth_session_store.dart';
 
 class NotificationPage extends StatefulWidget {
   final int? notificationId;
@@ -40,7 +44,7 @@ class _NotificationPageState extends State<NotificationPage> {
     'mail': 'notificatorMail',
     'sms': 'notificatorSms',
     'web': 'notificatorWeb',
-    'command':'notificatorCommand'
+    'command': 'notificatorCommand',
   };
 
   // Define a new mapping for notification types
@@ -79,9 +83,11 @@ class _NotificationPageState extends State<NotificationPage> {
       _isLoading = true;
     });
 
+    final traccarProvider = context.read<TraccarProvider>();
+    final apiConfig = ApiConfig.fromApiClient(traccarProvider.apiClient);
+
     try {
-      final prefs = await SharedPreferences.getInstance();
-      _jSessionId = prefs.getString('jSessionId');
+      _jSessionId = traccarProvider.sessionId ?? AuthSessionStore.instance.sessionId;
       if (_jSessionId == null) {
         throw Exception('Session not found');
       }
@@ -92,7 +98,7 @@ class _NotificationPageState extends State<NotificationPage> {
       };
 
       final typesResponse = await http.get(
-        Uri.parse('${AppConstants.traccarApiUrl}/notifications/types'),
+        apiConfig.uri('/notifications/types'),
         headers: headers,
       );
       if (typesResponse.statusCode == 200) {
@@ -100,7 +106,7 @@ class _NotificationPageState extends State<NotificationPage> {
       }
 
       final notificatorsResponse = await http.get(
-        Uri.parse('${AppConstants.traccarApiUrl}/notifications/notificators'),
+        apiConfig.uri('/notifications/notificators'),
         headers: headers,
       );
       if (notificatorsResponse.statusCode == 200) {
@@ -108,7 +114,7 @@ class _NotificationPageState extends State<NotificationPage> {
       }
 
       final commandsResponse = await http.get(
-        Uri.parse('${AppConstants.traccarApiUrl}/commands'),
+        apiConfig.uri('/commands'),
         headers: headers,
       );
       if (commandsResponse.statusCode == 200) {
@@ -116,7 +122,7 @@ class _NotificationPageState extends State<NotificationPage> {
       }
 
       final calendarsResponse = await http.get(
-        Uri.parse('${AppConstants.traccarApiUrl}/calendars'),
+        apiConfig.uri('/calendars'),
         headers: headers,
       );
       if (calendarsResponse.statusCode == 200) {
@@ -125,7 +131,7 @@ class _NotificationPageState extends State<NotificationPage> {
 
       if (widget.notificationId != null) {
         final notificationResponse = await http.get(
-          Uri.parse('${AppConstants.traccarApiUrl}/notifications/${widget.notificationId}'),
+          apiConfig.uri('/notifications/${widget.notificationId}'),
           headers: headers,
         );
         if (notificationResponse.statusCode == 200) {
@@ -142,15 +148,20 @@ class _NotificationPageState extends State<NotificationPage> {
     } catch (e) {
       debugPrint('Failed to fetch initial data: $e');
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
   Future<void> _saveNotification() async {
     if (_formKey.currentState?.validate() ?? false) {
       _formKey.currentState!.save();
+      final apiConfig = ApiConfig.fromApiClient(
+        context.read<TraccarProvider>().apiClient,
+      );
       final body = {
         'description': _descriptionController.text,
         'type': _selectedNotificationType,
@@ -171,17 +182,19 @@ class _NotificationPageState extends State<NotificationPage> {
 
         if (widget.notificationId == null) {
           response = await http.post(
-            Uri.parse('${AppConstants.traccarApiUrl}/notifications'),
+            apiConfig.uri('/notifications'),
             headers: headers,
             body: json.encode(body),
           );
         } else {
           response = await http.put(
-            Uri.parse('${AppConstants.traccarApiUrl}/notifications/${widget.notificationId}'),
+            apiConfig.uri('/notifications/${widget.notificationId}'),
             headers: headers,
             body: json.encode(body),
           );
         }
+
+        if (!mounted) return;
 
         if (response.statusCode >= 200 && response.statusCode < 300) {
           Navigator.pop(context);
@@ -195,6 +208,9 @@ class _NotificationPageState extends State<NotificationPage> {
   }
 
   Future<void> _testNotificators() async {
+    final apiConfig = ApiConfig.fromApiClient(
+      context.read<TraccarProvider>().apiClient,
+    );
     final body = {
       'type': _selectedNotificationType,
       'notificators': _selectedNotificators.join(','),
@@ -204,7 +220,7 @@ class _NotificationPageState extends State<NotificationPage> {
 
     try {
       final response = await http.post(
-        Uri.parse('${AppConstants.traccarApiUrl}/notifications/test'),
+        apiConfig.uri('/notifications/test'),
         headers: {
           'Content-Type': 'application/json',
           'Cookie': 'JSESSIONID=$_jSessionId',
@@ -212,63 +228,86 @@ class _NotificationPageState extends State<NotificationPage> {
         body: json.encode(body),
       );
 
+      if (!mounted) return;
+
       if (response.statusCode == 204) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('testNotificationSuccess'.tr)),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('testNotificationSuccess'.tr)));
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('testNotificationFailed'.tr)),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('testNotificationFailed'.tr)));
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('testNotificatorsError'.tr)),
-      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('testNotificatorsError'.tr)));
     }
   }
 
   void _showNotificatorSelection() {
-    showDialog(
+    showCupertinoModalPopup<void>(
       context: context,
-      builder: (BuildContext context) {
-        return StatefulBuilder(
-          builder: (BuildContext context, StateSetter setState) {
-            return AlertDialog(
-              title: Text('notificationType'.tr),
-              content: SingleChildScrollView(
-                child: ListBody(
-                  children: _notificatorTypes.map((notificator) {
-                    final isSelected = _selectedNotificators.contains(notificator['type']);
-                    final String? localizationKey = notificatorKeys[notificator['type']];
-                    final String displayValue = localizationKey != null ? localizationKey.tr : notificator['type'];
-                    return CheckboxListTile(
-                      value: isSelected,
-                      title: Text(displayValue),
-                      onChanged: (bool? value) {
-                        setState(() {
-                          if (value == true) {
-                            _selectedNotificators.add(notificator['type']);
-                          } else {
-                            _selectedNotificators.remove(notificator['type']);
-                          }
-                          this.setState(() {}); // Update parent state
-                        });
-                      },
-                    );
-                  }).toList(),
-                ),
+      builder: (BuildContext context) => StatefulBuilder(
+        builder: (BuildContext context, StateSetter setState) => Container(
+          height: 420,
+          padding: const EdgeInsets.only(top: 12),
+          color: Theme.of(context).colorScheme.surface,
+          // CheckboxListTile needs a Material ancestor; the Cupertino popup route has none.
+          child: Material(
+            type: MaterialType.transparency,
+            child: SafeArea(
+              top: false,
+              child: Column(
+                children: [
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: CupertinoButton(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: Text('sharedSave'.tr),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      child: ListBody(
+                        children: _notificatorTypes.map((notificator) {
+                          final isSelected = _selectedNotificators.contains(
+                            notificator['type'],
+                          );
+                          final String? localizationKey =
+                              notificatorKeys[notificator['type']];
+                          final String displayValue = localizationKey != null
+                              ? localizationKey.tr
+                              : notificator['type'];
+                          return CheckboxListTile(
+                            value: isSelected,
+                            title: Text(displayValue),
+                            onChanged: (bool? value) {
+                              setState(() {
+                                if (value == true) {
+                                  _selectedNotificators.add(
+                                    notificator['type'],
+                                  );
+                                } else {
+                                  _selectedNotificators.remove(
+                                    notificator['type'],
+                                  );
+                                }
+                                this.setState(() {}); // Update parent state
+                              });
+                            },
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: Text('sharedSave'.tr),
-                ),
-              ],
-            );
-          },
-        );
-      },
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -276,15 +315,13 @@ class _NotificationPageState extends State<NotificationPage> {
   Widget build(BuildContext context) {
     if (_isLoading) {
       return Scaffold(
-        appBar: AppBar(title: Text('sharedNotification'.tr)),
+        appBar: CupertinoNavigationBar(middle: Text('sharedNotification'.tr)),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text('sharedNotification'.tr),
-      ),
+      appBar: CupertinoNavigationBar(middle: Text('sharedNotification'.tr)),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
         child: Form(
@@ -299,10 +336,15 @@ class _NotificationPageState extends State<NotificationPage> {
                 children: [
                   DropdownButtonFormField<String>(
                     decoration: InputDecoration(labelText: 'sharedType'.tr),
-                    value: _selectedNotificationType,
-                    items: _notificationTypes.map<DropdownMenuItem<String>>((type) {
-                      final String? localizationKey = notificationTypeKeys[type['type']];
-                      final String displayValue = localizationKey != null ? localizationKey.tr : type['type'];
+                    initialValue: _selectedNotificationType,
+                    items: _notificationTypes.map<DropdownMenuItem<String>>((
+                      type,
+                    ) {
+                      final String? localizationKey =
+                          notificationTypeKeys[type['type']];
+                      final String displayValue = localizationKey != null
+                          ? localizationKey.tr
+                          : type['type'];
                       return DropdownMenuItem<String>(
                         value: type['type'],
                         child: Text(displayValue),
@@ -313,27 +355,36 @@ class _NotificationPageState extends State<NotificationPage> {
                         _selectedNotificationType = value;
                       });
                     },
-                    validator: (value) => value == null ? 'sharedRequired'.tr : null,
+                    validator: (value) =>
+                        value == null ? 'sharedRequired'.tr : null,
                   ),
                   const SizedBox(height: 16),
                   ListTile(
                     title: Text('sharedNotifications'.tr),
                     subtitle: Text(
                       _selectedNotificators
-                          .map((type) => notificatorKeys[type] != null ? notificatorKeys[type]!.tr : type)
+                          .map(
+                            (type) => notificatorKeys[type] != null
+                                ? notificatorKeys[type]!.tr
+                                : type,
+                          )
                           .join(', '),
                     ),
-                    trailing: const Icon(Icons.arrow_drop_down),
+                    trailing: const Icon(CupertinoIcons.chevron_down),
                     onTap: _showNotificatorSelection,
                   ),
                   if (_selectedNotificators.contains('command'))
                     DropdownButtonFormField<int>(
-                      decoration: InputDecoration(labelText: 'sharedSavedCommand'.tr),
-                      value: _selectedCommandId,
+                      decoration: InputDecoration(
+                        labelText: 'sharedSavedCommand'.tr,
+                      ),
+                      initialValue: _selectedCommandId,
                       items: _commands.map<DropdownMenuItem<int>>((command) {
                         return DropdownMenuItem<int>(
                           value: command['id'],
-                          child: Text(command['description'] ?? 'unnamedCommand'.tr),
+                          child: Text(
+                            command['description'] ?? 'unnamedCommand'.tr,
+                          ),
                         );
                       }).toList(),
                       onChanged: (value) {
@@ -341,7 +392,8 @@ class _NotificationPageState extends State<NotificationPage> {
                           _selectedCommandId = value;
                         });
                       },
-                      validator: (value) => value == null ? 'requiredForCommand'.tr : null,
+                      validator: (value) =>
+                          value == null ? 'requiredForCommand'.tr : null,
                     ),
                   const SizedBox(height: 16),
                   ElevatedButton(
@@ -368,12 +420,14 @@ class _NotificationPageState extends State<NotificationPage> {
                 children: [
                   TextFormField(
                     controller: _descriptionController,
-                    decoration: InputDecoration(labelText: 'sharedDescription'.tr),
+                    decoration: InputDecoration(
+                      labelText: 'sharedDescription'.tr,
+                    ),
                   ),
                   const SizedBox(height: 16),
                   DropdownButtonFormField<int>(
                     decoration: InputDecoration(labelText: 'sharedCalendar'.tr),
-                    value: _selectedCalendarId,
+                    initialValue: _selectedCalendarId,
                     items: _calendars.map<DropdownMenuItem<int>>((calendar) {
                       return DropdownMenuItem<int>(
                         value: calendar['id'],

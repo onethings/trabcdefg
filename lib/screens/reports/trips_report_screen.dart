@@ -1,18 +1,23 @@
 // lib/screens/reports/trips_report_screen.dart
-
+// A screen to display trips report in the TracDefg app.
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
+
+import 'package:flutter/foundation.dart'; // Added for debugPrint
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import 'package:trabcdefg/src/generated_api/api.dart' as api;
-import 'package:trabcdefg/providers/traccar_provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:intl/intl.dart';
-import 'package:http/http.dart' as http;
-import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'dart:ui' as ui;
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
+import 'package:http/http.dart' as http;
+import 'package:intl/intl.dart';
+import 'package:maplibre_gl/maplibre_gl.dart' as maplibre;
+import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:trabcdefg/providers/map_style_provider.dart';
+import 'package:trabcdefg/providers/traccar_provider.dart';
+import 'package:trabcdefg/src/generated_api/api.dart' as api;
+import 'package:trabcdefg/widgets/offline_address_service.dart';
 
 class TripReport {
   final int deviceId;
@@ -99,36 +104,19 @@ class _TripsReportScreenState extends State<TripsReportScreen> {
   List<TripReport> _tripsReport = [];
   bool _isLoading = true;
   String? _deviceName;
-  final Completer<GoogleMapController> _controller = Completer();
-  final Set<Marker> _markers = {};
-  final Set<Polyline> _polylines = {};
-  late BitmapDescriptor _startIcon;
-  late BitmapDescriptor _endIcon;
-MapType _currentMapType = MapType.normal;
+  maplibre.MapLibreMapController? _mapController;
+  final Set<String> _loadedIcons = {};
+  bool _isStyleLoaded = false;
 
   @override
   void initState() {
     super.initState();
-    _loadMarkerIcons();
     _fetchTripsReport();
   }
 
-  Future<void> _loadMarkerIcons() async {
-    // Load the start icon from assets/images/start.png
-    final Uint8List startIconBytes = (await rootBundle.load('assets/images/start.png')).buffer.asUint8List();
-    final ui.Codec startCodec = await ui.instantiateImageCodec(startIconBytes, targetWidth: 80);
-    final ui.FrameInfo startFi = await startCodec.getNextFrame();
-    _startIcon = await BitmapDescriptor.fromBytes(
-      (await (await startCodec.getNextFrame()).image.toByteData(format: ui.ImageByteFormat.png))!.buffer.asUint8List(),
-    );
-
-    // Load the end icon from assets/images/destination.png
-    final Uint8List endIconBytes = (await rootBundle.load('assets/images/destination.png')).buffer.asUint8List();
-    final ui.Codec endCodec = await ui.instantiateImageCodec(endIconBytes, targetWidth: 80);
-    final ui.FrameInfo endFi = await endCodec.getNextFrame();
-    _endIcon = await BitmapDescriptor.fromBytes(
-      (await (await endCodec.getNextFrame()).image.toByteData(format: ui.ImageByteFormat.png))!.buffer.asUint8List(),
-    );
+  @override
+  void dispose() {
+    super.dispose();
   }
 
   Future<void> _fetchTripsReport() async {
@@ -136,22 +124,21 @@ MapType _currentMapType = MapType.normal;
       _isLoading = true;
     });
 
-    final traccarProvider = Provider.of<TraccarProvider>(
-      context,
-      listen: false,
-    );
+    final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
 
     final prefs = await SharedPreferences.getInstance();
     final deviceId = prefs.getInt('selectedDeviceId');
     final fromDateString = prefs.getString('historyFrom');
     final toDateString = prefs.getString('historyTo');
-    print('Fetched from SharedPreferences: deviceId=$deviceId, fromDate=$fromDateString, toDate=$toDateString');
+
+    debugPrint('Fetched from SharedPreferences: deviceId=$deviceId, fromDate=$fromDateString, toDate=$toDateString');
 
     if (deviceId == null || fromDateString == null || toDateString == null) {
+      if (!mounted) return;
       setState(() {
         _isLoading = false;
       });
-      print('Missing device ID or date range from SharedPreferences.');
+      debugPrint('Missing device ID or date range from SharedPreferences.');
       return;
     }
 
@@ -159,21 +146,18 @@ MapType _currentMapType = MapType.normal;
     final toDate = DateTime.tryParse(toDateString);
 
     if (fromDate == null || toDate == null) {
+      if (!mounted) return;
       setState(() {
         _isLoading = false;
       });
-      print('Failed to parse date strings.');
+      debugPrint('Failed to parse date strings.');
       return;
     }
 
     try {
       final apiClient = traccarProvider.apiClient;
-      final queryParams = [
-          api.QueryParam('from', fromDate.toIso8601String()),
-          api.QueryParam('to', toDate.toIso8601String()),
-          api.QueryParam('deviceId', deviceId.toString()),
-      ];
-      final path = '/reports/trips';
+      final queryParams = [api.QueryParam('from', fromDate.toIso8601String()), api.QueryParam('to', toDate.toIso8601String()), api.QueryParam('deviceId', deviceId.toString())];
+      const path = '/reports/trips';
       final headerParams = {'Accept': 'application/json'};
 
       final http.Response response = await apiClient.invokeAPI(
@@ -186,98 +170,103 @@ MapType _currentMapType = MapType.normal;
         'application/json', // contentType
       );
 
+      if (!mounted) return;
+
       if (response.statusCode == 200 && response.body.isNotEmpty) {
         final contentType = response.headers['content-type'];
         if (contentType != null && contentType.contains('application/json')) {
           final decodedData = json.decode(response.body);
 
           if (decodedData is List && decodedData.isNotEmpty) {
-            _tripsReport = decodedData
-                .map((e) => TripReport.fromJson(e as Map<String, dynamic>))
-                .toList();
+            _tripsReport = decodedData.map((e) => TripReport.fromJson(e as Map<String, dynamic>)).toList();
             if (_tripsReport.isNotEmpty) {
               _deviceName = _tripsReport.first.deviceName;
-              _createMarkersAndPolylines();
+              _createMapElements();
             }
           }
         } else {
-          print('Warning: Expected JSON, but received content type: $contentType');
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed to load trips report. The server returned a file instead of JSON. Please check the Traccar server settings for reports.'.tr)),
-          );
+          debugPrint('Warning: Expected JSON, but received content type: $contentType');
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to load trips report. The server returned a file instead of JSON. Please check the Traccar server settings for reports.'.tr)));
         }
       }
     } catch (e) {
-      print('Error fetching trips report: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to load trips report.'.tr)),
-      );
+      debugPrint('Error fetching trips report: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to load trips report.'.tr)));
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
-  void _createMarkersAndPolylines() {
-    _markers.clear();
-    _polylines.clear();
+  Future<void> _onStyleLoaded() async {
+    _isStyleLoaded = true;
+    if (_tripsReport.isNotEmpty) {
+      _createMapElements();
+    }
+  }
+
+  Future<void> _createMapElements() async {
+    if (_mapController == null || !_isStyleLoaded || _tripsReport.isEmpty) {
+      return;
+    }
+
+    await _mapController!.clearSymbols();
+    await _mapController!.clearLines();
+
+    final List<maplibre.LatLng> allPoints = [];
+
+    // Capture context properties synchronously before entering async sequence loops
+    if (!mounted) return;
+    final String lineHexColor = Theme.of(context).colorScheme.primary.toHex();
+
     for (var i = 0; i < _tripsReport.length; i++) {
       final trip = _tripsReport[i];
-      final LatLng startPoint = LatLng(trip.startLat, trip.startLon);
-      final LatLng endPoint = LatLng(trip.endLat, trip.endLon);
+      final start = maplibre.LatLng(trip.startLat, trip.startLon);
+      final end = maplibre.LatLng(trip.endLat, trip.endLon);
 
-      _markers.add(
-        Marker(
-          markerId: MarkerId('start_$i'),
-          position: startPoint,
-          infoWindow: InfoWindow(
-            title: '${'reportTrips'.tr} ${i + 1} ${'reportStartDate'.tr}',
-            snippet: '${'positionDeviceTime'.tr}: ${DateFormat('yyyy-MM-dd HH:mm').format(trip.startTime.toLocal())}',
-          ),
-          icon: _startIcon,
-        ),
-      );
+      allPoints.add(start);
+      allPoints.add(end);
 
-      _markers.add(
-        Marker(
-          markerId: MarkerId('end_$i'),
-          position: endPoint,
-          infoWindow: InfoWindow(
-            title: '${'reportTrips'.tr} ${i + 1} ${'reportEndTime'.tr}',
-            snippet: '${'positionDeviceTime'.tr}: ${DateFormat('yyyy-MM-dd HH:mm').format(trip.endTime.toLocal())}',
-          ),
-          icon: _endIcon,
-        ),
-      );
+      await _mapController!.addLine(maplibre.LineOptions(geometry: [start, end], lineColor: lineHexColor, lineWidth: 4.0));
 
-      _polylines.add(
-        Polyline(
-          polylineId: PolylineId('trip_route_$i'),
-          points: [startPoint, endPoint],
-          color: Colors.blue,
-          width: 5,
-        ),
-      );
+      await _addMarker(start, "start_$i", "assets/images/start.png");
+      await _addMarker(end, "end_$i", "assets/images/destination.png");
+    }
+
+    if (allPoints.isNotEmpty) {
+      _zoomToFit(allPoints);
     }
   }
 
-  Future<void> _animateToPosition(LatLng position) async {
-    final controller = await _controller.future;
-    controller.animateCamera(
-      CameraUpdate.newCameraPosition(
-        CameraPosition(
-          target: position,
-          zoom: 16,
-        ),
-      ),
-    );
+  Future<void> _addMarker(maplibre.LatLng point, String iconId, String assetPath) async {
+    final baseIconId = assetPath.contains("start") ? "start_pin" : "end_pin";
+    if (!_loadedIcons.contains(baseIconId)) {
+      final ByteData bytes = await rootBundle.load(assetPath);
+      final Uint8List list = bytes.buffer.asUint8List();
+      await _mapController!.addImage(baseIconId, list);
+      _loadedIcons.add(baseIconId);
+    }
+
+    await _mapController!.addSymbol(maplibre.SymbolOptions(geometry: point, iconImage: baseIconId, iconSize: 1.4, iconAnchor: "bottom"));
   }
 
-  void _showInfoWindowForMarker(MarkerId markerId) {
-    final controller = _controller.future.then((c) {
-      c.showMarkerInfoWindow(markerId);
-    });
+  void _zoomToFit(List<maplibre.LatLng> points) {
+    if (points.isEmpty) return;
+    double minLat = points.map((p) => p.latitude).reduce(min);
+    double maxLat = points.map((p) => p.latitude).reduce(max);
+    double minLng = points.map((p) => p.longitude).reduce(min);
+    double maxLng = points.map((p) => p.longitude).reduce(max);
+
+    _mapController?.animateCamera(maplibre.CameraUpdate.newLatLngBounds(maplibre.LatLngBounds(southwest: maplibre.LatLng(minLat, minLng), northeast: maplibre.LatLng(maxLat, maxLng)), left: 50, right: 50, top: 50, bottom: 50));
+  }
+
+  void _animateToPosition(maplibre.LatLng position) {
+    _mapController?.animateCamera(maplibre.CameraUpdate.newLatLng(position));
   }
 
   String _formatDuration(int milliseconds) {
@@ -297,61 +286,48 @@ MapType _currentMapType = MapType.normal;
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     if (_isLoading) {
-      return Scaffold(body: Center(child: CircularProgressIndicator()));
+      return Scaffold(
+        body: Center(child: CircularProgressIndicator(color: theme.colorScheme.primary)),
+      );
     }
 
     if (_tripsReport.isEmpty) {
       return Scaffold(
-        appBar: AppBar(title: Text('${'reportTrips'.tr}: ${_deviceName ?? ''}')),
-        body: Center(
-          child: Text('No data available for the selected period.'.tr),
-        ),
+        appBar: CupertinoNavigationBar(middle: Text(_deviceName ?? 'reportTrips'.tr)),
+        body: Center(child: Text('sharedNoData'.tr)),
       );
     }
 
+    final mapProvider = Provider.of<MapStyleProvider>(context);
+    final initialCenter = _tripsReport.isNotEmpty ? maplibre.LatLng(_tripsReport.first.startLat, _tripsReport.first.startLon) : const maplibre.LatLng(21.9162, 95.9560);
+
     return Scaffold(
-      appBar: AppBar(title: Text('${'reportTrips'.tr}: ${_deviceName ?? ''}')),
+      appBar: CupertinoNavigationBar(middle: Text('${'reportTrips'.tr}: ${_deviceName ?? ''}')),
       body: Column(
         children: [
           Expanded(
             flex: 1,
             child: Stack(
               children: [
-                GoogleMap(
-              mapType: _currentMapType,
-              initialCameraPosition: _tripsReport.isNotEmpty
-                  ? CameraPosition(
-                      target: LatLng(_tripsReport.first.startLat, _tripsReport.first.startLon),
-                      zoom: 14,
-                    )
-                  : const CameraPosition(
-                      target: LatLng(21.9162, 95.9560), // Mandalay, Myanmar
-                      zoom: 14,
-                    ),
-              onMapCreated: (GoogleMapController controller) {
-                _controller.complete(controller);
-              },
-              markers: _markers,
-              polylines: _polylines,
-            ),
-             Positioned(
+                maplibre.MapLibreMap(
+                  key: ValueKey(mapProvider.isSatelliteMode),
+                  onMapCreated: (c) => _mapController = c,
+                  onStyleLoadedCallback: _onStyleLoaded,
+                  initialCameraPosition: maplibre.CameraPosition(target: initialCenter, zoom: 14.0),
+                  styleString: mapProvider.getStyle(theme.brightness),
+                ),
+                Positioned(
                   top: 10,
                   right: 10,
                   child: FloatingActionButton(
+                    heroTag: "btn_style_trip",
                     mini: true,
-                    onPressed: () {
-                      setState(() {
-                        _currentMapType = _currentMapType == MapType.normal
-                            ? MapType.satellite
-                            : MapType.normal;
-                      });
-                    },
-                    child: Icon(
-                      _currentMapType == MapType.normal
-                          ? Icons.satellite_alt
-                          : Icons.map,
-                    ),
+                    backgroundColor: theme.colorScheme.surface,
+                    onPressed: () => mapProvider.toggleMapType(),
+                    child: Icon(mapProvider.isSatelliteMode ? Icons.map : Icons.satellite_alt, color: theme.colorScheme.onSurface),
                   ),
                 ),
               ],
@@ -365,10 +341,7 @@ MapType _currentMapType = MapType.normal;
               itemBuilder: (context, index) {
                 final trip = _tripsReport[index];
                 return GestureDetector(
-                  onTap: () {
-                    _animateToPosition(LatLng(trip.startLat, trip.startLon));
-                    _showInfoWindowForMarker(MarkerId('start_$index'));
-                  },
+                  onTap: () => _animateToPosition(maplibre.LatLng(trip.startLat, trip.startLon)),
                   child: Card(
                     elevation: 4,
                     margin: const EdgeInsets.only(bottom: 16.0),
@@ -379,28 +352,27 @@ MapType _currentMapType = MapType.normal;
                         children: [
                           Text(
                             '${'reportTrips'.tr} ${index + 1}',
-                            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: theme.colorScheme.onSurface),
                           ),
                           const Divider(),
+                          _buildTripDetailRow(theme, 'reportStartTime'.tr, DateFormat('yyyy-MM-dd HH:mm').format(trip.startTime.toLocal())),
+                          _buildTripDetailRow(theme, 'reportEndTime'.tr, DateFormat('yyyy-MM-dd HH:mm').format(trip.endTime.toLocal())),
+                          _buildTripDetailRow(theme, 'reportDuration'.tr, _formatDuration(trip.duration)),
+                          _buildTripDetailRow(theme, 'sharedDistance'.tr, _formatDistance(trip.distance)),
+                          _buildTripDetailRow(theme, 'reportAverageSpeed'.tr, '${trip.averageSpeed.toStringAsFixed(2)} ${'sharedKmh'.tr}'),
                           ListTile(
-                            title: Text('reportStartTime'.tr),
-                            trailing: Text(DateFormat('yyyy-MM-dd HH:mm').format(trip.startTime.toLocal())),
+                            title: Text('reportStartAddress'.tr, style: TextStyle(color: theme.colorScheme.onSurfaceVariant)),
+                            subtitle: FutureBuilder<String>(
+                              future: trip.startAddress != null && trip.startAddress!.isNotEmpty ? Future.value(trip.startAddress) : OfflineAddressService.getAddress(trip.startLat, trip.startLon),
+                              builder: (context, snapshot) => Text(snapshot.data ?? '...', style: TextStyle(color: theme.colorScheme.onSurface)),
+                            ),
                           ),
                           ListTile(
-                            title: Text('reportEndTime'.tr),
-                            trailing: Text(DateFormat('yyyy-MM-dd HH:mm').format(trip.endTime.toLocal())),
-                          ),
-                          ListTile(
-                            title: Text('reportDuration'.tr),
-                            trailing: Text(_formatDuration(trip.duration)),
-                          ),
-                          ListTile(
-                            title: Text('sharedDistance'.tr),
-                            trailing: Text(_formatDistance(trip.distance)),
-                          ),
-                          ListTile(
-                            title: Text('reportAverageSpeed'.tr),
-                            trailing: Text('${trip.averageSpeed.toStringAsFixed(2)} ${'sharedKmh'.tr}'),
+                            title: Text('reportEndAddress'.tr, style: TextStyle(color: theme.colorScheme.onSurfaceVariant)),
+                            subtitle: FutureBuilder<String>(
+                              future: trip.endAddress != null && trip.endAddress!.isNotEmpty ? Future.value(trip.endAddress) : OfflineAddressService.getAddress(trip.endLat, trip.endLon),
+                              builder: (context, snapshot) => Text(snapshot.data ?? '...', style: TextStyle(color: theme.colorScheme.onSurface)),
+                            ),
                           ),
                         ],
                       ),
@@ -414,4 +386,18 @@ MapType _currentMapType = MapType.normal;
       ),
     );
   }
+
+  Widget _buildTripDetailRow(ThemeData theme, String title, String value) {
+    return ListTile(
+      title: Text(title, style: TextStyle(color: theme.colorScheme.onSurfaceVariant)),
+      trailing: Text(
+        value,
+        style: TextStyle(fontWeight: FontWeight.bold, color: theme.colorScheme.onSurface),
+      ),
+    );
+  }
+}
+
+extension ColorToHex on Color {
+  String toHex() => '#${toARGB32().toRadixString(16).padLeft(8, '0').substring(2)}';
 }

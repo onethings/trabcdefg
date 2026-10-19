@@ -15,89 +15,6 @@ class GroupsApi {
 
   final ApiClient apiClient;
 
-  /// Fetch a list of Groups
-  ///
-  /// Without any params, returns a list of the Groups the user belongs to
-  ///
-  /// Note: This method returns the HTTP [Response].
-  ///
-  /// Parameters:
-  ///
-  /// * [bool] all:
-  ///   Can only be used by admins or managers to fetch all entities
-  ///
-  /// * [int] userId:
-  ///   Standard users can use this only with their own _userId_
-  Future<Response> groupsGetWithHttpInfo({
-    bool? all,
-    int? userId,
-  }) async {
-    // ignore: prefer_const_declarations
-    final path = r'/groups';
-
-    // ignore: prefer_final_locals
-    Object? postBody;
-
-    final queryParams = <QueryParam>[];
-    final headerParams = <String, String>{};
-    final formParams = <String, String>{};
-
-    if (all != null) {
-      queryParams.addAll(_queryParams('', 'all', all));
-    }
-    if (userId != null) {
-      queryParams.addAll(_queryParams('', 'userId', userId));
-    }
-
-    const contentTypes = <String>[];
-
-    return apiClient.invokeAPI(
-      path,
-      'GET',
-      queryParams,
-      postBody,
-      headerParams,
-      formParams,
-      contentTypes.isEmpty ? null : contentTypes.first,
-    );
-  }
-
-  /// Fetch a list of Groups
-  ///
-  /// Without any params, returns a list of the Groups the user belongs to
-  ///
-  /// Parameters:
-  ///
-  /// * [bool] all:
-  ///   Can only be used by admins or managers to fetch all entities
-  ///
-  /// * [int] userId:
-  ///   Standard users can use this only with their own _userId_
-  Future<List<Group>?> groupsGet({
-    bool? all,
-    int? userId,
-  }) async {
-    final response = await groupsGetWithHttpInfo(
-      all: all,
-      userId: userId,
-    );
-    if (response.statusCode >= HttpStatus.badRequest) {
-      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
-    }
-    // When a remote server returns no body with a status of 204, we shall not decode it.
-    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
-    // FormatException when trying to decode an empty string.
-    if (response.body.isNotEmpty &&
-        response.statusCode != HttpStatus.noContent) {
-      final responseBody = await _decodeBodyBytes(response);
-      return (await apiClient.deserializeAsync(responseBody, 'List<Group>')
-              as List)
-          .cast<Group>()
-          .toList(growable: false);
-    }
-    return null;
-  }
-
   /// Delete a Group
   ///
   /// Note: This method returns the HTTP [Response].
@@ -105,7 +22,7 @@ class GroupsApi {
   /// Parameters:
   ///
   /// * [int] id (required):
-  Future<Response> groupsIdDeleteWithHttpInfo(
+  Future<Response> deleteGroupsIdWithHttpInfo(
     int id,
   ) async {
     // ignore: prefer_const_declarations
@@ -136,15 +53,254 @@ class GroupsApi {
   /// Parameters:
   ///
   /// * [int] id (required):
-  Future<void> groupsIdDelete(
+  Future<void> deleteGroupsId(
     int id,
   ) async {
-    final response = await groupsIdDeleteWithHttpInfo(
+    final response = await deleteGroupsIdWithHttpInfo(
       id,
     );
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
+  }
+
+  /// Fetch a list of Groups
+  ///
+  /// Without any params, returns a list of the Groups the user belongs to
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [bool] all:
+  ///   Can only be used by admins or managers to fetch all entities
+  ///
+  /// * [int] userId:
+  ///   Standard users can use this only with their own _userId_
+  ///
+  /// * [int] limit:
+  ///   Limit the number of returned results
+  ///
+  /// * [int] offset:
+  ///   Offset for pagination
+  ///
+  /// * [String] keyword:
+  ///   Search keyword filter
+  Future<Response> getGroupsWithHttpInfo({
+    bool? all,
+    int? userId,
+    int? limit,
+    int? offset,
+    String? keyword,
+  }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/groups';
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    if (all != null) {
+      queryParams.addAll(_queryParams('', 'all', all));
+    }
+    if (userId != null) {
+      queryParams.addAll(_queryParams('', 'userId', userId));
+    }
+    if (limit != null) {
+      queryParams.addAll(_queryParams('', 'limit', limit));
+    }
+    if (offset != null) {
+      queryParams.addAll(_queryParams('', 'offset', offset));
+    }
+    if (keyword != null) {
+      queryParams.addAll(_queryParams('', 'keyword', keyword));
+    }
+
+    const contentTypes = <String>[];
+
+    return apiClient.invokeAPI(
+      path,
+      'GET',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+    );
+  }
+
+  /// Fetch a list of Groups
+  ///
+  /// Without any params, returns a list of the Groups the user belongs to
+  ///
+  /// Parameters:
+  ///
+  /// * [bool] all:
+  ///   Can only be used by admins or managers to fetch all entities
+  ///
+  /// * [int] userId:
+  ///   Standard users can use this only with their own _userId_
+  ///
+  /// * [int] limit:
+  ///   Limit the number of returned results
+  ///
+  /// * [int] offset:
+  ///   Offset for pagination
+  ///
+  /// * [String] keyword:
+  ///   Search keyword filter
+  Future<List<Group>?> getGroups({
+    bool? all,
+    int? userId,
+    int? limit,
+    int? offset,
+    String? keyword,
+  }) async {
+    final response = await getGroupsWithHttpInfo(
+      all: all,
+      userId: userId,
+      limit: limit,
+      offset: offset,
+      keyword: keyword,
+    );
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty &&
+        response.statusCode != HttpStatus.noContent) {
+      final responseBody = await _decodeBodyBytes(response);
+      return (await apiClient.deserializeAsync(responseBody, 'List<Group>')
+              as List)
+          .cast<Group>()
+          .toList(growable: false);
+    }
+    return null;
+  }
+
+  /// Fetch a Group
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [int] id (required):
+  Future<Response> getGroupsIdWithHttpInfo(
+    int id,
+  ) async {
+    // ignore: prefer_const_declarations
+    final path = r'/groups/{id}'.replaceAll('{id}', id.toString());
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>[];
+
+    return apiClient.invokeAPI(
+      path,
+      'GET',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+    );
+  }
+
+  /// Fetch a Group
+  ///
+  /// Parameters:
+  ///
+  /// * [int] id (required):
+  Future<Group?> getGroupsId(
+    int id,
+  ) async {
+    final response = await getGroupsIdWithHttpInfo(
+      id,
+    );
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty &&
+        response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(
+        await _decodeBodyBytes(response),
+        'Group',
+      ) as Group;
+    }
+    return null;
+  }
+
+  /// Create a Group
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [Group] group (required):
+  Future<Response> postGroupsWithHttpInfo(
+    Group group,
+  ) async {
+    // ignore: prefer_const_declarations
+    final path = r'/groups';
+
+    // ignore: prefer_final_locals
+    Object? postBody = group;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>['application/json'];
+
+    return apiClient.invokeAPI(
+      path,
+      'POST',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+    );
+  }
+
+  /// Create a Group
+  ///
+  /// Parameters:
+  ///
+  /// * [Group] group (required):
+  Future<Group?> postGroups(
+    Group group,
+  ) async {
+    final response = await postGroupsWithHttpInfo(
+      group,
+    );
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty &&
+        response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(
+        await _decodeBodyBytes(response),
+        'Group',
+      ) as Group;
+    }
+    return null;
   }
 
   /// Update a Group
@@ -155,16 +311,16 @@ class GroupsApi {
   ///
   /// * [int] id (required):
   ///
-  /// * [Group] body (required):
-  Future<Response> groupsIdPutWithHttpInfo(
+  /// * [Group] group (required):
+  Future<Response> putGroupsIdWithHttpInfo(
     int id,
-    Group body,
+    Group group,
   ) async {
     // ignore: prefer_const_declarations
     final path = r'/groups/{id}'.replaceAll('{id}', id.toString());
 
     // ignore: prefer_final_locals
-    Object? postBody = body;
+    Object? postBody = group;
 
     final queryParams = <QueryParam>[];
     final headerParams = <String, String>{};
@@ -189,74 +345,14 @@ class GroupsApi {
   ///
   /// * [int] id (required):
   ///
-  /// * [Group] body (required):
-  Future<Group?> groupsIdPut(
+  /// * [Group] group (required):
+  Future<Group?> putGroupsId(
     int id,
-    Group body,
+    Group group,
   ) async {
-    final response = await groupsIdPutWithHttpInfo(
+    final response = await putGroupsIdWithHttpInfo(
       id,
-      body,
-    );
-    if (response.statusCode >= HttpStatus.badRequest) {
-      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
-    }
-    // When a remote server returns no body with a status of 204, we shall not decode it.
-    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
-    // FormatException when trying to decode an empty string.
-    if (response.body.isNotEmpty &&
-        response.statusCode != HttpStatus.noContent) {
-      return await apiClient.deserializeAsync(
-        await _decodeBodyBytes(response),
-        'Group',
-      ) as Group;
-    }
-    return null;
-  }
-
-  /// Create a Group
-  ///
-  /// Note: This method returns the HTTP [Response].
-  ///
-  /// Parameters:
-  ///
-  /// * [Group] body (required):
-  Future<Response> groupsPostWithHttpInfo(
-    Group body,
-  ) async {
-    // ignore: prefer_const_declarations
-    final path = r'/groups';
-
-    // ignore: prefer_final_locals
-    Object? postBody = body;
-
-    final queryParams = <QueryParam>[];
-    final headerParams = <String, String>{};
-    final formParams = <String, String>{};
-
-    const contentTypes = <String>['application/json'];
-
-    return apiClient.invokeAPI(
-      path,
-      'POST',
-      queryParams,
-      postBody,
-      headerParams,
-      formParams,
-      contentTypes.isEmpty ? null : contentTypes.first,
-    );
-  }
-
-  /// Create a Group
-  ///
-  /// Parameters:
-  ///
-  /// * [Group] body (required):
-  Future<Group?> groupsPost(
-    Group body,
-  ) async {
-    final response = await groupsPostWithHttpInfo(
-      body,
+      group,
     );
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));

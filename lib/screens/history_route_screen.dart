@@ -1,22 +1,32 @@
 // lib/screens/history_route_screen.dart
-
-import 'package:flutter/material.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'dart:async';
-import 'package:get/get.dart';
-import 'package:flutter/services.dart';
-import 'dart:ui' as ui;
-import 'package:trabcdefg/src/generated_api/api.dart' as api;
-import 'package:provider/provider.dart';
-import 'package:trabcdefg/providers/traccar_provider.dart';
-import 'package:intl/intl.dart';
+import 'dart:convert';
+import 'dart:developer' as developer;
+import 'dart:io';
 import 'dart:math';
-import 'package:shared_preferences/shared_preferences.dart';
-// *** NEW/REQUIRED IMPORTS FOR CALENDAR AND HIVE ***
-import 'package:table_calendar/table_calendar.dart';
+
+import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:get/get.dart';
 import 'package:hive_flutter/hive_flutter.dart';
-import 'package:trabcdefg/models/report_summary_hive.dart'; // REQUIRED MODEL
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:intl/intl.dart';
+import 'package:maplibre_gl/maplibre_gl.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:table_calendar/table_calendar.dart';
+import 'package:trabcdefg/models/report_summary_hive.dart';
+import 'package:trabcdefg/models/route_positions_hive.dart';
+import 'package:trabcdefg/providers/map_style_provider.dart';
+import 'package:trabcdefg/providers/traccar_provider.dart';
+import 'package:trabcdefg/src/generated_api/api.dart' as api;
+import 'package:trabcdefg/src/utils/position_cleaner.dart';
+import 'package:trabcdefg/widgets/offline_address_service.dart';
+
+enum OSMMapType { normal, satellite }
 
 class HistoryRouteScreen extends StatefulWidget {
   const HistoryRouteScreen({super.key});
@@ -25,870 +35,50 @@ class HistoryRouteScreen extends StatefulWidget {
   State<HistoryRouteScreen> createState() => _HistoryRouteScreenState();
 }
 
-class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
-  GoogleMapController? mapController;
-  Set<Polyline> _polylines = {};
-  Set<Marker> _markers = {};
-  List<api.Position> _positions = [];
-  List<api.Position> _movingPositions = [];
-  double _playbackPosition = 0.0;
-  Marker? _playbackMarker;
-  bool _isPlaying = false;
-  Timer? _playbackTimer;
-  BitmapDescriptor? _playbackMarkerIcon;
-  BitmapDescriptor? _redDotMarkerIcon;
-  BitmapDescriptor? _startMarkerIcon;
-  BitmapDescriptor? _parkingMarkerIcon;
-  BitmapDescriptor? _destinationMarkerIcon;
-  // NEW: Constant for marker sizing
-  final double _customMarkerTargetSize = 90.0; // Bigger size for custom icons
-  final double _arrowMarkerTargetSize = 70.0; // Vehicle arrow marker size
-  PolylineId _fullRoutePolylineId = PolylineId('full_route');
-  PolylineId _playedRoutePolylineId = PolylineId('played_route');
-  MapType _mapType = MapType.normal;
-  double _currentZoomLevel = 15.0;
+class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProviderStateMixin {
+  MapLibreMapController? _mapController;
+  List<double> _distancePrefixSum = [];
+  final RxString _currentAddressRx = "".obs;
 
-  // Device & Date State
+  // 狀態變數
+  List<api.Position> _positions = [];
+  final RxDouble _playbackPositionRx = 0.0.obs;
+
+  bool _isPlaying = false;
+  bool _isLoading = false;
+  bool _followUser = true;
+  Timer? _playbackTimer;
+  double _playbackSpeed = 1.0;
+
   int? _deviceId;
   DateTime? _historyFrom;
   DateTime? _historyTo;
   String? _selectedDeviceName;
-
-  // Calendar State (NEW)
   DateTime _focusedDay = DateTime.now();
   DateTime? _selectedCalendarDay = DateTime.now();
   final Map<DateTime, api.ReportSummary> _dailySummaries = {};
-  bool _isCalendarLoading = true;
-  CalendarFormat _calendarFormat = CalendarFormat.month;
-  // Speed control
-  double _playbackSpeed = 0.5; //1.0x speed
+  bool _isCalendarLoading = false;
+  double _currentZoom = 14.0;
+  // 切換地圖樣式時整個 MapLibreMap 會重建，這裡保留重建前的鏡頭，
+  // 新地圖才會沿用同一個位置與縮放，而不是重新取景。
+  CameraPosition? _lastCameraPosition;
+  bool _keepCameraOnStyleReload = false;
+
+  // 地圖資源
+  static const String _playbackIconId = "playback_arrow";
+  static const String _startIconId = "start_pin";
+  static const String _endIconId = "end_pin";
+  final List<LatLng> _stopPoints = [];
+
+  Symbol? _playbackSymbol;
+  Line? _playedLine;
 
   @override
   void initState() {
     super.initState();
-    _loadCustomMarkerIcons(); // Load all custom icons
-    _createDotMarkerIcon(Colors.red).then((icon) {
-      _redDotMarkerIcon = icon;
-    });
-    _loadInitialParamsAndFetch(); // Renamed to handle both initial route and calendar data
-  }
-
-  void _updateZoomLevel() async {
-    if (mapController != null) {
-      final zoom = await mapController!.getZoomLevel();
-      if (mounted) {
-        setState(() {
-          _currentZoomLevel = zoom;
-        });
-      }
-    }
-  }
-
-  void _zoom(double amount) {
-    if (mapController != null) {
-      // 1. Temporarily pause continuous camera animation during playback
-      //    This is the key fix. The next playback update will re-center,
-      //    but the manual zoom will be executed immediately.
-      mapController!.animateCamera(CameraUpdate.zoomBy(amount));
-    }
-  }
-
-  void _zoomIn() {
-    // If the route is playing, cancel the playback timer for a moment
-    // and force the next _updatePlaybackMarker call to NOT animate the camera.
-    if (_isPlaying) {
-      _playbackTimer?.cancel();
-    }
-
-    _zoom(2.0);
-    _updateZoomLevel();
-    // Resume playback if it was playing
-    if (_isPlaying) {
-      // Restarting playback will automatically re-engage the camera animation
-      _togglePlayback();
-      _togglePlayback();
-    }
-  }
-
-  void _zoomOut() {
-    // If the route is playing, cancel the playback timer for a moment
-    if (_isPlaying) {
-      _playbackTimer?.cancel();
-    }
-
-    _zoom(-2.0);
-    _updateZoomLevel();
-    // Resume playback if it was playing
-    if (_isPlaying) {
-      // Restarting playback will automatically re-engage the camera animation
-      _togglePlayback();
-      _togglePlayback();
-    }
-  }
-
-  Future<BitmapDescriptor?> _loadAssetIcon(
-    String assetPath,
-    double targetSize,
-  ) async {
-    try {
-      final byteData = await rootBundle.load(assetPath);
-      final imageData = byteData.buffer.asUint8List();
-      final codec = await ui.instantiateImageCodec(
-        imageData,
-        targetHeight: targetSize.toInt(),
-        targetWidth: targetSize.toInt(),
-      );
-      final frameInfo = await codec.getNextFrame();
-      final image = frameInfo.image;
-      final byteDataResized = await image.toByteData(
-        format: ui.ImageByteFormat.png,
-      );
-      return BitmapDescriptor.fromBytes(byteDataResized!.buffer.asUint8List());
-    } catch (e) {
-      print('Error loading marker icon $assetPath: $e');
-      return null;
-    }
-  }
-
-  Future<void> _loadCustomMarkerIcons() async {
-    // Playback arrow icon
-    _playbackMarkerIcon = await _loadAssetIcon(
-      'assets/images/arrow.png',
-      _arrowMarkerTargetSize,
-    );
-    // Start icon
-    _startMarkerIcon = await _loadAssetIcon(
-      'assets/images/start.png',
-      _customMarkerTargetSize,
-    );
-    // Parking/Stop icon
-    _parkingMarkerIcon = await _loadAssetIcon(
-      'assets/images/parking.png',
-      _customMarkerTargetSize,
-    );
-    // Destination/End icon
-    _destinationMarkerIcon = await _loadAssetIcon(
-      'assets/images/destination.png',
-      _customMarkerTargetSize,
-    );
-  }
-
-  // MODIFIED: Load initial route from saved prefs OR default to today, then fetch calendar data
-  Future<void> _loadInitialParamsAndFetch() async {
-    final prefs = await SharedPreferences.getInstance();
-    final deviceName = prefs.getString('selectedDeviceName');
-    final deviceId = prefs.getInt('selectedDeviceId');
-    final fromString = prefs.getString('historyFrom');
-    final toString = prefs.getString('historyTo');
-
-    DateTime defaultDate = DateTime.now();
-
-    setState(() {
-      _deviceId = deviceId;
-      _focusedDay = defaultDate;
-      _selectedCalendarDay = defaultDate;
-      _selectedDeviceName = deviceName;
-
-      // If history params exist, use them. Otherwise, default to today.
-      if (fromString != null && toString != null) {
-        _historyFrom = DateTime.tryParse(fromString)?.toLocal();
-        _historyTo = DateTime.tryParse(toString)?.toLocal();
-        // If a date was loaded from prefs, make it the default selected calendar day
-        if (_historyFrom != null) {
-          _selectedCalendarDay = DateTime(
-            _historyFrom!.year,
-            _historyFrom!.month,
-            _historyFrom!.day,
-          );
-        }
-      } else {
-        // Set today's date range
-        _historyFrom = DateTime(
-          defaultDate.year,
-          defaultDate.month,
-          defaultDate.day,
-          0,
-          0,
-          0,
-        );
-        _historyTo = DateTime(
-          defaultDate.year,
-          defaultDate.month,
-          defaultDate.day,
-          23,
-          59,
-          59,
-        );
-      }
-    });
-
-    if (_deviceId != null) {
-      // Fetch initial route (using local state _historyFrom, _historyTo)
-      _fetchHistoryRoute();
-      // Fetch monthly data for the calendar
-      await _fetchMonthlyData(_focusedDay);
-    } else {
-      print('Missing device ID for history route.');
-    }
-  }
-
-  // MODIFIED: Now uses selectedDay and not just local _historyFrom/_historyTo
-  Future<void> _fetchHistoryRoute({DateTime? selectedDay}) async {
-    if (selectedDay != null) {
-      // Update local state if a new day was selected from the calendar
-      _historyFrom = DateTime(
-        selectedDay.year,
-        selectedDay.month,
-        selectedDay.day,
-        0,
-        0,
-        0,
-      );
-      _historyTo = DateTime(
-        selectedDay.year,
-        selectedDay.month,
-        selectedDay.day,
-        23,
-        59,
-        59,
-      );
-    }
-
-    if (_deviceId == null || _historyFrom == null || _historyTo == null) return;
-
-    // Stop any existing playback and reset state
-    _playbackTimer?.cancel();
-    setState(() {
-      _isPlaying = false;
-      _positions = [];
-      _polylines = {};
-      _markers.removeWhere(
-        (m) => m.markerId.value == 'playback_marker',
-      ); // Remove playback marker
-      _playbackPosition = 0.0;
-    });
-
-    final traccarProvider = Provider.of<TraccarProvider>(
-      context,
-      listen: false,
-    );
-    final positionsApi = api.PositionsApi(traccarProvider.apiClient);
-
-    // API call uses the updated _historyFrom and _historyTo
-    final positions = await positionsApi.positionsGet(
-      deviceId: _deviceId,
-      from: _historyFrom!.toUtc(), // Use UTC as Traccar typically expects it
-      to: _historyTo!.toUtc(),
-    );
-
-    setState(() {
-      _positions = positions ?? [];
-
-      // NEW: Create the filtered list for smooth playback
-      _movingPositions = _positions
-          .where((p) => (p.speed ?? 0.0) > 0.0)
-          .toList();
-
-      _drawFullRoute();
-      if (_positions.isNotEmpty) {
-        _updatePlaybackMarker(animateCamera: true);
-      }
-    });
-  }
-
-  // NEW: Hive and API data fetching logic adapted from monthly_mileage_screen.dart
-  Future<void> _fetchMonthlyData(DateTime month) async {
-    if (_deviceId == null) return;
-
-    // Only proceed if the month has changed or if we are loading for the first time
-    if (_dailySummaries.isNotEmpty &&
-        month.month == _focusedDay.month &&
-        month.year == _focusedDay.year)
-      return;
-
-    // Set loading state and update focused day
-    setState(() {
-      _isCalendarLoading = true;
-      _focusedDay = month;
-    });
-
-    final traccarProvider = Provider.of<TraccarProvider>(
-      context,
-      listen: false,
-    );
-    final reportsApi = api.ReportsApi(traccarProvider.apiClient);
-    // OPEN HIVE BOX
-    final dailyBox = await Hive.openBox<ReportSummaryHive>('daily_summaries');
-
-    // Step 1: Load from cache (Hive)
-    _dailySummaries.clear();
-    final firstDayOfMonth = DateTime(month.year, month.month, 1);
-    final lastDayOfMonth = DateTime(month.year, month.month + 1, 0);
-
-    for (
-      var date = firstDayOfMonth;
-      date.isBefore(lastDayOfMonth.add(const Duration(days: 1)));
-      date = date.add(const Duration(days: 1))
-    ) {
-      final dayUtc = DateTime.utc(date.year, date.month, date.day);
-      final String hiveKey =
-          '$_deviceId-${DateFormat('yyyy-MM-dd').format(dayUtc)}';
-      final cachedSummary = dailyBox.get(hiveKey);
-
-      if (cachedSummary != null) {
-        _dailySummaries[dayUtc] = api.ReportSummary(
-          distance: cachedSummary.distance,
-          averageSpeed: cachedSummary.averageSpeed,
-          maxSpeed: cachedSummary.maxSpeed,
-          spentFuel: cachedSummary.spentFuel,
-        );
-      }
-    }
-
-    // Initial setState to show cached data immediately
-    setState(() {
-      _isCalendarLoading = false;
-    });
-
-    // Step 2: Fetch data from the network in the background and update cache
-    for (
-      var date = firstDayOfMonth;
-      date.isBefore(lastDayOfMonth.add(const Duration(days: 1)));
-      date = date.add(const Duration(days: 1))
-    ) {
-      final dayUtc = DateTime.utc(date.year, date.month, date.day);
-
-      // Optimization: skip API call if data is already in the map
-      if (_dailySummaries.containsKey(dayUtc)) continue;
-
-      final from = DateTime(date.year, date.month, date.day, 0, 0, 0);
-      final to = DateTime(date.year, date.month, date.day, 23, 59, 59);
-      final String hiveKey =
-          '$_deviceId-${DateFormat('yyyy-MM-dd').format(dayUtc)}';
-
-      try {
-        // Fetching reports summary
-        final summary = await reportsApi.reportsSummaryGet(
-          from.toUtc(), // Use UTC here
-          to.toUtc(),
-          deviceId: [_deviceId!],
-        );
-
-        if (summary != null && summary.isNotEmpty) {
-          final dailySummary = summary.first;
-
-          // FIX: Use dayUtc (the date queried) as the key instead of summary.startTime
-          _dailySummaries[dayUtc] = dailySummary;
-
-          // Step 3: Update Hive cache with fresh data
-          final newSummaryHive = ReportSummaryHive.fromApi(dailySummary);
-          await dailyBox.put(hiveKey, newSummaryHive);
-
-          // Update UI state for the calendar markers
-          if (mounted) setState(() {});
-        }
-      } catch (e) {
-        print('Failed to fetch data for day $date: $e');
-      }
-    }
-  }
-
-  // NEW: Handles date selection from the calendar
-  void _onDaySelected(DateTime selectedDay, DateTime focusedDay) {
-    setState(() {
-      _selectedCalendarDay = selectedDay;
-      _focusedDay = focusedDay;
-    });
-
-    // Check if the date is today or in the past
-    if (selectedDay.isBefore(DateTime.now().add(const Duration(days: 1))) &&
-        _deviceId != null) {
-      // Directly fetch the route for the selected day
-      _fetchHistoryRoute(selectedDay: selectedDay);
-      Navigator.pop(context); // Close the dialog
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No data or future date selected.')),
-      );
-    }
-  }
-
-  // NEW: Shows the calendar in a clean dialog pop-up
-  void _showCalendarDialog() async {
-    if (_deviceId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select a device first.')),
-      );
-      return;
-    }
-
-    final currentLocale = Get.locale;
-    if (currentLocale != null) {
-      final localeString = currentLocale.toString();
-      // Await the initialization
-      await initializeDateFormatting(localeString, null);
-    }
-    // Ensure data for the current focused month is loaded before showing
-    // This call is now non-blocking as _fetchMonthlyData handles its own loading state.
-    _fetchMonthlyData(_focusedDay);
-
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Select Route Date'),
-          content: StatefulBuilder(
-            builder: (BuildContext context, StateSetter modalSetState) {
-              void onPageChanged(DateTime focusedDay) {
-                modalSetState(() {
-                  _focusedDay = focusedDay;
-                });
-                // Fetch data for the new month asynchronously
-                _fetchMonthlyData(focusedDay);
-              }
-
-              return SingleChildScrollView(
-                child: SizedBox(
-                  width: MediaQuery.of(context).size.width * 0.9,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: <Widget>[
-                      // Use local state _isCalendarLoading to show spinner in the dialog
-                      _isCalendarLoading
-                          ? const Center(
-                              child: Padding(
-                                padding: EdgeInsets.all(32.0),
-                                child: CircularProgressIndicator(),
-                              ),
-                            )
-                          : TableCalendar(
-                              locale: Get.locale?.languageCode,
-                              firstDay: DateTime.utc(2020, 1, 1),
-                              lastDay: DateTime.utc(2030, 12, 31),
-                              focusedDay: _focusedDay,
-                              calendarFormat: _calendarFormat,
-                              headerStyle: const HeaderStyle(
-                                formatButtonVisible: false,
-                                titleCentered: true,
-                              ),
-                              selectedDayPredicate: (day) {
-                                return isSameDay(_selectedCalendarDay, day);
-                              },
-                              onDaySelected: (selectedDay, focusedDay) {
-                                // Call the main screen's function which handles navigation/route fetch
-                                _onDaySelected(selectedDay, focusedDay);
-                              },
-                              onPageChanged: onPageChanged,
-                              eventLoader: (day) {
-                                final dayUtc = DateTime.utc(
-                                  day.year,
-                                  day.month,
-                                  day.day,
-                                );
-                                if (_dailySummaries.containsKey(dayUtc)) {
-                                  return [true];
-                                }
-                                return [];
-                              },
-                              calendarBuilders: CalendarBuilders(
-                                markerBuilder: (context, date, events) {
-                                  final dayUtc = DateTime.utc(
-                                    date.year,
-                                    date.month,
-                                    date.day,
-                                  );
-                                  if (_dailySummaries.containsKey(dayUtc)) {
-                                    final summary = _dailySummaries[dayUtc]!;
-                                    final distanceInKm =
-                                        (summary.distance ?? 0.0) / 1000;
-                                    return Positioned(
-                                      bottom: 1,
-                                      child: Text(
-                                        '${distanceInKm.toStringAsFixed(0)}km',
-                                        style: const TextStyle(
-                                          fontSize: 10,
-                                          color: Colors.blue,
-                                        ),
-                                      ),
-                                    );
-                                  }
-                                  return null;
-                                },
-                              ),
-                            ),
-
-                      const SizedBox(height: 10),
-                      Text(
-                        'Selected: ${(_selectedCalendarDay != null) ? DateFormat('yyyy-MM-dd').format(_selectedCalendarDay!) : 'None'}',
-                        style: const TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            },
-          ),
-          actions: <Widget>[
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Close'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Future<BitmapDescriptor> _createDotMarkerIcon(Color color) async {
-    final ui.PictureRecorder pictureRecorder = ui.PictureRecorder();
-    final Canvas canvas = Canvas(pictureRecorder);
-    final Paint paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.fill;
-    final double radius = 5.0;
-    final Size size = Size(radius * 2, radius * 2);
-
-    canvas.drawCircle(Offset(radius, radius), radius, paint);
-
-    final ui.Image img = await pictureRecorder.endRecording().toImage(
-      size.width.toInt(),
-      size.height.toInt(),
-    );
-    final ByteData? byteData = await img.toByteData(
-      format: ui.ImageByteFormat.png,
-    );
-    return BitmapDescriptor.fromBytes(byteData!.buffer.asUint8List());
-  }
-
-  Color _getSpeedColor(double speed) {
-    if (speed <= 10) {
-      return Colors.green;
-    } else if (speed > 10 && speed <= 50) {
-      return Colors.yellow;
-    } else {
-      return Colors.red;
-    }
-  }
-
-  Future<void> _loadPlaybackMarkerIcon() async {
-    try {
-      final byteData = await rootBundle.load('assets/images/arrow.png');
-      final imageData = byteData.buffer.asUint8List();
-      final codec = await ui.instantiateImageCodec(
-        imageData,
-        targetHeight: 70,
-        targetWidth: 70,
-      );
-      final frameInfo = await codec.getNextFrame();
-      final image = frameInfo.image;
-      final byteDataResized = await image.toByteData(
-        format: ui.ImageByteFormat.png,
-      );
-      _playbackMarkerIcon = BitmapDescriptor.fromBytes(
-        byteDataResized!.buffer.asUint8List(),
-      );
-    } catch (e) {
-      print('Error loading playback marker icon: $e');
-    }
-  }
-
-  void _drawFullRoute() async {
-    if (_positions.isEmpty) return;
-
-    final points = _positions
-        .map(
-          (pos) => LatLng(pos.latitude!.toDouble(), pos.longitude!.toDouble()),
-        )
-        .toList();
-    final fullRoutePolyline = Polyline(
-      polylineId: _fullRoutePolylineId,
-      points: points,
-      color: Colors.grey.withOpacity(0.5),
-      width: 5,
-    );
-
-    _markers.removeWhere(
-      (m) => m.markerId.value != 'playback_marker',
-    ); // Keep playback marker if it exists
-
-    List<Marker> customMarkers = [];
-    final int totalPositions = _positions.length;
-
-    // 1. Add custom markers
-    for (int i = 0; i < totalPositions; i++) {
-      final pos = _positions[i];
-      final LatLng position = LatLng(
-        pos.latitude!.toDouble(),
-        pos.longitude!.toDouble(),
-      );
-
-      BitmapDescriptor? icon;
-      String id = 'point_$i';
-      Offset anchor = const Offset(0.5, 0.5); // Default center anchor
-
-      if (i == 0 && _startMarkerIcon != null) {
-        // Start Marker
-        icon = _startMarkerIcon;
-        id = 'start_point';
-        anchor = const Offset(0.5, 0.9); // Anchor for bottom alignment
-      } else if (i == totalPositions - 1 && _destinationMarkerIcon != null) {
-        // End Marker
-        icon = _destinationMarkerIcon;
-        id = 'end_point';
-        anchor = const Offset(0.5, 0.9); // Anchor for bottom alignment
-      } else {
-        // Intermediate Markers
-        final speed = pos.speed ?? 0.0;
-        if (speed <= 0.0 && _parkingMarkerIcon != null) {
-          // Parking/Stop Marker
-          icon = _parkingMarkerIcon;
-          anchor = const Offset(0.5, 0.9); // Anchor for bottom alignment
-        } else {
-          // Moving (Use speed-colored dot)
-          final color = _getSpeedColor(speed.toDouble());
-          icon = await _createDotMarkerIcon(color);
-        }
-      }
-
-      if (icon != null) {
-        customMarkers.add(
-          Marker(
-            markerId: MarkerId(id),
-            position: position,
-            icon: icon,
-            anchor: anchor,
-          ),
-        );
-      }
-    }
-
-    setState(() {
-      _polylines = {fullRoutePolyline};
-      // Add all non-playback custom markers
-      _markers.addAll(
-        customMarkers
-            .where((m) => m.markerId.value != 'playback_marker')
-            .toSet(),
-      );
-    });
-
-    _animateCameraToRoute();
-  }
-
-  // MODIFIED: Added playback speed logic
-  void _togglePlayback() {
-    // Use the moving positions for the playback check
-    if (_movingPositions.isEmpty) return;
-
-    setState(() {
-      _isPlaying = !_isPlaying;
-      if (_isPlaying) {
-        // mapController?.animateCamera(CameraUpdate.zoomTo(20.0)); //17.0 Zoom in for better view //now 18.0
-        _playbackTimer?.cancel();
-
-        // Calculate interval based on the required speed/smoothness
-        final int intervalMs = (1000 / (10 * _playbackSpeed)).round();
-        _updatePlaybackMarker(
-          animateCamera: true,
-          forceZoom: true,
-        ); // Force zoom on first update
-       Future.delayed(const Duration(milliseconds: 300), () {
-          // Check if we are still in the playing state after the delay
-          if (!_isPlaying || !mounted) return;
-          
-          _playbackTimer = Timer.periodic(Duration(milliseconds: intervalMs), (
-            timer,
-          ) {
-            // The rest of the timer logic runs here as before
-            final stepIncrement = 0.5 * _playbackSpeed; //0.5
-            final maxIndex = _movingPositions.length - 1;
-
-            if (_playbackPosition >= maxIndex) {
-              _playbackTimer?.cancel();
-              setState(() {
-                _isPlaying = false;
-                _playbackPosition = 0.0;
-                _updatePlaybackMarker(animateCamera: true);
-              });
-            } else {
-              setState(() {
-                _playbackPosition += stepIncrement;
-                _playbackPosition = min(_playbackPosition, maxIndex.toDouble());
-                _updatePlaybackMarker(animateCamera: true);
-              });
-            }
-          });
-        });
-      } else {
-        _playbackTimer?.cancel();
-        _updatePlaybackMarker(animateCamera: false);
-      }
-    });
-  }
-
-  void _onSpeedSelected(double speed) {
-    setState(() {
-      _playbackSpeed = speed;
-    });
-    // Restart playback to apply new speed
-    if (_isPlaying) {
-      _togglePlayback();
-      _togglePlayback();
-    }
-  }
-
-  void _updatePlaybackMarker({
-    bool animateCamera = false,
-    bool forceZoom = false,
-  }) {
-    // Use the filtered list for indexing
-    final listForPlayback = _movingPositions;
-    if (listForPlayback.isEmpty) return;
-
-    final int index1 = _playbackPosition.floor().clamp(
-      0,
-      listForPlayback.length - 1,
-    );
-    final int index2 = _playbackPosition.ceil().clamp(
-      0,
-      listForPlayback.length - 1,
-    );
-    final double fraction = _playbackPosition - index1;
-
-    final pos1 = listForPlayback[index1];
-    final pos2 = listForPlayback[index2];
-
-    final newLat =
-        pos1.latitude! + (pos2.latitude! - pos1.latitude!) * fraction;
-    final newLon =
-        pos1.longitude! + (pos2.longitude! - pos1.longitude!) * fraction;
-    final newLatLng = LatLng(newLat, newLon);
-
-    // Calculate bearing (rotation) remains the same, using pos1 and pos2 from the filtered list
-    double bearing = 0.0;
-    if (index1 < listForPlayback.length - 1) {
-      // ... (bearing calculation logic remains the same, using pos1/pos2 derived from listForPlayback)
-      final lat1 = _degreesToRadians(pos1.latitude!.toDouble());
-      final lon1 = _degreesToRadians(pos1.longitude!.toDouble());
-      final lat2 = _degreesToRadians(pos2.latitude!.toDouble());
-      final lon2 = _degreesToRadians(pos2.longitude!.toDouble());
-
-      final dLon = lon2 - lon1;
-      final y = sin(dLon) * cos(lat2);
-      final x = cos(lat1) * sin(lat2) - sin(lat1) * cos(lat2) * cos(dLon);
-
-      if (y != 0 || x != 0) {
-        bearing = atan2(y, x) * (180 / pi);
-      }
-    } else if (_playbackMarker != null) {
-      bearing = _playbackMarker!.rotation;
-    }
-
-    _playbackMarker = Marker(
-      markerId: const MarkerId('playback_marker'),
-      position: newLatLng,
-      icon: _playbackMarkerIcon ?? BitmapDescriptor.defaultMarker,
-      rotation: bearing,
-      anchor: const Offset(0.5, 0.5),
-    );
-
-    // To draw the *played* polyline, we must find the corresponding points
-    // in the ORIGINAL list to ensure it connects correctly to the full route.
-    // This requires a more complex mapping (e.g., finding the index of pos1 in _positions),
-    // but for simplicity and better UX, we will draw the *played* polyline only
-    // between the points in the *filtered* list, giving a direct "movement path."
-
-    // Simpler Played Polyline (draws the path of movement only)
-    final playedPoints = listForPlayback
-        .sublist(0, index1 + 1)
-        .map(
-          (pos) => LatLng(pos.latitude!.toDouble(), pos.longitude!.toDouble()),
-        )
-        .toList();
-
-    if (fraction > 0 && index1 < listForPlayback.length - 1) {
-      playedPoints.add(newLatLng);
-    }
-
-    final playedRoutePolyline = Polyline(
-      polylineId: _playedRoutePolylineId,
-      points: playedPoints,
-      color: const Color(0xFF0F53FE),
-      width: 5,
-    );
-
-    if (animateCamera) {
-      if (forceZoom) {
-        // Use CameraUpdate.newLatLngZoom to center AND set the zoom in one shot.
-        mapController?.animateCamera(
-          CameraUpdate.newLatLngZoom(
-            newLatLng,
-            15.7,
-          ), // Set preferred zoom (15.7 is a good balance), after tap play force to 15.7 zoom level.
-        );
-      } else {
-        // Subsequent movements just center the camera, maintaining the current zoom.
-        mapController?.animateCamera(CameraUpdate.newLatLng(newLatLng));
-      }
-
-      // if (_isPlaying) {
-      //   mapController?.getZoomLevel().then((currentZoom) {
-      //     // Only zoom if the current level is significantly different
-      //     if (currentZoom < 16.9) {
-      //       mapController?.animateCamera(CameraUpdate.zoomTo(17.0));
-      //     }
-      //   });}
-    }
-
-    setState(() {
-      _markers.removeWhere(
-        (marker) => marker.markerId.value == 'playback_marker',
-      );
-      _markers.add(_playbackMarker!);
-
-      _polylines.removeWhere(
-        (polyline) => polyline.polylineId.value == 'played_route',
-      );
-      // Add both the full route (grey) and the played route (blue)
-      _polylines.add(playedRoutePolyline);
-      if (!_polylines.any((p) => p.polylineId == _fullRoutePolylineId)) {
-        // Re-add the full route if it was accidentally removed
-        _drawFullRoute();
-      }
-    });
-  }
-
-  void _animateCameraToRoute() {
-    if (mapController != null && _positions.isNotEmpty) {
-      double minLat = _positions.first.latitude!.toDouble();
-      double maxLat = _positions.first.latitude!.toDouble();
-      double minLon = _positions.first.longitude!.toDouble();
-      double maxLon = _positions.first.longitude!.toDouble();
-
-      for (var pos in _positions) {
-        minLat = min(minLat, pos.latitude!.toDouble());
-        maxLat = max(maxLat, pos.latitude!.toDouble());
-        minLon = min(minLon, pos.longitude!.toDouble());
-        maxLon = max(maxLon, pos.longitude!.toDouble());
-      }
-
-      final bounds = LatLngBounds(
-        southwest: LatLng(minLat, minLon),
-        northeast: LatLng(maxLat, maxLon),
-      );
-      // Future.delayed(const Duration(milliseconds: 100), () {
-      //   mapController?.animateCamera(CameraUpdate.newLatLngBounds(bounds, 50));
-      // });
-      mapController?.animateCamera(CameraUpdate.newLatLngBounds(bounds, 50));
-    }
-  }
-
-  void _toggleMapType() {
-    setState(() {
-      _mapType = _mapType == MapType.normal
-          ? MapType.satellite
-          : MapType.normal;
-    });
+    OfflineAddressService.initDatabase();
+    cleanExpiredRouteHistory();
+    _loadInitialParamsAndFetch();
   }
 
   @override
@@ -897,320 +87,907 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> {
     super.dispose();
   }
 
-  String _formatTime(DateTime time) {
-    // Ensure time is converted to local time before formatting for display
-    return DateFormat('HH:mm:ss').format(time.toLocal());
-  }
+  // --- 地圖邏輯 ---
 
-  String get time {
-    if (_movingPositions.isEmpty) return 'N/A';
-    // Clamp the playback position index to the moving positions list
-    final index = _playbackPosition.toInt().clamp(
-      0,
-      _movingPositions.length - 1,
-    );
-    return _formatTime(_movingPositions[index].serverTime!);
-  }
-
-  String get speed {
-    if (_movingPositions.isEmpty) return 'N/A';
-    // Clamp the playback position index to the moving positions list
-    final index = _playbackPosition.toInt().clamp(
-      0,
-      _movingPositions.length - 1,
-    );
-    final speed = _movingPositions[index].speed ?? 0.0;
-    return '${speed.toStringAsFixed(2)} km/h';
-  }
-
-  String get distanceText {
-    if (_positions.isEmpty) return 'N/A';
-    double totalDistance = 0.0;
-    for (int i = 0; i < _positions.length - 1; i++) {
-      totalDistance += _calculateDistance(
-        LatLng(
-          _positions[i].latitude!.toDouble(),
-          _positions[i].longitude!.toDouble(),
-        ),
-        LatLng(
-          _positions[i + 1].latitude!.toDouble(),
-          _positions[i + 1].longitude!.toDouble(),
-        ),
-      );
+  Future<void> _onStyleLoaded() async {
+    await _loadCustomIconsToMap();
+    if (_positions.isEmpty) {
+      return;
     }
-    return '${totalDistance.toStringAsFixed(2)} km';
+    // 切換樣式只是把被清掉的圖層重畫一次，鏡頭必須維持原樣；
+    // 只有首次載入才自動取景。
+    final bool keepCamera = _keepCameraOnStyleReload;
+    _keepCameraOnStyleReload = false;
+    await _drawFullRoute(fitBounds: !keepCamera);
   }
 
-  double _calculateDistance(LatLng latLng1, LatLng latLng2) {
-    const double earthRadius = 6371;
-    final double dLat = _degreesToRadians(latLng2.latitude - latLng1.latitude);
-    final double dLon = _degreesToRadians(
-      latLng2.longitude - latLng1.longitude,
-    );
-
-    final a =
-        sin(dLat / 2) * sin(dLat / 2) +
-        cos(_degreesToRadians(latLng1.latitude)) *
-            cos(_degreesToRadians(latLng2.latitude)) *
-            sin(dLon / 2) *
-            sin(dLon / 2);
-    final c = 2 * atan2(sqrt(a), sqrt(1 - a));
-
-    return earthRadius * c;
+  void _toggleMapType() {
+    // MapLibreMap 會因為 style 變更而整張重建，先記下目前鏡頭，
+    // 重建後才會用同一個位置與縮放還原，不會跳到別的 zoom。
+    _lastCameraPosition = _mapController?.cameraPosition ?? _lastCameraPosition;
+    _keepCameraOnStyleReload = true;
+    Provider.of<MapStyleProvider>(context, listen: false).toggleMapType();
   }
 
-  double _degreesToRadians(double degrees) {
-    return degrees * pi / 180;
+  Future<void> _loadCustomIconsToMap() async {
+    if (_mapController == null) {
+      return;
+    }
+    await _addAssetImage(_playbackIconId, 'assets/images/arrow.png');
+    await _addAssetImage(_startIconId, 'assets/images/start.png');
+    await _addAssetImage(_endIconId, 'assets/images/destination.png');
+
+    for (int i = 1; i <= 50; i++) {
+      await _addAssetImage("pg_$i", "assets/images/pg_$i.png");
+    }
   }
+
+  Future<void> _addAssetImage(String id, String assetPath) async {
+    final ByteData bytes = await rootBundle.load(assetPath);
+    final Uint8List list = bytes.buffer.asUint8List();
+    await _mapController?.addImage(id, list);
+  }
+
+  void _calculateDistancePrefixSum() {
+    _distancePrefixSum = [0.0];
+    double total = 0;
+    for (int i = 0; i < _positions.length - 1; i++) {
+      total += _distanceBetween(_positions[i].latitude!.toDouble(), _positions[i].longitude!.toDouble(), _positions[i + 1].latitude!.toDouble(), _positions[i + 1].longitude!.toDouble());
+      _distancePrefixSum.add(total);
+    }
+  }
+
+  // --- 資料抓取與異步處理 ---
+
+  Future<void> _loadInitialParamsAndFetch() async {
+    final prefs = await SharedPreferences.getInstance();
+    final deviceName = prefs.getString('selectedDeviceName');
+    final deviceId = prefs.getInt('selectedDeviceId');
+    final fromString = prefs.getString('historyFrom');
+    final toString = prefs.getString('historyTo');
+    final lastZoom = prefs.getDouble('history_zoom_level');
+
+    DateTime defaultDate = DateTime.now();
+
+    // ✨ 已確認：嚴格落實大括號區塊區隔，後面無贅餘分號
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      if (lastZoom != null) {
+        _currentZoom = lastZoom;
+      }
+      _deviceId = deviceId;
+      _focusedDay = defaultDate;
+      _selectedCalendarDay = defaultDate;
+      _selectedDeviceName = deviceName;
+
+      if (fromString != null && toString != null) {
+        _historyFrom = DateTime.tryParse(fromString)?.toLocal();
+        _historyTo = DateTime.tryParse(toString)?.toLocal();
+        if (_historyFrom != null) {
+          _selectedCalendarDay = DateTime(_historyFrom!.year, _historyFrom!.month, _historyFrom!.day);
+        }
+      } else {
+        _historyFrom = DateTime(defaultDate.year, defaultDate.month, defaultDate.day, 0, 0, 0);
+        _historyTo = DateTime(defaultDate.year, defaultDate.month, defaultDate.day, 23, 59, 59);
+      }
+    });
+
+    if (_deviceId != null) {
+      _fetchHistoryRoute();
+      await _fetchMonthlyData(_focusedDay);
+    } else {
+      developer.log('Missing device ID for history route.', name: 'HistoryRouteScreen');
+    }
+  }
+
+  Future<void> cleanExpiredRouteHistory() async {
+    final routeBox = await Hive.openBox<RoutePositionsHive>('route_positions');
+    const cacheDuration = Duration(days: 60);
+    final DateTime expiryThreshold = DateTime.now().subtract(cacheDuration);
+
+    final List<dynamic> expiredKeys = [];
+
+    for (final key in routeBox.keys) {
+      final entry = routeBox.get(key);
+      if (entry != null && entry.cachedAt.isBefore(expiryThreshold)) {
+        expiredKeys.add(key);
+      }
+    }
+
+    if (expiredKeys.isNotEmpty) {
+      developer.log('Deleting ${expiredKeys.length} expired route entries.', name: 'HistoryRouteScreen');
+      await routeBox.deleteAll(expiredKeys);
+    }
+  }
+
+  void _calculateStops(List<api.Position> allPositions) {
+    _stopPoints.clear();
+    if (allPositions.length < 2) {
+      return;
+    }
+
+    for (int i = 0; i < allPositions.length - 1; i++) {
+      final p1 = allPositions[i];
+      final p2 = allPositions[i + 1];
+
+      // Use the recording time, not serverTime: backfilled records are stored
+      // long after they happened and would look like a stop.
+      final recordedAt1 = PositionCleaner.recordingTime(p1);
+      final recordedAt2 = PositionCleaner.recordingTime(p2);
+
+      if (recordedAt1 != null && recordedAt2 != null) {
+        final diff = recordedAt2.difference(recordedAt1);
+        if (diff.inMinutes >= 5) {
+          _stopPoints.add(LatLng(p1.latitude!.toDouble(), p1.longitude!.toDouble()));
+        }
+      }
+      if (_stopPoints.length >= 50) {
+        break;
+      }
+    }
+  }
+
+  Future<void> _fetchHistoryRoute({DateTime? selectedDay}) async {
+    if (selectedDay != null) {
+      _historyFrom = DateTime(selectedDay.year, selectedDay.month, selectedDay.day, 0, 0, 0);
+      _historyTo = DateTime(selectedDay.year, selectedDay.month, selectedDay.day, 23, 59, 59);
+    }
+
+    if (_deviceId == null || _historyFrom == null || _historyTo == null) {
+      return;
+    }
+
+    _playbackTimer?.cancel();
+    setState(() {
+      _isLoading = true;
+      _isPlaying = false;
+      _positions = [];
+      _playbackPositionRx.value = 0.0;
+    });
+
+    List<api.Position> fetchedPositions = [];
+    bool fetchedFromNetwork = false;
+    final hiveKey = '$_deviceId-${DateFormat('yyyy-MM-dd').format(_historyFrom!)}';
+
+    try {
+      final routeBox = await Hive.openBox<RoutePositionsHive>('route_positions');
+      final cachedRoute = routeBox.get(hiveKey);
+
+      bool isCacheValid = false;
+      if (cachedRoute != null) {
+        final bool isToday = isSameDay(_historyFrom, DateTime.now());
+        final diff = DateTime.now().difference(cachedRoute.cachedAt);
+        final bool isExpired = isToday ? diff > const Duration(minutes: 10) : diff > const Duration(days: 60);
+        isCacheValid = !isExpired;
+      }
+
+      if (isCacheValid) {
+        debugPrint('從快取載入: $hiveKey');
+        fetchedPositions = RoutePositionsHive.fromJsonList(cachedRoute!.positionsJson);
+      } else {
+        debugPrint('從網路抓取: $hiveKey');
+
+        if (!mounted) {
+          return;
+        }
+        fetchedFromNetwork = true;
+        final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
+
+        fetchedPositions = await api.PositionsApi(traccarProvider.apiClient).getPositions(deviceId: _deviceId, from: _historyFrom!.toUtc(), to: _historyTo!.toUtc()) ?? [];
+      }
+
+      // 補傳 (backfilled) batches arrive unordered, duplicated and with GPS
+      // spikes, which made the replay jump forwards and then backwards. Clean
+      // the track before caching so the next load is already usable.
+      final cleanedPositions = PositionCleaner.clean(fetchedPositions);
+      if (cleanedPositions.length != fetchedPositions.length) {
+        developer.log('Cleaned track: ${fetchedPositions.length} -> ${cleanedPositions.length} points', name: 'HistoryRouteScreen');
+      }
+      if (fetchedFromNetwork && cleanedPositions.isNotEmpty) {
+        await routeBox.put(hiveKey, RoutePositionsHive(dateKey: hiveKey, positionsJson: RoutePositionsHive.toJsonList(cleanedPositions), cachedAt: DateTime.now()));
+      }
+
+      // Stops are detected on the cleaned track (still including stationary
+      // points), while playback skips the idle samples as before.
+      _calculateStops(cleanedPositions);
+
+      final movingPositions = cleanedPositions.where((p) => (p.speed ?? 0) > 0).toList();
+      final playbackPositions = movingPositions.isNotEmpty ? movingPositions : cleanedPositions;
+
+      if (mounted) {
+        setState(() {
+          _positions = playbackPositions;
+          _isLoading = false;
+        });
+
+        _calculateDistancePrefixSum();
+
+        if (_mapController != null) {
+          _drawFullRoute();
+        }
+      }
+    } catch (e) {
+      debugPrint('獲取軌跡失敗: $e');
+      if (mounted) {
+        setState(() => _isLoading = false);
+        Get.snackbar("Error", "Failed to fetch route data");
+      }
+    }
+  }
+
+  // --- 繪製與動畫播放 ---
+
+  Future<void> _drawFullRoute({bool fitBounds = true}) async {
+    if (_mapController == null || _positions.isEmpty) {
+      return;
+    }
+
+    await _mapController!.clearLines();
+    await _mapController!.clearSymbols();
+
+    List<LatLng> points = _positions.map((p) => LatLng(p.latitude!.toDouble(), p.longitude!.toDouble())).toList();
+
+    await _mapController!.addLine(LineOptions(geometry: points, lineColor: "#808080", lineWidth: 3.0, lineOpacity: 0.5));
+
+    _playedLine = await _mapController!.addLine(const LineOptions(geometry: [], lineColor: "#0F53FE", lineWidth: 5.0, lineJoin: "round"));
+
+    _addMarker(points.first, _startIconId);
+    _addMarker(points.last, _endIconId);
+
+    if (_positions.isNotEmpty) {
+      _playbackSymbol = await _mapController!.addSymbol(SymbolOptions(geometry: LatLng(_positions.first.latitude!.toDouble(), _positions.first.longitude!.toDouble()), iconImage: _playbackIconId, iconSize: 1.8, zIndex: 10)); //1.2
+    }
+
+    for (int i = 0; i < _stopPoints.length; i++) {
+      await _mapController!.addSymbol(SymbolOptions(geometry: _stopPoints[i], iconImage: "pg_${i + 1}", iconSize: 3.5, iconAnchor: "center"));
+    }
+
+    if (fitBounds) {
+      _animateCameraToBounds();
+    }
+  }
+
+  void _addMarker(LatLng point, String iconId) {
+    _mapController?.addSymbol(SymbolOptions(geometry: point, iconImage: iconId, iconSize: 1.8, iconAnchor: "bottom")); //0.8
+  }
+
+  void _togglePlayback() {
+    if (_positions.isEmpty) {
+      return;
+    }
+
+    if (_isPlaying) {
+      _playbackTimer?.cancel();
+      setState(() => _isPlaying = false);
+      return;
+    }
+
+    final double maxLimit = max(0, _positions.length - 1).toDouble();
+    final bool isNewPlayback = _playbackPositionRx.value == 0 || _playbackPositionRx.value >= maxLimit;
+    if (_playbackPositionRx.value >= maxLimit) {
+      _playbackPositionRx.value = 0;
+      _lastCameraUpdateTick = 0;
+      _updatePlaybackUI();
+    }
+
+    if (isNewPlayback) {
+      _followUser = true;
+      final startPoint = LatLng(_positions.first.latitude!.toDouble(), _positions.first.longitude!.toDouble());
+      _mapController?.animateCamera(CameraUpdate.newLatLngZoom(startPoint, 16.0), duration: const Duration(milliseconds: 800));
+    }
+
+    setState(() {
+      _isPlaying = true;
+    });
+
+    _playbackTimer?.cancel();
+
+    _playbackTimer = Timer.periodic(const Duration(milliseconds: 32), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+
+      final double maxLimit = max(0, _positions.length - 1).toDouble();
+
+      if (_playbackPositionRx.value >= maxLimit) {
+        _playbackPositionRx.value = maxLimit;
+        timer.cancel();
+        if (mounted) {
+          setState(() => _isPlaying = false);
+        }
+      } else {
+        double increment = 0.05 * _playbackSpeed;
+        _playbackPositionRx.value = (_playbackPositionRx.value + increment).clamp(0.0, maxLimit);
+
+        _updatePlaybackUI();
+      }
+    });
+  }
+
+  int _lastCameraUpdateTick = 0;
+
+  void _updatePlaybackUI() async {
+    if (_mapController == null || _positions.isEmpty || _playbackSymbol == null) {
+      return;
+    }
+
+    final double pos = _playbackPositionRx.value;
+    final int idx = pos.floor().clamp(0, _positions.length - 1);
+    final int nextIdx = (idx + 1).clamp(0, _positions.length - 1);
+    final double fraction = pos - idx;
+
+    final p1 = _positions[idx];
+    final p2 = _positions[nextIdx];
+
+    final double smoothLat = p1.latitude!.toDouble() + (p2.latitude!.toDouble() - p1.latitude!.toDouble()) * fraction;
+    final double smoothLng = p1.longitude!.toDouble() + (p2.longitude!.toDouble() - p1.longitude!.toDouble()) * fraction;
+    final currentLatLng = LatLng(smoothLat, smoothLng);
+
+    double bearing = p1.course?.toDouble() ?? 0;
+    if (idx < _positions.length - 1 && fraction > 0.1) {
+      bearing = _calculateBearing(LatLng(p1.latitude!.toDouble(), p1.longitude!.toDouble()), LatLng(p2.latitude!.toDouble(), p2.longitude!.toDouble()));
+    }
+
+    if (_currentAddressRx.value == "" || idx % 20 == 0) {
+      OfflineAddressService.getAddress(p1.latitude!.toDouble(), p1.longitude!.toDouble()).then((addr) {
+        _currentAddressRx.value = addr;
+      });
+    }
+
+    _mapController!.updateSymbol(_playbackSymbol!, SymbolOptions(geometry: currentLatLng, iconRotate: bearing));
+
+    if (_playedLine != null) {
+      final playedPoints = _positions.sublist(0, idx + 1).map((p) => LatLng(p.latitude!.toDouble(), p.longitude!.toDouble())).toList();
+      playedPoints.add(currentLatLng);
+      _mapController!.updateLine(_playedLine!, LineOptions(geometry: playedPoints));
+    }
+
+    if (_followUser) {
+      _lastCameraUpdateTick++;
+      if (_lastCameraUpdateTick % 10 == 0) {
+        LatLngBounds? visibleRegion = await _mapController!.getVisibleRegion();
+        double latSpan = visibleRegion.northeast.latitude - visibleRegion.southwest.latitude;
+        double lngSpan = visibleRegion.northeast.longitude - visibleRegion.southwest.longitude;
+
+        double latThreshold = latSpan * 0.2;
+        double lngThreshold = lngSpan * 0.2;
+
+        bool isNearEdge =
+            currentLatLng.latitude > (visibleRegion.northeast.latitude - latThreshold) ||
+            currentLatLng.latitude < (visibleRegion.southwest.latitude + latThreshold) ||
+            currentLatLng.longitude > (visibleRegion.northeast.longitude - lngThreshold) ||
+            currentLatLng.longitude < (visibleRegion.southwest.longitude + lngThreshold);
+
+        if (isNearEdge) {
+          _mapController!.animateCamera(CameraUpdate.newLatLng(currentLatLng), duration: const Duration(milliseconds: 1500));
+        }
+      }
+    }
+  }
+
+  double _calculateBearing(LatLng start, LatLng end) {
+    double lat1 = start.latitude * pi / 180;
+    double lon1 = start.longitude * pi / 180;
+    double lat2 = end.latitude * pi / 180;
+    double lon2 = end.longitude * pi / 180;
+    return (atan2(sin(lon2 - lon1) * cos(lat2), cos(lat1) * sin(lat2) - sin(lat1) * cos(lat2) * cos(lon2 - lon1)) * 180 / pi + 360) % 360;
+  }
+
+  void _animateCameraToBounds() {
+    if (_positions.isEmpty) {
+      return;
+    }
+    double minLat = _positions.map((p) => p.latitude!).reduce(min).toDouble();
+    double maxLat = _positions.map((p) => p.latitude!).reduce(max).toDouble();
+    double minLon = _positions.map((p) => p.longitude!).reduce(min).toDouble();
+    double maxLon = _positions.map((p) => p.longitude!).reduce(max).toDouble();
+
+    _mapController?.animateCamera(CameraUpdate.newLatLngBounds(LatLngBounds(southwest: LatLng(minLat, minLon), northeast: LatLng(maxLat, maxLon)), left: 70, right: 70, top: 70, bottom: 250));
+  }
+
+  double _distanceBetween(double lat1, double lon1, double lat2, double lon2) {
+    var p = 0.017453292519943295;
+    var a = 0.5 - cos((lat2 - lat1) * p) / 2 + cos(lat1 * p) * cos(lat2 * p) * (1 - cos((lon2 - lon1) * p)) / 2;
+    return 12742 * asin(sqrt(a));
+  }
+
+  // --- UI 元件建立 ---
 
   @override
   Widget build(BuildContext context) {
-    final maxSliderValue = _movingPositions.isNotEmpty
-        ? (_movingPositions.length - 1).toDouble()
-        : 0.0;
-
-    final speedOptions = [0.5, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0];
-    // Helper variable for the title construction
-    String devicePart = _selectedDeviceName != null
-        ? ' | (${_selectedDeviceName!})'
-        : '';
-    String datePart = (_historyFrom != null)
-        ? DateFormat.yMMMd().format(_historyFrom!.toLocal())
-        : 'Select Date'.tr;
-
+    String devicePart = _selectedDeviceName != null ? ' | (${_selectedDeviceName!})' : '';
     return Scaffold(
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
+        backgroundColor: Theme.of(context).colorScheme.surface.withValues(alpha: 0.85),
+        elevation: 0,
         title: Text(
-          //'Route History: ${(_historyFrom != null) ? DateFormat('yyyy-MM-dd').format(_historyFrom!.toLocal()) : 'Select Date'}',
-          'reportReplay'.tr + ': $datePart$devicePart',
-          style: const TextStyle(
-            fontSize: 16, // Reduced font size (e.g., from default 20 to 16)
-          ),
+          '${'reportReplay'.tr}: ${DateFormat('MM/dd').format(_historyFrom ?? DateTime.now())}$devicePart',
+          style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontSize: 16, fontWeight: FontWeight.bold),
         ),
+        iconTheme: IconThemeData(color: Theme.of(context).colorScheme.onSurface),
       ),
       body: Stack(
         children: [
-          GoogleMap(
-            onMapCreated: (controller) {
-              mapController = controller;
-              _animateCameraToRoute();
-              _updateZoomLevel();
-            },
+          MapLibreMap(
+            key: ValueKey(Provider.of<MapStyleProvider>(context).isSatelliteMode),
+            onMapCreated: (c) => _mapController = c,
+            onStyleLoadedCallback: _onStyleLoaded,
+            initialCameraPosition: _lastCameraPosition ?? CameraPosition(target: const LatLng(0, 0), zoom: _currentZoom),
+            styleString: Provider.of<MapStyleProvider>(context).getStyle(Theme.of(context).brightness),
             onCameraMove: (position) {
-              if (position.zoom != _currentZoomLevel) {
-                _updateZoomLevel();
-              }
+              _lastCameraPosition = position;
+              _currentZoom = position.zoom;
+              SharedPreferences.getInstance().then((prefs) {
+                prefs.setDouble('history_zoom_level', position.zoom);
+              });
             },
-            initialCameraPosition: const CameraPosition(
-              target: LatLng(0, 0),
-              zoom: 15,
-            ),
-            mapType: _mapType,
-            markers: _markers,
-            polylines: _polylines,
-            rotateGesturesEnabled: false,
+            myLocationEnabled: false,
+            trackCameraPosition: true,
+            onMapClick: (_, _) {
+              setState(() => _followUser = false);
+            },
           ),
+          if (_isLoading) const Center(child: CircularProgressIndicator()),
 
-          // Map Type Toggle Button
           Positioned(
-            top: 10,
-            right: 10,
+            top: MediaQuery.of(context).padding.top + 60,
+            right: 12,
             child: Column(
               children: [
-                // 1. Map Type Toggle Button
-                FloatingActionButton(
-                  onPressed: _toggleMapType,
-                  mini: true,
-                  heroTag: 'mapTypeToggle',
-                  child: const Icon(Icons.layers),
-                ),
-
-                const SizedBox(height: 10),
-
-                // 2. Zoom In Button (NEW)
-                FloatingActionButton(
-                  onPressed: _zoomIn,
-                  mini: true,
-                  heroTag: 'zoomInButton',
-                  child: const Icon(Icons.add),
-                ),
-
-                const SizedBox(height: 10),
-
-                // 3. Zoom Out Button (NEW)
-                FloatingActionButton(
-                  onPressed: _zoomOut,
-                  mini: true,
-                  heroTag: 'zoomOutButton',
-                  child: const Icon(Icons.remove),
+                _mapFab(Icons.calendar_month, _showCalendarDialog, "btn_cal"),
+                const SizedBox(height: 12),
+                _mapFab(Provider.of<MapStyleProvider>(context).isSatelliteMode ? Icons.map : Icons.satellite_alt, _toggleMapType, "btn_style"),
+                const SizedBox(height: 12),
+                _mapFab(
+                  Icons.center_focus_strong,
+                  () {
+                    setState(() => _followUser = true);
+                    _animateCameraToBounds();
+                  },
+                  "btn_recenter",
+                  color: _followUser ? const Color(0xFF0F53FE) : Colors.white,
                 ),
               ],
             ),
           ),
-
-          // Calendar/Date Selection Button (NEW)
-          Positioned(
-            top: 10,
-            right: 70,
-            child: FloatingActionButton(
-              onPressed: _showCalendarDialog, // Calls the dialog function
-              mini: true,
-              heroTag: 'calendarButton',
-              child: const Icon(Icons.calendar_month),
-            ),
-          ),
-
-          // Playback Control Panel
-          Positioned(
-            bottom: 20,
-            left: 10,
-            right: 10,
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.95),
-                borderRadius: BorderRadius.circular(15),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.3),
-                    blurRadius: 10,
-                    offset: const Offset(0, 5),
-                  ),
-                ],
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Playback and Speed Controls Row
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      // Play/Pause Button
-                      IconButton(
-                        icon: Icon(
-                          _isPlaying ? Icons.pause : Icons.play_arrow,
-                          size: 30,
-                          color: _positions.isNotEmpty
-                              ? Colors.black
-                              : Colors.grey,
-                        ),
-                        onPressed: _positions.isNotEmpty
-                            ? _togglePlayback
-                            : null,
-                      ),
-
-                      // Speed Controls (1x, 2x, 3x, 4x, 5x, 6x)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade200,
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Row(
-                          children: speedOptions.map((speed) {
-                            final isSelected = _playbackSpeed == speed;
-                            return GestureDetector(
-                              onTap: _positions.isNotEmpty
-                                  ? () => _onSpeedSelected(speed)
-                                  : null,
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 4,
-                                ),
-                                child: Text(
-                                  speed == 0.5 ? '0.5x' : '${speed.toInt()}x',
-                                  style: TextStyle(
-                                    fontWeight: isSelected
-                                        ? FontWeight.bold
-                                        : FontWeight.normal,
-                                    color: isSelected
-                                        ? const Color(0xFF0F53FE)
-                                        : Colors.black87,
-                                  ),
-                                ),
-                              ),
-                            );
-                          }).toList(),
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 8),
-
-                  // Slider
-                  SliderTheme(
-                    data: SliderTheme.of(context).copyWith(
-                      thumbColor: const Color(0xFF0F53FE),
-                      activeTrackColor: const Color(0xFF0F53FE),
-                      inactiveTrackColor: Colors.grey.withOpacity(0.5),
-                      overlayColor: const Color(0xFF0F53FE).withOpacity(0.2),
-                      trackHeight: 4.0,
-                    ),
-                    child: Slider(
-                      value: _playbackPosition,
-                      min: 0,
-                      max: maxSliderValue,
-                      onChanged: (newValue) {
-                        setState(() {
-                          _playbackTimer?.cancel();
-                          _isPlaying = false;
-                          _playbackPosition = newValue;
-                          _updatePlaybackMarker();
-                        });
-                      },
-                      onChangeEnd: (newValue) {
-                        _updatePlaybackMarker(animateCamera: true);
-                      },
-                    ),
-                  ),
-
-                  const SizedBox(height: 8),
-
-                  // Info Row
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 10),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
-                      children: [
-                        _buildInfoColumn('Time', time),
-                        _buildInfoColumn('Speed', speed),
-                        _buildInfoColumn('Distance', distanceText),
-                        // _buildInfoColumn(
-                        //   'Zoom',
-                        //   _currentZoomLevel.toStringAsFixed(1), // Display zoom level, e.g., 15.7 after playback start, on production you can hide it.
-                        // ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
+          _buildPlaybackPanel(),
         ],
       ),
     );
   }
 
-  Widget _buildInfoColumn(String title, String value) {
+  Widget _mapFab(IconData icon, VoidCallback onPressed, String tag, {Color? color}) {
+    final theme = Theme.of(context);
+    final bgColor = color ?? theme.colorScheme.surface;
+    final iconColor = color == null ? theme.colorScheme.onSurface : Colors.white;
+
+    return FloatingActionButton(
+      heroTag: tag,
+      mini: true,
+      backgroundColor: bgColor,
+      onPressed: onPressed,
+      child: Icon(icon, color: iconColor),
+    );
+  }
+
+  Widget _buildPlaybackPanel() {
+    return Positioned(
+      bottom: 24 + MediaQuery.of(context).padding.bottom,
+      left: 16,
+      right: 16,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surface,
+          borderRadius: BorderRadius.circular(28),
+          boxShadow: [BoxShadow(color: Theme.of(context).brightness == Brightness.dark ? Colors.black.withValues(alpha: 0.4) : Colors.black.withValues(alpha: 0.1), blurRadius: 20, offset: const Offset(0, 10))],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Obx(
+              () => Text(
+                _currentAddressRx.value.isEmpty ? 'sharedLocating'.tr : _currentAddressRx.value,
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface),
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            Obx(() {
+              final int idx = _playbackPositionRx.value.floor().clamp(0, max(0, _positions.length - 1));
+              final pos = _positions.isEmpty ? null : _positions[idx];
+              final recordedAt = pos == null ? null : PositionCleaner.recordingTime(pos);
+              final time = recordedAt != null ? DateFormat('HH:mm:ss').format(recordedAt.toLocal()) : "--:--:--";
+              final speed = pos != null ? ((pos.speed ?? 0) * 1.852).toStringAsFixed(1) : "0.0";
+              final distance = _getDistanceFormatted(idx);
+              return Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [_buildStatItem("positionDrivingTime".tr, time, CupertinoIcons.clock), _buildStatItem("positionSpeed".tr, "$speed ${'sharedKmh'.tr}", Icons.speed_rounded), _buildStatItem("sharedDistance".tr, distance, Icons.straighten)],
+              );
+            }),
+            const SizedBox(height: 8),
+            Obx(() {
+              final double maxVal = max(0, _positions.length - 1).toDouble();
+              return SliderTheme(
+                data: SliderTheme.of(context).copyWith(trackHeight: 4, thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8), overlayShape: const RoundSliderOverlayShape(overlayRadius: 16)),
+                child: Slider(
+                  value: _playbackPositionRx.value,
+                  max: maxVal,
+                  onChanged: (v) {
+                    _playbackPositionRx.value = v;
+                    _updatePlaybackUI();
+                  },
+                  activeColor: Theme.of(context).colorScheme.primary,
+                  inactiveColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.15),
+                ),
+              );
+            }),
+            Row(
+              children: [
+                IconButton.filled(
+                  style: IconButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.primary, minimumSize: const Size(50, 50)),
+                  onPressed: _togglePlayback,
+                  icon: Icon(_isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded, color: Theme.of(context).colorScheme.onPrimary, size: 30),
+                ),
+                const Spacer(),
+                _buildSpeedSelector(),
+                const SizedBox(width: 12),
+                IconButton.outlined(onPressed: _exportToGPX, icon: const Icon(Icons.download_rounded, size: 20), tooltip: "Export GPX"),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _exportToGPX() async {
+    if (_positions.isEmpty) {
+      Get.snackbar("Error", "No track data to export");
+      return;
+    }
+
+    final deviceName = _selectedDeviceName ?? "Device";
+    final date = DateFormat('yyyy-MM-dd').format(_historyFrom ?? DateTime.now());
+
+    StringBuffer gpx = StringBuffer();
+    gpx.writeln('<?xml version="1.0" encoding="UTF-8"?>');
+    gpx.writeln('<gpx version="1.1" creator="Trabcdefg" xmlns="http://www.topografix.com/GPX/1/1">');
+    gpx.writeln('  <trk>');
+    gpx.writeln('    <name>$deviceName - $date</name>');
+    gpx.writeln('    <trkseg>');
+
+    for (var p in _positions) {
+      final timeStr = p.serverTime?.toUtc().toIso8601String() ?? "";
+      gpx.writeln('      <trkpt lat="${p.latitude}" lon="${p.longitude}">');
+      gpx.writeln('        <time>$timeStr</time>');
+      if (p.speed != null) {
+        gpx.writeln('        <speed>${p.speed}</speed>');
+      }
+      gpx.writeln('      </trkpt>');
+    }
+
+    gpx.writeln('    </trkseg>');
+    gpx.writeln('  </trk>');
+    gpx.writeln('</gpx>');
+
+    try {
+      final directory = await getTemporaryDirectory();
+      final file = File('${directory.path}/${deviceName}_$date.gpx');
+      await file.writeAsString(gpx.toString());
+
+      // ✨ 符合最新 share_plus 套件的實例化 ShareParams 傳參
+      await SharePlus.instance.share(ShareParams(files: [XFile(file.path)], text: 'GPX Export for $deviceName'));
+    } catch (e) {
+      Get.snackbar("Export Failed", e.toString());
+    }
+  }
+
+  Widget _buildStatItem(String label, String value, IconData icon) {
     return Column(
       children: [
-        Text(
-          title,
-          style: const TextStyle(
-            fontSize: 12,
-            color: Colors.grey,
-            fontWeight: FontWeight.w600,
-          ),
+        Row(
+          children: [
+            Icon(icon, size: 14, color: Theme.of(context).colorScheme.primary),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500),
+            ),
+          ],
         ),
+        const SizedBox(height: 2),
         Text(
           value,
-          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+          style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface, letterSpacing: -0.5),
         ),
       ],
     );
+  }
+
+  String _getDistanceFormatted(int currentIndex) {
+    if (_distancePrefixSum.isEmpty || currentIndex >= _distancePrefixSum.length) {
+      return "0.00 ${'sharedKm'.tr}";
+    }
+    return "${_distancePrefixSum[currentIndex].toStringAsFixed(2)} ${'sharedKm'.tr}";
+  }
+
+  Widget _buildSpeedSelector() {
+    final speeds = [1.0, 5.0, 10.0, 20.0];
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(color: Theme.of(context).colorScheme.surfaceContainerHighest, borderRadius: BorderRadius.circular(16)),
+      child: Row(
+        children: speeds.map((s) {
+          bool selected = _playbackSpeed == s;
+          return GestureDetector(
+            onTap: () => setState(() => _playbackSpeed = s),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: selected ? Theme.of(context).colorScheme.primaryContainer : Colors.transparent,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: selected ? [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 4)] : [],
+              ),
+              child: Text(
+                '${s.toInt()}x',
+                style: TextStyle(fontSize: 12, fontWeight: selected ? FontWeight.bold : FontWeight.normal, color: selected ? Theme.of(context).colorScheme.onPrimaryContainer : Theme.of(context).colorScheme.onSurfaceVariant),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  // --- 日曆邏輯 ---
+
+  Future<void> _fetchMonthlyData(DateTime month) async {
+    if (_deviceId == null) {
+      return;
+    }
+
+    if (_dailySummaries.isNotEmpty && month.month == _focusedDay.month && month.year == _focusedDay.year) {
+      return;
+    }
+
+    setState(() {
+      _isCalendarLoading = true;
+      _focusedDay = month;
+    });
+
+    if (!mounted) {
+      return;
+    }
+    final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
+    final reportsApi = api.ReportsApi(traccarProvider.apiClient);
+    final dailyBox = await Hive.openBox<ReportSummaryHive>('daily_summaries');
+    final serverVersion = await traccarProvider.fetchServerVersion();
+    final today = DateTime.now();
+
+    developer.log('Server version: $serverVersion — fetching monthly data for ${month.year}-${month.month}', name: 'HistoryRouteScreen');
+
+    _dailySummaries.clear();
+    final firstDayOfMonth = DateTime(month.year, month.month, 1);
+    final lastDayOfMonth = DateTime(month.year, month.month + 1, 0);
+
+    for (var date = firstDayOfMonth; date.isBefore(lastDayOfMonth.add(const Duration(days: 1))); date = date.add(const Duration(days: 1))) {
+      final dayUtc = DateTime.utc(date.year, date.month, date.day);
+      final String hiveKey = '${_deviceId}_${DateFormat('yyyy-MM-dd').format(dayUtc)}';
+      final cachedSummary = dailyBox.get(hiveKey);
+
+      if (cachedSummary != null) {
+        // ❗ Old API (e.g., v4.4) may have cached zero-value entries for future dates.
+        // Skip cached zero entries for dates after today so they get re-fetched later.
+        final distance = cachedSummary.distance ?? 0;
+        final engineHours = cachedSummary.engineHours ?? 0;
+        if (date.isAfter(today) && distance <= 0 && engineHours <= 0) {
+          developer.log('Skipping stale zero cache for future date: ${DateFormat('yyyy-MM-dd').format(date)}', name: 'HistoryRouteScreen');
+          await dailyBox.delete(hiveKey);
+          continue;
+        }
+        _dailySummaries[dayUtc] = api.ReportSummary(distance: cachedSummary.distance, averageSpeed: cachedSummary.averageSpeed, maxSpeed: cachedSummary.maxSpeed, spentFuel: cachedSummary.spentFuel, engineHours: cachedSummary.engineHours);
+      }
+    }
+
+    setState(() {
+      _isCalendarLoading = false;
+    });
+
+    for (var date = firstDayOfMonth; date.isBefore(lastDayOfMonth.add(const Duration(days: 1))); date = date.add(const Duration(days: 1))) {
+      final dayUtc = DateTime.utc(date.year, date.month, date.day);
+
+      // 🔥 Skip future dates — no data exists yet, and old API (v4.4) incorrectly
+      // returns zero-value summaries for future dates that would pollute our cache.
+      if (date.isAfter(today)) {
+        developer.log('Skipping future date (no network fetch): ${DateFormat('yyyy-MM-dd').format(date)}', name: 'HistoryRouteScreen');
+        continue;
+      }
+
+      if (_dailySummaries.containsKey(dayUtc)) {
+        continue;
+      }
+
+      final from = DateTime(date.year, date.month, date.day, 0, 0, 0).toUtc();
+      final to = DateTime(date.year, date.month, date.day, 23, 59, 59).toUtc();
+      final String hiveKey = '${_deviceId}_${DateFormat('yyyy-MM-dd').format(dayUtc)}';
+
+      try {
+        api.ReportSummary? dailySummary;
+        try {
+          // Try using the generated API first (works on v6.x+)
+          final summary = await reportsApi.getReportsSummary(from, to, deviceId: [_deviceId!]);
+          if (summary != null && summary.isNotEmpty) {
+            dailySummary = summary.first;
+          }
+        } catch (e) {
+          // Fallback for old API (v4.x) — the generated fromJson may fail
+          // on missing fields. Use raw API call with manual parsing instead.
+          developer.log('Generated API failed, trying raw API fallback: $e', name: 'HistoryRouteScreen');
+          try {
+            final response = await traccarProvider.apiClient.invokeAPI(
+              '/reports/summary',
+              'GET',
+              [api.QueryParam('from', from.toIso8601String()), api.QueryParam('to', to.toIso8601String()), api.QueryParam('deviceId', _deviceId.toString())],
+              null,
+              {},
+              {},
+              'application/json',
+            );
+            if (response.body.isNotEmpty) {
+              final decoded = json.decode(response.body) as List?;
+              if (decoded != null && decoded.isNotEmpty) {
+                final raw = decoded.first as Map<String, dynamic>;
+                dailySummary = api.ReportSummary(
+                  distance: (raw['distance'] as num?)?.toDouble(),
+                  averageSpeed: (raw['averageSpeed'] as num?)?.toDouble(),
+                  maxSpeed: (raw['maxSpeed'] as num?)?.toDouble(),
+                  spentFuel: (raw['spentFuel'] as num?)?.toDouble(),
+                  engineHours: raw['engineHours'] as int?,
+                );
+              }
+            }
+          } catch (e2) {
+            developer.log('Raw API fallback also failed for day $date: $e2', name: 'HistoryRouteScreen');
+          }
+        }
+
+        if (dailySummary != null) {
+          developer.log('Fetched summary for ${DateFormat('yyyy-MM-dd').format(date)}: distance=${dailySummary.distance}, engineHours=${dailySummary.engineHours}, avgSpeed=${dailySummary.averageSpeed}', name: 'HistoryRouteScreen');
+          _dailySummaries[dayUtc] = dailySummary;
+
+          await dailyBox.put(hiveKey, ReportSummaryHive.fromApi(dailySummary));
+          if (mounted) {
+            setState(() {});
+          }
+        } else {
+          developer.log('  → empty result (no data for this day)', name: 'HistoryRouteScreen');
+        }
+      } catch (e) {
+        developer.log('Failed to fetch data for day $date: $e', name: 'HistoryRouteScreen');
+      }
+    }
+  }
+
+  void _showCalendarDialog() async {
+    if (_deviceId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('pleaseSelectDevice'.tr)));
+      return;
+    }
+
+    final currentLocale = Get.locale;
+    if (currentLocale != null) {
+      final localeString = currentLocale.toString();
+      await initializeDateFormatting(localeString, null);
+    }
+
+    _fetchMonthlyData(_focusedDay);
+
+    if (!mounted) {
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, modalSetState) {
+          return AlertDialog(
+            contentPadding: EdgeInsets.zero,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+            content: SizedBox(
+              width: 340,
+              height: 520,
+              child: Column(
+                children: [
+                  const SizedBox(height: 16),
+                  if (_isCalendarLoading) const LinearProgressIndicator(),
+                  Expanded(
+                    child: TableCalendar(
+                      locale: Get.locale?.languageCode,
+                      firstDay: DateTime.utc(2020),
+                      lastDay: DateTime.now(),
+                      focusedDay: _focusedDay,
+                      daysOfWeekHeight: 24,
+                      selectedDayPredicate: (d) => isSameDay(_selectedCalendarDay, d),
+                      onPageChanged: (focusedDay) {
+                        modalSetState(() {
+                          _focusedDay = focusedDay;
+                        });
+                        _fetchMonthlyData(focusedDay).then((_) {
+                          if (mounted) {
+                            modalSetState(() {});
+                          }
+                        });
+                      },
+                      onDaySelected: (sel, foc) {
+                        _onDaySelected(sel, foc);
+                        Navigator.pop(context);
+                      },
+                      calendarBuilders: CalendarBuilders(
+                        markerBuilder: (context, date, events) {
+                          final dayUtc = DateTime.utc(date.year, date.month, date.day);
+
+                          if (_dailySummaries.containsKey(dayUtc)) {
+                            final summary = _dailySummaries[dayUtc]!;
+                            final distanceInKm = (summary.distance ?? 0.0) / 1000;
+
+                            if (distanceInKm <= 0) {
+                              return null;
+                            }
+
+                            return Positioned(
+                              bottom: 4,
+                              child: Text(
+                                '${distanceInKm.toStringAsFixed(1)} km',
+                                style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: isSameDay(_selectedCalendarDay, date) ? Colors.white : Colors.blue[700]),
+                              ),
+                            );
+                          }
+                          return null;
+                        },
+                      ),
+                      calendarStyle: CalendarStyle(
+                        todayDecoration: BoxDecoration(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5), shape: BoxShape.circle),
+                        selectedDecoration: BoxDecoration(color: Theme.of(context).colorScheme.primary, shape: BoxShape.circle),
+                        defaultTextStyle: TextStyle(color: Theme.of(context).colorScheme.onSurface),
+                        weekendTextStyle: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7)),
+                        outsideTextStyle: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3)),
+                        cellMargin: const EdgeInsets.all(4),
+                      ),
+                      headerStyle: HeaderStyle(
+                        formatButtonVisible: false,
+                        titleCentered: true,
+                        titleTextStyle: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontSize: 17, fontWeight: FontWeight.bold),
+                        leftChevronIcon: Icon(Icons.chevron_left, color: Theme.of(context).colorScheme.primary),
+                        rightChevronIcon: Icon(CupertinoIcons.chevron_right, color: Theme.of(context).colorScheme.primary),
+                      ),
+                      daysOfWeekStyle: DaysOfWeekStyle(
+                        weekdayStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12),
+                        weekendStyle: TextStyle(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.8), fontSize: 12),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  void _onDaySelected(DateTime selectedDay, DateTime focusedDay) {
+    setState(() {
+      _selectedCalendarDay = selectedDay;
+      _focusedDay = focusedDay;
+    });
+    _fetchHistoryRoute(selectedDay: selectedDay);
   }
 }

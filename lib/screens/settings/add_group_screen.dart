@@ -1,22 +1,22 @@
 // add_group_screen.dart
-
+// A screen to add a new group in the TracDefg app.
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:trabcdefg/src/generated_api/api.dart' as api;
-import 'package:trabcdefg/providers/traccar_provider.dart';
-import 'package:provider/provider.dart';
 import 'package:get/get.dart';
+import 'package:provider/provider.dart';
+import 'package:trabcdefg/providers/traccar_provider.dart';
+import 'package:trabcdefg/src/generated_api/api.dart' as api;
 
 class AddGroupScreen extends StatefulWidget {
   const AddGroupScreen({super.key});
 
   @override
-  _AddGroupScreenState createState() => _AddGroupScreenState();
+  State<AddGroupScreen> createState() => _AddGroupScreenState();
 }
 
 class _AddGroupScreenState extends State<AddGroupScreen> {
   final _formKey = GlobalKey<FormState>();
   String? _groupName;
-  String? _groupExtra;
   final List<Map<String, dynamic>> _attributes = [];
 
   void _addAttribute() {
@@ -55,21 +55,17 @@ class _AddGroupScreenState extends State<AddGroupScreen> {
       final newGroup = api.Group(name: _groupName!, attributes: attributesMap);
 
       try {
-        final traccarProvider = Provider.of<TraccarProvider>(
-          context,
-          listen: false,
-        );
+        final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
         // Correct way to instantiate GroupsApi with the authenticated client
         final groupsApi = api.GroupsApi(traccarProvider.apiClient);
-        await groupsApi.groupsPost(newGroup);
+        await groupsApi.postGroups(newGroup);
+
+        if (!mounted) return;
         Navigator.of(context).pop(true);
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('sharedSaved'.tr)));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('sharedSaved'.tr)));
       } catch (e) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Failed to add group: $e')));
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to add group: $e')));
       }
     }
   }
@@ -77,7 +73,7 @@ class _AddGroupScreenState extends State<AddGroupScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('sharedAdd'.tr + ' ' + 'groupDialog'.tr)),
+      appBar: CupertinoNavigationBar(middle: Text('${'sharedAdd'.tr} ${'groupDialog'.tr}')),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(16.0),
@@ -86,10 +82,7 @@ class _AddGroupScreenState extends State<AddGroupScreen> {
             child: ListView(
               children: [
                 TextFormField(
-                  decoration: InputDecoration(
-                    labelText:
-                        'sharedName'.tr + ' (' + 'sharedRequired'.tr + ')',
-                  ),
+                  decoration: InputDecoration(labelText: '${'sharedName'.tr} (${'sharedRequired'.tr})'),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
                       return 'Please enter a group name.';
@@ -103,17 +96,12 @@ class _AddGroupScreenState extends State<AddGroupScreen> {
                 TextFormField(
                   decoration: InputDecoration(labelText: 'sharedExtra'.tr),
                   onSaved: (value) {
-                    _groupExtra = value;
+                    // Kept form field operational, but variable _groupExtra removed
+                    // since it was listed as an unused field.
                   },
                 ),
                 const SizedBox(height: 20),
-                Text(
-                  'sharedAttributes'.tr,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+                Text('sharedAttributes'.tr, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 10),
                 ..._attributes.asMap().entries.map((entry) {
                   final index = entry.key;
@@ -127,12 +115,7 @@ class _AddGroupScreenState extends State<AddGroupScreen> {
                             children: [
                               Expanded(
                                 child: TextFormField(
-                                  decoration: InputDecoration(
-                                    labelText:
-                                        'sharedAttribute'.tr +
-                                        ' ' +
-                                        'sharedName'.tr,
-                                  ),
+                                  decoration: InputDecoration(labelText: '${'sharedAttribute'.tr} ${'sharedName'.tr}'),
                                   initialValue: attribute['name'],
                                   onSaved: (value) {
                                     attribute['name'] = value!;
@@ -147,44 +130,29 @@ class _AddGroupScreenState extends State<AddGroupScreen> {
                                     attribute['type'] = newValue!;
                                   });
                                 },
-                                items: <String>['String', 'Number', 'Boolean']
-                                    .map<DropdownMenuItem<String>>((
-                                      String value,
-                                    ) {
-                                      String translatedValue;
-                                      switch (value) {
-                                        case 'String':
-                                          translatedValue =
-                                              'sharedTypeString'.tr;
-                                          break;
-                                        case 'Number':
-                                          translatedValue =
-                                              'sharedTypeNumber'.tr;
-                                          break;
-                                        case 'Boolean':
-                                          translatedValue =
-                                              'sharedTypeBoolean'.tr;
-                                          break;
-                                        default:
-                                          translatedValue = value;
-                                      }
-                                      return DropdownMenuItem<String>(
-                                        value: value,
-                                        child: Text(translatedValue),
-                                      );
-                                    })
-                                    .toList(),
+                                items: <String>['String', 'Number', 'Boolean'].map<DropdownMenuItem<String>>((String value) {
+                                  String translatedValue;
+                                  switch (value) {
+                                    case 'String':
+                                      translatedValue = 'sharedTypeString'.tr;
+                                      break;
+                                    case 'Number':
+                                      translatedValue = 'sharedTypeNumber'.tr;
+                                      break;
+                                    case 'Boolean':
+                                      translatedValue = 'sharedTypeBoolean'.tr;
+                                      break;
+                                    default:
+                                      translatedValue = value;
+                                  }
+                                  return DropdownMenuItem<String>(value: value, child: Text(translatedValue));
+                                }).toList(),
                               ),
-                              IconButton(
-                                icon: const Icon(Icons.remove_circle),
-                                onPressed: () => _removeAttribute(index),
-                              ),
+                              IconButton(icon: const Icon(Icons.remove_circle), onPressed: () => _removeAttribute(index)),
                             ],
                           ),
                           TextFormField(
-                            decoration: InputDecoration(
-                              labelText: 'stateValue'.tr,
-                            ),
+                            decoration: InputDecoration(labelText: 'stateValue'.tr),
                             initialValue: attribute['value'],
                             onSaved: (value) {
                               attribute['value'] = value!;
@@ -194,21 +162,14 @@ class _AddGroupScreenState extends State<AddGroupScreen> {
                       ),
                     ),
                   );
-                }).toList(),
-                ElevatedButton.icon(
-                  onPressed: _addAttribute,
-                  icon: const Icon(Icons.add),
-                  label: Text('sharedAdd'.tr + ' ' + 'sharedAttribute'.tr),
-                ),
+                }), // Removed unnecessary .toList() from here
+                ElevatedButton.icon(onPressed: _addAttribute, icon: const Icon(CupertinoIcons.add), label: Text('${'sharedAdd'.tr} ${'sharedAttribute'.tr}')),
               ],
             ),
           ),
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _saveGroup,
-        child: const Icon(Icons.save),
-      ),
+      floatingActionButton: FloatingActionButton(onPressed: _saveGroup, child: const Icon(CupertinoIcons.checkmark_circle)),
     );
   }
 }

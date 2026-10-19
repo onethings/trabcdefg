@@ -25,6 +25,7 @@ class ReportStops {
     this.engineHours,
   });
 
+  /// Device identifier for the stop
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -33,6 +34,7 @@ class ReportStops {
   ///
   int? deviceId;
 
+  /// Human readable device name
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -41,6 +43,7 @@ class ReportStops {
   ///
   String? deviceName;
 
+  /// Stop duration in seconds
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -58,6 +61,7 @@ class ReportStops {
   ///
   DateTime? startTime;
 
+  /// Address where the stop occurred
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -66,6 +70,7 @@ class ReportStops {
   ///
   String? address;
 
+  /// Stop latitude in decimal degrees
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -74,6 +79,7 @@ class ReportStops {
   ///
   num? lat;
 
+  /// Stop longitude in decimal degrees
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -100,6 +106,7 @@ class ReportStops {
   ///
   num? spentFuel;
 
+  /// Engine hours accumulated during the stop
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated

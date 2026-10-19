@@ -1,17 +1,18 @@
 // groups_screen.dart
-
+// A screen to display and manage groups in the TracDefg app.
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:trabcdefg/src/generated_api/api.dart' as api;
-import 'package:trabcdefg/screens/settings/add_group_screen.dart';
-import 'package:trabcdefg/providers/traccar_provider.dart';
-import 'package:provider/provider.dart';
 import 'package:get/get.dart';
+import 'package:provider/provider.dart';
+import 'package:trabcdefg/providers/traccar_provider.dart';
+import 'package:trabcdefg/screens/settings/add_group_screen.dart';
+import 'package:trabcdefg/src/generated_api/api.dart' as api;
 
 class GroupsScreen extends StatefulWidget {
   const GroupsScreen({super.key});
 
   @override
-  _GroupsScreenState createState() => _GroupsScreenState();
+  State<GroupsScreen> createState() => _GroupsScreenState(); // <-- Changed return type here
 }
 
 class _GroupsScreenState extends State<GroupsScreen> {
@@ -28,16 +29,14 @@ class _GroupsScreenState extends State<GroupsScreen> {
     // Correct way to instantiate GroupsApi with the authenticated client
     final groupsApi = api.GroupsApi(traccarProvider.apiClient);
     setState(() {
-      _groupsFuture = groupsApi.groupsGet();
+      _groupsFuture = groupsApi.getGroups();
     });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text('groupDialog'.tr),
-      ),
+      appBar: CupertinoNavigationBar(middle: Text('groupDialog'.tr)),
       body: FutureBuilder<List<api.Group>?>(
         future: _groupsFuture,
         builder: (context, snapshot) {
@@ -61,19 +60,17 @@ class _GroupsScreenState extends State<GroupsScreen> {
           }
         },
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () async {
-          final newGroup = await Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => const AddGroupScreen(),
-            ),
-          );
-          if (newGroup != null) {
-            _fetchGroups();
-          }
-        },
-        child: const Icon(Icons.add),
+      floatingActionButton: Transform.translate(
+        offset: const Offset(0, -45), // 往上移動 45px
+        child: FloatingActionButton(
+          onPressed: () async {
+            final newGroup = await Navigator.push(context, MaterialPageRoute(builder: (context) => const AddGroupScreen()));
+            if (newGroup != null) {
+              _fetchGroups();
+            }
+          },
+          child: const Icon(CupertinoIcons.add),
+        ),
       ),
     );
   }

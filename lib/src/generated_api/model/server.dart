@@ -22,6 +22,7 @@ class Server {
     this.bingKey,
     this.mapUrl,
     this.poiLayer,
+    this.announcement,
     this.latitude,
     this.longitude,
     this.zoom,
@@ -33,6 +34,7 @@ class Server {
     this.attributes,
   });
 
+  /// Unique server configuration identifier
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -41,6 +43,7 @@ class Server {
   ///
   int? id;
 
+  /// Whether new user registrations are allowed
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -49,6 +52,7 @@ class Server {
   ///
   bool? registration;
 
+  /// When true only administrators can modify server-wide settings
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -57,6 +61,7 @@ class Server {
   ///
   bool? readonly;
 
+  /// Disallow device attribute changes for non-admins
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -65,6 +70,7 @@ class Server {
   ///
   bool? deviceReadonly;
 
+  /// Restrict command execution to supported protocol commands
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -73,6 +79,7 @@ class Server {
   ///
   bool? limitCommands;
 
+  /// Default map layer identifier
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -81,6 +88,7 @@ class Server {
   ///
   String? map;
 
+  /// Bing Maps API key used when Bing is selected as a provider
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -89,6 +97,7 @@ class Server {
   ///
   String? bingKey;
 
+  /// Custom tile server URL template if configured
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -97,6 +106,7 @@ class Server {
   ///
   String? mapUrl;
 
+  /// External point-of-interest layer configuration
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -105,6 +115,16 @@ class Server {
   ///
   String? poiLayer;
 
+  /// Message displayed to all users in the web application
+  ///
+  /// Please note: This property should have been non-nullable! Since the specification file
+  /// does not include a default value (using the "default:" property), however, the generated
+  /// source code must fall back to having a nullable type.
+  /// Consider adding a "default:" property in the specification file to hide this note.
+  ///
+  String? announcement;
+
+  /// Default map center latitude
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -113,6 +133,7 @@ class Server {
   ///
   num? latitude;
 
+  /// Default map center longitude
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -121,6 +142,7 @@ class Server {
   ///
   num? longitude;
 
+  /// Default map zoom level
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -129,6 +151,7 @@ class Server {
   ///
   int? zoom;
 
+  /// Traccar server version string
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -137,6 +160,7 @@ class Server {
   ///
   String? version;
 
+  /// Forces users to use the server-wide settings instead of their own
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -145,6 +169,7 @@ class Server {
   ///
   bool? forceSettings;
 
+  /// Default coordinate format for displaying positions
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -153,6 +178,7 @@ class Server {
   ///
   String? coordinateFormat;
 
+  /// Indicates whether OpenID authentication is available
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -161,6 +187,7 @@ class Server {
   ///
   bool? openIdEnabled;
 
+  /// Require OpenID authentication for all users when enabled
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -169,6 +196,7 @@ class Server {
   ///
   bool? openIdForce;
 
+  /// Additional server-level configuration values
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -190,6 +218,7 @@ class Server {
           other.bingKey == bingKey &&
           other.mapUrl == mapUrl &&
           other.poiLayer == poiLayer &&
+          other.announcement == announcement &&
           other.latitude == latitude &&
           other.longitude == longitude &&
           other.zoom == zoom &&
@@ -212,6 +241,7 @@ class Server {
       (bingKey == null ? 0 : bingKey!.hashCode) +
       (mapUrl == null ? 0 : mapUrl!.hashCode) +
       (poiLayer == null ? 0 : poiLayer!.hashCode) +
+      (announcement == null ? 0 : announcement!.hashCode) +
       (latitude == null ? 0 : latitude!.hashCode) +
       (longitude == null ? 0 : longitude!.hashCode) +
       (zoom == null ? 0 : zoom!.hashCode) +
@@ -224,7 +254,7 @@ class Server {
 
   @override
   String toString() =>
-      'Server[id=$id, registration=$registration, readonly=$readonly, deviceReadonly=$deviceReadonly, limitCommands=$limitCommands, map=$map, bingKey=$bingKey, mapUrl=$mapUrl, poiLayer=$poiLayer, latitude=$latitude, longitude=$longitude, zoom=$zoom, version=$version, forceSettings=$forceSettings, coordinateFormat=$coordinateFormat, openIdEnabled=$openIdEnabled, openIdForce=$openIdForce, attributes=$attributes]';
+      'Server[id=$id, registration=$registration, readonly=$readonly, deviceReadonly=$deviceReadonly, limitCommands=$limitCommands, map=$map, bingKey=$bingKey, mapUrl=$mapUrl, poiLayer=$poiLayer, announcement=$announcement, latitude=$latitude, longitude=$longitude, zoom=$zoom, version=$version, forceSettings=$forceSettings, coordinateFormat=$coordinateFormat, openIdEnabled=$openIdEnabled, openIdForce=$openIdForce, attributes=$attributes]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -272,6 +302,11 @@ class Server {
       json[r'poiLayer'] = this.poiLayer;
     } else {
       json[r'poiLayer'] = null;
+    }
+    if (this.announcement != null) {
+      json[r'announcement'] = this.announcement;
+    } else {
+      json[r'announcement'] = null;
     }
     if (this.latitude != null) {
       json[r'latitude'] = this.latitude;
@@ -351,6 +386,7 @@ class Server {
         bingKey: mapValueOfType<String>(json, r'bingKey'),
         mapUrl: mapValueOfType<String>(json, r'mapUrl'),
         poiLayer: mapValueOfType<String>(json, r'poiLayer'),
+        announcement: mapValueOfType<String>(json, r'announcement'),
         latitude: num.parse('${json[r'latitude']}'),
         longitude: num.parse('${json[r'longitude']}'),
         zoom: mapValueOfType<int>(json, r'zoom'),

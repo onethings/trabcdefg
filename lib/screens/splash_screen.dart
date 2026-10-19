@@ -1,11 +1,10 @@
 // lib/screens/splash_screen.dart
-
+// This screen handles checking the stored session ID and routing the user to either the main app or the login screen.
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:trabcdefg/providers/traccar_provider.dart';
-import 'package:trabcdefg/services/auth_service.dart';
 import 'package:get/get.dart';
+import 'package:provider/provider.dart';
+import 'package:trabcdefg/providers/traccar_provider.dart';
+import 'package:trabcdefg/services/auth_session_store.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -21,31 +20,42 @@ class _SplashScreenState extends State<SplashScreen> {
     _checkLoginStatus();
   }
 
+  /// Resumes the session saved in secure storage. The password is never
+  /// persisted, so if the server rejects the session the user must log in
+  /// again instead of silently re-authenticating.
   Future<void> _checkLoginStatus() async {
-    final prefs = await SharedPreferences.getInstance();
-    final jSessionId = prefs.getString('jSessionId');
+    await AuthSessionStore.instance.load();
+    final jSessionId = AuthSessionStore.instance.sessionId;
 
-    if (jSessionId != null) {
-      // Session ID found, try to use it to get devices
-      final traccarProvider = context.read<TraccarProvider>();
-      try {
-        // We use fetchInitialData as a way to validate the session
-        traccarProvider.setSessionId(jSessionId);
-        await traccarProvider.fetchInitialData();
-        
-        // If fetchInitialData succeeds, the session is valid. Navigate to main screen.
-        if (mounted) {
-          Navigator.of(context).pushReplacementNamed('/main');
-        }
-      } catch (e) {
-        // Session has expired or is invalid. Navigate to login screen.
-        if (mounted) {
-          Navigator.of(context).pushReplacementNamed('/login');
-        }
-      }
-    } else {
-      // No session ID found, navigate to login screen.
+    if (!mounted) return;
+
+    // No saved session → login page.
+    if (jSessionId == null || jSessionId.isEmpty) {
+      Navigator.of(context).pushReplacementNamed('/login');
+      return;
+    }
+
+    final traccarProvider = context.read<TraccarProvider>();
+    traccarProvider.setSessionId(jSessionId);
+
+    try {
+      await traccarProvider.fetchInitialData().timeout(const Duration(seconds: 10));
+
       if (mounted) {
+        Navigator.of(context).pushReplacementNamed('/main');
+      }
+    } catch (e) {
+      // 401 is handled by the API client: it tries one silent re-login, then
+      // clears the session and redirects. For network/server failures the
+      // session is kept so the next launch can retry.
+      debugPrint('Splash session check failed: $e');
+      if (mounted) {
+        final sessionExpired = AuthSessionStore.instance.sessionId == null;
+        Get.snackbar(
+          'Error'.tr,
+          sessionExpired ? 'Your session has expired. Please log in again.'.tr : 'Could not connect to server. Please check your network and try again.'.tr,
+          snackPosition: SnackPosition.BOTTOM,
+        );
         Navigator.of(context).pushReplacementNamed('/login');
       }
     }
@@ -53,9 +63,16 @@ class _SplashScreenState extends State<SplashScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(
+    return Scaffold(
       body: Center(
-        child: CircularProgressIndicator(),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Image.asset('assets/images/logo.png', width: 180, height: 180, fit: BoxFit.contain),
+            const SizedBox(height: 24),
+            const CircularProgressIndicator(),
+          ],
+        ),
       ),
     );
   }

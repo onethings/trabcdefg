@@ -15,11 +15,16 @@ class EventsApi {
 
   final ApiClient apiClient;
 
-  /// Performs an HTTP 'GET /events/{id}' operation and returns the [Response].
+  /// Fetch an Event
+  ///
+  /// Returns a single Event record with full context for the specified identifier
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
   /// Parameters:
   ///
   /// * [int] id (required):
-  Future<Response> eventsIdGetWithHttpInfo(
+  Future<Response> getEventsIdWithHttpInfo(
     int id,
   ) async {
     // ignore: prefer_const_declarations
@@ -45,13 +50,17 @@ class EventsApi {
     );
   }
 
+  /// Fetch an Event
+  ///
+  /// Returns a single Event record with full context for the specified identifier
+  ///
   /// Parameters:
   ///
   /// * [int] id (required):
-  Future<Event?> eventsIdGet(
+  Future<Event?> getEventsId(
     int id,
   ) async {
-    final response = await eventsIdGetWithHttpInfo(
+    final response = await getEventsIdWithHttpInfo(
       id,
     );
     if (response.statusCode >= HttpStatus.badRequest) {

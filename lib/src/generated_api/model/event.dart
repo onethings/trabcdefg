@@ -23,6 +23,7 @@ class Event {
     this.attributes,
   });
 
+  /// Unique event identifier
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -31,6 +32,7 @@ class Event {
   ///
   int? id;
 
+  /// Event type name
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -48,6 +50,7 @@ class Event {
   ///
   DateTime? eventTime;
 
+  /// Device associated with the event
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -56,6 +59,7 @@ class Event {
   ///
   int? deviceId;
 
+  /// Position record linked to the event when applicable
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -64,6 +68,7 @@ class Event {
   ///
   int? positionId;
 
+  /// Geofence referenced by the event if any
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -72,6 +77,7 @@ class Event {
   ///
   int? geofenceId;
 
+  /// Maintenance record tied to the event
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -80,6 +86,7 @@ class Event {
   ///
   int? maintenanceId;
 
+  /// Additional event-specific attributes
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated

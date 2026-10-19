@@ -16,9 +16,58 @@ class MaintenanceApi {
 
   final ApiClient apiClient;
 
-  /// Fetch a list of Maintenance
+  /// Delete a Maintenance task
   ///
-  /// Without params, it returns a list of Maintenance the user has access to
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [int] id (required):
+  Future<Response> deleteMaintenanceIdWithHttpInfo(
+    int id,
+  ) async {
+    // ignore: prefer_const_declarations
+    final path = r'/maintenance/{id}'.replaceAll('{id}', id.toString());
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>[];
+
+    return apiClient.invokeAPI(
+      path,
+      'DELETE',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+    );
+  }
+
+  /// Delete a Maintenance task
+  ///
+  /// Parameters:
+  ///
+  /// * [int] id (required):
+  Future<void> deleteMaintenanceId(
+    int id,
+  ) async {
+    final response = await deleteMaintenanceIdWithHttpInfo(
+      id,
+    );
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+  }
+
+  /// Fetch a list of Maintenance tasks
+  ///
+  /// Without params, it returns a list of Maintenance tasks the user has access to
   ///
   /// Note: This method returns the HTTP [Response].
   ///
@@ -37,12 +86,24 @@ class MaintenanceApi {
   ///   Standard users can use this only with _groupId_s, they have access to
   ///
   /// * [bool] refresh:
-  Future<Response> maintenanceGetWithHttpInfo({
+  ///
+  /// * [int] limit:
+  ///   Limit the number of returned results
+  ///
+  /// * [int] offset:
+  ///   Offset for pagination
+  ///
+  /// * [String] keyword:
+  ///   Search keyword filter
+  Future<Response> getMaintenanceWithHttpInfo({
     bool? all,
     int? userId,
     int? deviceId,
     int? groupId,
     bool? refresh,
+    int? limit,
+    int? offset,
+    String? keyword,
   }) async {
     // ignore: prefer_const_declarations
     final path = r'/maintenance';
@@ -69,6 +130,15 @@ class MaintenanceApi {
     if (refresh != null) {
       queryParams.addAll(_queryParams('', 'refresh', refresh));
     }
+    if (limit != null) {
+      queryParams.addAll(_queryParams('', 'limit', limit));
+    }
+    if (offset != null) {
+      queryParams.addAll(_queryParams('', 'offset', offset));
+    }
+    if (keyword != null) {
+      queryParams.addAll(_queryParams('', 'keyword', keyword));
+    }
 
     const contentTypes = <String>[];
 
@@ -83,9 +153,9 @@ class MaintenanceApi {
     );
   }
 
-  /// Fetch a list of Maintenance
+  /// Fetch a list of Maintenance tasks
   ///
-  /// Without params, it returns a list of Maintenance the user has access to
+  /// Without params, it returns a list of Maintenance tasks the user has access to
   ///
   /// Parameters:
   ///
@@ -102,19 +172,34 @@ class MaintenanceApi {
   ///   Standard users can use this only with _groupId_s, they have access to
   ///
   /// * [bool] refresh:
-  Future<List<Maintenance>?> maintenanceGet({
+  ///
+  /// * [int] limit:
+  ///   Limit the number of returned results
+  ///
+  /// * [int] offset:
+  ///   Offset for pagination
+  ///
+  /// * [String] keyword:
+  ///   Search keyword filter
+  Future<List<Maintenance>?> getMaintenance({
     bool? all,
     int? userId,
     int? deviceId,
     int? groupId,
     bool? refresh,
+    int? limit,
+    int? offset,
+    String? keyword,
   }) async {
-    final response = await maintenanceGetWithHttpInfo(
+    final response = await getMaintenanceWithHttpInfo(
       all: all,
       userId: userId,
       deviceId: deviceId,
       groupId: groupId,
       refresh: refresh,
+      limit: limit,
+      offset: offset,
+      keyword: keyword,
     );
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
@@ -133,14 +218,14 @@ class MaintenanceApi {
     return null;
   }
 
-  /// Delete a Maintenance
+  /// Fetch a Maintenance task
   ///
   /// Note: This method returns the HTTP [Response].
   ///
   /// Parameters:
   ///
   /// * [int] id (required):
-  Future<Response> maintenanceIdDeleteWithHttpInfo(
+  Future<Response> getMaintenanceIdWithHttpInfo(
     int id,
   ) async {
     // ignore: prefer_const_declarations
@@ -157,7 +242,7 @@ class MaintenanceApi {
 
     return apiClient.invokeAPI(
       path,
-      'DELETE',
+      'GET',
       queryParams,
       postBody,
       headerParams,
@@ -166,72 +251,16 @@ class MaintenanceApi {
     );
   }
 
-  /// Delete a Maintenance
+  /// Fetch a Maintenance task
   ///
   /// Parameters:
   ///
   /// * [int] id (required):
-  Future<void> maintenanceIdDelete(
+  Future<Maintenance?> getMaintenanceId(
     int id,
   ) async {
-    final response = await maintenanceIdDeleteWithHttpInfo(
+    final response = await getMaintenanceIdWithHttpInfo(
       id,
-    );
-    if (response.statusCode >= HttpStatus.badRequest) {
-      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
-    }
-  }
-
-  /// Update a Maintenance
-  ///
-  /// Note: This method returns the HTTP [Response].
-  ///
-  /// Parameters:
-  ///
-  /// * [int] id (required):
-  ///
-  /// * [Maintenance] body (required):
-  Future<Response> maintenanceIdPutWithHttpInfo(
-    int id,
-    Maintenance body,
-  ) async {
-    // ignore: prefer_const_declarations
-    final path = r'/maintenance/{id}'.replaceAll('{id}', id.toString());
-
-    // ignore: prefer_final_locals
-    Object? postBody = body;
-
-    final queryParams = <QueryParam>[];
-    final headerParams = <String, String>{};
-    final formParams = <String, String>{};
-
-    const contentTypes = <String>['application/json'];
-
-    return apiClient.invokeAPI(
-      path,
-      'PUT',
-      queryParams,
-      postBody,
-      headerParams,
-      formParams,
-      contentTypes.isEmpty ? null : contentTypes.first,
-    );
-  }
-
-  /// Update a Maintenance
-  ///
-  /// Parameters:
-  ///
-  /// * [int] id (required):
-  ///
-  /// * [Maintenance] body (required):
-  Future<Maintenance?> maintenanceIdPut(
-    int id,
-    Maintenance body,
-  ) async {
-    final response = await maintenanceIdPutWithHttpInfo(
-      id,
-      body,
     );
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
@@ -249,21 +278,21 @@ class MaintenanceApi {
     return null;
   }
 
-  /// Create a Maintenance
+  /// Create a Maintenance task
   ///
   /// Note: This method returns the HTTP [Response].
   ///
   /// Parameters:
   ///
-  /// * [Maintenance] body (required):
-  Future<Response> maintenancePostWithHttpInfo(
-    Maintenance body,
+  /// * [Maintenance] maintenance (required):
+  Future<Response> postMaintenanceWithHttpInfo(
+    Maintenance maintenance,
   ) async {
     // ignore: prefer_const_declarations
     final path = r'/maintenance';
 
     // ignore: prefer_final_locals
-    Object? postBody = body;
+    Object? postBody = maintenance;
 
     final queryParams = <QueryParam>[];
     final headerParams = <String, String>{};
@@ -282,16 +311,83 @@ class MaintenanceApi {
     );
   }
 
-  /// Create a Maintenance
+  /// Create a Maintenance task
   ///
   /// Parameters:
   ///
-  /// * [Maintenance] body (required):
-  Future<Maintenance?> maintenancePost(
-    Maintenance body,
+  /// * [Maintenance] maintenance (required):
+  Future<Maintenance?> postMaintenance(
+    Maintenance maintenance,
   ) async {
-    final response = await maintenancePostWithHttpInfo(
-      body,
+    final response = await postMaintenanceWithHttpInfo(
+      maintenance,
+    );
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty &&
+        response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(
+        await _decodeBodyBytes(response),
+        'Maintenance',
+      ) as Maintenance;
+    }
+    return null;
+  }
+
+  /// Update a Maintenance task
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [int] id (required):
+  ///
+  /// * [Maintenance] maintenance (required):
+  Future<Response> putMaintenanceIdWithHttpInfo(
+    int id,
+    Maintenance maintenance,
+  ) async {
+    // ignore: prefer_const_declarations
+    final path = r'/maintenance/{id}'.replaceAll('{id}', id.toString());
+
+    // ignore: prefer_final_locals
+    Object? postBody = maintenance;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>['application/json'];
+
+    return apiClient.invokeAPI(
+      path,
+      'PUT',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+    );
+  }
+
+  /// Update a Maintenance task
+  ///
+  /// Parameters:
+  ///
+  /// * [int] id (required):
+  ///
+  /// * [Maintenance] maintenance (required):
+  Future<Maintenance?> putMaintenanceId(
+    int id,
+    Maintenance maintenance,
+  ) async {
+    final response = await putMaintenanceIdWithHttpInfo(
+      id,
+      maintenance,
     );
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));

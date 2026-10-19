@@ -32,6 +32,7 @@ class ReportTrips {
     this.driverName,
   });
 
+  /// Device identifier for the trip
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -40,6 +41,7 @@ class ReportTrips {
   ///
   int? deviceId;
 
+  /// Human readable device name
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -84,6 +86,7 @@ class ReportTrips {
   ///
   num? spentFuel;
 
+  /// Trip duration in seconds
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -101,6 +104,7 @@ class ReportTrips {
   ///
   DateTime? startTime;
 
+  /// Address where the trip started
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -109,6 +113,7 @@ class ReportTrips {
   ///
   String? startAddress;
 
+  /// Starting latitude in decimal degrees
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -117,6 +122,7 @@ class ReportTrips {
   ///
   num? startLat;
 
+  /// Starting longitude in decimal degrees
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -134,6 +140,7 @@ class ReportTrips {
   ///
   DateTime? endTime;
 
+  /// Address where the trip ended
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -142,6 +149,7 @@ class ReportTrips {
   ///
   String? endAddress;
 
+  /// Ending latitude in decimal degrees
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -150,6 +158,7 @@ class ReportTrips {
   ///
   num? endLat;
 
+  /// Ending longitude in decimal degrees
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -158,6 +167,7 @@ class ReportTrips {
   ///
   num? endLon;
 
+  /// Unique identifier of the driver assigned to the trip
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -166,6 +176,7 @@ class ReportTrips {
   ///
   String? driverUniqueId;
 
+  /// Name of the driver assigned to the trip
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated

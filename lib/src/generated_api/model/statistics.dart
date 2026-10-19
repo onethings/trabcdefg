@@ -30,6 +30,7 @@ class Statistics {
   ///
   DateTime? captureTime;
 
+  /// Number of active users in the capture period
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -38,6 +39,7 @@ class Statistics {
   ///
   int? activeUsers;
 
+  /// Number of active devices in the capture period
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -46,6 +48,7 @@ class Statistics {
   ///
   int? activeDevices;
 
+  /// Total API requests processed
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -54,6 +57,7 @@ class Statistics {
   ///
   int? requests;
 
+  /// Number of device messages received
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -62,6 +66,7 @@ class Statistics {
   ///
   int? messagesReceived;
 
+  /// Number of device messages stored to the database
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated

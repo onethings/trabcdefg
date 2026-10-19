@@ -1,13 +1,19 @@
+import 'dart:ui';
+
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
-import 'package:trabcdefg/providers/traccar_provider.dart';
-import 'package:trabcdefg/services/auth_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:trabcdefg/constants.dart';
-import 'package:trabcdefg/src/generated_api/api.dart' as api;
+import 'package:trabcdefg/providers/theme_provider.dart';
+import 'package:trabcdefg/providers/traccar_provider.dart';
 import 'package:trabcdefg/screens/qr_scanner_screen.dart';
-import 'package:get/get.dart';
+import 'package:trabcdefg/services/api_client_factory.dart';
+import 'package:trabcdefg/services/auth_service.dart';
 import 'package:trabcdefg/services/localization_service.dart';
+import 'package:trabcdefg/src/generated_api/api.dart' as api;
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -16,15 +22,73 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStateMixin {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _serverUrlController = TextEditingController(text: AppConstants.traccarServerUrl);
   bool _isLoading = false;
+  bool _obscurePassword = true;
+  String _version = "";
+  String? _serverVersion;
+  int _serverVersionRequest = 0;
+
+  late AnimationController _animationController;
+  late Animation<double> _fadeAnimation;
 
   @override
   void initState() {
     super.initState();
+    _loadVersion();
+    _loadSavedServerUrl();
+    _animationController = AnimationController(vsync: this, duration: const Duration(milliseconds: 1000));
+    _fadeAnimation = CurvedAnimation(parent: _animationController, curve: Curves.easeIn);
+    _animationController.forward();
+  }
+
+  Future<void> _loadVersion() async {
+    final info = await PackageInfo.fromPlatform();
+    setState(() => _version = "${info.version}+${info.buildNumber}");
+  }
+
+  /// The server URL is never shown to the user, so the last chosen server
+  /// (QR scan or manual entry) has to be restored here.
+  Future<void> _loadSavedServerUrl() async {
+    final prefs = await SharedPreferences.getInstance();
+    final saved = prefs.getString('traccarServerUrl');
+    if (!mounted) return;
+    if (saved != null && saved.isNotEmpty) {
+      setState(() => _serverUrlController.text = saved);
+    }
+    await _loadServerVersion(_serverUrlController.text);
+  }
+
+  String _normalizedServerUrl(String raw) {
+    var serverUrl = raw.trim().isEmpty ? AppConstants.traccarServerUrl : raw.trim();
+    if (!serverUrl.startsWith('http://') && !serverUrl.startsWith('https://')) {
+      final isLocal = RegExp(r'^(localhost|127\.|192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)').hasMatch(serverUrl);
+      serverUrl = (isLocal ? 'http://' : 'https://') + serverUrl;
+    }
+    return serverUrl.replaceFirst(RegExp(r'/+$'), '');
+  }
+
+  Future<void> _loadServerVersion(String serverUrl) async {
+    final request = ++_serverVersionRequest;
+    if (mounted) setState(() => _serverVersion = null);
+
+    try {
+      final client = ApiClientFactory.create('${_normalizedServerUrl(serverUrl)}/api');
+      final server = await api.ServerApi(client).getServer();
+      if (!mounted || request != _serverVersionRequest) return;
+      setState(() => _serverVersion = server?.version);
+    } catch (e) {
+      debugPrint('Failed to fetch server version for login screen: $e');
+    }
+  }
+
+  /// Friendly label for the configured server, e.g. "demo3.traccar.org".
+  String get _serverHostLabel {
+    final raw = _serverUrlController.text.trim().isEmpty ? AppConstants.traccarServerUrl : _serverUrlController.text.trim();
+    return raw.replaceFirst(RegExp(r'^https?://'), '').replaceAll(RegExp(r'/+$'), '');
   }
 
   @override
@@ -32,321 +96,595 @@ class _LoginScreenState extends State<LoginScreen> {
     _emailController.dispose();
     _passwordController.dispose();
     _serverUrlController.dispose();
+    _animationController.dispose();
     super.dispose();
   }
 
   Future<void> _login() async {
-    setState(() {
-      _isLoading = true;
-    });
-
+    setState(() => _isLoading = true);
     try {
+      final prefs = await SharedPreferences.getInstance();
+
+      // The server address is optional for the user: fall back to the last
+      // saved server and finally to the built-in default, so an untouched
+      // login form always works.
+      final savedServerUrl = _serverUrlController.text.trim().isEmpty ? prefs.getString('traccarServerUrl') ?? '' : _serverUrlController.text;
+      final serverUrl = _normalizedServerUrl(savedServerUrl);
+
+      _serverUrlController.text = serverUrl;
+      final newApiClient = ApiClientFactory.create('$serverUrl/api');
+
+      await prefs.setString('traccarServerUrl', serverUrl);
+
+      // Guard checking asynchronous gap before utilizing BuildContext
+      if (!mounted) return;
       final authService = context.read<AuthService>();
       final traccarProvider = context.read<TraccarProvider>();
 
-      await authService.login(
-        _emailController.text,
-        _passwordController.text,
-      );
+      authService.updateApiClient(newApiClient);
+      traccarProvider.updateApiClient(newApiClient);
 
-      final prefs = await SharedPreferences.getInstance();
-      final jSessionId = prefs.getString('jSessionId');
-      if (jSessionId != null) {
-        traccarProvider.setSessionId(jSessionId);
-      }
+      await authService.login(_emailController.text, _passwordController.text);
 
       await traccarProvider.fetchInitialData();
+      // 🔥 Pre-fetch & cache server version at login so all screens
+      // can use traccarProvider.serverVersion without extra API calls.
+      await traccarProvider.fetchServerVersion();
 
-      if (mounted) {
-        Navigator.of(context).pushNamed('/main');
+      if (mounted) Navigator.of(context).pushNamed('/main');
+    } on LoginException catch (e) {
+      if (!mounted) return;
+      // 401 — wrong email/password or expired account
+      if (e.statusCode == 401) {
+        Get.snackbar('Error'.tr, 'loginFailed'.tr, snackPosition: SnackPosition.BOTTOM);
+        return;
       }
-    } on api.ApiException catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('${'loginFailed'.tr}: ${e.message}'),
+      // 400 — surface the server message, e.g. "Account has expired"
+      if (e.statusCode == 400 && e.message.contains('Account has expired')) {
+        showCupertinoDialog<void>(
+          context: context,
+          builder: (context) => CupertinoAlertDialog(
+            title: Text('Error'.tr),
+            content: Text('loginFailed'.tr),
+            actions: [CupertinoDialogAction(onPressed: () => Navigator.of(context).pop(), child: const Text('OK'))],
           ),
         );
+        return;
+      }
+      // Other 4xx / 5xx — show the server-provided message
+      Get.snackbar('Error'.tr, e.message, snackPosition: SnackPosition.BOTTOM);
+    } on api.ApiException catch (_) {
+      // Network-level failure (DNS / TLS / connection refused / timeout).
+      // No URL talk here — the user never sets the server address.
+      if (mounted) {
+        Get.snackbar('Error'.tr, 'serverUnreachable'.tr, snackPosition: SnackPosition.BOTTOM);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('An unexpected error occurred.'),
-          ),
-        );
+        Get.snackbar('Error'.tr, e.toString(), snackPosition: SnackPosition.BOTTOM);
       }
     } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  Future<void> _showServerSelectionDialog() async {
-    showDialog(
+  void _showServerDialog(BuildContext context) {
+    showModalBottomSheet(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text('SelectServer'.tr),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                ...AppConstants.officialServers.map((url) {
-                  return ListTile(
-                    title: Text(url),
-                    onTap: () {
-                      _serverUrlController.text = url;
-                      Navigator.of(context).pop();
-                    },
-                  );
-                }).toList(),
-                const Divider(),
-                TextField(
-                  controller: _serverUrlController,
-                  decoration: InputDecoration(
-                    labelText: 'CustomServerURL'.tr,
-                    suffixIcon: IconButton(
-                      icon: const Icon(Icons.qr_code_scanner),
-                      onPressed: () async {
-                        final scannedUrl = await Navigator.of(context).push<String>(
-                          MaterialPageRoute(builder: (context) => const QrScannerScreen()),
-                        );
-                        if (scannedUrl != null) {
-                          _serverUrlController.text = scannedUrl;
-                          if (mounted) {
-                            Navigator.of(context).pop();
-                          }
-                        }
-                      },
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(30))),
+      backgroundColor: Colors.transparent,
+      builder: (context) => _ServerPickerSheet(
+        initialUrl: _serverUrlController.text,
+        onSelected: (url) async {
+          final prefs = await SharedPreferences.getInstance();
+          final normalizedUrl = _normalizedServerUrl(url);
+          await prefs.setString('traccarServerUrl', normalizedUrl);
+          if (!context.mounted) return;
+          // Keep the app-wide clients in sync so pre-login screens such as
+          // password reset target the server the user just selected.
+          final client = ApiClientFactory.create('$normalizedUrl/api');
+          context.read<TraccarProvider>().updateApiClient(client);
+          context.read<AuthService>().updateApiClient(client);
+          setState(() => _serverUrlController.text = normalizedUrl);
+          await _loadServerVersion(normalizedUrl);
+        },
+      ),
     );
   }
 
-  // Method to show the language selection dialog with more recognizable names
-  void _showLanguageSelectionDialog() {
-    final Map<String, String> languageNames = {
-      'af': 'Afrikaans',
-      'ar_SA': 'العربية (السعودية)',
-      'ar': 'العربية',
-      'az': 'Azərbaycan dili',
-      'bg': 'Български',
-      'bn': 'বাংলা',
-      'ca': 'Català',
-      'cs': 'Čeština',
-      'da': 'Dansk',
-      'de': 'Deutsch',
-      'el': 'Ελληνικά',
-      'en_US': 'English (US)',
-   //   'en': 'English',
-      'es': 'Español',
-      'et': 'Eesti',
-      'fa': 'فارسی',
-      'fi': 'Suomi',
-      'fr': 'Français',
-      'gl': 'Galego',
-      'he': 'עברית',
-      'hi': 'हिन्दी',
-      'hr': 'Hrvatski',
-      'hu': 'Magyar',
-      'hy': 'Հայերեն',
-      'id': 'Bahasa Indonesia',
-      'it': 'Italiano',
-      'ja': '日本語',
-      'ka': 'ქართული',
-      'kk': 'Қазақ',
-      'km': 'ភាសាខ្មែរ',
-      'ko': '한국어',
-      'lo': 'ລາວ',
-      'lt': 'Lietuvių',
-      'lv': 'Latviešu',
-      'mk': 'Македонски',
-      'ml': 'മലയാളം',
-      'mn': 'Монгол',
-      'ms': 'Bahasa Melayu',
-      'nb': 'Norsk bokmål',
-      'ne': 'नेपाली',
-      'nl': 'Nederlands',
-      'nn': 'Norsk nynorsk',
-      'pl': 'Polski',
-      'pt_BR': 'Português (Brasil)',
-      'pt': 'Português',
-      'ro': 'Română',
-      'ru': 'Русский',
-      'si': 'සිංහල',
-      'sk': 'Slovenčina',
-      'sl': 'Slovenščina',
-      'sq': 'Shqip',
-      'sr': 'Srpski',
-      'sv': 'Svenska',
-      'sw': 'Kiswahili',
-      'ta': 'தமிழ்',
-      'th': 'ไทย',
-      'tk': 'Türkmen',
-      'tr': 'Türkçe',
-      'uk': 'Українська',
-      'uz': 'Oʻzbekcha',
-      'vi': 'Tiếng Việt',
-      'zh_TW': '繁體中文',
-      'zh': '简体中文',
-    };
-
-    final List<Locale> supportedLocales = [
-      const Locale('af'),
-      const Locale('ar', 'SA'),
-      const Locale('ar'),
-      const Locale('az'),
-      const Locale('bg'),
-      const Locale('bn'),
-      const Locale('ca'),
-      const Locale('cs'),
-      const Locale('da'),
-      const Locale('de'),
-      const Locale('el'),
-      const Locale('en', 'US'),
-   //   const Locale('en'),
-      const Locale('es'),
-      const Locale('et'),
-      const Locale('fa'),
-      const Locale('fi'),
-      const Locale('fr'),
-      const Locale('gl'),
-      const Locale('he'),
-      const Locale('hi'),
-      const Locale('hr'),
-      const Locale('hu'),
-      const Locale('hy'),
-      const Locale('id'),
-      const Locale('it'),
-      const Locale('ja'),
-      const Locale('ka'),
-      const Locale('kk'),
-      const Locale('km'),
-      const Locale('ko'),
-      const Locale('lo'),
-      const Locale('lt'),
-      const Locale('lv'),
-      const Locale('mk'),
-      const Locale('ml'),
-      const Locale('mn'),
-      const Locale('ms'),
-      const Locale('nb'),
-      const Locale('ne'),
-      const Locale('nl'),
-      const Locale('nn'),
-      const Locale('pl'),
-      const Locale('pt', 'BR'),
-      const Locale('pt'),
-      const Locale('ro'),
-      const Locale('ru'),
-      const Locale('si'),
-      const Locale('sk'),
-      const Locale('sl'),
-      const Locale('sq'),
-      const Locale('sr'),
-      const Locale('sv'),
-      const Locale('sw'),
-      const Locale('ta'),
-      const Locale('th'),
-      const Locale('tk'),
-      const Locale('tr'),
-      const Locale('uk'),
-      const Locale('uz'),
-      const Locale('vi'),
-      const Locale('zh', 'TW'),
-      const Locale('zh'),
-    ];
-
-    showDialog(
+  void _showLanguageDialog(BuildContext context) {
+    showModalBottomSheet(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text('loginLanguage'.tr),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: supportedLocales.map((locale) {
-                final String localeCode = locale.languageCode + (locale.countryCode != null ? '_${locale.countryCode}' : '');
-                final String? languageName = languageNames[localeCode];
-                return ListTile(
-                  title: Text(languageName ?? localeCode),
-                  onTap: () async {
-                    await LocalizationService.saveLocale(locale);
-                    Get.updateLocale(locale);
-                    Navigator.of(context).pop();
-                  },
-                );
-              }).toList(),
-            ),
-          ),
-        );
-      },
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(30))),
+      backgroundColor: Colors.transparent,
+      builder: (context) => const _LanguagePickerSheet(),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final themeProvider = context.watch<ThemeProvider>();
+
     return Scaffold(
-      appBar: AppBar(
-        title: Text('loginTitle'.tr),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.language),
-            onPressed: _showLanguageSelectionDialog,
+      body: Stack(
+        children: [
+          // 1. 動態背景裝飾
+          _buildBackground(theme),
+
+          SafeArea(
+            child: FadeTransition(
+              opacity: _fadeAnimation,
+              child: Center(
+                child: SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  child: Column(
+                    children: [
+                      // 3. 主要登入卡片 (Glassmorphism)
+                      _buildLoginCard(theme, themeProvider),
+
+                      const SizedBox(height: 20),
+                      _buildActionButtons(theme),
+                    ],
+                  ),
+                ),
+              ),
+            ),
           ),
-          IconButton(
-            icon: const Icon(Icons.public),
-            onPressed: _showServerSelectionDialog,
+
+          // 頂部與底部裝飾性組件
+          _buildTopActions(theme),
+          _buildBottomInfo(theme, themeProvider),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBackground(ThemeData theme) {
+    return Container(
+      color: theme.colorScheme.surface,
+      child: Stack(
+        children: [
+          Positioned(top: -100, right: -50, child: CircleAvatar(radius: 150, backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.1))),
+          Positioned(bottom: -50, left: -50, child: CircleAvatar(radius: 120, backgroundColor: theme.colorScheme.secondary.withValues(alpha: 0.08))),
+          BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 40, sigmaY: 40),
+            child: Container(color: Colors.transparent),
           ),
         ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+    );
+  }
+
+  Widget _buildLoginCard(ThemeData theme, ThemeProvider themeProvider) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(32),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            children: [
+              _buildTextField(controller: _emailController, label: 'userEmail'.tr, icon: Icons.alternate_email_rounded),
+              const SizedBox(height: 16),
+              _buildTextField(
+                controller: _passwordController,
+                label: 'userPassword'.tr,
+                icon: Icons.lock_outline_rounded,
+                obscure: _obscurePassword,
+                suffix: IconButton(icon: Icon(_obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined, size: 20), onPressed: () => setState(() => _obscurePassword = !_obscurePassword)),
+              ),
+              const SizedBox(height: 24),
+              _buildSubmitButton(theme),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTextField({required TextEditingController controller, required String label, required IconData icon, bool obscure = false, Widget? suffix, VoidCallback? onTap, bool readOnly = false}) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 4, bottom: 8),
+          child: Text(label, style: theme.textTheme.labelMedium?.copyWith(fontWeight: FontWeight.bold)),
+        ),
+        TextField(
+          controller: controller,
+          obscureText: obscure,
+          onTap: onTap,
+          readOnly: readOnly,
+          decoration: InputDecoration(
+            prefixIcon: Icon(icon, size: 20),
+            suffixIcon: suffix,
+            filled: true,
+            fillColor: theme.colorScheme.onSurface.withValues(alpha: 0.03),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide(color: theme.colorScheme.outlineVariant.withValues(alpha: 0.3)),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide(color: theme.colorScheme.primary, width: 1.5),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSubmitButton(ThemeData theme) {
+    return SizedBox(
+      width: double.infinity,
+      height: 58,
+      child: ElevatedButton(
+        onPressed: _isLoading ? null : _login,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: theme.colorScheme.primary,
+          foregroundColor: theme.colorScheme.onPrimary,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          elevation: 0,
+        ),
+        child: _isLoading ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : Text('loginLogin'.tr, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+      ),
+    );
+  }
+
+  Widget _buildActionButtons(ThemeData theme) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        TextButton(onPressed: () => Get.toNamed('/register'), child: Text('loginRegister'.tr)),
+        Text('|', style: TextStyle(color: theme.colorScheme.outlineVariant)),
+        TextButton(onPressed: () => Get.toNamed('/reset-password'), child: Text('loginReset'.tr)),
+      ],
+    );
+  }
+
+  Widget _buildTopActions(ThemeData theme) {
+    return Positioned(
+      top: 10,
+      right: 10,
+      child: SafeArea(
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            TextField(
-              controller: _serverUrlController,
-              decoration: InputDecoration(labelText: 'ServerUrl'.tr),
+            // Discreet entry point for technicians only — the server address
+            // itself stays out of the login flow.
+            IconButton(
+              onPressed: () => _showServerDialog(context),
+              tooltip: 'SelectServer'.tr,
+              icon: Icon(Icons.settings_outlined, size: 20, color: theme.colorScheme.primary.withValues(alpha: 0.5)),
             ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _emailController,
-              decoration: InputDecoration(labelText: 'userEmail'.tr),
-            ),
-            TextField(
-              controller: _passwordController,
-              decoration: InputDecoration(labelText: 'userPassword'.tr),
-              obscureText: true,
-            ),
-            const SizedBox(height: 20),
-            _isLoading
-                ? const CircularProgressIndicator()
-                : ElevatedButton(onPressed: _login, child: Text('loginLogin'.tr)),
-            const SizedBox(height: 10),
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pushNamed('/register');
-              },
-              child: Text('loginRegister'.tr),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pushNamed('/reset-password');
-              },
-              child: Text('loginReset'.tr),
+            IconButton(
+              onPressed: () => _showLanguageDialog(context),
+              icon: Icon(Icons.translate_rounded, color: theme.colorScheme.primary),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBottomInfo(ThemeData theme, ThemeProvider themeProvider) {
+    return Positioned(
+      bottom: 20,
+      left: 24,
+      right: 24,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              GestureDetector(
+                onTap: () => _showServerDialog(context),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.cloud_outlined, size: 13, color: theme.colorScheme.onSurface.withValues(alpha: 0.35)),
+                    const SizedBox(width: 4),
+                    Text(_serverHostLabel, style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withValues(alpha: 0.35), fontSize: 11)),
+                  ],
+                ),
+              ),
+              if (_serverVersion != null) ...[const SizedBox(height: 2), Text('${'settingsServerVersion'.tr}: $_serverVersion', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withValues(alpha: 0.35), fontSize: 11))],
+              const SizedBox(height: 2),
+              Text('v $_version', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withValues(alpha: 0.4))),
+            ],
+          ),
+          Row(
+            children: [
+              _buildThemeDot(themeProvider, AppThemePreset.obsidian, const Color(0xFF1A1A1A)),
+              _buildThemeDot(themeProvider, AppThemePreset.deepSea, const Color(0xFF0D1B2A)),
+              _buildThemeDot(themeProvider, AppThemePreset.mint, const Color(0xFF52B788)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildThemeDot(ThemeProvider provider, AppThemePreset preset, Color color) {
+    final isSelected = provider.activePreset == preset;
+    return GestureDetector(
+      onTap: () => provider.setPreset(preset),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 300),
+        margin: const EdgeInsets.symmetric(horizontal: 6),
+        width: isSelected ? 22 : 18,
+        height: isSelected ? 22 : 18,
+        decoration: BoxDecoration(
+          color: color,
+          shape: BoxShape.circle,
+          border: Border.all(color: isSelected ? Colors.white : Colors.transparent, width: 2),
+          boxShadow: isSelected ? [BoxShadow(color: color.withValues(alpha: 0.5), blurRadius: 10, spreadRadius: 1)] : [],
+        ),
+      ),
+    );
+  }
+}
+
+class _ServerPickerSheet extends StatefulWidget {
+  final Function(String) onSelected;
+  final String? initialUrl;
+  const _ServerPickerSheet({required this.onSelected, this.initialUrl});
+
+  @override
+  State<_ServerPickerSheet> createState() => _ServerPickerSheetState();
+}
+
+class _ServerPickerSheetState extends State<_ServerPickerSheet> {
+  late final TextEditingController _textController;
+  late String _inputQuery;
+
+  @override
+  void initState() {
+    super.initState();
+    // Pre-fill the field only when the current URL is a custom (non-official)
+    // one, so a typo can be corrected without retyping the whole address.
+    final initial = widget.initialUrl?.trim() ?? '';
+    final isCustom = initial.isNotEmpty && !AppConstants.officialServers.contains(initial);
+    _textController = TextEditingController(text: isCustom ? initial : '');
+    if (isCustom) {
+      _textController.selection = TextSelection.collapsed(offset: initial.length);
+    }
+    _inputQuery = isCustom ? initial : '';
+  }
+
+  @override
+  void dispose() {
+    _textController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _scanQrCode(BuildContext context) async {
+    final result = await Navigator.of(context).push<String>(MaterialPageRoute(builder: (_) => const QrScannerScreen()));
+    if (result == null || result.isEmpty || !mounted) return;
+    widget.onSelected(result);
+    Navigator.pop(context);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final allServers = AppConstants.officialServers;
+
+    final filteredServers = allServers.where((s) => s.toLowerCase().contains(_inputQuery.toLowerCase())).toList();
+
+    bool showCustomOption = _inputQuery.isNotEmpty && !allServers.contains(_inputQuery);
+
+    return BackdropFilter(
+      filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+      child: Container(
+        height: MediaQuery.of(context).size.height * 0.75,
+        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surface.withValues(alpha: 0.9),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
+        ),
+        child: SafeArea(
+          bottom: true,
+          child: Column(
+            children: [
+              const SizedBox(height: 12),
+              _buildHandle(),
+              const SizedBox(height: 16),
+              Text('SelectServer'.tr, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 16),
+
+              // Scanning the QR code is the easiest path for users who cannot
+              // read or type a server address.
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                child: SizedBox(
+                  width: double.infinity,
+                  height: 56,
+                  child: ElevatedButton.icon(
+                    onPressed: () => _scanQrCode(context),
+                    icon: const Icon(Icons.qr_code_scanner_rounded),
+                    label: Text('serverScanQr'.tr, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: theme.colorScheme.primary,
+                      foregroundColor: theme.colorScheme.onPrimary,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      elevation: 0,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                child: TextField(
+                  controller: _textController,
+                  onChanged: (value) => setState(() => _inputQuery = value),
+                  decoration: InputDecoration(
+                    hintText: 'http://your-server-ip:8082',
+                    prefixIcon: const Icon(Icons.edit_note_rounded),
+                    suffixIcon: _inputQuery.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.check_circle, color: Colors.green),
+                            onPressed: () {
+                              widget.onSelected(_inputQuery);
+                              Navigator.pop(context);
+                            },
+                          )
+                        : null,
+                    filled: true,
+                    fillColor: theme.colorScheme.onSurface.withValues(alpha: 0.05),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              Expanded(
+                child: ListView(
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  children: [
+                    if (showCustomOption)
+                      ListTile(
+                        leading: const Icon(Icons.add_link, color: Colors.blue),
+                        title: Text('CustomServerURL'.tr),
+                        subtitle: Text(_inputQuery),
+                        onTap: () {
+                          widget.onSelected(_inputQuery);
+                          Navigator.pop(context);
+                        },
+                      ),
+
+                    if (showCustomOption) const Divider(),
+
+                    ...filteredServers.map(
+                      (url) => ListTile(
+                        title: Text(url, style: const TextStyle(fontSize: 14)),
+                        leading: const Icon(Icons.dns_outlined, size: 18),
+                        onTap: () {
+                          widget.onSelected(url);
+                          Navigator.pop(context);
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHandle() {
+    return Container(
+      width: 40,
+      height: 4,
+      decoration: BoxDecoration(color: Colors.grey[400], borderRadius: BorderRadius.circular(2)),
+    );
+  }
+}
+
+class _LanguagePickerSheet extends StatefulWidget {
+  const _LanguagePickerSheet();
+
+  @override
+  State<_LanguagePickerSheet> createState() => _LanguagePickerSheetState();
+}
+
+class _LanguagePickerSheetState extends State<_LanguagePickerSheet> {
+  final _searchController = TextEditingController();
+  String _searchQuery = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final allLangs = LocalizationService.langs;
+    final allLocales = LocalizationService.locales;
+
+    final filteredIndices = <int>[];
+    for (int i = 0; i < allLangs.length; i++) {
+      if (allLangs[i].toLowerCase().contains(_searchQuery.toLowerCase())) {
+        filteredIndices.add(i);
+      }
+    }
+
+    return BackdropFilter(
+      filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+      child: Container(
+        height: MediaQuery.of(context).size.height * 0.75,
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surface.withValues(alpha: 0.9),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
+        ),
+        child: SafeArea(
+          bottom: true,
+          child: Column(
+            children: [
+              const SizedBox(height: 12),
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(color: Colors.grey[400], borderRadius: BorderRadius.circular(2)),
+              ),
+              const SizedBox(height: 16),
+              Text('loginLanguage'.tr, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 12),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                child: TextField(
+                  controller: _searchController,
+                  onChanged: (value) => setState(() => _searchQuery = value),
+                  decoration: InputDecoration(
+                    hintText: 'sharedSearch'.tr,
+                    prefixIcon: const Icon(CupertinoIcons.search),
+                    filled: true,
+                    fillColor: theme.colorScheme.onSurface.withValues(alpha: 0.05),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Expanded(
+                child: ListView.separated(
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  itemCount: filteredIndices.length,
+                  separatorBuilder: (context, index) => Divider(color: theme.colorScheme.outlineVariant.withValues(alpha: 0.3)),
+                  itemBuilder: (context, index) {
+                    final idx = filteredIndices[index];
+                    return ListTile(
+                      title: Text(allLangs[idx]),
+                      onTap: () async {
+                        await LocalizationService.saveLocale(allLocales[idx]);
+                        Get.updateLocale(allLocales[idx]);
+
+                        // ✅ 修正：檢查即將使用的這個 context 是否 mounted
+                        if (context.mounted) {
+                          Navigator.pop(context);
+                        }
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

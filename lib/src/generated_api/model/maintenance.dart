@@ -21,6 +21,7 @@ class Maintenance {
     this.attributes,
   });
 
+  /// Unique maintenance item identifier
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -29,6 +30,7 @@ class Maintenance {
   ///
   int? id;
 
+  /// Maintenance task name
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -37,6 +39,7 @@ class Maintenance {
   ///
   String? name;
 
+  /// Metric the maintenance is based on
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -45,6 +48,7 @@ class Maintenance {
   ///
   String? type;
 
+  /// Current accumulated value when maintenance tracking starts
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -53,6 +57,7 @@ class Maintenance {
   ///
   num? start;
 
+  /// Threshold value after which maintenance is due
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -61,6 +66,7 @@ class Maintenance {
   ///
   num? period;
 
+  /// Custom maintenance attributes
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated

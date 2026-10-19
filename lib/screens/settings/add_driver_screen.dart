@@ -1,16 +1,20 @@
 // add_driver_screen.dart
-
+// A screen to add or edit a driver in the TracDefg app.
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:trabcdefg/src/generated_api/api.dart' as api;
-import 'package:trabcdefg/providers/traccar_provider.dart';
-import 'package:provider/provider.dart';
 import 'package:get/get.dart';
+import 'package:provider/provider.dart';
+import 'package:trabcdefg/providers/traccar_provider.dart';
+import 'package:trabcdefg/src/generated_api/api.dart' as api;
 
 class AddDriverScreen extends StatefulWidget {
-  const AddDriverScreen({super.key});
+  // 1. Accept an optional driver instance for editing mode
+  const AddDriverScreen({super.key, this.driver});
+
+  final api.Driver? driver;
 
   @override
-  _AddDriverScreenState createState() => _AddDriverScreenState();
+  State<AddDriverScreen> createState() => _AddDriverScreenState();
 }
 
 class _AddDriverScreenState extends State<AddDriverScreen> {
@@ -18,6 +22,30 @@ class _AddDriverScreenState extends State<AddDriverScreen> {
   String? _name;
   String? _uniqueId;
   final List<Map<String, dynamic>> _attributes = [];
+
+  // Helper getter to determine if we are editing an existing record
+  bool get _isEditing => widget.driver != null;
+
+  @override
+  void initState() {
+    super.initState();
+    // 2. Pre-populate local attributes if we are editing a driver
+    if (_isEditing && widget.driver!.attributes != null) {
+      // FIX: Safely cast the generic Object to a usable Map
+      final attributesMap = widget.driver!.attributes as Map<String, dynamic>;
+
+      attributesMap.forEach((key, value) {
+        String type = 'String';
+        if (value is num) {
+          type = 'Number';
+        } else if (value is bool) {
+          type = 'Boolean';
+        }
+
+        _attributes.add({'name': key, 'type': type, 'value': value.toString()});
+      });
+    }
+  }
 
   void _addAttribute() {
     setState(() {
@@ -52,35 +80,46 @@ class _AddDriverScreenState extends State<AddDriverScreen> {
         attributesMap[attr['name']] = value;
       }
 
-      final newDriver = api.Driver(
+      // 3. Keep the original ID intact if editing, otherwise it generates a new payload
+      final driverData = api.Driver(
+        id: widget.driver?.id, // Crucial for PUT requests!
         name: _name!,
         uniqueId: _uniqueId!,
         attributes: attributesMap,
       );
 
       try {
-        final traccarProvider = Provider.of<TraccarProvider>(
-          context,
-          listen: false,
-        );
+        final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
         final driversApi = api.DriversApi(traccarProvider.apiClient);
-        await driversApi.driversPost(newDriver);
+
+        // 4. Branch logic: PUT to update, POST to create
+        if (_isEditing) {
+          await driversApi.putDriversId(widget.driver!.id!, driverData);
+        } else {
+          await driversApi.postDrivers(driverData);
+        }
+
+        if (!mounted) return;
+
         Navigator.of(context).pop(true);
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('sharedSaved'.tr)));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('sharedSaved'.tr)));
       } catch (e) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Failed to add driver: $e')));
+        if (!mounted) return;
+
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to save driver: $e')));
       }
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    // 5. Update UI title dynamically based on context
+    final titleText = _isEditing
+        ? '${'sharedEdit'.tr} ${'sharedDriver'.tr}' // Ensure 'sharedEdit' is defined in your localization translations
+        : '${'sharedAdd'.tr} ${'sharedDriver'.tr}';
+
     return Scaffold(
-      appBar: AppBar(title: Text('sharedAdd'.tr + ' ' + 'sharedDriver'.tr)),
+      appBar: CupertinoNavigationBar(middle: Text(titleText)),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(16.0),
@@ -89,10 +128,8 @@ class _AddDriverScreenState extends State<AddDriverScreen> {
             child: ListView(
               children: [
                 TextFormField(
-                  decoration: InputDecoration(
-                    labelText:
-                        'sharedName'.tr + ' (' + 'sharedRequired'.tr + ')',
-                  ),
+                  initialValue: widget.driver?.name, // Pre-populates on edit
+                  decoration: InputDecoration(labelText: '${'sharedName'.tr} (${'sharedRequired'.tr})'),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
                       return 'Please enter a name.'.tr;
@@ -104,13 +141,8 @@ class _AddDriverScreenState extends State<AddDriverScreen> {
                   },
                 ),
                 TextFormField(
-                  decoration: InputDecoration(
-                    labelText:
-                        'positionDriverUniqueId'.tr +
-                        ' (' +
-                        'sharedRequired'.tr +
-                        ')',
-                  ),
+                  initialValue: widget.driver?.uniqueId, // Pre-populates on edit
+                  decoration: InputDecoration(labelText: '${'positionDriverUniqueId'.tr} (${'sharedRequired'.tr})'),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
                       return 'Please enter an identifier.'.tr;
@@ -122,18 +154,13 @@ class _AddDriverScreenState extends State<AddDriverScreen> {
                   },
                 ),
                 const SizedBox(height: 20),
-                Text(
-                  'sharedAttributes'.tr,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+                Text('sharedAttributes'.tr, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 10),
                 ..._attributes.asMap().entries.map((entry) {
                   final index = entry.key;
                   final attribute = entry.value;
                   return Card(
+                    key: ValueKey(index), // Helps Flutter track dynamically drawn items cleanly
                     child: Padding(
                       padding: const EdgeInsets.all(8.0),
                       child: Column(
@@ -142,12 +169,7 @@ class _AddDriverScreenState extends State<AddDriverScreen> {
                             children: [
                               Expanded(
                                 child: TextFormField(
-                                  decoration: InputDecoration(
-                                    labelText:
-                                        'sharedAttribute'.tr +
-                                        ' ' +
-                                        'sharedName'.tr,
-                                  ),
+                                  decoration: InputDecoration(labelText: '${'sharedAttribute'.tr} ${'sharedName'.tr}'),
                                   initialValue: attribute['name'],
                                   onSaved: (value) {
                                     attribute['name'] = value!;
@@ -162,44 +184,29 @@ class _AddDriverScreenState extends State<AddDriverScreen> {
                                     attribute['type'] = newValue!;
                                   });
                                 },
-                                items: <String>['String', 'Number', 'Boolean']
-                                    .map<DropdownMenuItem<String>>((
-                                      String value,
-                                    ) {
-                                      String translatedValue;
-                                      switch (value) {
-                                        case 'String':
-                                          translatedValue =
-                                              'sharedTypeString'.tr;
-                                          break;
-                                        case 'Number':
-                                          translatedValue =
-                                              'sharedTypeNumber'.tr;
-                                          break;
-                                        case 'Boolean':
-                                          translatedValue =
-                                              'sharedTypeBoolean'.tr;
-                                          break;
-                                        default:
-                                          translatedValue = value;
-                                      }
-                                      return DropdownMenuItem<String>(
-                                        value: value,
-                                        child: Text(translatedValue),
-                                      );
-                                    })
-                                    .toList(),
+                                items: <String>['String', 'Number', 'Boolean'].map<DropdownMenuItem<String>>((String value) {
+                                  String translatedValue;
+                                  switch (value) {
+                                    case 'String':
+                                      translatedValue = 'sharedTypeString'.tr;
+                                      break;
+                                    case 'Number':
+                                      translatedValue = 'sharedTypeNumber'.tr;
+                                      break;
+                                    case 'Boolean':
+                                      translatedValue = 'sharedTypeBoolean'.tr;
+                                      break;
+                                    default:
+                                      translatedValue = value;
+                                  }
+                                  return DropdownMenuItem<String>(value: value, child: Text(translatedValue));
+                                }).toList(),
                               ),
-                              IconButton(
-                                icon: const Icon(Icons.remove_circle),
-                                onPressed: () => _removeAttribute(index),
-                              ),
+                              IconButton(icon: const Icon(Icons.remove_circle), onPressed: () => _removeAttribute(index)),
                             ],
                           ),
                           TextFormField(
-                            decoration: InputDecoration(
-                              labelText: 'stateValue'.tr,
-                            ),
+                            decoration: InputDecoration(labelText: 'stateValue'.tr),
                             initialValue: attribute['value'],
                             onSaved: (value) {
                               attribute['value'] = value!;
@@ -209,12 +216,8 @@ class _AddDriverScreenState extends State<AddDriverScreen> {
                       ),
                     ),
                   );
-                }).toList(),
-                ElevatedButton.icon(
-                  onPressed: _addAttribute,
-                  icon: const Icon(Icons.add),
-                  label: Text('sharedAdd'.tr + ' ' + 'sharedAttribute'.tr),
-                ),
+                }),
+                ElevatedButton.icon(onPressed: _addAttribute, icon: const Icon(CupertinoIcons.add), label: Text('${'sharedAdd'.tr} ${'sharedAttribute'.tr}')),
               ],
             ),
           ),
@@ -231,10 +234,7 @@ class _AddDriverScreenState extends State<AddDriverScreen> {
               },
               child: Text('sharedCancel'.tr),
             ),
-            ElevatedButton(
-              onPressed: _saveDriver,
-              child: Text('sharedSave'.tr),
-            ),
+            ElevatedButton(onPressed: _saveDriver, child: Text('sharedSave'.tr)),
           ],
         ),
       ),

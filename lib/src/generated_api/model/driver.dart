@@ -19,6 +19,7 @@ class Driver {
     this.attributes,
   });
 
+  /// Unique driver identifier
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -27,6 +28,7 @@ class Driver {
   ///
   int? id;
 
+  /// Driver full name
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -35,6 +37,7 @@ class Driver {
   ///
   String? name;
 
+  /// Unique external identifier for the driver
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -43,6 +46,7 @@ class Driver {
   ///
   String? uniqueId;
 
+  /// Custom driver attributes
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated

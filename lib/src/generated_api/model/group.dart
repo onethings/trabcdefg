@@ -19,6 +19,7 @@ class Group {
     this.attributes,
   });
 
+  /// Unique group identifier
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -27,6 +28,7 @@ class Group {
   ///
   int? id;
 
+  /// Group display name
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -35,6 +37,7 @@ class Group {
   ///
   String? name;
 
+  /// Parent group identifier for nested grouping
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
@@ -43,6 +46,7 @@ class Group {
   ///
   int? groupId;
 
+  /// Arbitrary metadata attached to the group
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
   /// does not include a default value (using the "default:" property), however, the generated
