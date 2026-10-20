@@ -550,9 +550,19 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
                     _animateCameraToBounds();
                   },
                   "btn_recenter",
-                  color: _followUser ? const Color(0xFF0F53FE) : Colors.white,
+                  active: _followUser,
                 ),
               ],
+            ),
+          ),
+          Positioned(
+            top: 0,
+            bottom: 0,
+            right: 12,
+            child: Align(
+              alignment: Alignment.centerRight,
+              widthFactor: 1.0,
+              child: Column(mainAxisSize: MainAxisSize.min, children: [_mapFab(Icons.add, () => _zoomMap(1), "btn_zoom_in"), const SizedBox(height: 8), _mapFab(Icons.remove, () => _zoomMap(-1), "btn_zoom_out")]),
             ),
           ),
           _buildPlaybackPanel(),
@@ -561,10 +571,23 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     );
   }
 
-  Widget _mapFab(IconData icon, VoidCallback onPressed, String tag, {Color? color}) {
+  void _zoomMap(double delta) {
+    final controller = _mapController;
+    if (controller == null) {
+      return;
+    }
+    final double current = controller.cameraPosition?.zoom ?? _currentZoom;
+    final double target = (current + delta).clamp(2.0, 20.0);
+    if (target == current) {
+      return;
+    }
+    controller.animateCamera(CameraUpdate.zoomTo(target), duration: const Duration(milliseconds: 250));
+  }
+
+  Widget _mapFab(IconData icon, VoidCallback onPressed, String tag, {bool active = false}) {
     final theme = Theme.of(context);
-    final bgColor = color ?? theme.colorScheme.surface;
-    final iconColor = color == null ? theme.colorScheme.onSurface : Colors.white;
+    final bgColor = active ? const Color(0xFF0F53FE) : theme.colorScheme.surface;
+    final iconColor = active ? Colors.white : theme.colorScheme.onSurface;
 
     return FloatingActionButton(
       heroTag: tag,
