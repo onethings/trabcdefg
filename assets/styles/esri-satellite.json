@@ -3,7 +3,7 @@
   "name": "ESRI-World-Imagery-Satellite",
   "metadata": {
     "maputnik:renderer": "mlgljs",
-    "usage": "MapScreen 衛星模式（AppMapType.satellite）使用的底圖"
+    "usage": "純衛星影像（無道路／地名標註）。MapScreen 預設的衛星模式改採用 esri-hybrid.json（Google 混合地圖風格），此檔保留作為無標註影像的備用底圖"
   },
   "sources": {
     "esriImagery": {

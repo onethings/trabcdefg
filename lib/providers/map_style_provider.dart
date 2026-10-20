@@ -4,10 +4,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 enum AppMapType {
   liberty,
   bright, // OpenFreeMap Bright
-  satellite, // ArcGIS Satellite
+  satellite, // Esri 衛星影像 + 道路／地名（混合，等同 Google Hybrid）
   dark,
   terrain,
-  hybrid,
+  hybrid, // 同 satellite
 }
 
 class MapStyleProvider with ChangeNotifier {
@@ -21,8 +21,10 @@ class MapStyleProvider with ChangeNotifier {
   static const String _brightStyle = "assets/styles/liberty.json";
   static const String _darkStyle = "assets/styles/dark.json";
   static const String _terrainStyle = "assets/styles/fiord.json";
-  static const String _hybridStyle = "assets/styles/positron.json";
-  static const String _satelliteStyle = "assets/styles/esri-satellite.json";
+
+  /// 衛星模式採「混合」呈現：Esri 衛星影像當底圖，上面疊道路與地名
+  /// （OpenMapTiles 向量圖層），效果等同 Google 混合地圖（Hybrid）。
+  static const String _hybridStyle = "assets/styles/esri-hybrid.json";
 
   MapStyleProvider() {
     _loadPreference();
@@ -57,21 +59,20 @@ class MapStyleProvider with ChangeNotifier {
       case AppMapType.bright:
         return isDark ? _darkStyle : _brightStyle;
       case AppMapType.satellite:
-        return _satelliteStyle;
+      case AppMapType.hybrid:
+        return _hybridStyle;
       case AppMapType.dark:
         return _darkStyle;
       case AppMapType.liberty:
         return _streetStyle;
       case AppMapType.terrain:
         return _terrainStyle;
-      case AppMapType.hybrid:
-        return _hybridStyle;
     }
   }
 
   String get styleString => getStyle(Brightness.light);
 
-  bool get isSatelliteMode => _mapType == AppMapType.satellite;
+  bool get isSatelliteMode => _mapType == AppMapType.satellite || _mapType == AppMapType.hybrid;
 
   void toggleMapType() {
     if (_mapType == AppMapType.bright) {

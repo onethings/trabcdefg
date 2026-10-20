@@ -333,6 +333,14 @@ class AddGeofenceScreenState extends State<AddGeofenceScreen> {
   // --- Tile URLs ---
   static const String _osmUrlTemplate = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
   static const String _satelliteUrlTemplate = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+
+  // 混合地圖（Hybrid）：Esri 的透明參考圖層，疊在衛星影像上補回道路與地名。
+  static const String _satelliteRoadsUrlTemplate = 'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}';
+  static const String _satellitePlacesUrlTemplate = 'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}';
+
+  /// Esri 參考圖層的快取只到 z16，再放大就沿用 z16 圖磚放大顯示，
+  /// 避免向伺服器要不到圖磚而讓道路／地名整片消失。
+  static const int _satelliteReferenceMaxNativeZoom = 16;
   static const List<String> _osmSubdomains = ['a', 'b', 'c'];
 
   // --- Geocoding search ---
@@ -890,6 +898,20 @@ class AddGeofenceScreenState extends State<AddGeofenceScreen> {
                         tileProvider: _tileProvider,
                         tileBuilder: Theme.of(context).brightness == Brightness.dark && _mapType == AppMapType.openStreetMap ? darkModeTileBuilder : null,
                       ),
+                      if (_mapType == AppMapType.satellite) ...[
+                        TileLayer(
+                          urlTemplate: _satelliteRoadsUrlTemplate,
+                          userAgentPackageName: 'com.trabcdefg.app',
+                          tileProvider: _tileProvider,
+                          maxNativeZoom: _satelliteReferenceMaxNativeZoom,
+                        ),
+                        TileLayer(
+                          urlTemplate: _satellitePlacesUrlTemplate,
+                          userAgentPackageName: 'com.trabcdefg.app',
+                          tileProvider: _tileProvider,
+                          maxNativeZoom: _satelliteReferenceMaxNativeZoom,
+                        ),
+                      ],
                       CircleLayer(circles: _circles),
                       PolygonLayer(polygons: _polygons),
                       MarkerLayer(markers: _polygonMarkers),
