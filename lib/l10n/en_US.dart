@@ -179,6 +179,7 @@ const Map<String, String> enUs = {
   "errorGeneral": "Invalid parameters or constraints violation",
   "errorConnection": "Connection error",
   "errorSocket": "Web socket connection error",
+  "retry": "Retry",
   "errorZero": "Can't be zero",
   "userEmail": "Email",
   "userPassword": "Password",

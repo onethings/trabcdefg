@@ -35,7 +35,7 @@ void main() {
           refreshCalls++;
           await Future<void>.delayed(const Duration(milliseconds: 10));
           sessionId = 'new';
-          return true;
+          return SessionRefreshResult.renewed;
         },
         onUnauthorized: () async => unauthorizedCalls++,
         inner: MockClient((request) async {
@@ -65,7 +65,7 @@ void main() {
     },
   );
 
-  test('notifies unauthorized once when the refresh fails', () async {
+  test('notifies unauthorized once when the server rejects the session', () async {
     var refreshCalls = 0;
     var unauthorizedCalls = 0;
 
@@ -74,7 +74,7 @@ void main() {
       refreshSession: () async {
         refreshCalls++;
         await Future<void>.delayed(const Duration(milliseconds: 10));
-        return false;
+        return SessionRefreshResult.rejected;
       },
       onUnauthorized: () async => unauthorizedCalls++,
       inner: MockClient((_) async => http.Response('expired', 401)),
@@ -92,6 +92,33 @@ void main() {
     expect(unauthorizedCalls, 1);
   });
 
+  test('keeps the session when the refresh cannot reach the server', () async {
+    var refreshCalls = 0;
+    var unauthorizedCalls = 0;
+
+    final client = AuthInterceptingClient(
+      sessionIdProvider: () => 'still-valid',
+      refreshSession: () async {
+        refreshCalls++;
+        return SessionRefreshResult.inconclusive;
+      },
+      onUnauthorized: () async => unauthorizedCalls++,
+      inner: MockClient((_) async => http.Response('expired', 401)),
+    );
+
+    final responses = await Future.wait(
+      List.generate(
+        3,
+        (_) => client.get(Uri.parse('https://example.test/api/devices')),
+      ),
+    );
+
+    // The request still fails, but the stored session must not be discarded.
+    expect(responses.map((response) => response.statusCode), everyElement(401));
+    expect(refreshCalls, 1);
+    expect(unauthorizedCalls, 0);
+  });
+
   test('does not try to refresh a rejected login request', () async {
     var refreshCalls = 0;
     var unauthorizedCalls = 0;
@@ -100,7 +127,7 @@ void main() {
       sessionIdProvider: () => 'old',
       refreshSession: () async {
         refreshCalls++;
-        return true;
+        return SessionRefreshResult.renewed;
       },
       onUnauthorized: () async => unauthorizedCalls++,
       inner: MockClient((_) async => http.Response('invalid credentials', 401)),

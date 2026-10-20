@@ -8,7 +8,21 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 typedef SessionIdProvider = String? Function();
-typedef SessionRefresher = Future<bool> Function();
+typedef SessionRefresher = Future<SessionRefreshResult> Function();
+
+/// Outcome of a silent session refresh.
+enum SessionRefreshResult {
+  /// A new session was obtained and persisted.
+  renewed,
+
+  /// The server rejected the session (or the credentials are no longer
+  /// available), so the user has to sign in again.
+  rejected,
+
+  /// The refresh could not be completed (offline, timeout, 5xx). The stored
+  /// session may still be valid, so it must not be discarded.
+  inconclusive,
+}
 
 /// Wraps an [http.Client] to handle expired sessions.
 ///
@@ -17,8 +31,10 @@ typedef SessionRefresher = Future<bool> Function();
 ///    concurrently (single-flight).
 /// 2. If the refresh succeeds, the original request is retried once with the
 ///    new session cookie.
-/// 3. If the refresh fails, [onUnauthorized] is invoked once so the app can
-///    clear its state and return to the login screen.
+/// 3. If the refresh fails because the server rejected the session,
+///    [onUnauthorized] is invoked once so the app can clear its state and
+///    return to the login screen. A refresh that merely could not reach the
+///    server keeps the session intact.
 ///
 /// Login requests (POST /session) are excluded because a 401 there means
 /// "invalid credentials", not "expired session".
@@ -28,7 +44,7 @@ class AuthInterceptingClient extends http.BaseClient {
   final SessionRefresher? refreshSession;
   final Future<void> Function()? onUnauthorized;
 
-  Completer<bool>? _refreshCompleter;
+  Completer<SessionRefreshResult>? _refreshCompleter;
   Completer<void>? _unauthorizedCompleter;
 
   AuthInterceptingClient({
@@ -62,9 +78,15 @@ class AuthInterceptingClient extends http.BaseClient {
       return response;
     }
 
-    final refreshed = await _refreshOnce();
-    if (!refreshed) {
+    final refreshResult = await _refreshOnce();
+    if (refreshResult == SessionRefreshResult.rejected) {
       await _notifyUnauthorized();
+      return response;
+    }
+    if (refreshResult != SessionRefreshResult.renewed) {
+      // The refresh failed for a reason unrelated to the session's validity
+      // (offline, timeout, 5xx). Keep the session and let the caller handle
+      // the failed request.
       return response;
     }
 
@@ -96,22 +118,22 @@ class AuthInterceptingClient extends http.BaseClient {
   }
 
   /// Runs at most one refresh at a time; concurrent 401s await the same result.
-  Future<bool> _refreshOnce() {
+  Future<SessionRefreshResult> _refreshOnce() {
     final existing = _refreshCompleter;
     if (existing != null) return existing.future;
 
-    final completer = Completer<bool>();
+    final completer = Completer<SessionRefreshResult>();
     _refreshCompleter = completer;
 
     Future(() async {
-      var refreshed = false;
+      var result = SessionRefreshResult.inconclusive;
       try {
-        refreshed = await refreshSession!();
+        result = await refreshSession!();
       } catch (e) {
         debugPrint('AuthInterceptingClient: session refresh failed: $e');
       } finally {
         _refreshCompleter = null;
-        if (!completer.isCompleted) completer.complete(refreshed);
+        if (!completer.isCompleted) completer.complete(result);
       }
     });
 

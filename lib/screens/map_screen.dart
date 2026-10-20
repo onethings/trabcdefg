@@ -15,6 +15,7 @@ import 'package:trabcdefg/providers/map_style_provider.dart';
 import 'package:trabcdefg/providers/settings_provider.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
 import 'package:trabcdefg/screens/settings/geofences_screen.dart' hide AppMapType, TileCacheService;
+import 'package:trabcdefg/services/auth_session_store.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
 import 'package:trabcdefg/widgets/offline_address_service.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -185,7 +186,11 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
             })
             .catchError((error) {
               debugPrint("Session validation failed on resume: $error");
-              if (mounted) {
+              // A network/timeout/server error does not invalidate the
+              // session. Only redirect when the server actually rejected it
+              // and the silent re-login failed (the interceptor then clears
+              // the stored session).
+              if (mounted && AuthSessionStore.instance.sessionId == null) {
                 Get.offAllNamed('/login');
               }
             });

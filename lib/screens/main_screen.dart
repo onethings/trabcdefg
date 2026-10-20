@@ -25,8 +25,8 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   int _currentIndex = 0;
   final List<Widget> _screens = const [DeviceListScreen(), MapScreen(), SettingsScreen()];
 
-  // 🛑 伺服器健康檢查：伺服器當機/斷線時，把使用者送回登入頁，
-  // 避免在伺服器不可用的狀態下繼續使用 Devices/Map/Settings。
+  // 伺服器健康檢查：定期確認伺服器是否還在，並讓 401 的處理集中在一處。
+  // 連線失敗或逾時只提示，不會把仍有效的登入狀態丟掉。
   Timer? _serverHealthTimer;
   int _serverFailCount = 0;
 
@@ -48,7 +48,15 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
+      // Restart the health check with a clean counter: requests that failed
+      // while the app was backgrounded must not count towards a logout.
+      _serverFailCount = 0;
+      _startServerHealthCheck();
       _validateSessionOnResume();
+    } else {
+      // Pings fired while suspended/without network only produce false
+      // failures (and used to send the user to the login screen).
+      _serverHealthTimer?.cancel();
     }
   }
 
@@ -88,9 +96,10 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   }
 
   /// 每 20 秒輕量 ping 一次伺服器（GET /session）。
-  /// - 成功：重置失敗計數。
-  /// - 401（session 過期）：立即回登入頁。
-  /// - 連線失敗（伺服器當機）：連續 2 次失敗才回登入頁，避免短暫斷線就踢人。
+  ///
+  /// 只有伺服器明確回 401 才代表 session 失效。連線失敗、逾時或 5xx 都只是
+  /// 暫時性問題，不能因此把使用者送到登入頁（session 其實還有效）。
+  /// 401 的靜默重登與導向由 AuthInterceptingClient 統一處理，這裡只做安全網。
   void _startServerHealthCheck() {
     _serverHealthTimer?.cancel();
     _serverHealthTimer = Timer.periodic(const Duration(seconds: 20), (_) => _checkServerHealth());
@@ -100,21 +109,28 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     if (!mounted) return;
     final traccarProvider = context.read<TraccarProvider>();
     try {
-      await api.SessionApi(traccarProvider.apiClient).getSession().timeout(const Duration(seconds: 5));
+      // 10s，讓行動網路喚醒/DNS 重連有足夠時間完成，避免誤判斷線。
+      await api.SessionApi(traccarProvider.apiClient).getSession().timeout(const Duration(seconds: 10));
       _serverFailCount = 0; // 伺服器正常
       return;
     } catch (e) {
       final isAuthFailure = e is api.ApiException && e.code == 401;
       if (!isAuthFailure) {
         _serverFailCount++;
-        debugPrint('Server unreachable (health check $_serverFailCount/2): $e');
-      }
-      if (isAuthFailure || _serverFailCount >= 2) {
-        _serverHealthTimer?.cancel();
-        if (mounted) {
-          Get.snackbar('Error'.tr, isAuthFailure ? 'Your session has expired. Please log in again.'.tr : 'Connection to server lost. Please check your network and log in again.'.tr, snackPosition: SnackPosition.BOTTOM);
-          Get.offAllNamed('/login');
+        debugPrint('Server unreachable (health check $_serverFailCount): $e');
+        if (_serverFailCount == 2 && mounted) {
+          Get.snackbar('Error'.tr, 'Connection to server lost. Please check your network.'.tr, snackPosition: SnackPosition.BOTTOM);
         }
+        return;
+      }
+
+      // 401：攔截器已嘗試靜默重登；只有 session 真的被清掉（重登也失敗）
+      // 才需要導向登入頁，而且不要重複導航。
+      if (AuthSessionStore.instance.sessionId != null) return;
+      _serverHealthTimer?.cancel();
+      if (mounted && Get.currentRoute != '/login') {
+        Get.snackbar('Error'.tr, 'Your session has expired. Please log in again.'.tr, snackPosition: SnackPosition.BOTTOM);
+        Get.offAllNamed('/login');
       }
     }
   }

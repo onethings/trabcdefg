@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:trabcdefg/services/auth_session_store.dart';
+import 'package:trabcdefg/services/http_interceptor.dart';
 import 'package:trabcdefg/src/generated_api/api.dart';
 
 /// Thrown when the login request is rejected by the server.
@@ -75,34 +76,55 @@ class AuthService {
   /// The password is never persisted, so this only works within the process
   /// that performed the original login. After an app restart the user has to
   /// sign in again.
-  Future<bool> tryAutoRelogin() =>
-      refreshSession(client: apiClient, store: _sessionStore);
+  Future<bool> tryAutoRelogin() async {
+    final result = await refreshSession(
+      client: apiClient,
+      store: _sessionStore,
+    );
+    return result == SessionRefreshResult.renewed;
+  }
 
   /// Re-logs in through [client] and updates [store] with the new session id.
-  static Future<bool> refreshSession({
+  ///
+  /// Only a definitive rejection (400/401/403, or credentials no longer held
+  /// in memory) is reported as [SessionRefreshResult.rejected]. Transport
+  /// errors and 5xx responses are [SessionRefreshResult.inconclusive] so the
+  /// caller does not discard a session that is probably still valid.
+  static Future<SessionRefreshResult> refreshSession({
     required ApiClient client,
     required AuthSessionStore store,
   }) async {
     final email = store.email;
     final password = store.password;
-    if (email == null || password == null) return false;
+    if (email == null || password == null) {
+      return SessionRefreshResult.rejected;
+    }
 
     try {
-      final response = await SessionApi(client)
-          .postSessionWithHttpInfo(email, password);
-      if (response.statusCode != 200) return false;
+      final response = await SessionApi(
+        client,
+      ).postSessionWithHttpInfo(email, password);
+      if (response.statusCode != 200) {
+        return _isRejection(response.statusCode)
+            ? SessionRefreshResult.rejected
+            : SessionRefreshResult.inconclusive;
+      }
 
       final sessionId = extractSessionId(response.headers);
-      if (sessionId == null) return false;
+      if (sessionId == null) return SessionRefreshResult.inconclusive;
 
       await store.updateSession(sessionId);
       debugPrint('Session refreshed successfully.');
-      return true;
+      return SessionRefreshResult.renewed;
     } catch (e) {
+      // Network/DNS/TLS failures say nothing about the session's validity.
       debugPrint('Session refresh failed: $e');
-      return false;
+      return SessionRefreshResult.inconclusive;
     }
   }
+
+  static bool _isRejection(int statusCode) =>
+      statusCode == 400 || statusCode == 401 || statusCode == 403;
 
   /// Extracts the JSESSIONID value from a response's `set-cookie` headers.
   static String? extractSessionId(Map<String, String> headers) {
