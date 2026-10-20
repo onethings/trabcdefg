@@ -692,4 +692,6 @@ const Map<String, String> zhCN = {
   "dashboardDeviceStatus": "设备状态",
   "dashboardNoDevices": "未找到设备",
   "justNow": "现在",
+  "minimalViewMode": "极简观看模式",
+  "standardViewMode": "标准观看模式",
 };

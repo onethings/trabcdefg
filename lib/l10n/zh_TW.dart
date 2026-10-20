@@ -700,4 +700,6 @@ const Map<String, String> zhTw = {
   "dashboardDeviceStatus": "裝置狀態",
   "dashboardNoDevices": "沒有裝置",
   "justNow": "現在",
+  "minimalViewMode": "極簡觀看模式",
+  "standardViewMode": "標準觀看模式",
 };

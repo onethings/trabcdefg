@@ -706,4 +706,6 @@ const Map<String, String> enUs = {
   "hours": "Hours",
   "deviceSelectLocation": "Select device location",
   "searchOsm": "Search in OSM",
+  "minimalViewMode": "Minimal view",
+  "standardViewMode": "Standard view",
 };

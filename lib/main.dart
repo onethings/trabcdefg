@@ -76,11 +76,7 @@ class TraccarApp extends StatelessWidget {
         // Provide the API client with the initial server URL. The factory adds
         // the JSON Accept header and the shared 401 handling (single-flight
         // re-login + one retry).
-        Provider<api.ApiClient>(
-          create: (_) => ApiClientFactory.create(
-            initialUrl != null ? '$initialUrl/api' : AppConstants.traccarApiUrl,
-          ),
-        ),
+        Provider<api.ApiClient>(create: (_) => ApiClientFactory.create(initialUrl != null ? '$initialUrl/api' : AppConstants.traccarApiUrl)),
         // Provide the authentication service.
         Provider<AuthService>(create: (context) => AuthService(apiClient: context.read<api.ApiClient>())),
         // Provide the WebSocket service.
@@ -98,7 +94,7 @@ class TraccarApp extends StatelessWidget {
         builder: (context, themeProvider, settingsProvider, child) {
           return GetMaterialApp(
             debugShowCheckedModeBanner: false,
-            title: 'Tar Kaw',
+            title: 'Trabcdefg', // Set the app title to "Trabcdefg" as per your request.
             theme: themeProvider.getTheme(Brightness.light),
             darkTheme: themeProvider.getTheme(Brightness.dark),
             themeMode: themeProvider.themeMode,

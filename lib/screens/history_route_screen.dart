@@ -63,6 +63,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
   // 新地圖才會沿用同一個位置與縮放，而不是重新取景。
   CameraPosition? _lastCameraPosition;
   bool _keepCameraOnStyleReload = false;
+  bool _isMinimalMode = false;
 
   // 地圖資源
   static const String _playbackIconId = "playback_arrow";
@@ -500,17 +501,20 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
   @override
   Widget build(BuildContext context) {
     String devicePart = _selectedDeviceName != null ? ' | (${_selectedDeviceName!})' : '';
+    final double safeTop = MediaQuery.of(context).padding.top;
     return Scaffold(
       extendBodyBehindAppBar: true,
-      appBar: AppBar(
-        backgroundColor: Theme.of(context).colorScheme.surface.withValues(alpha: 0.85),
-        elevation: 0,
-        title: Text(
-          '${'reportReplay'.tr}: ${DateFormat('MM/dd').format(_historyFrom ?? DateTime.now())}$devicePart',
-          style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontSize: 16, fontWeight: FontWeight.bold),
-        ),
-        iconTheme: IconThemeData(color: Theme.of(context).colorScheme.onSurface),
-      ),
+      appBar: _isMinimalMode
+          ? null
+          : AppBar(
+              backgroundColor: Theme.of(context).colorScheme.surface.withValues(alpha: 0.85),
+              elevation: 0,
+              title: Text(
+                '${'reportReplay'.tr}: ${DateFormat('MM/dd').format(_historyFrom ?? DateTime.now())}$devicePart',
+                style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+              iconTheme: IconThemeData(color: Theme.of(context).colorScheme.onSurface),
+            ),
       body: Stack(
         children: [
           MapLibreMap(
@@ -534,37 +538,54 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
           ),
           if (_isLoading) const Center(child: CircularProgressIndicator()),
 
-          Positioned(
-            top: MediaQuery.of(context).padding.top + 60,
-            right: 12,
-            child: Column(
-              children: [
-                _mapFab(Icons.calendar_month, _showCalendarDialog, "btn_cal"),
-                const SizedBox(height: 12),
-                _mapFab(Provider.of<MapStyleProvider>(context).isSatelliteMode ? Icons.map : Icons.satellite_alt, _toggleMapType, "btn_style"),
-                const SizedBox(height: 12),
-                _mapFab(
-                  Icons.center_focus_strong,
-                  () {
-                    setState(() => _followUser = true);
-                    _animateCameraToBounds();
-                  },
-                  "btn_recenter",
-                  active: _followUser,
-                ),
-              ],
+          // 極簡觀看模式：只留地圖、時間與速度，其餘控制項暫時收起
+          AnimatedPositioned(
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeOutCubic,
+            top: safeTop + (_isMinimalMode ? 12 : 60),
+            left: 12,
+            child: _mapFab(
+              _isMinimalMode ? Icons.fullscreen_exit_rounded : Icons.fullscreen_rounded,
+              () => setState(() => _isMinimalMode = !_isMinimalMode),
+              "btn_minimal",
+              active: _isMinimalMode,
+              tooltip: _isMinimalMode ? 'standardViewMode'.tr : 'minimalViewMode'.tr,
             ),
           ),
-          Positioned(
-            top: 0,
-            bottom: 0,
-            right: 12,
-            child: Align(
-              alignment: Alignment.centerRight,
-              widthFactor: 1.0,
-              child: Column(mainAxisSize: MainAxisSize.min, children: [_mapFab(Icons.add, () => _zoomMap(1), "btn_zoom_in"), const SizedBox(height: 8), _mapFab(Icons.remove, () => _zoomMap(-1), "btn_zoom_out")]),
+
+          if (!_isMinimalMode) ...[
+            Positioned(
+              top: safeTop + 60,
+              right: 12,
+              child: Column(
+                children: [
+                  _mapFab(Icons.calendar_month, _showCalendarDialog, "btn_cal"),
+                  const SizedBox(height: 12),
+                  _mapFab(Provider.of<MapStyleProvider>(context).isSatelliteMode ? Icons.map : Icons.satellite_alt, _toggleMapType, "btn_style"),
+                  const SizedBox(height: 12),
+                  _mapFab(
+                    Icons.center_focus_strong,
+                    () {
+                      setState(() => _followUser = true);
+                      _animateCameraToBounds();
+                    },
+                    "btn_recenter",
+                    active: _followUser,
+                  ),
+                ],
+              ),
             ),
-          ),
+            Positioned(
+              top: 0,
+              bottom: 0,
+              right: 12,
+              child: Align(
+                alignment: Alignment.centerRight,
+                widthFactor: 1.0,
+                child: Column(mainAxisSize: MainAxisSize.min, children: [_mapFab(Icons.add, () => _zoomMap(1), "btn_zoom_in"), const SizedBox(height: 8), _mapFab(Icons.remove, () => _zoomMap(-1), "btn_zoom_out")]),
+              ),
+            ),
+          ],
           _buildPlaybackPanel(),
         ],
       ),
@@ -584,7 +605,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     controller.animateCamera(CameraUpdate.zoomTo(target), duration: const Duration(milliseconds: 250));
   }
 
-  Widget _mapFab(IconData icon, VoidCallback onPressed, String tag, {bool active = false}) {
+  Widget _mapFab(IconData icon, VoidCallback onPressed, String tag, {bool active = false, String? tooltip}) {
     final theme = Theme.of(context);
     final bgColor = active ? const Color(0xFF0F53FE) : theme.colorScheme.surface;
     final iconColor = active ? Colors.white : theme.colorScheme.onSurface;
@@ -592,6 +613,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     return FloatingActionButton(
       heroTag: tag,
       mini: true,
+      tooltip: tooltip,
       backgroundColor: bgColor,
       onPressed: onPressed,
       child: Icon(icon, color: iconColor),
@@ -603,42 +625,113 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
       bottom: 24 + MediaQuery.of(context).padding.bottom,
       left: 16,
       right: 16,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface,
-          borderRadius: BorderRadius.circular(28),
-          boxShadow: [BoxShadow(color: Theme.of(context).brightness == Brightness.dark ? Colors.black.withValues(alpha: 0.4) : Colors.black.withValues(alpha: 0.1), blurRadius: 20, offset: const Offset(0, 10))],
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 220),
+        switchInCurve: Curves.easeOutCubic,
+        switchOutCurve: Curves.easeInCubic,
+        // 面板高度不同，切換時讓新舊面板都貼齊底部，避免極簡列先浮在中間。
+        layoutBuilder: (currentChild, previousChildren) => Stack(
+          alignment: Alignment.bottomCenter,
+          children: [...previousChildren, ?currentChild],
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Obx(
-              () => Text(
-                _currentAddressRx.value.isEmpty ? 'sharedLocating'.tr : _currentAddressRx.value,
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface),
-                textAlign: TextAlign.center,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
+        child: _isMinimalMode ? _buildMinimalPlaybackPanel() : _buildFullPlaybackPanel(),
+      ),
+    );
+  }
+
+  Widget _buildFullPlaybackPanel() {
+    return Container(
+      key: const ValueKey('history_playback_panel_full'),
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(28),
+        boxShadow: [BoxShadow(color: Theme.of(context).brightness == Brightness.dark ? Colors.black.withValues(alpha: 0.4) : Colors.black.withValues(alpha: 0.1), blurRadius: 20, offset: const Offset(0, 10))],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Obx(
+            () => Text(
+              _currentAddressRx.value.isEmpty ? 'sharedLocating'.tr : _currentAddressRx.value,
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface),
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
-            Obx(() {
-              final int idx = _playbackPositionRx.value.floor().clamp(0, max(0, _positions.length - 1));
-              final pos = _positions.isEmpty ? null : _positions[idx];
-              final recordedAt = pos == null ? null : PositionCleaner.recordingTime(pos);
-              final time = recordedAt != null ? DateFormat('HH:mm:ss').format(recordedAt.toLocal()) : "--:--:--";
-              final speed = pos != null ? ((pos.speed ?? 0) * 1.852).toStringAsFixed(1) : "0.0";
-              final distance = _getDistanceFormatted(idx);
-              return Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [_buildStatItem("positionDrivingTime".tr, time, CupertinoIcons.clock), _buildStatItem("positionSpeed".tr, "$speed ${'sharedKmh'.tr}", Icons.speed_rounded), _buildStatItem("sharedDistance".tr, distance, Icons.straighten)],
-              );
-            }),
-            const SizedBox(height: 8),
-            Obx(() {
-              final double maxVal = max(0, _positions.length - 1).toDouble();
-              return SliderTheme(
-                data: SliderTheme.of(context).copyWith(trackHeight: 4, thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8), overlayShape: const RoundSliderOverlayShape(overlayRadius: 16)),
+          ),
+          Obx(() {
+            final int idx = _playbackPositionRx.value.floor().clamp(0, max(0, _positions.length - 1));
+            final pos = _positions.isEmpty ? null : _positions[idx];
+            final recordedAt = pos == null ? null : PositionCleaner.recordingTime(pos);
+            final time = recordedAt != null ? DateFormat('HH:mm:ss').format(recordedAt.toLocal()) : "--:--:--";
+            final speed = pos != null ? ((pos.speed ?? 0) * 1.852).toStringAsFixed(1) : "0.0";
+            final distance = _getDistanceFormatted(idx);
+            return Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [_buildStatItem("positionDrivingTime".tr, time, CupertinoIcons.clock), _buildStatItem("positionSpeed".tr, "$speed ${'sharedKmh'.tr}", Icons.speed_rounded), _buildStatItem("sharedDistance".tr, distance, Icons.straighten)],
+            );
+          }),
+          const SizedBox(height: 8),
+          Obx(() {
+            final double maxVal = max(0, _positions.length - 1).toDouble();
+            return SliderTheme(
+              data: SliderTheme.of(context).copyWith(trackHeight: 4, thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8), overlayShape: const RoundSliderOverlayShape(overlayRadius: 16)),
+              child: Slider(
+                value: _playbackPositionRx.value,
+                max: maxVal,
+                onChanged: (v) {
+                  _playbackPositionRx.value = v;
+                  _updatePlaybackUI();
+                },
+                activeColor: Theme.of(context).colorScheme.primary,
+                inactiveColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.15),
+              ),
+            );
+          }),
+          Row(
+            children: [
+              IconButton.filled(
+                style: IconButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.primary, minimumSize: const Size(50, 50)),
+                onPressed: _togglePlayback,
+                icon: Icon(_isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded, color: Theme.of(context).colorScheme.onPrimary, size: 30),
+              ),
+              const Spacer(),
+              _buildSpeedSelector(),
+              const SizedBox(width: 12),
+              IconButton.outlined(onPressed: _exportToGPX, icon: const Icon(Icons.download_rounded, size: 20), tooltip: "Export GPX"),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMinimalPlaybackPanel() {
+    final theme = Theme.of(context);
+    return Container(
+      key: const ValueKey('history_playback_panel_minimal'),
+      padding: const EdgeInsets.fromLTRB(10, 2, 14, 6),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface.withValues(alpha: 0.94),
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: [BoxShadow(color: theme.brightness == Brightness.dark ? Colors.black.withValues(alpha: 0.35) : Colors.black.withValues(alpha: 0.08), blurRadius: 14, offset: const Offset(0, 6))],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Obx(() {
+            final double maxVal = max(0, _positions.length - 1).toDouble();
+            return SizedBox(
+              height: 18,
+              child: SliderTheme(
+                data: SliderTheme.of(context).copyWith(
+                  trackHeight: 2,
+                  thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 4),
+                  overlayShape: const RoundSliderOverlayShape(overlayRadius: 10),
+                  activeTrackColor: theme.colorScheme.primary,
+                  inactiveTrackColor: theme.colorScheme.primary.withValues(alpha: 0.15),
+                ),
                 child: Slider(
                   value: _playbackPositionRx.value,
                   max: maxVal,
@@ -646,26 +739,58 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
                     _playbackPositionRx.value = v;
                     _updatePlaybackUI();
                   },
-                  activeColor: Theme.of(context).colorScheme.primary,
-                  inactiveColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.15),
                 ),
-              );
-            }),
-            Row(
-              children: [
-                IconButton.filled(
-                  style: IconButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.primary, minimumSize: const Size(50, 50)),
+              ),
+            );
+          }),
+          Row(
+            children: [
+              SizedBox(
+                width: 40,
+                height: 40,
+                child: IconButton.filled(
+                  style: IconButton.styleFrom(backgroundColor: theme.colorScheme.primary, minimumSize: const Size(40, 40), padding: EdgeInsets.zero),
                   onPressed: _togglePlayback,
-                  icon: Icon(_isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded, color: Theme.of(context).colorScheme.onPrimary, size: 30),
+                  icon: Icon(_isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded, color: theme.colorScheme.onPrimary, size: 24),
                 ),
-                const Spacer(),
-                _buildSpeedSelector(),
-                const SizedBox(width: 12),
-                IconButton.outlined(onPressed: _exportToGPX, icon: const Icon(Icons.download_rounded, size: 20), tooltip: "Export GPX"),
-              ],
-            ),
-          ],
-        ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Obx(() {
+                  final int idx = _playbackPositionRx.value.floor().clamp(0, max(0, _positions.length - 1));
+                  final pos = _positions.isEmpty ? null : _positions[idx];
+                  final recordedAt = pos == null ? null : PositionCleaner.recordingTime(pos);
+                  final time = recordedAt != null ? DateFormat('MM/dd HH:mm:ss').format(recordedAt.toLocal()) : "--/-- --:--:--";
+                  final speed = pos != null ? ((pos.speed ?? 0) * 1.852).toStringAsFixed(1) : "0.0";
+                  return Row(
+                    children: [
+                      Expanded(
+                        flex: 3,
+                        child: Text(
+                          time,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: theme.colorScheme.onSurface, letterSpacing: -0.2),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        flex: 2,
+                        child: Text(
+                          "$speed ${'sharedKmh'.tr}",
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.end,
+                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: theme.colorScheme.primary),
+                        ),
+                      ),
+                    ],
+                  );
+                }),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
