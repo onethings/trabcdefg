@@ -285,6 +285,30 @@ class TraccarProvider with ChangeNotifier {
   api.User? get currentUser => _currentUser;
 
   List<api.Device> get devices => _devices;
+
+  void updateDevice(api.Device updatedDevice) {
+    final index = _devices.indexWhere((device) => device.id == updatedDevice.id);
+    if (index == -1) return;
+
+    final current = _devices[index];
+    _devices[index] = api.Device(
+      id: updatedDevice.id,
+      name: updatedDevice.name,
+      uniqueId: updatedDevice.uniqueId,
+      status: current.status,
+      disabled: updatedDevice.disabled,
+      lastUpdate: current.lastUpdate,
+      positionId: current.positionId,
+      groupId: updatedDevice.groupId,
+      phone: updatedDevice.phone,
+      model: updatedDevice.model,
+      contact: updatedDevice.contact,
+      category: updatedDevice.category,
+      attributes: updatedDevice.attributes,
+    );
+    notifyListeners();
+  }
+
   List<api.Position> get positions => _positions;
   api.Position? getPosition(int deviceId) => _positionMap[deviceId];
   List<api.Event> get events => _events;

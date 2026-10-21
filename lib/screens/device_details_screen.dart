@@ -10,6 +10,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
+import 'package:trabcdefg/screens/settings/add_device_screen.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
 
 // 1. Create a container class for all necessary future data
@@ -20,8 +21,15 @@ class DeviceData {
   DeviceData(this.device, this.positions);
 }
 
-class DeviceDetailsScreen extends StatelessWidget {
+class DeviceDetailsScreen extends StatefulWidget {
   const DeviceDetailsScreen({super.key});
+
+  @override
+  State<DeviceDetailsScreen> createState() => _DeviceDetailsScreenState();
+}
+
+class _DeviceDetailsScreenState extends State<DeviceDetailsScreen> {
+  api.Device? _updatedDevice;
 
   // 2. Define a function to fetch all required data
   Future<DeviceData> _fetchDeviceAndPositions(BuildContext context, int deviceId) async {
@@ -57,56 +65,16 @@ class DeviceDetailsScreen extends StatelessWidget {
     return null;
   }
 
-  // 3. A dedicated row for copyable content (the phone number)
-  Widget _buildCopyableDetailRow(BuildContext context, String label, String value) {
-    // Only allow copying if the value is meaningful (not the 'sharedNoData' string)
-    final bool isCopyable = value.isNotEmpty && value != 'sharedNoData'.tr;
+  Future<void> _editDevice(api.Device device) async {
+    final updatedDevice = await Navigator.of(context).push<api.Device>(MaterialPageRoute(builder: (_) => AddDeviceScreen(device: device)));
+    if (updatedDevice == null || !mounted) return;
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Expanded(
-            flex: 2,
-            child: Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
-          ),
-          Expanded(
-            flex: 3,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                Flexible(
-                  child: Text(value, textAlign: TextAlign.right, overflow: TextOverflow.ellipsis, maxLines: 2),
-                ),
-                if (isCopyable)
-                  // The copy icon wrapped in a tap detector
-                  InkWell(
-                    onTap: () async {
-                      // Capture the messenger state BEFORE the async gap
-                      final messenger = ScaffoldMessenger.of(context);
-
-                      await Clipboard.setData(ClipboardData(text: value));
-
-                      // FIX APPLIED HERE in previous step: calculate the dynamic string first
-                      final String confirmationText =
-                          // Assuming 'copiedToClipboard' is a translation key
-                          '$label ${'copiedToClipboard'.tr}';
-
-                      // Show confirmation message safely using the captured messenger
-                      messenger.showSnackBar(SnackBar(content: Text(confirmationText), duration: const Duration(seconds: 1)));
-                    },
-                    child: const Padding(
-                      padding: EdgeInsets.only(left: 8.0),
-                      child: Icon(Icons.copy, size: 16, color: Colors.grey),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
+    context.read<TraccarProvider>().updateDevice(updatedDevice);
+    setState(() => _updatedDevice = updatedDevice);
+    if (updatedDevice.name != null) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('selectedDeviceName', updatedDevice.name!);
+    }
   }
 
   @override
@@ -137,7 +105,7 @@ class DeviceDetailsScreen extends StatelessWidget {
           return Scaffold(
             appBar: CupertinoNavigationBar(
               // FIX: Removed unnecessary non-null assertion '!' and replaced '+' with interpolation
-              middle: Text('$deviceName - ${'deviceSecondaryInfo'.tr}'),
+              middle: Text('${_updatedDevice?.name ?? deviceName} - ${'deviceSecondaryInfo'.tr}'),
               trailing: Consumer<TraccarProvider>(
                 builder: (context, provider, child) {
                   final isFavorite = provider.isFavorite(deviceId);
@@ -156,39 +124,21 @@ class DeviceDetailsScreen extends StatelessWidget {
                 } else if (dataSnapshot.hasError) {
                   return Center(child: Text('Error: ${dataSnapshot.error}'));
                 } else if (dataSnapshot.hasData) {
-                  final device = dataSnapshot.data!.device;
+                  final device = _updatedDevice ?? dataSnapshot.data!.device;
                   final positions = dataSnapshot.data!.positions;
                   final position = (positions != null && positions.isNotEmpty) ? positions.first : null;
 
-                  // Check if position data is available to display
-                  if (position == null) {
-                    return Center(child: Text('sharedNoData'.tr));
-                  }
-
-                  final positionRows = _buildPositionRows(position);
-                  final attributeRows = _buildAttributeRows(_asAttributeMap(position.attributes));
-                  final phone = device.phone;
-                  final hasPhone = _hasAttributeValue(phone);
+                  final positionRows = position == null ? <Widget>[] : _buildPositionRows(position);
+                  final attributeRows = position == null ? <Widget>[] : _buildAttributeRows(_asAttributeMap(position.attributes));
+                  final bottomNavigationSpace = MediaQuery.paddingOf(context).bottom + kBottomNavigationBarHeight;
 
                   return SingleChildScrollView(
-                    padding: const EdgeInsets.fromLTRB(16, 20, 16, 40),
+                    padding: EdgeInsets.fromLTRB(16, 20, 16, 16 + bottomNavigationSpace),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         _buildOverviewCard(context, device, position, deviceName),
-                        if (hasPhone) ...[
-                          const SizedBox(height: 24),
-                          Card(
-                            margin: EdgeInsets.zero,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(20),
-                              side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.5)),
-                            ),
-                            child: Padding(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4), child: _buildCopyableDetailRow(context, 'sharedPhone'.tr, phone!)),
-                          ),
-                        ],
-                        const SizedBox(height: 24),
-                        _buildDetailSection(context, 'reportPositions'.tr, CupertinoIcons.location, positionRows),
+                        if (positionRows.isNotEmpty) ...[const SizedBox(height: 24), _buildDetailSection(context, 'reportPositions'.tr, CupertinoIcons.location, positionRows)],
                         if (attributeRows.isNotEmpty) ...[const SizedBox(height: 24), _buildDetailSection(context, 'sharedAttributes'.tr, CupertinoIcons.slider_horizontal_3, attributeRows)],
                       ],
                     ),
@@ -204,9 +154,9 @@ class DeviceDetailsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildOverviewCard(BuildContext context, api.Device device, api.Position position, String fallbackName) {
+  Widget _buildOverviewCard(BuildContext context, api.Device device, api.Position? position, String fallbackName) {
     final colors = Theme.of(context).colorScheme;
-    final positionValues = position.toJson();
+    final positionValues = position?.toJson() ?? const <String, dynamic>{};
     final address = positionValues['address']?.toString();
     final fixTime = positionValues['fixTime'];
     final formattedFixTime = _hasAttributeValue(fixTime) ? _formatPositionValue('fixTime', fixTime) : null;
@@ -241,18 +191,68 @@ class DeviceDetailsScreen extends StatelessWidget {
                     ],
                   ),
                 ),
+                IconButton(
+                  tooltip: 'sharedEdit'.tr,
+                  onPressed: () => _editDevice(device),
+                  icon: Icon(CupertinoIcons.pencil, color: colors.primary),
+                ),
               ],
             ),
-            if (_hasAttributeValue(address) || formattedFixTime != null) ...[
+            if (_hasAttributeValue(address) || formattedFixTime != null || _hasAttributeValue(device.category) || _hasAttributeValue(device.phone)) ...[
               const SizedBox(height: 18),
               Divider(color: colors.outlineVariant.withValues(alpha: 0.5)),
               if (_hasAttributeValue(address)) _buildOverviewMeta(context, CupertinoIcons.map_pin_ellipse, address!),
-              if (_hasAttributeValue(address) && formattedFixTime != null) const SizedBox(height: 12),
+              if (_hasAttributeValue(address) && (formattedFixTime != null || _hasAttributeValue(device.category) || _hasAttributeValue(device.phone))) const SizedBox(height: 12),
               if (formattedFixTime != null) _buildOverviewMeta(context, CupertinoIcons.clock, formattedFixTime),
+              if (_hasAttributeValue(device.category)) ...[if (_hasAttributeValue(address) || formattedFixTime != null) const SizedBox(height: 12), _buildEditableCopyRow(context, 'deviceCategory'.tr, _categoryDisplayName(device.category!), device)],
+              if (_hasAttributeValue(device.phone)) ...[
+                if (_hasAttributeValue(address) || formattedFixTime != null || _hasAttributeValue(device.category)) const SizedBox(height: 12),
+                _buildEditableCopyRow(context, 'sharedPhone'.tr, device.phone!, device),
+              ],
             ],
           ],
         ),
       ),
+    );
+  }
+
+  String _categoryDisplayName(String category) {
+    final translationKey = 'category${category[0].toUpperCase()}${category.substring(1)}';
+    final translated = translationKey.tr;
+    return translated == translationKey ? category : translated;
+  }
+
+  Widget _buildEditableCopyRow(BuildContext context, String label, String value, api.Device device) {
+    final colors = Theme.of(context).colorScheme;
+    return Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: Theme.of(context).textTheme.labelSmall?.copyWith(color: colors.onSurfaceVariant)),
+              const SizedBox(height: 3),
+              SelectableText(value, style: Theme.of(context).textTheme.bodyMedium),
+            ],
+          ),
+        ),
+        IconButton(
+          tooltip: 'sharedCopy'.tr,
+          visualDensity: VisualDensity.compact,
+          onPressed: () async {
+            await Clipboard.setData(ClipboardData(text: value));
+            if (!context.mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$label: ${'sharedCopy'.tr}'), duration: const Duration(seconds: 1)));
+          },
+          icon: Icon(CupertinoIcons.doc_on_doc, size: 19, color: colors.onSurfaceVariant),
+        ),
+        IconButton(
+          tooltip: 'sharedEdit'.tr,
+          visualDensity: VisualDensity.compact,
+          onPressed: () => _editDevice(device),
+          icon: Icon(CupertinoIcons.pencil, size: 19, color: colors.primary),
+        ),
+      ],
     );
   }
 
