@@ -438,6 +438,11 @@ class _DeviceDetailsScreenState extends State<DeviceDetailsScreen> {
 
   String _formatAttributeValue(String key, Object? value) {
     if (value == null) return 'sharedNoData'.tr;
+    if (key == 'alarm' && value is String && value.isNotEmpty) {
+      final translationKey = 'alarm${value[0].toUpperCase()}${value.substring(1)}';
+      final translated = translationKey.tr;
+      if (translated != translationKey) return translated;
+    }
     if (value is bool) return value ? 'sharedYes'.tr : 'sharedNo'.tr;
     if (value is num) {
       if (_meterAttributes.contains(key)) {
