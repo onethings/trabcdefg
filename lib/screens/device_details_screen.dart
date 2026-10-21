@@ -1,5 +1,7 @@
 // lib/screens/device_details_screen.dart
 // DeviceDetailsScreen displaying detailed device info and latest position
+import 'dart:convert';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // <-- ADD THIS IMPORT for Clipboard
@@ -157,17 +159,10 @@ class DeviceDetailsScreen extends StatelessWidget {
                   final device = dataSnapshot.data!.device;
                   final positions = dataSnapshot.data!.positions;
                   final position = (positions != null && positions.isNotEmpty) ? positions.first : null;
-                  final attributes = position?.attributes as Map<String, dynamic>?;
 
                   String formatDate(DateTime? date) {
                     if (date == null) return 'sharedNoData'.tr;
                     return DateFormat('MM/dd/yyyy, hh:mm:ss a').format(date.toLocal());
-                  }
-
-                  String formatDistance(num? distance) {
-                    if (distance == null) return 'sharedNoData'.tr;
-                    // FIX: Replaced '+' concatenation with string interpolation
-                    return '${(distance / 1000).toStringAsFixed(2)} ${'sharedKm'.tr}';
                   }
 
                   String formatSpeed(num? speed) {
@@ -179,11 +174,6 @@ class DeviceDetailsScreen extends StatelessWidget {
                   String formatCourse(num? course) {
                     if (course == null) return 'sharedNoData'.tr;
                     return '↑';
-                  }
-
-                  String formatHours(num? hours) {
-                    if (hours == null) return 'sharedNoData'.tr;
-                    return (hours / 3600000).toStringAsFixed(2);
                   }
 
                   String formatBoolValue(bool? value) {
@@ -227,28 +217,15 @@ class DeviceDetailsScreen extends StatelessWidget {
                         _buildDetailRow('positionCourse'.tr, formatCourse(position.course)),
                         _buildDetailRow('positionAddress'.tr, position.address ?? 'sharedNoData'.tr),
                         _buildDetailRow('positionAccuracy'.tr, position.accuracy?.toString() ?? 'sharedNoData'.tr),
-                        _buildDetailRow('Network'.tr, position.network?.toString() ?? 'sharedNoData'.tr),
+                        _buildAttributeRow('Network'.tr, _formatAttributeValue('network', position.network)),
                         _buildDetailRow('sharedGeofences'.tr, position.geofenceIds.toString()),
                         const SizedBox(height: 20),
                         Text('sharedAttributes'.tr, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                         const Divider(),
-                        _buildDetailRow('sharedType'.tr, attributes?['type']?.toString() ?? 'sharedNoData'.tr),
-                        _buildDetailRow('deviceStatus'.tr, attributes?['status']?.toString() ?? 'sharedNoData'.tr),
-                        _buildDetailRow('positionIgnition'.tr, formatBoolValue(attributes?['ignition'])),
-                        _buildDetailRow('positionCharge'.tr, formatBoolValue(attributes?['charge'])),
-                        _buildDetailRow('positionBlocked'.tr, formatBoolValue(attributes?['blocked'])),
-                        _buildDetailRow(
-                          'positionBatteryLevel'.tr,
-                          attributes?['batteryLevel'] != null
-                              // FIX: Removed unnecessary '!' bang operator
-                              ? '${attributes?['batteryLevel']}%'
-                              : 'sharedNoData'.tr,
-                        ),
-                        _buildDetailRow('positionRssi'.tr, attributes?['rssi']?.toString() ?? 'sharedNoData'.tr),
-                        _buildDetailRow('positionDistance'.tr, formatDistance(attributes?['distance'])),
-                        _buildDetailRow('deviceTotalDistance'.tr, formatDistance(attributes?['totalDistance'])),
-                        _buildDetailRow('reportEngineHours'.tr, formatHours(attributes?['hours'])),
-                        _buildDetailRow('positionMotion'.tr, formatBoolValue(attributes?['motion'])),
+                        // Attributes differ per protocol, model and firmware (JT808
+                        // alone reports iccid, odometer, alarm, ...), so render
+                        // whatever the server sent instead of a fixed whitelist.
+                        ..._buildAttributeRows(_asAttributeMap(position.attributes)),
                       ],
                     ),
                   );
@@ -276,6 +253,135 @@ class DeviceDetailsScreen extends StatelessWidget {
           Expanded(
             flex: 3,
             child: Text(value, textAlign: TextAlign.right, overflow: TextOverflow.ellipsis, maxLines: 2),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Attribute keys Traccar reports for most protocols. They keep a stable
+  /// order and a translated label; everything else is appended afterwards.
+  static const List<String> _primaryAttributeKeys = [
+    'type',
+    'status',
+    'ignition',
+    'charge',
+    'blocked',
+    'batteryLevel',
+    'rssi',
+    'distance',
+    'totalDistance',
+    'hours',
+    'motion',
+  ];
+
+  static const Map<String, String> _attributeTranslationKeys = {
+    'type': 'sharedType',
+    'status': 'deviceStatus',
+    'ignition': 'positionIgnition',
+    'charge': 'positionCharge',
+    'blocked': 'positionBlocked',
+    'batteryLevel': 'positionBatteryLevel',
+    'rssi': 'positionRssi',
+    'distance': 'positionDistance',
+    'totalDistance': 'deviceTotalDistance',
+    'hours': 'reportEngineHours',
+    'motion': 'positionMotion',
+    'alarm': 'positionAlarm',
+    'odometer': 'positionOdometer',
+  };
+
+  /// Keys that read better as-is than as a raw lowercase server key.
+  static const Map<String, String> _attributeDisplayNames = {
+    'iccid': 'ICCID',
+    'imei': 'IMEI',
+    'imsi': 'IMSI',
+    'vin': 'VIN',
+    'rpm': 'RPM',
+  };
+
+  /// Traccar stores these attributes in meters.
+  static const Set<String> _meterAttributes = {
+    'distance',
+    'totalDistance',
+    'odometer',
+    'obdOdometer',
+    'odometerTrip',
+  };
+
+  Map<String, dynamic> _asAttributeMap(Object? attributes) {
+    if (attributes is Map<String, dynamic>) return attributes;
+    if (attributes is Map) {
+      return attributes.map((key, value) => MapEntry(key.toString(), value));
+    }
+    return const {};
+  }
+
+  List<Widget> _buildAttributeRows(Map<String, dynamic> attributes) {
+    final rows = <Widget>[];
+    final remainingKeys = attributes.keys.toSet();
+
+    for (final key in _primaryAttributeKeys) {
+      remainingKeys.remove(key);
+      rows.add(_buildAttributeRow(_attributeLabel(key), _formatAttributeValue(key, attributes[key])));
+    }
+
+    for (final key in remainingKeys.toList()..sort()) {
+      final value = attributes[key];
+      if (value == null) continue;
+      rows.add(_buildAttributeRow(_attributeLabel(key), _formatAttributeValue(key, value)));
+    }
+
+    return rows;
+  }
+
+  String _attributeLabel(String key) {
+    final translationKey = _attributeTranslationKeys[key];
+    if (translationKey != null) return translationKey.tr;
+    return _attributeDisplayNames[key] ?? key;
+  }
+
+  String _formatAttributeValue(String key, Object? value) {
+    if (value == null) return 'sharedNoData'.tr;
+    if (value is bool) return value ? 'sharedYes'.tr : 'sharedNo'.tr;
+    if (value is num) {
+      if (_meterAttributes.contains(key)) {
+        return '${(value / 1000).toStringAsFixed(2)} ${'sharedKm'.tr}';
+      }
+      if (key == 'hours') {
+        return (value / Duration.millisecondsPerHour).toStringAsFixed(2);
+      }
+      final text = value is double && value == value.roundToDouble()
+          ? value.toInt().toString()
+          : value.toString();
+      if (key == 'batteryLevel') return '$text%';
+      return text;
+    }
+    if (value is Map || value is List) {
+      try {
+        return const JsonEncoder.withIndent('  ').convert(value);
+      } catch (_) {
+        return value.toString();
+      }
+    }
+    return value.toString();
+  }
+
+  /// Attribute rows wrap instead of truncating so long values such as ICCID,
+  /// VIN or nested network information stay fully readable.
+  Widget _buildAttributeRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            flex: 2,
+            child: Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
+          ),
+          Expanded(
+            flex: 3,
+            child: SelectableText(value, textAlign: TextAlign.right),
           ),
         ],
       ),
