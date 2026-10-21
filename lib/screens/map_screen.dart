@@ -97,6 +97,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   final ValueNotifier<api.Device?> _selectedDeviceNotifier = ValueNotifier(null);
   final ValueNotifier<api.Position?> _selectedPositionNotifier = ValueNotifier(null);
   final ValueNotifier<String> _selectedAddressNotifier = ValueNotifier("");
+  int _deviceSelectionGeneration = 0;
 
   bool _isCacheInitialized = false;
   Timer? _zoomDebounce;
@@ -411,7 +412,6 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       return;
     }
 
-    setState(() => _currentDevice = device);
     _onDeviceSelected(device, provider.positions, forceShowPanel: true, zoomToMax: true);
   }
 
@@ -437,7 +437,6 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                     title: Text(device.name ?? 'Unknown Device'.tr),
                     onTap: () {
                       Navigator.of(popupContext).pop();
-                      setState(() => _currentDevice = device);
                       _onDeviceSelected(device, provider.positions, forceShowPanel: true, zoomToMax: true);
                     },
                   ),
@@ -804,10 +803,6 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     }
 
     final nextDevice = devices[nextIndex];
-    setState(() {
-      _currentDevice = nextDevice;
-    });
-
     // 直接跟隨切換到的車：鏡頭立刻回到它的「現在」位置，之後每次位置更新
     // 都由 _updateSelectedDeviceLive 持續跟隨，軌跡也從這一刻重新開始。
     _onDeviceSelected(nextDevice, provider.positions, forceShowPanel: false, follow: true);
@@ -822,13 +817,11 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   /// - 軌跡從「選取那一刻」重新開始：換車清空，同一台車再次選取（例如按
   ///   「我的位置」恢復跟隨）則保留既有軌跡。
   void _onDeviceSelected(api.Device device, List<api.Position> allPositions, {bool forceShowPanel = false, bool follow = true, bool zoomToMax = false}) async {
+    final int selectionGeneration = ++_deviceSelectionGeneration;
     final bool deviceChanged = _selectedDeviceNotifier.value?.id != device.id;
 
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt('selectedDeviceId', device.id!);
-    await prefs.setString('selectedDeviceName', device.name!);
-
-    if (!mounted) return;
+    // 同步地更新兩處選取狀態，避免位置推送仍以舊的 _currentDevice 更新面板。
+    setState(() => _currentDevice = device);
     final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
 
     final position = traccarProvider.getPosition(device.id!) ?? allPositions.firstWhere((p) => p.deviceId == device.id, orElse: () => api.Position(deviceId: device.id, latitude: 0.0, longitude: 0.0));
@@ -864,12 +857,20 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       traccarProvider.prefetchDeviceHistory(device.id!);
     }
 
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted || selectionGeneration != _deviceSelectionGeneration) return;
+    await prefs.setInt('selectedDeviceId', device.id!);
+    await prefs.setString('selectedDeviceName', device.name!);
+    if (!mounted || selectionGeneration != _deviceSelectionGeneration) return;
+
     if (latLng == null) return;
 
     // 先讓地圖可視範圍扣掉明細面板（含上方切換列），鏡頭再對準裝置，
     // marker 才會落在「面板上緣 ~ 地圖頂部」的正中央，而不是被面板遮住。
     await _syncSheetContentInset(animated: false);
+    if (!mounted || selectionGeneration != _deviceSelectionGeneration) return;
     await _animateCamera(zoomToMax ? maplibre.CameraUpdate.newLatLngZoom(latLng, _kMaxMapZoom) : maplibre.CameraUpdate.newLatLng(latLng));
+    if (!mounted || selectionGeneration != _deviceSelectionGeneration) return;
     // 立刻用最新資料跑一次 marker / 跟隨流程，不用等下一次位置更新
     await _scheduleMarkerUpdate(traccarProvider);
 
@@ -877,11 +878,11 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
     try {
       final String addr = await OfflineAddressService.getAddress(latLng.latitude, latLng.longitude);
-      if (!mounted) return;
+      if (!mounted || selectionGeneration != _deviceSelectionGeneration) return;
       _selectedAddressNotifier.value = addr;
     } catch (e) {
       debugPrint("Geocoder error: $e");
-      if (!mounted) return;
+      if (!mounted || selectionGeneration != _deviceSelectionGeneration) return;
       _selectedAddressNotifier.value = "Location: ${latLng.latitude.toStringAsFixed(4)}, ${latLng.longitude.toStringAsFixed(4)}";
     }
   }
