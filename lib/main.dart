@@ -80,7 +80,10 @@ class TraccarApp extends StatelessWidget {
         // Provide the authentication service.
         Provider<AuthService>(create: (context) => AuthService(apiClient: context.read<api.ApiClient>())),
         // Provide the WebSocket service.
-        Provider<WebSocketService>(create: (_) => WebSocketService()),
+        Provider<WebSocketService>(
+          create: (_) => WebSocketService(),
+          dispose: (_, service) => service.dispose(),
+        ),
         // Provide the main TraccarProvider for state management.
         ChangeNotifierProvider<TraccarProvider>(
           create: (context) => TraccarProvider(apiClient: context.read<api.ApiClient>(), webSocketService: context.read<WebSocketService>(), authService: context.read<AuthService>()),

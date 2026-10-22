@@ -17,6 +17,7 @@ import 'package:trabcdefg/providers/traccar_provider.dart';
 import 'package:trabcdefg/screens/settings/geofences_screen.dart' hide AppMapType, TileCacheService;
 import 'package:trabcdefg/services/auth_session_store.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
+import 'package:trabcdefg/src/utils/position_coordinates.dart';
 import 'package:trabcdefg/widgets/offline_address_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -59,6 +60,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   // 🚀 marker 增量更新的狀態：deviceId -> 對應的 Symbol（圖標 / 標籤）
   final Map<int, maplibre.Symbol> _deviceSymbols = {};
   final Map<int, maplibre.Symbol> _labelSymbols = {};
+  final Map<int, _MarkerRenderState> _markerRenderStates = {};
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   api.Device? _currentDevice;
   final TileCacheService _cacheService = TileCacheService();
@@ -207,6 +209,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     // 樣式重建後舊 controller 的 symbol 與軌跡線都已失效，必須清掉增量狀態
     _deviceSymbols.clear();
     _labelSymbols.clear();
+    _markerRenderStates.clear();
     _trailLine = null;
     _trailPoints.clear();
     _lastAddressLookupPoint = null;
@@ -236,7 +239,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       if (lastDeviceId != null) {
         final device = traccarProvider.devices.firstWhereOrNull((d) => d.id == lastDeviceId);
         if (device != null) {
-          _onDeviceSelected(device, traccarProvider.positions, follow: false);
+          _onDeviceSelected(device, follow: false);
         } else {
           _zoomToFitAll(traccarProvider);
         }
@@ -357,29 +360,28 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
     final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
     if (device.id == null || traccarProvider.getPosition(device.id!) == null) return;
-    _onDeviceSelected(device, traccarProvider.positions, forceShowPanel: true);
+    _onDeviceSelected(device, forceShowPanel: true);
   }
 
   /// 只回傳「地圖上看得到」的裝置：有定位資料（緯度不為 null）才算。
   /// 切換列只在這些裝置之間移動，沒有定位數據的車會自動跳過。
   List<api.Device> _navigableDevices(TraccarProvider provider) {
     return provider.devices.where((device) {
-      final pos = _findPositionOrNull(provider.positions, device.id);
-      return pos != null && pos.latitude != null && pos.longitude != null;
+      return _hasValidCoordinates(_positionForDevice(provider, device.id));
     }).toList();
   }
 
   List<api.Device> _devicesNearMarker(api.Device tappedDevice, TraccarProvider provider) {
-    final tappedPosition = _findPositionOrNull(provider.positions, tappedDevice.id);
+    final tappedPosition = _positionForDevice(provider, tappedDevice.id);
     final cameraZoom = _mapController?.cameraPosition?.zoom;
-    if (tappedPosition?.latitude == null || tappedPosition?.longitude == null || cameraZoom == null) {
+    if (!_hasValidCoordinates(tappedPosition) || cameraZoom == null) {
       return [tappedDevice];
     }
 
     final tappedPoint = _projectToWorldPixels(tappedPosition!, cameraZoom);
     final nearbyDevices = _navigableDevices(provider).where((device) {
-      final position = _findPositionOrNull(provider.positions, device.id);
-      if (position?.latitude == null || position?.longitude == null) return false;
+      final position = _positionForDevice(provider, device.id);
+      if (!_hasValidCoordinates(position)) return false;
 
       final point = _projectToWorldPixels(position!, cameraZoom);
       final worldSize = 256 * math.pow(2, cameraZoom);
@@ -412,7 +414,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       return;
     }
 
-    _onDeviceSelected(device, provider.positions, forceShowPanel: true, zoomToMax: true);
+    _onDeviceSelected(device, forceShowPanel: true, zoomToMax: true);
   }
 
   void _showNearbyDevicePicker(List<api.Device> devices, TraccarProvider provider) {
@@ -437,7 +439,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                     title: Text(device.name ?? 'Unknown Device'.tr),
                     onTap: () {
                       Navigator.of(popupContext).pop();
-                      _onDeviceSelected(device, provider.positions, forceShowPanel: true, zoomToMax: true);
+                      _onDeviceSelected(device, forceShowPanel: true, zoomToMax: true);
                     },
                   ),
               ],
@@ -497,7 +499,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     double? minLat, maxLat, minLng, maxLng;
 
     for (var pos in provider.positions) {
-      if (pos.latitude == null || pos.longitude == null) continue;
+      if (!_hasValidCoordinates(pos)) continue;
       double lat = pos.latitude!.toDouble();
       double lng = pos.longitude!.toDouble();
 
@@ -538,7 +540,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _updateAllMarkers(TraccarProvider provider) async {
-    if (_mapController == null || !_isStyleLoaded) return;
+    final controller = _mapController;
+    if (controller == null || !_isStyleLoaded) return;
 
     // 💡 優化：在任何 await 異步操作之前，先安全地讀取變數並存為區域變數
     // 這樣可以完美避開「跨異步間隙使用 BuildContext」的 linter 報錯
@@ -554,11 +557,11 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     final visibleDeviceIds = <int>{};
 
     for (final device in provider.devices) {
-      final pos = _findPositionOrNull(provider.positions, device.id);
-      if (pos == null || pos.latitude == null) continue;
-
       final int? deviceId = device.id;
       if (deviceId == null) continue;
+      final pos = provider.getPosition(deviceId);
+      if (pos == null || !_hasValidCoordinates(pos)) continue;
+      final position = pos;
       visibleDeviceIds.add(deviceId);
 
       final String category = device.category ?? 'default';
@@ -567,55 +570,63 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
       final String plate = device.name ?? '';
       final String customLabelId = "label_$plate";
+      final latLng = maplibre.LatLng(position.latitude!.toDouble(), position.longitude!.toDouble());
+      final double course = position.course?.toDouble() ?? 0.0;
+      final double iconSize = 4.0 * scale;
+      final previousState = _markerRenderStates[deviceId];
+      final bool iconChanged =
+          previousState == null || previousState.iconImage != baseIconKey || previousState.course != course || previousState.iconSize != iconSize || previousState.latitude != latLng.latitude || previousState.longitude != latLng.longitude;
+      final bool labelChanged = previousState == null || previousState.labelImage != customLabelId || previousState.latitude != latLng.latitude || previousState.longitude != latLng.longitude;
 
-      await _iconService.ensureIconLoaded(_mapController, baseIconKey);
-      await _iconService.ensureLabelIconLoaded(_mapController, plate, customLabelId);
+      if (_deviceSymbols[deviceId] == null || previousState?.iconImage != baseIconKey) {
+        await _iconService.ensureIconLoaded(controller, baseIconKey);
+      }
+      if (_labelSymbols[deviceId] == null || previousState?.labelImage != customLabelId) {
+        await _iconService.ensureLabelIconLoaded(controller, plate, customLabelId);
+      }
+      if (!mounted || !identical(_mapController, controller) || !_isStyleLoaded) return;
 
-      final latLng = maplibre.LatLng(pos.latitude!.toDouble(), pos.longitude!.toDouble());
       final deviceData = {'deviceId': deviceId.toString()};
 
       // 設備圖標：存在就原地更新，不存在才新增
       final iconSymbol = _deviceSymbols[deviceId];
-      if (iconSymbol != null) {
-        await _mapController!.updateSymbol(iconSymbol, maplibre.SymbolOptions(geometry: latLng, iconImage: baseIconKey, iconRotate: pos.course?.toDouble() ?? 0.0, iconSize: 4.0 * scale, iconAnchor: 'center', zIndex: 10));
-      } else {
-        _deviceSymbols[deviceId] = await _mapController!.addSymbol(
-          maplibre.SymbolOptions(
-            geometry: latLng,
-            iconImage: baseIconKey,
-            iconRotate: pos.course?.toDouble() ?? 0.0,
-            iconSize: 4.0 * scale, // 💡 這裡直接使用剛剛存好的 scale 變數
-            iconAnchor: 'center',
-            zIndex: 10,
-          ),
-          deviceData,
-        );
+      if (iconSymbol == null) {
+        _deviceSymbols[deviceId] = await controller.addSymbol(maplibre.SymbolOptions(geometry: latLng, iconImage: baseIconKey, iconRotate: course, iconSize: iconSize, iconAnchor: 'center', zIndex: 10), deviceData);
+      } else if (iconChanged) {
+        await controller.updateSymbol(iconSymbol, maplibre.SymbolOptions(geometry: latLng, iconImage: baseIconKey, iconRotate: course, iconSize: iconSize, iconAnchor: 'center', zIndex: 10));
       }
 
       // 名稱標籤：同樣「新增或原地更新」
       final labelSymbol = _labelSymbols[deviceId];
-      if (labelSymbol != null) {
-        await _mapController!.updateSymbol(labelSymbol, maplibre.SymbolOptions(geometry: latLng, iconImage: customLabelId, iconRotate: 0.0, iconOffset: const Offset(0, 15), iconSize: 1.2, iconAnchor: 'top', zIndex: 5));
-      } else {
-        _labelSymbols[deviceId] = await _mapController!.addSymbol(maplibre.SymbolOptions(geometry: latLng, iconImage: customLabelId, iconRotate: 0.0, iconOffset: const Offset(0, 15), iconSize: 1.2, iconAnchor: 'top', zIndex: 5), deviceData);
+      if (labelSymbol == null) {
+        _labelSymbols[deviceId] = await controller.addSymbol(maplibre.SymbolOptions(geometry: latLng, iconImage: customLabelId, iconRotate: 0.0, iconOffset: const Offset(0, 15), iconSize: 1.2, iconAnchor: 'top', zIndex: 5), deviceData);
+      } else if (labelChanged) {
+        await controller.updateSymbol(labelSymbol, maplibre.SymbolOptions(geometry: latLng, iconImage: customLabelId, iconRotate: 0.0, iconOffset: const Offset(0, 15), iconSize: 1.2, iconAnchor: 'top', zIndex: 5));
       }
+
+      _markerRenderStates[deviceId] = _MarkerRenderState(latitude: latLng.latitude, longitude: latLng.longitude, course: course, iconSize: iconSize, iconImage: baseIconKey, labelImage: customLabelId);
     }
 
     // 清除已經沒有位置資料（或已被移除）的設備 marker
-    final staleIds = _deviceSymbols.keys.where((id) => !visibleDeviceIds.contains(id)).toList();
+    final staleIds = <int>{..._deviceSymbols.keys, ..._labelSymbols.keys}.where((id) => !visibleDeviceIds.contains(id)).toList();
     for (final id in staleIds) {
       final iconSymbol = _deviceSymbols.remove(id);
       if (iconSymbol != null) {
         try {
-          await _mapController!.removeSymbol(iconSymbol);
-        } catch (_) {}
+          await controller.removeSymbol(iconSymbol);
+        } catch (error) {
+          debugPrint('Failed to remove device marker $id: $error');
+        }
       }
       final labelSymbol = _labelSymbols.remove(id);
       if (labelSymbol != null) {
         try {
-          await _mapController!.removeSymbol(labelSymbol);
-        } catch (_) {}
+          await controller.removeSymbol(labelSymbol);
+        } catch (error) {
+          debugPrint('Failed to remove device label $id: $error');
+        }
       }
+      _markerRenderStates.remove(id);
     }
   }
 
@@ -626,12 +637,13 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     if (currentDeviceId == null) return;
 
     final api.Position? currentPos = provider.getPosition(currentDeviceId);
-    if (currentPos == null || currentPos.latitude == null || currentPos.longitude == null) return;
+    if (currentPos == null || !_hasValidCoordinates(currentPos)) return;
 
-    final maplibre.LatLng currentLatLng = maplibre.LatLng(currentPos.latitude!.toDouble(), currentPos.longitude!.toDouble());
+    final api.Position position = currentPos;
+    final maplibre.LatLng currentLatLng = maplibre.LatLng(position.latitude!.toDouble(), position.longitude!.toDouble());
 
     // 軌跡：只累積目前選取裝置的移動
-    if (currentPos.deviceId == _trailDeviceId) {
+    if (position.deviceId == _trailDeviceId) {
       _appendTrailPoint(currentLatLng);
     }
 
@@ -642,9 +654,9 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
     // 明細面板：位置/地址跟著車跑（面板沒開也先更新，打開時就是最新的）
     if (_selectedDeviceNotifier.value?.id == currentDeviceId) {
-      _selectedPositionNotifier.value = currentPos;
+      _selectedPositionNotifier.value = position;
       if (_isPanelOpen) {
-        _maybeRefreshPanelAddress(currentPos, currentLatLng);
+        _maybeRefreshPanelAddress(position, currentLatLng);
       }
     }
   }
@@ -805,7 +817,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     final nextDevice = devices[nextIndex];
     // 直接跟隨切換到的車：鏡頭立刻回到它的「現在」位置，之後每次位置更新
     // 都由 _updateSelectedDeviceLive 持續跟隨，軌跡也從這一刻重新開始。
-    _onDeviceSelected(nextDevice, provider.positions, forceShowPanel: false, follow: true);
+    _onDeviceSelected(nextDevice, forceShowPanel: false, follow: true);
   }
 
   /// 唯一的「選取裝置」入口：上/下台車、點地圖 marker、Drawer 列表全部走這裡。
@@ -816,7 +828,10 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   ///   [_updateSelectedDeviceLive] 隨每次位置更新持續跟隨。
   /// - 軌跡從「選取那一刻」重新開始：換車清空，同一台車再次選取（例如按
   ///   「我的位置」恢復跟隨）則保留既有軌跡。
-  void _onDeviceSelected(api.Device device, List<api.Position> allPositions, {bool forceShowPanel = false, bool follow = true, bool zoomToMax = false}) async {
+  void _onDeviceSelected(api.Device device, {bool forceShowPanel = false, bool follow = true, bool zoomToMax = false}) async {
+    final int? deviceId = device.id;
+    if (deviceId == null) return;
+
     final int selectionGeneration = ++_deviceSelectionGeneration;
     final bool deviceChanged = _selectedDeviceNotifier.value?.id != device.id;
 
@@ -824,9 +839,9 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     setState(() => _currentDevice = device);
     final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
 
-    final position = traccarProvider.getPosition(device.id!) ?? allPositions.firstWhere((p) => p.deviceId == device.id, orElse: () => api.Position(deviceId: device.id, latitude: 0.0, longitude: 0.0));
+    final position = traccarProvider.getPosition(deviceId) ?? api.Position(deviceId: deviceId);
 
-    final bool hasFix = position.latitude != null && position.longitude != null && position.latitude != 0.0;
+    final bool hasFix = _hasValidCoordinates(position);
     final maplibre.LatLng? latLng = hasFix ? maplibre.LatLng(position.latitude!.toDouble(), position.longitude!.toDouble()) : null;
 
     final String? immediateAddress = latLng == null ? null : OfflineAddressService.getAddressFromCache(latLng.latitude, latLng.longitude);
@@ -853,14 +868,14 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       _showDeviceDetailPanel(device, position);
     }
 
-    if (device.id != null) {
-      traccarProvider.prefetchDeviceHistory(device.id!);
-    }
+    traccarProvider.prefetchDeviceHistory(deviceId);
 
     final prefs = await SharedPreferences.getInstance();
     if (!mounted || selectionGeneration != _deviceSelectionGeneration) return;
-    await prefs.setInt('selectedDeviceId', device.id!);
-    await prefs.setString('selectedDeviceName', device.name!);
+    await prefs.setInt('selectedDeviceId', deviceId);
+    if (device.name != null) {
+      await prefs.setString('selectedDeviceName', device.name!);
+    }
     if (!mounted || selectionGeneration != _deviceSelectionGeneration) return;
 
     if (latLng == null) return;
@@ -926,7 +941,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                     title: Text('linkGoogleMaps'.tr),
                     onTap: () {
                       Navigator.of(context).pop();
-                      if (currentPosition?.latitude != null && currentPosition?.longitude != null) {
+                      if (_hasValidCoordinates(currentPosition)) {
                         final url = Uri.parse('https://maps.google.com/maps?q=${currentPosition!.latitude!.toDouble()},${currentPosition.longitude!.toDouble()}');
                         _launchUrl(url);
                       }
@@ -936,7 +951,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                     title: Text('linkAppleMaps'.tr),
                     onTap: () {
                       Navigator.of(context).pop();
-                      if (currentPosition?.latitude != null && currentPosition?.longitude != null) {
+                      if (_hasValidCoordinates(currentPosition)) {
                         final url = Uri.parse('https://maps.apple.com/?q=${currentPosition!.latitude!.toDouble()},${currentPosition.longitude!.toDouble()}');
                         _launchUrl(url);
                       }
@@ -946,7 +961,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                     title: Text('linkStreetView'.tr),
                     onTap: () {
                       Navigator.of(context).pop();
-                      if (currentPosition?.latitude != null && currentPosition?.longitude != null) {
+                      if (_hasValidCoordinates(currentPosition)) {
                         final url = Uri.parse('google.streetview:cbll=${currentPosition!.latitude!.toDouble()},${currentPosition.longitude!.toDouble()}');
                         _launchUrl(url);
                       }
@@ -1057,13 +1072,13 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     });
   }
 
-  api.Position? _findPositionOrNull(List<api.Position> positions, int? deviceId) {
+  api.Position? _positionForDevice(TraccarProvider provider, int? deviceId) {
     if (deviceId == null) return null;
-    try {
-      return positions.firstWhere((p) => p.deviceId == deviceId);
-    } catch (_) {
-      return null;
-    }
+    return provider.getPosition(deviceId);
+  }
+
+  bool _hasValidCoordinates(api.Position? position) {
+    return hasValidPositionCoordinates(position);
   }
 
   Color _getStatusColor(String? status) {
@@ -1117,7 +1132,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     // 不要在 comparator 裡重複掃 positions 清單。
     final Map<int, double> speedByDeviceId = {
       for (final device in devices)
-        if (device.id != null) device.id!: (_findPositionOrNull(traccarProvider.positions, device.id)?.speed ?? 0.0).toDouble(),
+        if (device.id != null) device.id!: (_positionForDevice(traccarProvider, device.id)?.speed ?? 0.0).toDouble(),
     };
 
     devices.sort((a, b) {
@@ -1195,7 +1210,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                     itemCount: devices.length,
                     itemBuilder: (context, index) {
                       final device = devices[index];
-                      final position = _findPositionOrNull(traccarProvider.positions, device.id);
+                      final position = _positionForDevice(traccarProvider, device.id);
 
                       final speed = (position?.speed ?? 0.0).toStringAsFixed(1);
                       final isIgnitionOn = (position?.attributes as Map<String, dynamic>?)?['ignition'] == true;
@@ -1222,7 +1237,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                           Navigator.of(context).pop();
 
                           if (position != null) {
-                            _onDeviceSelected(device, traccarProvider.positions, forceShowPanel: true);
+                            _onDeviceSelected(device, forceShowPanel: true);
                           }
                         },
                       );
@@ -1261,16 +1276,16 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
         double initialLat = 0, initialLng = 0, initialZoom = 2.0;
 
         if (_currentDevice != null) {
-          final initialPosition = _findPositionOrNull(traccarProvider.positions, _currentDevice!.id);
+          final initialPosition = _positionForDevice(traccarProvider, _currentDevice!.id);
 
-          if (initialPosition?.latitude != null && initialPosition?.longitude != null) {
+          if (_hasValidCoordinates(initialPosition)) {
             initialLat = initialPosition!.latitude!.toDouble();
             initialLng = initialPosition.longitude!.toDouble();
             initialZoom = 15.0;
           }
         } else if (traccarProvider.positions.isNotEmpty) {
           final api.Position firstPosition = traccarProvider.positions.first;
-          if (firstPosition.latitude != null && firstPosition.longitude != null) {
+          if (_hasValidCoordinates(firstPosition)) {
             initialLat = firstPosition.latitude!.toDouble();
             initialLng = firstPosition.longitude!.toDouble();
             initialZoom = 5.0;
@@ -1400,6 +1415,17 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       },
     );
   }
+}
+
+class _MarkerRenderState {
+  final double latitude;
+  final double longitude;
+  final double course;
+  final double iconSize;
+  final String iconImage;
+  final String labelImage;
+
+  const _MarkerRenderState({required this.latitude, required this.longitude, required this.course, required this.iconSize, required this.iconImage, required this.labelImage});
 }
 
 // ── 毛玻璃 UI 基礎元件 ──────────────────────────────────────────────

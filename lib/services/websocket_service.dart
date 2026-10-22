@@ -2,14 +2,15 @@
 
 import 'dart:async';
 import 'dart:convert';
-import 'dart:developer' as developer; // 1. Add this import
+import 'dart:developer' as developer;
 import 'dart:math';
 
 import 'package:web_socket_channel/io.dart';
 
 class WebSocketService {
   IOWebSocketChannel? _channel;
-  final _controller = StreamController<dynamic>.broadcast();
+  StreamSubscription<dynamic>? _channelSubscription;
+  final _controller = StreamController<Map<String, dynamic>>.broadcast();
   bool _isConnectAttempted = false;
   Timer? _reconnectTimer;
 
@@ -21,7 +22,7 @@ class WebSocketService {
   /// If set, reconnect will use this instead of the potentially stale [_lastSessionId].
   String? Function()? sessionIdProvider;
 
-  Stream<dynamic> get stream => _controller.stream;
+  Stream<Map<String, dynamic>> get stream => _controller.stream;
 
   void connect(String wsUrl, String sessionId) {
     _lastUrl = wsUrl;
@@ -29,34 +30,61 @@ class WebSocketService {
     _isConnectAttempted = true;
 
     try {
-      // 2. Replaced print with developer.log
       developer.log('Connecting to WebSocket at: $wsUrl', name: 'WebSocketService');
       _reconnectTimer?.cancel();
 
-      _channel = IOWebSocketChannel.connect(Uri.parse(wsUrl), headers: {'Cookie': 'JSESSIONID=$sessionId'});
+      final previousChannel = _channel;
+      final previousSubscription = _channelSubscription;
+      _channelSubscription = null;
+      if (previousSubscription != null) {
+        unawaited(previousSubscription.cancel());
+      }
+      if (previousChannel != null) {
+        unawaited(previousChannel.sink.close(1000));
+      }
 
-      _channel!.stream.listen(
+      final channel = IOWebSocketChannel.connect(
+        Uri.parse(wsUrl),
+        headers: {'Cookie': 'JSESSIONID=$sessionId'},
+      );
+      _channel = channel;
+
+      _channelSubscription = channel.stream.listen(
         (message) {
           _reconnectAttempts = 0;
-          if (!_controller.isClosed) {
-            _controller.add(json.decode(message));
+          try {
+            final decoded = json.decode(message as String);
+            if (decoded is! Map) {
+              developer.log(
+                'Ignoring non-object WebSocket message',
+                name: 'WebSocketService',
+              );
+              return;
+            }
+            if (!_controller.isClosed) {
+              _controller.add(Map<String, dynamic>.from(decoded));
+            }
+          } catch (error, stackTrace) {
+            developer.log(
+              'Failed to decode WebSocket message',
+              name: 'WebSocketService',
+              error: error,
+              stackTrace: stackTrace,
+            );
           }
         },
         onError: (error) {
-          // 3. Replaced print with developer.log
           developer.log('WebSocket error: $error', name: 'WebSocketService', error: error);
-          _scheduleReconnect();
+          if (identical(_channel, channel)) _scheduleReconnect();
         },
         onDone: () {
-          // 4. Replaced print with developer.log
           developer.log('WebSocket closed', name: 'WebSocketService');
-          if (_isConnectAttempted) {
+          if (identical(_channel, channel) && _isConnectAttempted) {
             _scheduleReconnect();
           }
         },
       );
     } catch (e) {
-      // 5. Replaced print with developer.log
       developer.log('WebSocket connection failed: $e', name: 'WebSocketService', error: e);
       _scheduleReconnect();
     }
@@ -68,7 +96,6 @@ class WebSocketService {
     _reconnectAttempts++;
     final delay = Duration(seconds: min(pow(2, _reconnectAttempts).toInt(), 30));
 
-    // 6. Replaced print with developer.log
     developer.log('Scheduling WebSocket reconnect in ${delay.inSeconds}s (Attempt $_reconnectAttempts)', name: 'WebSocketService');
 
     _reconnectTimer = Timer(delay, () {
@@ -88,12 +115,20 @@ class WebSocketService {
     _isConnectAttempted = false;
     _reconnectTimer?.cancel();
     _reconnectTimer = null;
-    if (_channel != null) {
-      _channel!.sink.close(1000);
-      _channel = null;
-      if (!_controller.isClosed) {
-        _controller.add(false);
-      }
+    final subscription = _channelSubscription;
+    _channelSubscription = null;
+    if (subscription != null) {
+      unawaited(subscription.cancel());
     }
+    final channel = _channel;
+    _channel = null;
+    if (channel != null) {
+      unawaited(channel.sink.close(1000));
+    }
+  }
+
+  void dispose() {
+    disconnect();
+    unawaited(_controller.close());
   }
 }

@@ -66,17 +66,15 @@ class OfflineAddressService {
   }
 
   static String? _getDbName(String langCode) {
-    if (langCode == 'zh') return "chinese_ultra_res.db";
     if (langCode == 'my') {
       return "myanmar_ultra_res_my.db"; //"myanmar_ultra_res.db";
     }
-    if (langCode == 'en') return "english_ultra_res.db";
-    return null; // Return null if no specific DB for this language
+    return null;
   }
 
   static Future<void> initDatabase({String? manualLangCode}) async {
     await _initCache();
-    String langCode = manualLangCode ?? Get.locale?.languageCode ?? Get.deviceLocale?.languageCode ?? 'en';
+    String langCode = manualLangCode ?? _getCurrentLanguageCode();
 
     // 關鍵修正：確保 _currentLang 與當前 Get.locale 同步
     if (_db != null && _currentLang == langCode) return;
@@ -104,6 +102,10 @@ class OfflineAddressService {
     _currentLang = langCode;
   }
 
+  static String _getCurrentLanguageCode() {
+    return Get.locale?.languageCode ?? Get.deviceLocale?.languageCode ?? 'en';
+  }
+
   static Future<void> forceSwitchLanguage(String langCode) async {
     await initDatabase(manualLangCode: langCode);
   }
@@ -125,22 +127,34 @@ class OfflineAddressService {
 
   static Future<AddressResult> getAddressDetailed(double lat, double lon) async {
     try {
-      await initDatabase();
+      await _initCache();
+      final String langCode = _getCurrentLanguageCode();
+      if (_currentLang != langCode) {
+        if (_db != null) {
+          await _db!.close();
+          _db = null;
+        }
+        _currentLang = langCode;
+      }
 
-      // Prefer the current online address when available; cached offline results
-      // may contain an incorrect township from the coarse administrative grid.
+      final String cacheKey = _cacheKey(lat, lon);
+      if (_cacheBox?.containsKey(cacheKey) ?? false) {
+        final String cachedAddress = _cacheBox!.get(cacheKey);
+        if (!_isCoordinateFallback(cachedAddress, lat, lon)) {
+          return AddressResult(address: cachedAddress);
+        }
+      }
+
       final String? remote = await _getRemoteAddressQueued(lat, lon);
       if (remote != null) {
         return AddressResult(address: remote);
       }
 
-      final String cacheKey = _cacheKey(lat, lon);
-      if (_cacheBox?.containsKey(cacheKey) ?? false) {
-        return AddressResult(address: _cacheBox!.get(cacheKey));
+      if (langCode != 'my') {
+        return AddressResult(address: "${lat.toStringAsFixed(4)}, ${lon.toStringAsFixed(4)}");
       }
 
-      // if (_db == null) return AddressResult(address: "Unknown");
-      // Don't return here, let it fallback to Nominatim if _db is null
+      await initDatabase(manualLangCode: langCode);
       final String fullHash = GeoHasher().encode(lon, lat, precision: 9);
 
       String? street, state;
@@ -238,8 +252,12 @@ class OfflineAddressService {
       // township and only use the broader city/state value.
       String result = _formatAddressParts(street, null, state, lat, lon);
 
+      if (_isCoordinateFallback(result, lat, lon)) {
+        return AddressResult(address: result, matchedGeohash: matchedStreetGeohash != null ? _intToGh(matchedStreetGeohash, 8) : null);
+      }
+
       // --- Hive 快取管理與自動清理 ---
-      if (_cacheBox != null && result != "Location: ${lat.toStringAsFixed(4)}, ${lon.toStringAsFixed(4)}") {
+      if (_cacheBox != null) {
         // 當資料超過 10.5 萬筆時，清理掉最舊的 1 萬筆
         if (_cacheBox!.length > 105000) {
           final List<dynamic> keysToDelete = _cacheBox!.keys.take(10000).toList();
@@ -253,6 +271,10 @@ class OfflineAddressService {
     } catch (e) {
       return AddressResult(address: "Error: $e");
     }
+  }
+
+  static bool _isCoordinateFallback(String address, double lat, double lon) {
+    return address == "${lat.toStringAsFixed(4)}, ${lon.toStringAsFixed(4)}";
   }
 
   /// 封裝：嚴格遵循格式化的地址組合
@@ -321,6 +343,9 @@ class OfflineAddressService {
           String? city = (addressObj['city'] ?? addressObj['town'] ?? addressObj['state'])?.toString();
 
           String formatted = _formatAddressParts(road, district, city, lat, lon);
+          if (_isCoordinateFallback(formatted, lat, lon)) {
+            return null;
+          }
 
           // 快取到 Hive
           final String cacheKey = _cacheKey(lat, lon);

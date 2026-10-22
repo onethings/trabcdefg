@@ -352,7 +352,7 @@ class _MonthlyMileageScreenState extends State<MonthlyMileageScreen> {
               : Column(
                   children: [
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(0, 0, 0, 0), //12, 8, 12, 4
+                      padding: const EdgeInsets.fromLTRB(0, 0, 10, 10), //12, 8, 12, 4
                       child: Container(
                         decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(14)),
                         child: TableCalendar(
@@ -361,7 +361,7 @@ class _MonthlyMileageScreenState extends State<MonthlyMileageScreen> {
                           lastDay: DateTime.utc(2030, 12, 31),
                           focusedDay: _focusedDay,
                           daysOfWeekHeight: 0,
-                          rowHeight: 54,
+                          rowHeight: 55, //54
                           headerStyle: const HeaderStyle(
                             titleCentered: true,
                             leftChevronIcon: Icon(CupertinoIcons.chevron_left, size: 18),
@@ -412,12 +412,13 @@ class _MonthlyMileageScreenState extends State<MonthlyMileageScreen> {
                                 final summary = _dailySummaries[dayUtc]!;
                                 final distanceInKm = (summary.distance ?? 0.0) / 1000;
                                 final engineHoursInHours = (summary.engineHours ?? 0) / 3600000;
+                                final isSelected = isSameDay(date, _selectedDay);
 
                                 // Two lines: mileage on top, engine hours below.
                                 // Anchored right under the day number so the gap
                                 // stays small no matter what rowHeight is set to.
                                 return Positioned(
-                                  top: 32, //21
+                                  top: 30, //32
                                   left: 0,
                                   right: 0,
                                   //    bottom: 0,
@@ -427,7 +428,7 @@ class _MonthlyMileageScreenState extends State<MonthlyMileageScreen> {
                                     children: [
                                       Text(
                                         '${distanceInKm.toStringAsFixed(0)}km',
-                                        style: const TextStyle(fontSize: 10, color: CupertinoColors.systemBlue, fontWeight: FontWeight.w500),
+                                        style: TextStyle(fontSize: 10, color: isSelected ? CupertinoColors.white : CupertinoColors.systemBlue, fontWeight: FontWeight.w500),
                                       ),
                                       Text(
                                         '${engineHoursInHours.toStringAsFixed(1)}h',
@@ -443,7 +444,7 @@ class _MonthlyMileageScreenState extends State<MonthlyMileageScreen> {
                         ),
                       ),
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 18), //8
                     if (_selectedDaySummary == null)
                       Expanded(
                         child: Center(
