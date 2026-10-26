@@ -456,11 +456,20 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     return index < 0 ? 1 : index + 1;
   }
 
+  /// 切換列中間車牌代表的那台車：目前裝置不在可切換清單時退回第一台，
+  /// 讓顯示的名稱、n/N 與「點車牌放大」永遠指的是同一台。
+  api.Device? _switcherDevice(List<api.Device> devices, api.Device? currentDevice) {
+    if (devices.isEmpty) return null;
+    final index = devices.indexWhere((d) => d.id == currentDevice?.id);
+    return devices[index < 0 ? 0 : index];
+  }
+
   /// 底部控制列本體（裝置切換 + 縮放）。
   /// 面板開／關兩條繪製路徑都用這個 builder，所以永遠長得一樣。
   Widget _buildBottomControls(TraccarProvider traccarProvider, api.Device? currentDevice) {
     // 切換列只在「有定位數據」的裝置之間移動，沒數據的車直接跳過。
     final List<api.Device> navigableDevices = _navigableDevices(traccarProvider);
+    final api.Device? switcherDevice = _switcherDevice(navigableDevices, currentDevice);
     return Row(
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
@@ -469,11 +478,13 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
             alignment: Alignment.bottomCenter,
             child: navigableDevices.length > 1
                 ? _DeviceSwitcherBar(
-                    deviceName: currentDevice?.name,
+                    deviceName: switcherDevice?.name,
                     index: _deviceIndexIn(navigableDevices, currentDevice),
                     total: navigableDevices.length,
                     onPrevious: () => _navigateToDevice(-1, traccarProvider),
                     onNext: () => _navigateToDevice(1, traccarProvider),
+                    // 點車牌 = 回到這台車：鏡頭拉近到最大縮放（19），明細面板一起打開。
+                    onPlateTap: switcherDevice == null ? null : () => _onDeviceSelected(switcherDevice, forceShowPanel: true, zoomToMax: true),
                   )
                 : const SizedBox.shrink(),
           ),
@@ -1581,22 +1592,39 @@ class _GlassIconButtonState extends State<_GlassIconButton> {
   }
 }
 
-/// 裝置快速切換列：單一玻璃膠囊（左箭頭｜裝置名稱 + n/N｜右箭頭）。
+/// 裝置快速切換列：單一玻璃膠囊（左箭頭｜車牌 + n/N｜右箭頭）。
 /// 原本兩顆獨立按鈕中間留 28px 空白浮在底部，跟明細面板分不出層級；
 /// 合併成膠囊後視覺更集中，也能一眼看出「現在在看第幾台」。
-class _DeviceSwitcherBar extends StatelessWidget {
+/// 中間的車牌本身也是按鈕：點一下鏡頭就回到該車並放到最大縮放（zoom 19）。
+class _DeviceSwitcherBar extends StatefulWidget {
   final String? deviceName;
   final int index;
   final int total;
   final VoidCallback onPrevious;
   final VoidCallback onNext;
 
-  const _DeviceSwitcherBar({required this.deviceName, required this.index, required this.total, required this.onPrevious, required this.onNext});
+  /// 點擊中間車牌的動作；null 表示目前沒有可放大的目標。
+  final VoidCallback? onPlateTap;
+
+  const _DeviceSwitcherBar({required this.deviceName, required this.index, required this.total, required this.onPrevious, required this.onNext, this.onPlateTap});
+
+  @override
+  State<_DeviceSwitcherBar> createState() => _DeviceSwitcherBarState();
+}
+
+class _DeviceSwitcherBarState extends State<_DeviceSwitcherBar> {
+  bool _platePressed = false;
+
+  void _setPlatePressed(bool value) {
+    if (_platePressed == value || !mounted) return;
+    setState(() => _platePressed = value);
+  }
 
   @override
   Widget build(BuildContext context) {
     final TextTheme textTheme = Theme.of(context).textTheme;
     final ColorScheme colorScheme = Theme.of(context).colorScheme;
+    final VoidCallback? onPlateTap = widget.onPlateTap;
 
     return _GlassSurface(
       borderRadius: _kPillRadius,
@@ -1604,24 +1632,50 @@ class _DeviceSwitcherBar extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _GlassIconButton(icon: Icons.chevron_left_rounded, label: 'devicePrevious'.tr, haptic: true, onTap: onPrevious),
-          ConstrainedBox(
-            constraints: const BoxConstraints(minWidth: 92, maxWidth: 132),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  deviceName ?? 'Unknown Device'.tr,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                  style: textTheme.labelLarge?.copyWith(fontSize: 14, color: colorScheme.onSurface),
+          _GlassIconButton(icon: Icons.chevron_left_rounded, label: 'devicePrevious'.tr, haptic: true, onTap: widget.onPrevious),
+          Semantics(
+            button: true,
+            child: InkWell(
+              onTap: onPlateTap == null
+                  ? null
+                  : () {
+                      HapticFeedback.selectionClick();
+                      onPlateTap();
+                    },
+              onTapDown: (_) => _setPlatePressed(true),
+              onTapUp: (_) => _setPlatePressed(false),
+              onTapCancel: () => _setPlatePressed(false),
+              borderRadius: BorderRadius.circular(_kControlRadius - 3),
+              splashColor: Colors.transparent,
+              highlightColor: Colors.transparent,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minWidth: 92, maxWidth: 132),
+                child: AnimatedScale(
+                  // 跟箭頭一樣用「按下縮小」回饋，因為 splash/highlight 已被主題關掉
+                  scale: _platePressed ? 0.94 : 1.0,
+                  duration: const Duration(milliseconds: 120),
+                  curve: Curves.easeOut,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          widget.deviceName ?? 'Unknown Device'.tr,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
+                          style: textTheme.labelLarge?.copyWith(fontSize: 14, color: colorScheme.onSurface),
+                        ),
+                        Text('${widget.index} / ${widget.total}', style: textTheme.labelSmall?.copyWith(color: colorScheme.onSurfaceVariant)),
+                      ],
+                    ),
+                  ),
                 ),
-                Text('$index / $total', style: textTheme.labelSmall?.copyWith(color: colorScheme.onSurfaceVariant)),
-              ],
+              ),
             ),
           ),
-          _GlassIconButton(icon: Icons.chevron_right_rounded, label: 'deviceNext'.tr, haptic: true, onTap: onNext),
+          _GlassIconButton(icon: Icons.chevron_right_rounded, label: 'deviceNext'.tr, haptic: true, onTap: widget.onNext),
         ],
       ),
     );
