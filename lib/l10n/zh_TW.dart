@@ -703,4 +703,12 @@ const Map<String, String> zhTw = {
   "justNow": "現在",
   "minimalViewMode": "極簡觀看模式",
   "standardViewMode": "標準觀看模式",
+  "routeColorModeTooltip": "軌跡分色模式",
+  "routeColorModeTitle": "選擇軌跡分色模式",
+  "routeColorModeSingle": "單一顏色模式",
+  "routeColorModeSingleDesc": "經典藍色進度線與灰色背景",
+  "routeColorModeSpeedStatus": "依速度/狀態分色 (GPS 常規)",
+  "routeColorModeSpeedStatusDesc": "綠:正常行駛 | 黃:超速 | 紅:怠速停留",
+  "routeColorModeTimeGradient": "時間漸層分色",
+  "routeColorModeTimeGradientDesc": "早:淺藍 | 午:中藍 | 晚:深藍",
 };

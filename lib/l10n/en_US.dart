@@ -709,4 +709,12 @@ const Map<String, String> enUs = {
   "searchOsm": "Search in OSM",
   "minimalViewMode": "Minimal view",
   "standardViewMode": "Standard view",
+  "routeColorModeTooltip": "Track color mode",
+  "routeColorModeTitle": "Select Track Color Mode",
+  "routeColorModeSingle": "Single Color Mode",
+  "routeColorModeSingleDesc": "Classic blue progress line with gray background",
+  "routeColorModeSpeedStatus": "Color by Speed/Status (GPS Standard)",
+  "routeColorModeSpeedStatusDesc": "Green: Normal driving | Yellow: Speeding | Red: Idle stop",
+  "routeColorModeTimeGradient": "Time Gradient Color",
+  "routeColorModeTimeGradientDesc": "Morning: Light blue | Noon: Medium blue | Evening: Dark blue",
 };

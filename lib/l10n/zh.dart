@@ -694,4 +694,12 @@ const Map<String, String> zhCN = {
   "justNow": "现在",
   "minimalViewMode": "极简观看模式",
   "standardViewMode": "标准观看模式",
+  "routeColorModeTooltip": "轨迹分色模式",
+  "routeColorModeTitle": "选择轨迹分色模式",
+  "routeColorModeSingle": "单一颜色模式",
+  "routeColorModeSingleDesc": "经典蓝色进度线与灰色背景",
+  "routeColorModeSpeedStatus": "按速度/状态分色 (GPS 常规)",
+  "routeColorModeSpeedStatusDesc": "绿:正常行驶 | 黄:超速 | 红:怠速停留",
+  "routeColorModeTimeGradient": "时间渐变分色",
+  "routeColorModeTimeGradientDesc": "早:浅蓝 | 午:中蓝 | 晚:深蓝",
 };

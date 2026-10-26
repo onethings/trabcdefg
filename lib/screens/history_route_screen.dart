@@ -28,6 +28,12 @@ import 'package:trabcdefg/widgets/offline_address_service.dart';
 
 enum OSMMapType { normal, satellite }
 
+enum RouteColorMode {
+  single, // 單一顏色
+  speedStatus, // 依速度/狀態分色 (綠:正常, 黃:超速, 紅:怠速/停留)
+  timeGradient, // 時間漸層分色 (早:淺藍, 午:中藍, 晚:深藍)
+}
+
 class HistoryRouteScreen extends StatefulWidget {
   const HistoryRouteScreen({super.key});
 
@@ -59,11 +65,11 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
   final Map<DateTime, api.ReportSummary> _dailySummaries = {};
   bool _isCalendarLoading = false;
   double _currentZoom = 14.0;
-  // 切換地圖樣式時整個 MapLibreMap 會重建，這裡保留重建前的鏡頭，
-  // 新地圖才會沿用同一個位置與縮放，而不是重新取景。
+
   CameraPosition? _lastCameraPosition;
   bool _keepCameraOnStyleReload = false;
   bool _isMinimalMode = false;
+  RouteColorMode _routeColorMode = RouteColorMode.single;
 
   // 地圖資源
   static const String _playbackIconId = "playback_arrow";
@@ -95,16 +101,12 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     if (_positions.isEmpty) {
       return;
     }
-    // 切換樣式只是把被清掉的圖層重畫一次，鏡頭必須維持原樣；
-    // 只有首次載入才自動取景。
     final bool keepCamera = _keepCameraOnStyleReload;
     _keepCameraOnStyleReload = false;
     await _drawFullRoute(fitBounds: !keepCamera);
   }
 
   void _toggleMapType() {
-    // MapLibreMap 會因為 style 變更而整張重建，先記下目前鏡頭，
-    // 重建後才會用同一個位置與縮放還原，不會跳到別的 zoom。
     _lastCameraPosition = _mapController?.cameraPosition ?? _lastCameraPosition;
     _keepCameraOnStyleReload = true;
     Provider.of<MapStyleProvider>(context, listen: false).toggleMapType();
@@ -147,10 +149,14 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     final fromString = prefs.getString('historyFrom');
     final toString = prefs.getString('historyTo');
     final lastZoom = prefs.getDouble('history_zoom_level');
+    final savedColorMode = prefs.getString('route_color_mode');
+
+    if (savedColorMode != null) {
+      _routeColorMode = RouteColorMode.values.firstWhere((e) => e.name == savedColorMode, orElse: () => RouteColorMode.single);
+    }
 
     DateTime defaultDate = DateTime.now();
 
-    // ✨ 已確認：嚴格落實大括號區塊區隔，後面無贅餘分號
     if (!mounted) {
       return;
     }
@@ -214,8 +220,6 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
       final p1 = allPositions[i];
       final p2 = allPositions[i + 1];
 
-      // Use the recording time, not serverTime: backfilled records are stored
-      // long after they happened and would look like a stop.
       final recordedAt1 = PositionCleaner.recordingTime(p1);
       final recordedAt2 = PositionCleaner.recordingTime(p2);
 
@@ -280,9 +284,6 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
         fetchedPositions = await api.PositionsApi(traccarProvider.apiClient).getPositions(deviceId: _deviceId, from: _historyFrom!.toUtc(), to: _historyTo!.toUtc()) ?? [];
       }
 
-      // 補傳 (backfilled) batches arrive unordered, duplicated and with GPS
-      // spikes, which made the replay jump forwards and then backwards. Clean
-      // the track before caching so the next load is already usable.
       final cleanedPositions = PositionCleaner.clean(fetchedPositions);
       if (cleanedPositions.length != fetchedPositions.length) {
         developer.log('Cleaned track: ${fetchedPositions.length} -> ${cleanedPositions.length} points', name: 'HistoryRouteScreen');
@@ -291,8 +292,6 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
         await routeBox.put(hiveKey, RoutePositionsHive(dateKey: hiveKey, positionsJson: RoutePositionsHive.toJsonList(cleanedPositions), cachedAt: DateTime.now()));
       }
 
-      // Stops are detected on the cleaned track (still including stationary
-      // points), while playback skips the idle samples as before.
       _calculateStops(cleanedPositions);
 
       final movingPositions = cleanedPositions.where((p) => (p.speed ?? 0) > 0).toList();
@@ -331,7 +330,11 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
 
     List<LatLng> points = _positions.map((p) => LatLng(p.latitude!.toDouble(), p.longitude!.toDouble())).toList();
 
-    await _mapController!.addLine(LineOptions(geometry: points, lineColor: "#808080", lineWidth: 3.0, lineOpacity: 0.5));
+    if (_routeColorMode == RouteColorMode.single) {
+      await _mapController!.addLine(LineOptions(geometry: points, lineColor: "#808080", lineWidth: 3.0, lineOpacity: 0.5));
+    } else {
+      await _drawSegmentedLines();
+    }
 
     _playedLine = await _mapController!.addLine(const LineOptions(geometry: [], lineColor: "#0F53FE", lineWidth: 5.0, lineJoin: "round"));
 
@@ -339,7 +342,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     _addMarker(points.last, _endIconId);
 
     if (_positions.isNotEmpty) {
-      _playbackSymbol = await _mapController!.addSymbol(SymbolOptions(geometry: LatLng(_positions.first.latitude!.toDouble(), _positions.first.longitude!.toDouble()), iconImage: _playbackIconId, iconSize: 1.8, zIndex: 10)); //1.2
+      _playbackSymbol = await _mapController!.addSymbol(SymbolOptions(geometry: LatLng(_positions.first.latitude!.toDouble(), _positions.first.longitude!.toDouble()), iconImage: _playbackIconId, iconSize: 1.8, zIndex: 10));
     }
 
     for (int i = 0; i < _stopPoints.length; i++) {
@@ -351,8 +354,146 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     }
   }
 
+  Future<void> _drawSegmentedLines() async {
+    if (_positions.length < 2) return;
+
+    String getColorForPosition(api.Position p) {
+      if (_routeColorMode == RouteColorMode.speedStatus) {
+        final speedKmh = (p.speed ?? 0) * 1.852;
+        if (speedKmh <= 0.5) {
+          return "#E74C3C"; // 紅色：怠速/停留
+        } else if (speedKmh > 110) {
+          return "#F1C40F"; // 黃色：超速
+        } else {
+          return "#2ECC71"; // 綠色：正常行駛
+        }
+      } else if (_routeColorMode == RouteColorMode.timeGradient) {
+        final recordedAt = PositionCleaner.recordingTime(p);
+        final hour = recordedAt?.hour ?? 12;
+        if (hour >= 6 && hour < 12) {
+          return "#85C1E9"; // 早上：淺藍
+        } else if (hour >= 12 && hour < 18) {
+          return "#3498DB"; // 下午：中藍
+        } else {
+          return "#1B4F72"; // 晚上/凌晨：深藍
+        }
+      }
+      return "#808080";
+    }
+
+    List<LatLng> currentSegmentPoints = [];
+    String? currentColor;
+
+    for (int i = 0; i < _positions.length; i++) {
+      final p = _positions[i];
+      final latLng = LatLng(p.latitude!.toDouble(), p.longitude!.toDouble());
+      final color = getColorForPosition(p);
+
+      if (currentColor == null) {
+        currentColor = color;
+        currentSegmentPoints.add(latLng);
+      } else if (currentColor == color) {
+        currentSegmentPoints.add(latLng);
+      } else {
+        if (currentSegmentPoints.length >= 2) {
+          await _mapController!.addLine(LineOptions(geometry: currentSegmentPoints, lineColor: currentColor, lineWidth: 4.0, lineOpacity: 0.8));
+        }
+        currentSegmentPoints = [currentSegmentPoints.last, latLng];
+        currentColor = color;
+      }
+    }
+
+    if (currentSegmentPoints.length >= 2 && currentColor != null) {
+      await _mapController!.addLine(LineOptions(geometry: currentSegmentPoints, lineColor: currentColor, lineWidth: 4.0, lineOpacity: 0.8));
+    }
+  }
+
+  void _setRouteColorMode(RouteColorMode mode) {
+    setState(() {
+      _routeColorMode = mode;
+    });
+    SharedPreferences.getInstance().then((prefs) {
+      prefs.setString('route_color_mode', mode.name);
+    });
+    if (_positions.isNotEmpty) {
+      _drawFullRoute();
+    }
+  }
+
+  void _showColorModeMenu() {
+    Get.bottomSheet(
+      Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'routeColorModeTitle'.tr,
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface),
+            ),
+            const SizedBox(height: 16),
+            ListTile(
+              leading: const Icon(Icons.lens, color: Color(0xFF0F53FE)),
+              title: Text('routeColorModeSingle'.tr),
+              subtitle: Text('routeColorModeSingleDesc'.tr),
+              trailing: _routeColorMode == RouteColorMode.single ? const Icon(Icons.check, color: Colors.blue) : null,
+              onTap: () {
+                Navigator.pop(context);
+                _setRouteColorMode(RouteColorMode.single);
+              },
+            ),
+            ListTile(
+              leading: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: const [
+                  Icon(Icons.lens, size: 12, color: Color(0xFF2ECC71)),
+                  SizedBox(width: 4),
+                  Icon(Icons.lens, size: 12, color: Color(0xFFF1C40F)),
+                  SizedBox(width: 4),
+                  Icon(Icons.lens, size: 12, color: Color(0xFFE74C3C)),
+                ],
+              ),
+              title: Text('routeColorModeSpeedStatus'.tr),
+              subtitle: Text('routeColorModeSpeedStatusDesc'.tr),
+              trailing: _routeColorMode == RouteColorMode.speedStatus ? const Icon(Icons.check, color: Colors.blue) : null,
+              onTap: () {
+                Navigator.pop(context);
+                _setRouteColorMode(RouteColorMode.speedStatus);
+              },
+            ),
+            ListTile(
+              leading: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: const [
+                  Icon(Icons.lens, size: 12, color: Color(0xFF85C1E9)),
+                  SizedBox(width: 4),
+                  Icon(Icons.lens, size: 12, color: Color(0xFF3498DB)),
+                  SizedBox(width: 4),
+                  Icon(Icons.lens, size: 12, color: Color(0xFF1B4F72)),
+                ],
+              ),
+              title: Text('routeColorModeTimeGradient'.tr),
+              subtitle: Text('routeColorModeTimeGradientDesc'.tr),
+              trailing: _routeColorMode == RouteColorMode.timeGradient ? const Icon(Icons.check, color: Colors.blue) : null,
+              onTap: () {
+                Navigator.pop(context);
+                _setRouteColorMode(RouteColorMode.timeGradient);
+              },
+            ),
+            const SizedBox(height: 12),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _addMarker(LatLng point, String iconId) {
-    _mapController?.addSymbol(SymbolOptions(geometry: point, iconImage: iconId, iconSize: 1.8, iconAnchor: "bottom")); //0.8
+    _mapController?.addSymbol(SymbolOptions(geometry: point, iconImage: iconId, iconSize: 1.8, iconAnchor: "bottom"));
   }
 
   void _togglePlayback() {
@@ -538,7 +679,6 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
           ),
           if (_isLoading) const Center(child: CircularProgressIndicator()),
 
-          // 極簡觀看模式：只留地圖、時間與速度，其餘控制項暫時收起
           AnimatedPositioned(
             duration: const Duration(milliseconds: 250),
             curve: Curves.easeOutCubic,
@@ -559,6 +699,8 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
               right: 12,
               child: Column(
                 children: [
+                  _mapFab(Icons.palette_rounded, _showColorModeMenu, "btn_color_mode", active: _routeColorMode != RouteColorMode.single, tooltip: 'routeColorModeTooltip'.tr),
+                  const SizedBox(height: 12),
                   _mapFab(Icons.calendar_month, _showCalendarDialog, "btn_cal"),
                   const SizedBox(height: 12),
                   _mapFab(Provider.of<MapStyleProvider>(context).isSatelliteMode ? Icons.map : Icons.satellite_alt, _toggleMapType, "btn_style"),
@@ -629,11 +771,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
         duration: const Duration(milliseconds: 220),
         switchInCurve: Curves.easeOutCubic,
         switchOutCurve: Curves.easeInCubic,
-        // 面板高度不同，切換時讓新舊面板都貼齊底部，避免極簡列先浮在中間。
-        layoutBuilder: (currentChild, previousChildren) => Stack(
-          alignment: Alignment.bottomCenter,
-          children: [...previousChildren, ?currentChild],
-        ),
+        layoutBuilder: (currentChild, previousChildren) => Stack(alignment: Alignment.bottomCenter, children: [...previousChildren, ?currentChild]),
         child: _isMinimalMode ? _buildMinimalPlaybackPanel() : _buildFullPlaybackPanel(),
       ),
     );
@@ -830,7 +968,6 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
       final file = File('${directory.path}/${deviceName}_$date.gpx');
       await file.writeAsString(gpx.toString());
 
-      // ✨ 符合最新 share_plus 套件的實例化 ShareParams 傳參
       await SharePlus.instance.share(ShareParams(files: [XFile(file.path)], text: 'GPX Export for $deviceName'));
     } catch (e) {
       Get.snackbar("Export Failed", e.toString());
@@ -932,8 +1069,6 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
       final cachedSummary = dailyBox.get(hiveKey);
 
       if (cachedSummary != null) {
-        // ❗ Old API (e.g., v4.4) may have cached zero-value entries for future dates.
-        // Skip cached zero entries for dates after today so they get re-fetched later.
         final distance = cachedSummary.distance ?? 0;
         final engineHours = cachedSummary.engineHours ?? 0;
         if (date.isAfter(today) && distance <= 0 && engineHours <= 0) {
@@ -952,8 +1087,6 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     for (var date = firstDayOfMonth; date.isBefore(lastDayOfMonth.add(const Duration(days: 1))); date = date.add(const Duration(days: 1))) {
       final dayUtc = DateTime.utc(date.year, date.month, date.day);
 
-      // 🔥 Skip future dates — no data exists yet, and old API (v4.4) incorrectly
-      // returns zero-value summaries for future dates that would pollute our cache.
       if (date.isAfter(today)) {
         developer.log('Skipping future date (no network fetch): ${DateFormat('yyyy-MM-dd').format(date)}', name: 'HistoryRouteScreen');
         continue;
@@ -970,14 +1103,11 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
       try {
         api.ReportSummary? dailySummary;
         try {
-          // Try using the generated API first (works on v6.x+)
           final summary = await reportsApi.getReportsSummary(from, to, deviceId: [_deviceId!]);
           if (summary != null && summary.isNotEmpty) {
             dailySummary = summary.first;
           }
         } catch (e) {
-          // Fallback for old API (v4.x) — the generated fromJson may fail
-          // on missing fields. Use raw API call with manual parsing instead.
           developer.log('Generated API failed, trying raw API fallback: $e', name: 'HistoryRouteScreen');
           try {
             final response = await traccarProvider.apiClient.invokeAPI(

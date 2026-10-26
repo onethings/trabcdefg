@@ -679,4 +679,12 @@ const Map<String, String> my = {
   "dashboardDeviceStatus": "စက် အခြေအနေ",
   "dashboardNoDevices": "စက်များ မတွေ့ရပါ",
   "justNow": "ယခုလေးတင်",
+  "routeColorModeTooltip": "လမ်းကြောင်း အရောင်ခွဲခြားမှုမုဒ်",
+  "routeColorModeTitle": "လမ်းကြောင်း အရောင်ခွဲခြားမှုမုဒ်ကို ရွေးပါ",
+  "routeColorModeSingle": "အရောင်တစ်မျိုးတည်း မုဒ်",
+  "routeColorModeSingleDesc": "ဂန္ထဝင် အပြာရောင် လိုင်းနှင့် မီးခိုးရောင် နောက်ခံ",
+  "routeColorModeSpeedStatus": "အမြန်နှုန်း/အခြေအနေအလိုက် အရောင်ခွဲခြားမှု (GPS ပုံမှန်)",
+  "routeColorModeSpeedStatusDesc": "အစိမ်း − ပုံမှန် မောင်းနှင်မှု | အဝါ − အမြန်နှုန်းလွန်ခြင်း | အနီ − ရပ်တန့်နေခြင်း",
+  "routeColorModeTimeGradient": "အချိန်အလိုက် အရောင်အဆင့်",
+  "routeColorModeTimeGradientDesc": "မနက် − အပြာနု | မွန်းလွဲ − အပြာလတ် | ညနေ − အပြာရင့်",
 };
