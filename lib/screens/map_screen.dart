@@ -513,7 +513,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       final String baseIconKey = 'marker_${category.toLowerCase()}_${status.toLowerCase()}';
 
       final String plate = device.name ?? '';
-      final String customLabelId = "label_$plate";
+      final bool isSelected = deviceId == _currentDevice?.id;
+      final String customLabelId = isSelected ? "label_selected_$plate" : "label_$plate";
       final latLng = maplibre.LatLng(position.latitude!.toDouble(), position.longitude!.toDouble());
       final double course = position.course?.toDouble() ?? 0.0;
       final double iconSize = 4.0 * scale;
@@ -526,7 +527,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
         await _iconService.ensureIconLoaded(controller, baseIconKey);
       }
       if (_labelSymbols[deviceId] == null || previousState?.labelImage != customLabelId) {
-        await _iconService.ensureLabelIconLoaded(controller, plate, customLabelId);
+        await _iconService.ensureLabelIconLoaded(controller, plate, customLabelId, isSelected: isSelected);
       }
       if (!mounted || !identical(_mapController, controller) || !_isStyleLoaded) return;
 
@@ -540,10 +541,11 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       }
 
       final labelSymbol = _labelSymbols[deviceId];
+      final int labelZIndex = isSelected ? 6 : 5;
       if (labelSymbol == null) {
-        _labelSymbols[deviceId] = await controller.addSymbol(maplibre.SymbolOptions(geometry: latLng, iconImage: customLabelId, iconRotate: 0.0, iconOffset: const Offset(0, 15), iconSize: 1.2, iconAnchor: 'top', zIndex: 5), deviceData);
+        _labelSymbols[deviceId] = await controller.addSymbol(maplibre.SymbolOptions(geometry: latLng, iconImage: customLabelId, iconRotate: 0.0, iconOffset: const Offset(0, 15), iconSize: 1.2, iconAnchor: 'top', zIndex: labelZIndex), deviceData);
       } else if (labelChanged) {
-        await controller.updateSymbol(labelSymbol, maplibre.SymbolOptions(geometry: latLng, iconImage: customLabelId, iconRotate: 0.0, iconOffset: const Offset(0, 15), iconSize: 1.2, iconAnchor: 'top', zIndex: 5));
+        await controller.updateSymbol(labelSymbol, maplibre.SymbolOptions(geometry: latLng, iconImage: customLabelId, iconRotate: 0.0, iconOffset: const Offset(0, 15), iconSize: 1.2, iconAnchor: 'top', zIndex: labelZIndex));
       }
 
       _markerRenderStates[deviceId] = _MarkerRenderState(latitude: latLng.latitude, longitude: latLng.longitude, course: course, iconSize: iconSize, iconImage: baseIconKey, labelImage: customLabelId);

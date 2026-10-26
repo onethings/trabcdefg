@@ -5,6 +5,9 @@ import 'package:flutter/services.dart';
 import 'package:maplibre_gl/maplibre_gl.dart' as maplibre;
 
 class MarkerIconService {
+  /// 選中車輛的車牌背景色（iOS 系統藍），用以區別未選中的車輛。
+  static const Color selectedLabelBackground = Color(0xFF007AFF);
+
   final Set<String> loadedIcons;
 
   MarkerIconService({required this.loadedIcons});
@@ -46,94 +49,102 @@ class MarkerIconService {
   Future<void> ensureLabelIconLoaded(
     maplibre.MapLibreMapController? mapController,
     String plate,
-    String customLabelId,
-  ) async {
+    String customLabelId, {
+    bool isSelected = false,
+  }) async {
     if (mapController == null || loadedIcons.contains(customLabelId)) return;
 
     try {
-      // 1. 準備文字繪製器 (TextPainter)
-      // 使用更清晰的字體與間距，確保可讀性
-      final textPainter = TextPainter(
-        text: TextSpan(
-          text: plate,
-          style: const TextStyle(
-            color: Colors.black,
-            fontSize: 18.0, // 加大字體 (從 14 -> 18)
-            fontWeight: FontWeight.bold,
-            letterSpacing: 0.5,
-          ),
-        ),
-        textDirection: ui.TextDirection.ltr,
+      final Uint8List? pngBytes = await buildLabelPng(
+        plate,
+        isSelected: isSelected,
       );
-      textPainter.layout();
-
-      // 2. 計算背景尺寸 (窄背景)
-      const double horizontalPadding = 10.0; // 增加左右邊距
-      const double verticalPadding = 4.0; // 增加上下邊距
-      final double boxWidth = textPainter.width + (horizontalPadding * 2);
-      final double boxHeight = textPainter.height + (verticalPadding * 2);
-
-      // 3. 建立畫布並繪製
-      final recorder = ui.PictureRecorder();
-      final canvas = Canvas(recorder);
-
-      // 繪製陰影 (讓標籤更立體)
-      final shadowPaint = Paint()
-        ..color = Colors.black.withValues(alpha: 0.3)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4); // 增加陰影模糊度
-      canvas.drawRRect(
-        RRect.fromLTRBR(
-          2,
-          2,
-          boxWidth + 2,
-          boxHeight + 2,
-          const Radius.circular(8),
-        ),
-        shadowPaint,
-      );
-
-      // 繪製白色窄背景
-      final bgPaint = Paint()..color = Colors.white;
-      final borderPaint = Paint()
-        ..color = Colors.black87
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.0; // 稍微加粗邊框
-
-      final rRect = RRect.fromLTRBR(
-        0,
-        0,
-        boxWidth,
-        boxHeight,
-        const Radius.circular(8),
-      );
-      canvas.drawRRect(rRect, bgPaint);
-      canvas.drawRRect(rRect, borderPaint); // 加入細黑邊框增加對比
-
-      // 繪製文字
-      textPainter.paint(
-        canvas,
-        const Offset(horizontalPadding, verticalPadding),
-      );
-
-      // 4. 轉換為圖片格式
-      final picture = recorder.endRecording();
-      // 我們在畫布周圍預留一點空間給陰影
-      final img = await picture.toImage(
-        (boxWidth + 8).toInt(),
-        (boxHeight + 8).toInt(),
-      );
-      final pngBytes = await img.toByteData(format: ui.ImageByteFormat.png);
-
       if (pngBytes != null) {
-        await mapController.addImage(
-          customLabelId,
-          pngBytes.buffer.asUint8List(),
-        );
+        await mapController.addImage(customLabelId, pngBytes);
         loadedIcons.add(customLabelId);
       }
     } catch (e) {
       debugPrint("❌ 生成標籤標記錯誤 ($customLabelId): $e");
     }
+  }
+
+  /// 產生車牌標籤圖片：[isSelected] 為 true 時使用藍底白字，否則白底黑字。
+  Future<Uint8List?> buildLabelPng(
+    String plate, {
+    bool isSelected = false,
+  }) async {
+    // 1. 準備文字繪製器 (TextPainter)
+    // 使用更清晰的字體與間距，確保可讀性
+    final textPainter = TextPainter(
+      text: TextSpan(
+        text: plate,
+        style: TextStyle(
+          color: isSelected ? Colors.white : Colors.black,
+          fontSize: 18.0, // 加大字體 (從 14 -> 18)
+          fontWeight: FontWeight.bold,
+          letterSpacing: 0.5,
+        ),
+      ),
+      textDirection: ui.TextDirection.ltr,
+    );
+    textPainter.layout();
+
+    // 2. 計算背景尺寸 (窄背景)
+    const double horizontalPadding = 10.0; // 增加左右邊距
+    const double verticalPadding = 4.0; // 增加上下邊距
+    final double boxWidth = textPainter.width + (horizontalPadding * 2);
+    final double boxHeight = textPainter.height + (verticalPadding * 2);
+
+    // 3. 建立畫布並繪製
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
+
+    // 繪製陰影 (讓標籤更立體)
+    final shadowPaint = Paint()
+      ..color = Colors.black.withValues(alpha: 0.3)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4); // 增加陰影模糊度
+    canvas.drawRRect(
+      RRect.fromLTRBR(
+        2,
+        2,
+        boxWidth + 2,
+        boxHeight + 2,
+        const Radius.circular(8),
+      ),
+      shadowPaint,
+    );
+
+    // 繪製車牌背景（選中：藍底白字；未選中：白底黑字）
+    final bgPaint = Paint()
+      ..color = isSelected ? selectedLabelBackground : Colors.white;
+    final borderPaint = Paint()
+      ..color = isSelected ? Colors.white : Colors.black87
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.0; // 稍微加粗邊框
+
+    final rRect = RRect.fromLTRBR(
+      0,
+      0,
+      boxWidth,
+      boxHeight,
+      const Radius.circular(8),
+    );
+    canvas.drawRRect(rRect, bgPaint);
+    canvas.drawRRect(rRect, borderPaint); // 加入細黑邊框增加對比
+
+    // 繪製文字
+    textPainter.paint(canvas, const Offset(horizontalPadding, verticalPadding));
+
+    // 4. 轉換為圖片格式
+    final picture = recorder.endRecording();
+    // 我們在畫布周圍預留一點空間給陰影
+    final img = await picture.toImage(
+      (boxWidth + 8).toInt(),
+      (boxHeight + 8).toInt(),
+    );
+    final pngBytes = await img.toByteData(format: ui.ImageByteFormat.png);
+
+    return pngBytes?.buffer.asUint8List();
   }
 
   // 保留舊的方法以防其他地方引用，但標註為不建議使用
