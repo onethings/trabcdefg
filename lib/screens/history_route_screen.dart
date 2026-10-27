@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'dart:developer' as developer;
 import 'dart:io';
 import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -26,11 +27,44 @@ import 'package:trabcdefg/src/generated_api/api.dart' as api;
 import 'package:trabcdefg/src/utils/position_cleaner.dart';
 import 'package:trabcdefg/widgets/offline_address_service.dart';
 
+/// Turbo Colormap 速度漸層計算工具 (向量優化版)
+class TurboColormap {
+  static const List<double> rCoeffs = [0.13572138, 4.6153926, -42.66032258, 132.13108234, -152.94239396, 59.28637943];
+  static const List<double> gCoeffs = [0.09140261, 2.19418839, 4.84296658, -14.18503333, 4.27729857, 2.82956604];
+  static const List<double> bCoeffs = [0.1066733, 12.64194608, -60.58204836, 110.36276771, -89.90310912, 27.34824973];
+
+  @pragma('vm:prefer-inline')
+  static double _interpolateChannel(double normalizedValue, List<double> coeffs) {
+    double result = coeffs[0];
+    double p = normalizedValue;
+    for (int i = 1; i < 6; i++) {
+      result += coeffs[i] * p;
+      p *= normalizedValue;
+    }
+    return max(0.0, min(1.0, result));
+  }
+
+  /// 根據速度 (speed) 以及該趟軌跡的最小 (minSpeed)、最大速度 (maxSpeed) 計算並返回 Hex 色碼
+  static String getSpeedColorHex(double speed, double minSpeed, double maxSpeed) {
+    if (maxSpeed <= minSpeed) {
+      maxSpeed = minSpeed + 1.0;
+    }
+    double normalizedValue = (speed - minSpeed) / (maxSpeed - minSpeed);
+    normalizedValue = max(0.0, min(1.0, normalizedValue));
+
+    int r = (255 * _interpolateChannel(normalizedValue, rCoeffs)).round();
+    int g = (255 * _interpolateChannel(normalizedValue, gCoeffs)).round();
+    int b = (255 * _interpolateChannel(normalizedValue, bCoeffs)).round();
+
+    return '#${r.toRadixString(16).padLeft(2, '0')}${g.toRadixString(16).padLeft(2, '0')}${b.toRadixString(16).padLeft(2, '0')}'.toUpperCase();
+  }
+}
+
 enum OSMMapType { normal, satellite }
 
 enum RouteColorMode {
   single, // 單一顏色
-  speedStatus, // 依速度/狀態分色 (綠:正常, 黃:超速, 紅:怠速/停留)
+  speedStatus, // 依速度分色 (使用 Turbo Colormap 漸層)
   timeGradient, // 時間漸層分色 (早:淺藍, 午:中藍, 晚:深藍)
 }
 
@@ -43,7 +77,7 @@ class HistoryRouteScreen extends StatefulWidget {
 
 class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProviderStateMixin {
   MapLibreMapController? _mapController;
-  List<double> _distancePrefixSum = [];
+  Float64List _distancePrefixSum = Float64List(0);
   final RxString _currentAddressRx = "".obs;
 
   // 狀態變數
@@ -71,14 +105,20 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
   bool _isMinimalMode = false;
   RouteColorMode _routeColorMode = RouteColorMode.single;
 
-  // 地圖資源
+  // 地圖資源常量與動態狀態
   static const String _playbackIconId = "playback_arrow";
   static const String _startIconId = "start_pin";
   static const String _endIconId = "end_pin";
-  final List<LatLng> _stopPoints = [];
+  static const String _routeSourceId = "history_route_source";
+  static const String _routeLayerId = "history_route_layer";
+  static const String _playedRouteSourceId = "played_route_source";
+  static const String _playedRouteLayerId = "played_route_layer";
 
+  final List<LatLng> _stopPoints = [];
   Symbol? _playbackSymbol;
-  Line? _playedLine;
+
+  // 地址快取與去抖動控制
+  int _lastAddressFetchIndex = -1;
 
   @override
   void initState() {
@@ -132,11 +172,17 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
   }
 
   void _calculateDistancePrefixSum() {
-    _distancePrefixSum = [0.0];
+    final count = _positions.length;
+    if (count == 0) {
+      _distancePrefixSum = Float64List(0);
+      return;
+    }
+    _distancePrefixSum = Float64List(count);
+    _distancePrefixSum[0] = 0.0;
     double total = 0;
-    for (int i = 0; i < _positions.length - 1; i++) {
+    for (int i = 0; i < count - 1; i++) {
       total += _distanceBetween(_positions[i].latitude!.toDouble(), _positions[i].longitude!.toDouble(), _positions[i + 1].latitude!.toDouble(), _positions[i + 1].longitude!.toDouble());
-      _distancePrefixSum.add(total);
+      _distancePrefixSum[i + 1] = total;
     }
   }
 
@@ -246,6 +292,8 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     }
 
     _playbackTimer?.cancel();
+    _lastAddressFetchIndex = -1;
+
     setState(() {
       _isLoading = true;
       _isPlaying = false;
@@ -318,93 +366,103 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     }
   }
 
-  // --- 繪製與動畫播放 ---
+  // --- 高效 GeoJSON 繪製與動畫播放 ---
 
   Future<void> _drawFullRoute({bool fitBounds = true}) async {
     if (_mapController == null || _positions.isEmpty) {
       return;
     }
 
-    await _mapController!.clearLines();
     await _mapController!.clearSymbols();
+    await _mapController!.clearLines();
 
-    List<LatLng> points = _positions.map((p) => LatLng(p.latitude!.toDouble(), p.longitude!.toDouble())).toList();
+    // 建構全軌跡 GeoJSON FeatureCollection
+    final features = <Map<String, dynamic>>[];
 
-    if (_routeColorMode == RouteColorMode.single) {
-      await _mapController!.addLine(LineOptions(geometry: points, lineColor: "#808080", lineWidth: 3.0, lineOpacity: 0.5));
-    } else {
-      await _drawSegmentedLines();
+    double minSpeed = double.infinity;
+    double maxSpeed = double.negativeInfinity;
+
+    if (_routeColorMode == RouteColorMode.speedStatus) {
+      for (var p in _positions) {
+        final speedKmh = (p.speed ?? 0) * 1.852;
+        if (speedKmh < minSpeed) minSpeed = speedKmh;
+        if (speedKmh > maxSpeed) maxSpeed = speedKmh;
+      }
+      if (minSpeed == double.infinity) minSpeed = 0;
+      if (maxSpeed == double.negativeInfinity) maxSpeed = 100;
     }
 
-    _playedLine = await _mapController!.addLine(const LineOptions(geometry: [], lineColor: "#0F53FE", lineWidth: 5.0, lineJoin: "round"));
-
-    _addMarker(points.first, _startIconId);
-    _addMarker(points.last, _endIconId);
-
-    if (_positions.isNotEmpty) {
-      _playbackSymbol = await _mapController!.addSymbol(SymbolOptions(geometry: LatLng(_positions.first.latitude!.toDouble(), _positions.first.longitude!.toDouble()), iconImage: _playbackIconId, iconSize: 1.8, zIndex: 10));
+    String getColorForPosition(api.Position p) {
+      if (_routeColorMode == RouteColorMode.speedStatus) {
+        final speedKmh = (p.speed ?? 0) * 1.852;
+        return TurboColormap.getSpeedColorHex(speedKmh, minSpeed, maxSpeed);
+      } else if (_routeColorMode == RouteColorMode.timeGradient) {
+        final recordedAt = PositionCleaner.recordingTime(p);
+        final hour = recordedAt?.hour ?? 12;
+        if (hour >= 6 && hour < 12) {
+          return "#85C1E9";
+        } else if (hour >= 12 && hour < 18) {
+          return "#3498DB";
+        } else {
+          return "#1B4F72";
+        }
+      }
+      return "#808080";
     }
 
+    for (int i = 0; i < _positions.length - 1; i++) {
+      final p1 = _positions[i];
+      final p2 = _positions[i + 1];
+      final color = getColorForPosition(p1);
+
+      features.add({
+        "type": "Feature",
+        "properties": {"color": color},
+        "geometry": {
+          "type": "LineString",
+          "coordinates": [
+            [p1.longitude!.toDouble(), p1.latitude!.toDouble()],
+            [p2.longitude!.toDouble(), p2.latitude!.toDouble()],
+          ],
+        },
+      });
+    }
+
+    final fullGeoJson = {"type": "FeatureCollection", "features": features};
+
+    // 使用原生 GeoJsonSource / LineLayer 優化效能
+    await _mapController!.removeLayer(_routeLayerId).catchError((_) {});
+    await _mapController!.removeSource(_routeSourceId).catchError((_) {});
+    await _mapController!.removeLayer(_playedRouteLayerId).catchError((_) {});
+    await _mapController!.removeSource(_playedRouteSourceId).catchError((_) {});
+
+    await _mapController!.addSource(_routeSourceId, GeojsonSourceProperties(data: fullGeoJson));
+    await _mapController!.addLineLayer(_routeSourceId, _routeLayerId, LineLayerProperties(lineColor: ['get', 'color'], lineWidth: 4.0, lineOpacity: 0.85, lineJoin: "round", lineCap: "round"));
+
+    // 建立已行駛軌跡 (Played Route) 的獨立 Layer
+    final initialPlayedGeoJson = {
+      "type": "Feature",
+      "geometry": {"type": "LineString", "coordinates": []},
+    };
+    await _mapController!.addSource(_playedRouteSourceId, GeojsonSourceProperties(data: initialPlayedGeoJson));
+    await _mapController!.addLineLayer(_playedRouteSourceId, _playedRouteLayerId, const LineLayerProperties(lineColor: "#0F53FE", lineWidth: 6.0, lineJoin: "round", lineCap: "round"));
+
+    // 標記起點與終點
+    final startLatLng = LatLng(_positions.first.latitude!.toDouble(), _positions.first.longitude!.toDouble());
+    final endLatLng = LatLng(_positions.last.latitude!.toDouble(), _positions.last.longitude!.toDouble());
+    _addMarker(startLatLng, _startIconId);
+    _addMarker(endLatLng, _endIconId);
+
+    // 播放指示圖示
+    _playbackSymbol = await _mapController!.addSymbol(SymbolOptions(geometry: startLatLng, iconImage: _playbackIconId, iconSize: 1.8, zIndex: 10));
+
+    // 停靠點標記
     for (int i = 0; i < _stopPoints.length; i++) {
       await _mapController!.addSymbol(SymbolOptions(geometry: _stopPoints[i], iconImage: "pg_${i + 1}", iconSize: 3.5, iconAnchor: "center"));
     }
 
     if (fitBounds) {
       _animateCameraToBounds();
-    }
-  }
-
-  Future<void> _drawSegmentedLines() async {
-    if (_positions.length < 2) return;
-
-    String getColorForPosition(api.Position p) {
-      if (_routeColorMode == RouteColorMode.speedStatus) {
-        final speedKmh = (p.speed ?? 0) * 1.852;
-        if (speedKmh <= 0.5) {
-          return "#E74C3C"; // 紅色：怠速/停留
-        } else if (speedKmh > 110) {
-          return "#F1C40F"; // 黃色：超速
-        } else {
-          return "#2ECC71"; // 綠色：正常行駛
-        }
-      } else if (_routeColorMode == RouteColorMode.timeGradient) {
-        final recordedAt = PositionCleaner.recordingTime(p);
-        final hour = recordedAt?.hour ?? 12;
-        if (hour >= 6 && hour < 12) {
-          return "#85C1E9"; // 早上：淺藍
-        } else if (hour >= 12 && hour < 18) {
-          return "#3498DB"; // 下午：中藍
-        } else {
-          return "#1B4F72"; // 晚上/凌晨：深藍
-        }
-      }
-      return "#808080";
-    }
-
-    List<LatLng> currentSegmentPoints = [];
-    String? currentColor;
-
-    for (int i = 0; i < _positions.length; i++) {
-      final p = _positions[i];
-      final latLng = LatLng(p.latitude!.toDouble(), p.longitude!.toDouble());
-      final color = getColorForPosition(p);
-
-      if (currentColor == null) {
-        currentColor = color;
-        currentSegmentPoints.add(latLng);
-      } else if (currentColor == color) {
-        currentSegmentPoints.add(latLng);
-      } else {
-        if (currentSegmentPoints.length >= 2) {
-          await _mapController!.addLine(LineOptions(geometry: currentSegmentPoints, lineColor: currentColor, lineWidth: 4.0, lineOpacity: 0.8));
-        }
-        currentSegmentPoints = [currentSegmentPoints.last, latLng];
-        currentColor = color;
-      }
-    }
-
-    if (currentSegmentPoints.length >= 2 && currentColor != null) {
-      await _mapController!.addLine(LineOptions(geometry: currentSegmentPoints, lineColor: currentColor, lineWidth: 4.0, lineOpacity: 0.8));
     }
   }
 
@@ -448,15 +506,13 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
               },
             ),
             ListTile(
-              leading: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: const [
-                  Icon(Icons.lens, size: 12, color: Color(0xFF2ECC71)),
-                  SizedBox(width: 4),
-                  Icon(Icons.lens, size: 12, color: Color(0xFFF1C40F)),
-                  SizedBox(width: 4),
-                  Icon(Icons.lens, size: 12, color: Color(0xFFE74C3C)),
-                ],
+              leading: Container(
+                width: 32,
+                height: 14,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(colors: [Color(0xFF301239), Color(0xFF1AE4B6), Color(0xFFFABA39), Color(0xFF7A0403)]),
+                  borderRadius: BorderRadius.circular(4),
+                ),
               ),
               title: Text('routeColorModeSpeedStatus'.tr),
               subtitle: Text('routeColorModeSpeedStatusDesc'.tr),
@@ -574,19 +630,28 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
       bearing = _calculateBearing(LatLng(p1.latitude!.toDouble(), p1.longitude!.toDouble()), LatLng(p2.latitude!.toDouble(), p2.longitude!.toDouble()));
     }
 
-    if (_currentAddressRx.value == "" || idx % 20 == 0) {
+    // 去抖動與非同步逆地址檢索優化
+    if (_lastAddressFetchIndex == -1 || (idx - _lastAddressFetchIndex).abs() >= 15) {
+      _lastAddressFetchIndex = idx;
       OfflineAddressService.getAddress(p1.latitude!.toDouble(), p1.longitude!.toDouble()).then((addr) {
-        _currentAddressRx.value = addr;
+        if (mounted) _currentAddressRx.value = addr;
       });
     }
 
     _mapController!.updateSymbol(_playbackSymbol!, SymbolOptions(geometry: currentLatLng, iconRotate: bearing));
 
-    if (_playedLine != null) {
-      final playedPoints = _positions.sublist(0, idx + 1).map((p) => LatLng(p.latitude!.toDouble(), p.longitude!.toDouble())).toList();
-      playedPoints.add(currentLatLng);
-      _mapController!.updateLine(_playedLine!, LineOptions(geometry: playedPoints));
+    // 使用 MapLibre GeoJSON Source 直接批次更新行駛軌跡
+    final playedCoordinates = <List<double>>[];
+    for (int i = 0; i <= idx; i++) {
+      playedCoordinates.add([_positions[i].longitude!.toDouble(), _positions[i].latitude!.toDouble()]);
     }
+    playedCoordinates.add([smoothLng, smoothLat]);
+
+    final playedGeoJson = {
+      "type": "Feature",
+      "geometry": {"type": "LineString", "coordinates": playedCoordinates},
+    };
+    _mapController!.setGeoJsonSource(_playedRouteSourceId, playedGeoJson);
 
     if (_followUser) {
       _lastCameraUpdateTick++;
@@ -605,17 +670,19 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
             currentLatLng.longitude < (visibleRegion.southwest.longitude + lngThreshold);
 
         if (isNearEdge) {
-          _mapController!.animateCamera(CameraUpdate.newLatLng(currentLatLng), duration: const Duration(milliseconds: 1500));
+          _mapController!.animateCamera(CameraUpdate.newLatLng(currentLatLng), duration: const Duration(milliseconds: 1000));
         }
       }
     }
   }
 
+  @pragma('vm:prefer-inline')
   double _calculateBearing(LatLng start, LatLng end) {
-    double lat1 = start.latitude * pi / 180;
-    double lon1 = start.longitude * pi / 180;
-    double lat2 = end.latitude * pi / 180;
-    double lon2 = end.longitude * pi / 180;
+    const p = pi / 180;
+    double lat1 = start.latitude * p;
+    double lon1 = start.longitude * p;
+    double lat2 = end.latitude * p;
+    double lon2 = end.longitude * p;
     return (atan2(sin(lon2 - lon1) * cos(lat2), cos(lat1) * sin(lat2) - sin(lat1) * cos(lat2) * cos(lon2 - lon1)) * 180 / pi + 360) % 360;
   }
 
@@ -631,8 +698,9 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     _mapController?.animateCamera(CameraUpdate.newLatLngBounds(LatLngBounds(southwest: LatLng(minLat, minLon), northeast: LatLng(maxLat, maxLon)), left: 70, right: 70, top: 70, bottom: 250));
   }
 
+  @pragma('vm:prefer-inline')
   double _distanceBetween(double lat1, double lon1, double lat2, double lon2) {
-    var p = 0.017453292519943295;
+    const p = 0.017453292519943295;
     var a = 0.5 - cos((lat2 - lat1) * p) / 2 + cos(lat1 * p) * cos(lat2 * p) * (1 - cos((lon2 - lon1) * p)) / 2;
     return 12742 * asin(sqrt(a));
   }
