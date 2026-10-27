@@ -1,9 +1,11 @@
+// lib/screens/map_screen.dart
 import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
@@ -101,7 +103,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     _drawerSearchController.addListener(() {
       final String query = _drawerSearchController.text;
       if (query == _drawerSearchQuery) return;
-      setState(() => _drawerSearchQuery = query);
+      _safeSetState(() => _drawerSearchQuery = query);
     });
 
     _loadDrawerSortMode();
@@ -111,7 +113,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       OfflineAddressService.initDatabase();
 
       if (mounted) {
-        setState(() {
+        _safeSetState(() {
           _isCacheInitialized = true;
         });
       }
@@ -124,6 +126,18 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     }
   }
 
+  // 安全觸發 setState，防止在 Build 期間更新狀態報錯
+  void _safeSetState(VoidCallback fn) {
+    if (!mounted) return;
+    if (SchedulerBinding.instance.schedulerPhase == SchedulerPhase.persistentCallbacks) {
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(fn);
+      });
+    } else {
+      setState(fn);
+    }
+  }
+
   Future<void> _loadLastSelectedDevice() async {
     final prefs = await SharedPreferences.getInstance();
     final lastDeviceId = prefs.getInt('selectedDeviceId');
@@ -133,7 +147,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       if (provider.devices.isNotEmpty) {
         final device = provider.devices.firstWhereOrNull((d) => d.id == lastDeviceId);
         if (device != null) {
-          setState(() {
+          _safeSetState(() {
             _currentDevice = device;
           });
         }
@@ -178,7 +192,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   }
 
   void _onStyleLoaded() async {
-    setState(() {
+    _safeSetState(() {
       _isStyleLoaded = true;
     });
     _loadedIcons.clear();
@@ -304,7 +318,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     if (device == null) return;
 
     if (_isFollowingDevice) {
-      setState(() {
+      _safeSetState(() {
         _isFollowingDevice = false;
       });
       return;
@@ -747,7 +761,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     final int selectionGeneration = ++_deviceSelectionGeneration;
     final bool deviceChanged = _selectedDeviceNotifier.value?.id != device.id;
 
-    setState(() => _currentDevice = device);
+    _safeSetState(() => _currentDevice = device);
     final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
 
     final position = traccarProvider.getPosition(deviceId) ?? api.Position(deviceId: deviceId);
@@ -762,7 +776,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     _selectedAddressNotifier.value = immediateAddress ?? (hasFix ? "Loading..." : "No GPS Signal");
 
     if (follow && !_isFollowingDevice) {
-      setState(() => _isFollowingDevice = true);
+      _safeSetState(() => _isFollowingDevice = true);
     }
 
     if (deviceChanged) {
@@ -903,7 +917,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       return;
     }
 
-    setState(() {
+    _safeSetState(() {
       _panelOpenNotifier.value = true;
     });
     _bottomSheetController = _scaffoldKey.currentState!.showBottomSheet(backgroundColor: Colors.transparent, elevation: 0, (context) {
@@ -960,7 +974,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
     _bottomSheetController!.closed.then((_) {
       if (mounted) {
-        setState(() {
+        _safeSetState(() {
           _panelOpenNotifier.value = false;
           _bottomSheetController = null;
           _isFollowingDevice = false;
@@ -1001,13 +1015,13 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     final String? stored = prefs.getString(_kDrawerSortModeKey);
     final mode = _DrawerSortMode.values.firstWhereOrNull((m) => m.name == stored);
     if (mode != null && mounted) {
-      setState(() => _drawerSortMode = mode);
+      _safeSetState(() => _drawerSortMode = mode);
     }
   }
 
   void _setDrawerSortMode(_DrawerSortMode mode) {
     if (mode == _drawerSortMode) return;
-    setState(() => _drawerSortMode = mode);
+    _safeSetState(() => _drawerSortMode = mode);
     SharedPreferences.getInstance().then((prefs) => prefs.setString(_kDrawerSortModeKey, mode.name));
   }
 
@@ -1211,7 +1225,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                     if (_isCameraAnimating) return;
 
                     if (_isFollowingDevice) {
-                      setState(() {
+                      _safeSetState(() {
                         _isFollowingDevice = false;
                       });
                     }
@@ -1248,7 +1262,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                       return;
                     }
                     if (_isFollowingDevice) {
-                      setState(() {
+                      _safeSetState(() {
                         _isFollowingDevice = false;
                       });
                     }
