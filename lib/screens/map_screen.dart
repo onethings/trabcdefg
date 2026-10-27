@@ -142,7 +142,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     final lastDeviceId = prefs.getInt('selectedDeviceId');
 
     if (lastDeviceId != null && mounted) {
-      final provider = Provider.of<TraccarProvider>(context, listen: false);
+      final provider = context.read<TraccarProvider>();
       if (provider.devices.isNotEmpty) {
         final device = provider.devices.firstWhereOrNull((d) => d.id == lastDeviceId);
         if (device != null) {
@@ -172,7 +172,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       if (mounted) {
-        final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
+        final traccarProvider = context.read<TraccarProvider>();
         traccarProvider
             .fetchInitialData()
             .then((_) {
@@ -203,7 +203,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     _lastAddressLookupPoint = null;
 
     if (!mounted) return;
-    final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
+    final traccarProvider = context.read<TraccarProvider>();
     final String trailColorHex = _toHexColor(Theme.of(context).colorScheme.primary);
     await _mapController!.setSymbolIconAllowOverlap(true);
     await _mapController!.setSymbolIconIgnorePlacement(true);
@@ -323,7 +323,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       return;
     }
 
-    final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
+    final traccarProvider = context.read<TraccarProvider>();
     if (device.id == null || traccarProvider.getPosition(device.id!) == null) return;
     _onDeviceSelected(device, forceShowPanel: true);
   }
@@ -507,7 +507,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     final controller = _mapController;
     if (controller == null || !_isStyleLoaded) return;
 
-    final double scale = Provider.of<SettingsProvider>(context, listen: false).markerSizeScale;
+    final double scale = context.read<SettingsProvider>().markerSizeScale;
 
     _updateSelectedDeviceLive(provider);
 
@@ -718,7 +718,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
   Future<void> _deleteDevice(int deviceId) async {
     if (!mounted) return;
-    final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
+    final traccarProvider = context.read<TraccarProvider>();
     final devicesApi = api.DevicesApi(traccarProvider.apiClient);
 
     try {
@@ -761,7 +761,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     final bool deviceChanged = _selectedDeviceNotifier.value?.id != device.id;
 
     _safeSetState(() => _currentDevice = device);
-    final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
+    final traccarProvider = context.read<TraccarProvider>();
 
     final position = traccarProvider.getPosition(deviceId) ?? api.Position(deviceId: deviceId);
 
@@ -954,7 +954,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                                 _showDeleteConfirmationDialog(currentDev);
                               },
                               onRefresh: () async {
-                                final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
+                                final traccarProvider = context.read<TraccarProvider>();
                                 await traccarProvider.fetchInitialData();
                               },
                             ),
@@ -1250,7 +1250,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                       final deviceId = int.tryParse(deviceIdString ?? '');
 
                       if (deviceId != null && mounted) {
-                        final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
+                        final traccarProvider = context.read<TraccarProvider>();
                         _handleDeviceMarkerTap(deviceId, traccarProvider);
                       }
                     });
@@ -1545,7 +1545,6 @@ class _DataUpdateListenerState extends State<_DataUpdateListener> {
   void didUpdateWidget(_DataUpdateListener oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.data != oldWidget.data) {
-      // 確保將標記更新排程到當前 Frame 結束後執行，防止 build 期間呼叫 setState 衝突
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
           widget.onUpdate();
@@ -1572,4 +1571,5 @@ enum _DrawerSortMode {
   final IconData icon;
 }
 
-String _toHexColor(Color color) => '#${color.toARGB32().toRadixString(16).padLeft(8, '0').substring(2)}';
+// 改進：直接輸出完整 8 位數 ARGB 十六進位碼（#AARRGGBB），完美支援 MapLibre 軌跡透明度渲染
+String _toHexColor(Color color) => '#${color.toARGB32().toRadixString(16).padLeft(8, '0')}';
