@@ -26,42 +26,39 @@ import 'package:trabcdefg/src/generated_api/api.dart' as api;
 import 'package:trabcdefg/src/utils/position_cleaner.dart';
 import 'package:trabcdefg/widgets/offline_address_service.dart';
 
-/// Turbo Colormap 速度漸層計算工具
-class TurboColormap {
-  static const List<double> rCoeffs = [0.13572138, 4.6153926, -42.66032258, 132.13108234, -152.94239396, 59.28637943];
-  static const List<double> gCoeffs = [0.09140261, 2.19418839, 4.84296658, -14.18503333, 4.27729857, 2.82956604];
-  static const List<double> bCoeffs = [0.1066733, 12.64194608, -60.58204836, 110.36276771, -89.90310912, 27.34824973];
-
-  static double _interpolateChannel(double normalizedValue, List<double> coeffs) {
-    double result = 0;
-    for (int i = 0; i < coeffs.length; i++) {
-      result += coeffs[i] * pow(normalizedValue, i);
-    }
-    return max(0.0, min(1.0, result));
-  }
-
-  /// 根據速度 (speed) 以及該趟軌跡的最小 (minSpeed)、最大速度 (maxSpeed) 計算並返回 Hex 色碼
-  static String getSpeedColorHex(double speed, double minSpeed, double maxSpeed) {
-    if (maxSpeed <= minSpeed) {
-      maxSpeed = minSpeed + 1.0; // 避免分母為零
-    }
-    double normalizedValue = (speed - minSpeed) / (maxSpeed - minSpeed);
-    normalizedValue = max(0.0, min(1.0, normalizedValue));
-
-    int r = (255 * _interpolateChannel(normalizedValue, rCoeffs)).round();
-    int g = (255 * _interpolateChannel(normalizedValue, gCoeffs)).round();
-    int b = (255 * _interpolateChannel(normalizedValue, bCoeffs)).round();
-
-    return '#${r.toRadixString(16).padLeft(2, '0')}${g.toRadixString(16).padLeft(2, '0')}${b.toRadixString(16).padLeft(2, '0')}'.toUpperCase();
-  }
-}
-
 enum OSMMapType { normal, satellite }
 
 enum RouteColorMode {
   single, // 單一顏色
-  speedStatus, // 依速度分色 (使用 Turbo Colormap 漸層)
-  timeGradient, // 時間漸層分色 (早:淺藍, 午:中藍, 晚:深藍)
+  speedStatus, // 依速度分色 (已整合 Turbo 漸層)[cite: 1]
+  timeGradient, // 時間漸層分色 (早:淺藍, 午:中藍, 晚:深藍)[cite: 1]
+}
+
+// --- Turbo Colormap 演算法與係數 ---
+const List<double> _turboRedCoeffs = [0.13572138, 4.6153926, -42.66032258, 132.13108234, -152.94239396, 59.28637943];
+const List<double> _turboGreenCoeffs = [0.09140261, 2.19418839, 4.84296658, -14.18503333, 4.27729857, 2.82956604];
+const List<double> _turboBlueCoeffs = [0.1066733, 12.64194608, -60.58204836, 110.36276771, -89.90310912, 27.34824973];
+
+double _interpolateChannel(double normalizedValue, List<double> coeffs) {
+  double result = 0;
+  for (int i = 0; i < coeffs.length; i++) {
+    result += coeffs[i] * pow(normalizedValue, i);
+  }
+  return max(0.0, min(1.0, result));
+}
+
+List<int> _interpolateTurbo(double value) {
+  final normalizedValue = max(0.0, min(1.0, value));
+  return [(255 * _interpolateChannel(normalizedValue, _turboRedCoeffs)).round(), (255 * _interpolateChannel(normalizedValue, _turboGreenCoeffs)).round(), (255 * _interpolateChannel(normalizedValue, _turboBlueCoeffs)).round()];
+}
+
+String _getTurboSpeedColor(double speedKmh, double minSpeed, double maxSpeed) {
+  if (maxSpeed <= minSpeed) {
+    maxSpeed = minSpeed + 1.0;
+  }
+  final normalizedSpeed = ((speedKmh - minSpeed) / (maxSpeed - minSpeed)).clamp(0.0, 1.0);
+  final rgb = _interpolateTurbo(normalizedSpeed);
+  return '#${rgb[0].toRadixString(16).padLeft(2, '0')}${rgb[1].toRadixString(16).padLeft(2, '0')}${rgb[2].toRadixString(16).padLeft(2, '0')}';
 }
 
 class HistoryRouteScreen extends StatefulWidget {
@@ -387,34 +384,29 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
   Future<void> _drawSegmentedLines() async {
     if (_positions.length < 2) return;
 
-    // 若為依速度分色，計算全軌跡最小與最大速度（km/h）以供 Turbo Colormap 正規化
-    double minSpeed = double.infinity;
-    double maxSpeed = double.negativeInfinity;
-
-    if (_routeColorMode == RouteColorMode.speedStatus) {
-      for (var p in _positions) {
-        final speedKmh = (p.speed ?? 0) * 1.852;
-        if (speedKmh < minSpeed) minSpeed = speedKmh;
-        if (speedKmh > maxSpeed) maxSpeed = speedKmh;
-      }
-      if (minSpeed == double.infinity) minSpeed = 0;
-      if (maxSpeed == double.negativeInfinity) maxSpeed = 100;
+    // 計算速度極值供 Turbo 漸層使用
+    double minSpeed = 0;
+    double maxSpeed = 120.0;
+    if (_routeColorMode == RouteColorMode.speedStatus && _positions.isNotEmpty) {
+      final speeds = _positions.map((p) => (p.speed ?? 0) * 1.852).toList();
+      minSpeed = speeds.reduce(min);
+      maxSpeed = speeds.reduce(max);
     }
 
     String getColorForPosition(api.Position p) {
+      final speedKmh = (p.speed ?? 0) * 1.852;
       if (_routeColorMode == RouteColorMode.speedStatus) {
-        final speedKmh = (p.speed ?? 0) * 1.852;
-        // 套用 Turbo Colormap 漸層演算法
-        return TurboColormap.getSpeedColorHex(speedKmh, minSpeed, maxSpeed);
+        // 直接使用 Turbo 色譜依速度計算顏色
+        return _getTurboSpeedColor(speedKmh, minSpeed, maxSpeed);
       } else if (_routeColorMode == RouteColorMode.timeGradient) {
         final recordedAt = PositionCleaner.recordingTime(p);
         final hour = recordedAt?.hour ?? 12;
         if (hour >= 6 && hour < 12) {
-          return "#85C1E9"; // 早上：淺藍
+          return "#85C1E9"; // 早上：淺藍[cite: 1]
         } else if (hour >= 12 && hour < 18) {
-          return "#3498DB"; // 下午：中藍
+          return "#3498DB"; // 下午：中藍[cite: 1]
         } else {
-          return "#1B4F72"; // 晚上/凌晨：深藍
+          return "#1B4F72"; // 晚上/凌晨：深藍[cite: 1]
         }
       }
       return "#808080";
@@ -488,15 +480,15 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
             ),
             ListTile(
               leading: Container(
-                width: 32,
-                height: 14,
+                width: 36,
+                height: 12,
                 decoration: BoxDecoration(
-                  gradient: const LinearGradient(colors: [Color(0xFF301239), Color(0xFF1AE4B6), Color(0xFFFABA39), Color(0xFF7A0403)]),
-                  borderRadius: BorderRadius.circular(4),
+                  gradient: const LinearGradient(colors: [Color(0xFF350A66), Color(0xFF3858E9), Color(0xFF2490EA), Color(0xFF1EC0AC), Color(0xFF7FE23E), Color(0xFFFDE725)]),
+                  borderRadius: BorderRadius.circular(6),
                 ),
               ),
               title: Text('routeColorModeSpeedStatus'.tr),
-              subtitle: Text('routeColorModeSpeedStatusDesc'.tr),
+              //subtitle: const Text('依實際行車速度呈現平滑的 Turbo 漸層色譜'),
               trailing: _routeColorMode == RouteColorMode.speedStatus ? const Icon(Icons.check, color: Colors.blue) : null,
               onTap: () {
                 Navigator.pop(context);
