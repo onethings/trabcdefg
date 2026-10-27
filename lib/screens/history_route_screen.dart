@@ -5,6 +5,7 @@ import 'dart:developer' as developer;
 import 'dart:io';
 import 'dart:math';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
@@ -62,6 +63,76 @@ String _getTurboSpeedColor(double speedKmh, double minSpeed, double maxSpeed) {
   return '#${rgb[0].toRadixString(16).padLeft(2, '0')}${rgb[1].toRadixString(16).padLeft(2, '0')}${rgb[2].toRadixString(16).padLeft(2, '0')}';
 }
 
+// --- Isolate Background Compute Helper ---
+class _GeoJsonParams {
+  final List<api.Position> positions;
+  final RouteColorMode routeColorMode;
+
+  _GeoJsonParams(this.positions, this.routeColorMode);
+}
+
+Map<String, dynamic> _buildGeoJsonIsolate(_GeoJsonParams params) {
+  final positions = params.positions;
+  final routeColorMode = params.routeColorMode;
+
+  double minSpeed = 0;
+  double maxSpeed = 120.0;
+  if (routeColorMode == RouteColorMode.speedStatus && positions.isNotEmpty) {
+    final speeds = positions.map((p) => (p.speed ?? 0) * 1.852).toList();
+    minSpeed = speeds.reduce(min);
+    maxSpeed = speeds.reduce(max);
+  }
+
+  String getColor(api.Position p) {
+    final speedKmh = (p.speed ?? 0) * 1.852;
+    if (routeColorMode == RouteColorMode.speedStatus) {
+      return _getTurboSpeedColor(speedKmh, minSpeed, maxSpeed);
+    } else if (routeColorMode == RouteColorMode.timeGradient) {
+      final recordedAt = PositionCleaner.recordingTime(p);
+      final hour = recordedAt?.hour ?? 12;
+      if (hour >= 6 && hour < 12) {
+        return "#85C1E9";
+      } else if (hour >= 12 && hour < 18) {
+        return "#3498DB";
+      } else {
+        return "#1B4F72";
+      }
+    }
+    return "#808080";
+  }
+
+  final List<Map<String, dynamic>> features = [];
+
+  if (routeColorMode == RouteColorMode.single) {
+    final coords = positions.map((p) => [p.longitude!.toDouble(), p.latitude!.toDouble()]).toList();
+    features.add({
+      "type": "Feature",
+      "properties": {"color": "#808080"},
+      "geometry": {"type": "LineString", "coordinates": coords},
+    });
+  } else {
+    for (int i = 0; i < positions.length - 1; i++) {
+      final p1 = positions[i];
+      final p2 = positions[i + 1];
+      final color = getColor(p1);
+
+      features.add({
+        "type": "Feature",
+        "properties": {"color": color},
+        "geometry": {
+          "type": "LineString",
+          "coordinates": [
+            [p1.longitude!.toDouble(), p1.latitude!.toDouble()],
+            [p2.longitude!.toDouble(), p2.latitude!.toDouble()],
+          ],
+        },
+      });
+    }
+  }
+
+  return {"type": "FeatureCollection", "features": features};
+}
+
 class HistoryRouteScreen extends StatefulWidget {
   const HistoryRouteScreen({super.key});
 
@@ -70,6 +141,27 @@ class HistoryRouteScreen extends StatefulWidget {
 }
 
 class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProviderStateMixin {
+  // 靜態常數與 UI 物件抽取
+  static const List<double> _playbackSpeeds = [1.0, 5.0, 10.0, 20.0];
+
+  static const BoxDecoration _turboGradientDecoration = BoxDecoration(
+    gradient: LinearGradient(colors: [Color(0xFF350A66), Color(0xFF3858E9), Color(0xFF2490EA), Color(0xFF1EC0AC), Color(0xFF7FE23E), Color(0xFFFDE725)]),
+    borderRadius: BorderRadius.all(Radius.circular(6)),
+  );
+
+  static const Widget _singleColorIcon = Icon(Icons.lens, color: Color(0xFF0F53FE));
+
+  static const Widget _timeGradientIcons = Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Icon(Icons.lens, size: 12, color: Color(0xFF85C1E9)),
+      SizedBox(width: 4),
+      Icon(Icons.lens, size: 12, color: Color(0xFF3498DB)),
+      SizedBox(width: 4),
+      Icon(Icons.lens, size: 12, color: Color(0xFF1B4F72)),
+    ],
+  );
+
   MapLibreMapController? _mapController;
   List<double> _distancePrefixSum = [];
   final RxString _currentAddressRx = "".obs;
@@ -396,8 +488,14 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
 
     final List<LatLng> points = _positions.map((p) => LatLng(p.latitude!.toDouble(), p.longitude!.toDouble())).toList();
 
-    // 1. 建立背景軌跡 (使用 GeoJSON Source 與 LineLayer 實現極速渲染)
-    final Map<String, dynamic> routeGeoJson = _buildFullRouteGeoJson();
+    // 1. 建立背景軌跡 (超過1000點移至 Isolate 背景處理避免UI卡頓)
+    Map<String, dynamic> routeGeoJson;
+    if (_positions.length > 1000) {
+      routeGeoJson = await compute(_buildGeoJsonIsolate, _GeoJsonParams(_positions, _routeColorMode));
+    } else {
+      routeGeoJson = _buildGeoJsonIsolate(_GeoJsonParams(_positions, _routeColorMode));
+    }
+
     await _mapController!.addSource(_routeSourceId, GeojsonSourceProperties(data: routeGeoJson));
     await _mapController!.addLineLayer(_routeSourceId, _routeLayerId, LineLayerProperties(lineColor: ['get', 'color'], lineWidth: 4.0, lineOpacity: 0.8, lineJoin: 'round', lineCap: 'round'));
 
@@ -431,65 +529,6 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     }
   }
 
-  Map<String, dynamic> _buildFullRouteGeoJson() {
-    double minSpeed = 0;
-    double maxSpeed = 120.0;
-    if (_routeColorMode == RouteColorMode.speedStatus && _positions.isNotEmpty) {
-      final speeds = _positions.map((p) => (p.speed ?? 0) * 1.852).toList();
-      minSpeed = speeds.reduce(min);
-      maxSpeed = speeds.reduce(max);
-    }
-
-    String getColor(api.Position p) {
-      final speedKmh = (p.speed ?? 0) * 1.852;
-      if (_routeColorMode == RouteColorMode.speedStatus) {
-        return _getTurboSpeedColor(speedKmh, minSpeed, maxSpeed);
-      } else if (_routeColorMode == RouteColorMode.timeGradient) {
-        final recordedAt = PositionCleaner.recordingTime(p);
-        final hour = recordedAt?.hour ?? 12;
-        if (hour >= 6 && hour < 12) {
-          return "#85C1E9";
-        } else if (hour >= 12 && hour < 18) {
-          return "#3498DB";
-        } else {
-          return "#1B4F72";
-        }
-      }
-      return "#808080";
-    }
-
-    final List<Map<String, dynamic>> features = [];
-
-    if (_routeColorMode == RouteColorMode.single) {
-      final coords = _positions.map((p) => [p.longitude!.toDouble(), p.latitude!.toDouble()]).toList();
-      features.add({
-        "type": "Feature",
-        "properties": {"color": "#808080"},
-        "geometry": {"type": "LineString", "coordinates": coords},
-      });
-    } else {
-      for (int i = 0; i < _positions.length - 1; i++) {
-        final p1 = _positions[i];
-        final p2 = _positions[i + 1];
-        final color = getColor(p1);
-
-        features.add({
-          "type": "Feature",
-          "properties": {"color": color},
-          "geometry": {
-            "type": "LineString",
-            "coordinates": [
-              [p1.longitude!.toDouble(), p1.latitude!.toDouble()],
-              [p2.longitude!.toDouble(), p2.latitude!.toDouble()],
-            ],
-          },
-        });
-      }
-    }
-
-    return {"type": "FeatureCollection", "features": features};
-  }
-
   void _setRouteColorMode(RouteColorMode mode) {
     _safeSetState(() {
       _routeColorMode = mode;
@@ -519,7 +558,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
               ),
               const SizedBox(height: 16),
               ListTile(
-                leading: const Icon(Icons.lens, color: Color(0xFF0F53FE)),
+                leading: _singleColorIcon,
                 title: Text('routeColorModeSingle'.tr),
                 subtitle: Text('routeColorModeSingleDesc'.tr),
                 trailing: _routeColorMode == RouteColorMode.single ? const Icon(Icons.check, color: Colors.blue) : null,
@@ -529,14 +568,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
                 },
               ),
               ListTile(
-                leading: Container(
-                  width: 36,
-                  height: 12,
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(colors: [Color(0xFF350A66), Color(0xFF3858E9), Color(0xFF2490EA), Color(0xFF1EC0AC), Color(0xFF7FE23E), Color(0xFFFDE725)]),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                ),
+                leading: Container(width: 36, height: 12, decoration: _turboGradientDecoration),
                 title: Text('routeColorModeSpeedStatus'.tr),
                 trailing: _routeColorMode == RouteColorMode.speedStatus ? const Icon(Icons.check, color: Colors.blue) : null,
                 onTap: () {
@@ -545,16 +577,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
                 },
               ),
               ListTile(
-                leading: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: const [
-                    Icon(Icons.lens, size: 12, color: Color(0xFF85C1E9)),
-                    SizedBox(width: 4),
-                    Icon(Icons.lens, size: 12, color: Color(0xFF3498DB)),
-                    SizedBox(width: 4),
-                    Icon(Icons.lens, size: 12, color: Color(0xFF1B4F72)),
-                  ],
-                ),
+                leading: _timeGradientIcons,
                 title: Text('routeColorModeTimeGradient'.tr),
                 subtitle: Text('routeColorModeTimeGradientDesc'.tr),
                 trailing: _routeColorMode == RouteColorMode.timeGradient ? const Icon(Icons.check, color: Colors.blue) : null,
@@ -643,7 +666,6 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     if (_currentAddressRx.value == "" || idx % 20 == 0) {
       final int currentToken = ++_addressRequestToken;
       OfflineAddressService.getAddress(p1.latitude!.toDouble(), p1.longitude!.toDouble()).then((addr) {
-        //_currentAddressRx.value = addr;
         if (currentToken == _addressRequestToken) {
           _currentAddressRx.value = addr;
         }
@@ -1089,12 +1111,11 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
   }
 
   Widget _buildSpeedSelector() {
-    final speeds = [1.0, 5.0, 10.0, 20.0];
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(color: Theme.of(context).colorScheme.surfaceContainerHighest, borderRadius: BorderRadius.circular(16)),
       child: Row(
-        children: speeds.map((s) {
+        children: _playbackSpeeds.map((s) {
           bool selected = _playbackSpeed == s;
           return GestureDetector(
             onTap: () => _safeSetState(() => _playbackSpeed = s),
