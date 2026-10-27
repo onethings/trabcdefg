@@ -126,7 +126,6 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     }
   }
 
-  // 安全觸發 setState，防止在 Build 期間更新狀態報錯
   void _safeSetState(VoidCallback fn) {
     if (!mounted) return;
     if (SchedulerBinding.instance.schedulerPhase == SchedulerPhase.persistentCallbacks) {
@@ -1546,7 +1545,12 @@ class _DataUpdateListenerState extends State<_DataUpdateListener> {
   void didUpdateWidget(_DataUpdateListener oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.data != oldWidget.data) {
-      widget.onUpdate();
+      // 確保將標記更新排程到當前 Frame 結束後執行，防止 build 期間呼叫 setState 衝突
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          widget.onUpdate();
+        }
+      });
     }
   }
 
