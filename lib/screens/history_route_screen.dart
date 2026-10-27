@@ -30,8 +30,8 @@ enum OSMMapType { normal, satellite }
 
 enum RouteColorMode {
   single, // 單一顏色
-  speedStatus, // 依速度分色 (已整合 Turbo 漸層)[cite: 1]
-  timeGradient, // 時間漸層分色 (早:淺藍, 午:中藍, 晚:深藍)[cite: 1]
+  speedStatus, // 依速度分色 (Turbo 漸層)
+  timeGradient, // 時間漸層分色 (早:淺藍, 午:中藍, 晚:深藍)
 }
 
 // --- Turbo Colormap 演算法與係數 ---
@@ -80,8 +80,9 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
   bool _isPlaying = false;
   bool _isLoading = false;
   bool _followUser = true;
-  Timer? _playbackTimer;
   double _playbackSpeed = 1.0;
+
+  AnimationController? _playbackAnimationController;
 
   int? _deviceId;
   DateTime? _historyFrom;
@@ -98,26 +99,38 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
   bool _isMinimalMode = false;
   RouteColorMode _routeColorMode = RouteColorMode.single;
 
-  // 地圖資源
+  // 地圖資源常量與標示
   static const String _playbackIconId = "playback_arrow";
   static const String _startIconId = "start_pin";
   static const String _endIconId = "end_pin";
   final List<LatLng> _stopPoints = [];
 
   Symbol? _playbackSymbol;
-  Line? _playedLine;
+  int _lastCameraAnimTime = 0;
+
+  // GeoJSON 圖層識別碼
+  static const String _routeSourceId = "history_route_source";
+  static const String _routeLayerId = "history_route_layer";
+  static const String _playedSourceId = "played_route_source";
+  static const String _playedLayerId = "played_route_layer";
 
   @override
   void initState() {
     super.initState();
+    _initAnimationController();
     OfflineAddressService.initDatabase();
     cleanExpiredRouteHistory();
     _loadInitialParamsAndFetch();
   }
 
+  void _initAnimationController() {
+    _playbackAnimationController = AnimationController(vsync: this, duration: const Duration(seconds: 1))..addListener(_onAnimationTick);
+  }
+
   @override
   void dispose() {
-    _playbackTimer?.cancel();
+    _playbackAnimationController?.stop();
+    _playbackAnimationController?.dispose();
     super.dispose();
   }
 
@@ -272,7 +285,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
       return;
     }
 
-    _playbackTimer?.cancel();
+    _playbackAnimationController?.stop();
     setState(() {
       _isLoading = true;
       _isPlaying = false;
@@ -345,26 +358,48 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     }
   }
 
-  // --- 繪製與動畫播放 ---
+  // --- 高效能 GeoJSON 地圖繪製與動畫播放 ---
+
+  Future<void> _cleanMapLayers() async {
+    if (_mapController == null) return;
+    try {
+      await _mapController!.removeLayer(_playedLayerId);
+      await _mapController!.removeSource(_playedSourceId);
+      await _mapController!.removeLayer(_routeLayerId);
+      await _mapController!.removeSource(_routeSourceId);
+    } catch (_) {}
+    await _mapController!.clearLines();
+    await _mapController!.clearSymbols();
+  }
 
   Future<void> _drawFullRoute({bool fitBounds = true}) async {
     if (_mapController == null || _positions.isEmpty) {
       return;
     }
 
-    await _mapController!.clearLines();
-    await _mapController!.clearSymbols();
+    await _cleanMapLayers();
 
-    List<LatLng> points = _positions.map((p) => LatLng(p.latitude!.toDouble(), p.longitude!.toDouble())).toList();
+    final List<LatLng> points = _positions.map((p) => LatLng(p.latitude!.toDouble(), p.longitude!.toDouble())).toList();
 
-    if (_routeColorMode == RouteColorMode.single) {
-      await _mapController!.addLine(LineOptions(geometry: points, lineColor: "#808080", lineWidth: 3.0, lineOpacity: 0.5));
-    } else {
-      await _drawSegmentedLines();
-    }
+    // 1. 建立背景軌跡 (使用 GeoJSON Source 與 LineLayer 實現極速渲染)
+    final Map<String, dynamic> routeGeoJson = _buildFullRouteGeoJson();
+    await _mapController!.addSource(_routeSourceId, GeojsonSourceProperties(data: routeGeoJson));
+    await _mapController!.addLineLayer(_routeSourceId, _routeLayerId, LineLayerProperties(lineColor: ['get', 'color'], lineWidth: 4.0, lineOpacity: 0.8, lineJoin: 'round', lineCap: 'round'));
 
-    _playedLine = await _mapController!.addLine(const LineOptions(geometry: [], lineColor: "#0F53FE", lineWidth: 5.0, lineJoin: "round"));
+    // 2. 建立已播放軌跡圖層 (動態更新)
+    final Map<String, dynamic> emptyPlayedGeoJson = {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "geometry": {"type": "LineString", "coordinates": []},
+        },
+      ],
+    };
+    await _mapController!.addSource(_playedSourceId, GeojsonSourceProperties(data: emptyPlayedGeoJson));
+    await _mapController!.addLineLayer(_playedSourceId, _playedLayerId, LineLayerProperties(lineColor: '#0F53FE', lineWidth: 5.5, lineOpacity: 1.0, lineJoin: 'round', lineCap: 'round'));
 
+    // 3. 繪製起終點標籤與停靠點
     _addMarker(points.first, _startIconId);
     _addMarker(points.last, _endIconId);
 
@@ -381,10 +416,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     }
   }
 
-  Future<void> _drawSegmentedLines() async {
-    if (_positions.length < 2) return;
-
-    // 計算速度極值供 Turbo 漸層使用
+  Map<String, dynamic> _buildFullRouteGeoJson() {
     double minSpeed = 0;
     double maxSpeed = 120.0;
     if (_routeColorMode == RouteColorMode.speedStatus && _positions.isNotEmpty) {
@@ -393,50 +425,54 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
       maxSpeed = speeds.reduce(max);
     }
 
-    String getColorForPosition(api.Position p) {
+    String getColor(api.Position p) {
       final speedKmh = (p.speed ?? 0) * 1.852;
       if (_routeColorMode == RouteColorMode.speedStatus) {
-        // 直接使用 Turbo 色譜依速度計算顏色
         return _getTurboSpeedColor(speedKmh, minSpeed, maxSpeed);
       } else if (_routeColorMode == RouteColorMode.timeGradient) {
         final recordedAt = PositionCleaner.recordingTime(p);
         final hour = recordedAt?.hour ?? 12;
         if (hour >= 6 && hour < 12) {
-          return "#85C1E9"; // 早上：淺藍[cite: 1]
+          return "#85C1E9";
         } else if (hour >= 12 && hour < 18) {
-          return "#3498DB"; // 下午：中藍[cite: 1]
+          return "#3498DB";
         } else {
-          return "#1B4F72"; // 晚上/凌晨：深藍[cite: 1]
+          return "#1B4F72";
         }
       }
       return "#808080";
     }
 
-    List<LatLng> currentSegmentPoints = [];
-    String? currentColor;
+    final List<Map<String, dynamic>> features = [];
 
-    for (int i = 0; i < _positions.length; i++) {
-      final p = _positions[i];
-      final latLng = LatLng(p.latitude!.toDouble(), p.longitude!.toDouble());
-      final color = getColorForPosition(p);
+    if (_routeColorMode == RouteColorMode.single) {
+      final coords = _positions.map((p) => [p.longitude!.toDouble(), p.latitude!.toDouble()]).toList();
+      features.add({
+        "type": "Feature",
+        "properties": {"color": "#808080"},
+        "geometry": {"type": "LineString", "coordinates": coords},
+      });
+    } else {
+      for (int i = 0; i < _positions.length - 1; i++) {
+        final p1 = _positions[i];
+        final p2 = _positions[i + 1];
+        final color = getColor(p1);
 
-      if (currentColor == null) {
-        currentColor = color;
-        currentSegmentPoints.add(latLng);
-      } else if (currentColor == color) {
-        currentSegmentPoints.add(latLng);
-      } else {
-        if (currentSegmentPoints.length >= 2) {
-          await _mapController!.addLine(LineOptions(geometry: currentSegmentPoints, lineColor: currentColor, lineWidth: 4.0, lineOpacity: 0.8));
-        }
-        currentSegmentPoints = [currentSegmentPoints.last, latLng];
-        currentColor = color;
+        features.add({
+          "type": "Feature",
+          "properties": {"color": color},
+          "geometry": {
+            "type": "LineString",
+            "coordinates": [
+              [p1.longitude!.toDouble(), p1.latitude!.toDouble()],
+              [p2.longitude!.toDouble(), p2.latitude!.toDouble()],
+            ],
+          },
+        });
       }
     }
 
-    if (currentSegmentPoints.length >= 2 && currentColor != null) {
-      await _mapController!.addLine(LineOptions(geometry: currentSegmentPoints, lineColor: currentColor, lineWidth: 4.0, lineOpacity: 0.8));
-    }
+    return {"type": "FeatureCollection", "features": features};
   }
 
   void _setRouteColorMode(RouteColorMode mode) {
@@ -447,7 +483,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
       prefs.setString('route_color_mode', mode.name);
     });
     if (_positions.isNotEmpty) {
-      _drawFullRoute();
+      _drawFullRoute(fitBounds: false);
     }
   }
 
@@ -488,7 +524,6 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
                 ),
               ),
               title: Text('routeColorModeSpeedStatus'.tr),
-              //subtitle: const Text('依實際行車速度呈現平滑的 Turbo 漸層色譜'),
               trailing: _routeColorMode == RouteColorMode.speedStatus ? const Icon(Icons.check, color: Colors.blue) : null,
               onTap: () {
                 Navigator.pop(context);
@@ -526,60 +561,47 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
   }
 
   void _togglePlayback() {
-    if (_positions.isEmpty) {
-      return;
-    }
+    if (_positions.isEmpty) return;
 
     if (_isPlaying) {
-      _playbackTimer?.cancel();
+      _playbackAnimationController?.stop();
       setState(() => _isPlaying = false);
       return;
     }
 
     final double maxLimit = max(0, _positions.length - 1).toDouble();
-    final bool isNewPlayback = _playbackPositionRx.value == 0 || _playbackPositionRx.value >= maxLimit;
     if (_playbackPositionRx.value >= maxLimit) {
       _playbackPositionRx.value = 0;
-      _lastCameraUpdateTick = 0;
       _updatePlaybackUI();
     }
 
-    if (isNewPlayback) {
+    if (_playbackPositionRx.value == 0) {
       _followUser = true;
       final startPoint = LatLng(_positions.first.latitude!.toDouble(), _positions.first.longitude!.toDouble());
       _mapController?.animateCamera(CameraUpdate.newLatLngZoom(startPoint, 16.0), duration: const Duration(milliseconds: 800));
     }
 
-    setState(() {
-      _isPlaying = true;
-    });
-
-    _playbackTimer?.cancel();
-
-    _playbackTimer = Timer.periodic(const Duration(milliseconds: 32), (timer) {
-      if (!mounted) {
-        timer.cancel();
-        return;
-      }
-
-      final double maxLimit = max(0, _positions.length - 1).toDouble();
-
-      if (_playbackPositionRx.value >= maxLimit) {
-        _playbackPositionRx.value = maxLimit;
-        timer.cancel();
-        if (mounted) {
-          setState(() => _isPlaying = false);
-        }
-      } else {
-        double increment = 0.05 * _playbackSpeed;
-        _playbackPositionRx.value = (_playbackPositionRx.value + increment).clamp(0.0, maxLimit);
-
-        _updatePlaybackUI();
-      }
-    });
+    setState(() => _isPlaying = true);
+    _playbackAnimationController?.repeat();
   }
 
-  int _lastCameraUpdateTick = 0;
+  void _onAnimationTick() {
+    if (!_isPlaying || _positions.isEmpty) return;
+
+    final double maxLimit = max(0, _positions.length - 1).toDouble();
+    double step = 0.05 * _playbackSpeed;
+    double nextVal = _playbackPositionRx.value + step;
+
+    if (nextVal >= maxLimit) {
+      _playbackPositionRx.value = maxLimit;
+      _playbackAnimationController?.stop();
+      setState(() => _isPlaying = false);
+    } else {
+      _playbackPositionRx.value = nextVal;
+    }
+
+    _updatePlaybackUI();
+  }
 
   void _updatePlaybackUI() async {
     if (_mapController == null || _positions.isEmpty || _playbackSymbol == null) {
@@ -609,17 +631,32 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
       });
     }
 
+    // 更新行進中的小車標記
     _mapController!.updateSymbol(_playbackSymbol!, SymbolOptions(geometry: currentLatLng, iconRotate: bearing));
 
-    if (_playedLine != null) {
-      final playedPoints = _positions.sublist(0, idx + 1).map((p) => LatLng(p.latitude!.toDouble(), p.longitude!.toDouble())).toList();
-      playedPoints.add(currentLatLng);
-      _mapController!.updateLine(_playedLine!, LineOptions(geometry: playedPoints));
+    // 高效更新已播放軌跡 GeoJSON 數據 (使用正確的 setGeoJsonSource 方法)
+    final List<List<double>> playedCoords = [];
+    for (int i = 0; i <= idx; i++) {
+      playedCoords.add([_positions[i].longitude!.toDouble(), _positions[i].latitude!.toDouble()]);
     }
+    playedCoords.add([smoothLng, smoothLat]);
 
+    final Map<String, dynamic> updatedPlayedGeoJson = {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "geometry": {"type": "LineString", "coordinates": playedCoords},
+        },
+      ],
+    };
+    await _mapController!.setGeoJsonSource(_playedSourceId, updatedPlayedGeoJson);
+
+    // 相機跟隨與節流機制
     if (_followUser) {
-      _lastCameraUpdateTick++;
-      if (_lastCameraUpdateTick % 10 == 0) {
+      final now = DateTime.now().millisecondsSinceEpoch;
+      if (now - _lastCameraAnimTime > 600) {
+        _lastCameraAnimTime = now;
         LatLngBounds? visibleRegion = await _mapController!.getVisibleRegion();
         double latSpan = visibleRegion.northeast.latitude - visibleRegion.southwest.latitude;
         double lngSpan = visibleRegion.northeast.longitude - visibleRegion.southwest.longitude;
@@ -634,7 +671,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
             currentLatLng.longitude < (visibleRegion.southwest.longitude + lngThreshold);
 
         if (isNearEdge) {
-          _mapController!.animateCamera(CameraUpdate.newLatLng(currentLatLng), duration: const Duration(milliseconds: 1500));
+          _mapController!.animateCamera(CameraUpdate.newLatLng(currentLatLng), duration: const Duration(milliseconds: 600));
         }
       }
     }
@@ -1113,7 +1150,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
       _isCalendarLoading = false;
     });
 
-    for (var date = firstDayOfMonth; date.isBefore(lastDayOfMonth.add(const Duration(days: 1))); date = date.add(const Duration(days: 1))) {
+    for (var date = firstDayOfMonth; date.isBefore(lastDayOfMonth.add(const Duration(days: 15))); date = date.add(const Duration(days: 1))) {
       final dayUtc = DateTime.utc(date.year, date.month, date.day);
 
       if (date.isAfter(today)) {
