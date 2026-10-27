@@ -74,6 +74,8 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
   List<double> _distancePrefixSum = [];
   final RxString _currentAddressRx = "".obs;
 
+  int _addressRequestToken = 0; // 用來記錄請求的流水號
+
   // 狀態變數
   List<api.Position> _positions = [];
   final RxDouble _playbackPositionRx = 0.0.obs;
@@ -639,8 +641,12 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     }
 
     if (_currentAddressRx.value == "" || idx % 20 == 0) {
+      final int currentToken = ++_addressRequestToken;
       OfflineAddressService.getAddress(p1.latitude!.toDouble(), p1.longitude!.toDouble()).then((addr) {
-        _currentAddressRx.value = addr;
+        //_currentAddressRx.value = addr;
+        if (currentToken == _addressRequestToken) {
+          _currentAddressRx.value = addr;
+        }
       });
     }
 
@@ -674,8 +680,8 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
         double latSpan = visibleRegion.northeast.latitude - visibleRegion.southwest.latitude;
         double lngSpan = visibleRegion.northeast.longitude - visibleRegion.southwest.longitude;
 
-        double latThreshold = latSpan * 0.2;
-        double lngThreshold = lngSpan * 0.2;
+        double latThreshold = latSpan * 0.3;
+        double lngThreshold = lngSpan * 0.3;
 
         bool isNearEdge =
             currentLatLng.latitude > (visibleRegion.northeast.latitude - latThreshold) ||
@@ -1163,7 +1169,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
       _isCalendarLoading = false;
     });
 
-    for (var date = firstDayOfMonth; date.isBefore(lastDayOfMonth.add(const Duration(days: 15))); date = date.add(const Duration(days: 1))) {
+    for (var date = firstDayOfMonth; date.isBefore(lastDayOfMonth.add(const Duration(days: 1))); date = date.add(const Duration(days: 1))) {
       final dayUtc = DateTime.utc(date.year, date.month, date.day);
 
       if (date.isAfter(today)) {
