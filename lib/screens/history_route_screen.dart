@@ -113,7 +113,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
   static const String _routeSourceId = "history_route_source";
   static const String _routeLayerId = "history_route_layer";
   static const String _playedSourceId = "played_route_source";
-  static const String _playedLayerId = "played_route_layer";
+  static const String _playedLayerId = "played_layer";
 
   @override
   void initState() {
@@ -503,13 +503,10 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
   void _showColorModeMenu() {
     Get.bottomSheet(
       Material(
-        color: Colors.transparent,
-        child: Container(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        child: Padding(
           padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1248,7 +1245,6 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
       await initializeDateFormatting(localeString, null);
     }
 
-    // 延後抓取月資料，避免在開啟對話框瞬間觸發 setState 衝突
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _fetchMonthlyData(_focusedDay);
     });
