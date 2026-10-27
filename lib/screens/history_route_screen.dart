@@ -7,6 +7,7 @@ import 'dart:math';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:hive_flutter/hive_flutter.dart';
@@ -134,6 +135,18 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     super.dispose();
   }
 
+  // 安全觸發 setState 的輔助方法，防止 build 期間呼叫報錯
+  void _safeSetState(VoidCallback fn) {
+    if (!mounted) return;
+    if (SchedulerBinding.instance.schedulerPhase == SchedulerPhase.persistentCallbacks) {
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(fn);
+      });
+    } else {
+      setState(fn);
+    }
+  }
+
   // --- 地圖邏輯 ---
 
   Future<void> _onStyleLoaded() async {
@@ -201,7 +214,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
       return;
     }
 
-    setState(() {
+    _safeSetState(() {
       if (lastZoom != null) {
         _currentZoom = lastZoom;
       }
@@ -286,7 +299,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     }
 
     _playbackAnimationController?.stop();
-    setState(() {
+    _safeSetState(() {
       _isLoading = true;
       _isPlaying = false;
       _positions = [];
@@ -338,7 +351,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
       final playbackPositions = movingPositions.isNotEmpty ? movingPositions : cleanedPositions;
 
       if (mounted) {
-        setState(() {
+        _safeSetState(() {
           _positions = playbackPositions;
           _isLoading = false;
         });
@@ -352,7 +365,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     } catch (e) {
       debugPrint('獲取軌跡失敗: $e');
       if (mounted) {
-        setState(() => _isLoading = false);
+        _safeSetState(() => _isLoading = false);
         Get.snackbar("Error", "Failed to fetch route data");
       }
     }
@@ -476,7 +489,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
   }
 
   void _setRouteColorMode(RouteColorMode mode) {
-    setState(() {
+    _safeSetState(() {
       _routeColorMode = mode;
     });
     SharedPreferences.getInstance().then((prefs) {
@@ -489,68 +502,71 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
 
   void _showColorModeMenu() {
     Get.bottomSheet(
-      Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'routeColorModeTitle'.tr,
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface),
-            ),
-            const SizedBox(height: 16),
-            ListTile(
-              leading: const Icon(Icons.lens, color: Color(0xFF0F53FE)),
-              title: Text('routeColorModeSingle'.tr),
-              subtitle: Text('routeColorModeSingleDesc'.tr),
-              trailing: _routeColorMode == RouteColorMode.single ? const Icon(Icons.check, color: Colors.blue) : null,
-              onTap: () {
-                Navigator.pop(context);
-                _setRouteColorMode(RouteColorMode.single);
-              },
-            ),
-            ListTile(
-              leading: Container(
-                width: 36,
-                height: 12,
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(colors: [Color(0xFF350A66), Color(0xFF3858E9), Color(0xFF2490EA), Color(0xFF1EC0AC), Color(0xFF7FE23E), Color(0xFFFDE725)]),
-                  borderRadius: BorderRadius.circular(6),
+      Material(
+        color: Colors.transparent,
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'routeColorModeTitle'.tr,
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface),
+              ),
+              const SizedBox(height: 16),
+              ListTile(
+                leading: const Icon(Icons.lens, color: Color(0xFF0F53FE)),
+                title: Text('routeColorModeSingle'.tr),
+                subtitle: Text('routeColorModeSingleDesc'.tr),
+                trailing: _routeColorMode == RouteColorMode.single ? const Icon(Icons.check, color: Colors.blue) : null,
+                onTap: () {
+                  Navigator.pop(context);
+                  _setRouteColorMode(RouteColorMode.single);
+                },
+              ),
+              ListTile(
+                leading: Container(
+                  width: 36,
+                  height: 12,
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(colors: [Color(0xFF350A66), Color(0xFF3858E9), Color(0xFF2490EA), Color(0xFF1EC0AC), Color(0xFF7FE23E), Color(0xFFFDE725)]),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
                 ),
+                title: Text('routeColorModeSpeedStatus'.tr),
+                trailing: _routeColorMode == RouteColorMode.speedStatus ? const Icon(Icons.check, color: Colors.blue) : null,
+                onTap: () {
+                  Navigator.pop(context);
+                  _setRouteColorMode(RouteColorMode.speedStatus);
+                },
               ),
-              title: Text('routeColorModeSpeedStatus'.tr),
-              trailing: _routeColorMode == RouteColorMode.speedStatus ? const Icon(Icons.check, color: Colors.blue) : null,
-              onTap: () {
-                Navigator.pop(context);
-                _setRouteColorMode(RouteColorMode.speedStatus);
-              },
-            ),
-            ListTile(
-              leading: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: const [
-                  Icon(Icons.lens, size: 12, color: Color(0xFF85C1E9)),
-                  SizedBox(width: 4),
-                  Icon(Icons.lens, size: 12, color: Color(0xFF3498DB)),
-                  SizedBox(width: 4),
-                  Icon(Icons.lens, size: 12, color: Color(0xFF1B4F72)),
-                ],
+              ListTile(
+                leading: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: const [
+                    Icon(Icons.lens, size: 12, color: Color(0xFF85C1E9)),
+                    SizedBox(width: 4),
+                    Icon(Icons.lens, size: 12, color: Color(0xFF3498DB)),
+                    SizedBox(width: 4),
+                    Icon(Icons.lens, size: 12, color: Color(0xFF1B4F72)),
+                  ],
+                ),
+                title: Text('routeColorModeTimeGradient'.tr),
+                subtitle: Text('routeColorModeTimeGradientDesc'.tr),
+                trailing: _routeColorMode == RouteColorMode.timeGradient ? const Icon(Icons.check, color: Colors.blue) : null,
+                onTap: () {
+                  Navigator.pop(context);
+                  _setRouteColorMode(RouteColorMode.timeGradient);
+                },
               ),
-              title: Text('routeColorModeTimeGradient'.tr),
-              subtitle: Text('routeColorModeTimeGradientDesc'.tr),
-              trailing: _routeColorMode == RouteColorMode.timeGradient ? const Icon(Icons.check, color: Colors.blue) : null,
-              onTap: () {
-                Navigator.pop(context);
-                _setRouteColorMode(RouteColorMode.timeGradient);
-              },
-            ),
-            const SizedBox(height: 12),
-          ],
+              const SizedBox(height: 12),
+            ],
+          ),
         ),
       ),
     );
@@ -565,7 +581,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
 
     if (_isPlaying) {
       _playbackAnimationController?.stop();
-      setState(() => _isPlaying = false);
+      _safeSetState(() => _isPlaying = false);
       return;
     }
 
@@ -581,7 +597,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
       _mapController?.animateCamera(CameraUpdate.newLatLngZoom(startPoint, 16.0), duration: const Duration(milliseconds: 800));
     }
 
-    setState(() => _isPlaying = true);
+    _safeSetState(() => _isPlaying = true);
     _playbackAnimationController?.repeat();
   }
 
@@ -595,7 +611,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     if (nextVal >= maxLimit) {
       _playbackPositionRx.value = maxLimit;
       _playbackAnimationController?.stop();
-      setState(() => _isPlaying = false);
+      _safeSetState(() => _isPlaying = false);
     } else {
       _playbackPositionRx.value = nextVal;
     }
@@ -634,7 +650,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     // 更新行進中的小車標記
     _mapController!.updateSymbol(_playbackSymbol!, SymbolOptions(geometry: currentLatLng, iconRotate: bearing));
 
-    // 高效更新已播放軌跡 GeoJSON 數據 (使用正確的 setGeoJsonSource 方法)
+    // 高效更新已播放軌跡 GeoJSON 數據
     final List<List<double>> playedCoords = [];
     for (int i = 0; i <= idx; i++) {
       playedCoords.add([_positions[i].longitude!.toDouble(), _positions[i].latitude!.toDouble()]);
@@ -740,7 +756,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
             myLocationEnabled: false,
             trackCameraPosition: true,
             onMapClick: (_, _) {
-              setState(() => _followUser = false);
+              _safeSetState(() => _followUser = false);
             },
           ),
           if (_isLoading) const Center(child: CircularProgressIndicator()),
@@ -752,7 +768,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
             left: 12,
             child: _mapFab(
               _isMinimalMode ? Icons.fullscreen_exit_rounded : Icons.fullscreen_rounded,
-              () => setState(() => _isMinimalMode = !_isMinimalMode),
+              () => _safeSetState(() => _isMinimalMode = !_isMinimalMode),
               "btn_minimal",
               active: _isMinimalMode,
               tooltip: _isMinimalMode ? 'standardViewMode'.tr : 'minimalViewMode'.tr,
@@ -774,7 +790,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
                   _mapFab(
                     Icons.center_focus_strong,
                     () {
-                      setState(() => _followUser = true);
+                      _safeSetState(() => _followUser = true);
                       _animateCameraToBounds();
                     },
                     "btn_recenter",
@@ -1078,7 +1094,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
         children: speeds.map((s) {
           bool selected = _playbackSpeed == s;
           return GestureDetector(
-            onTap: () => setState(() => _playbackSpeed = s),
+            onTap: () => _safeSetState(() => _playbackSpeed = s),
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -1109,7 +1125,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
       return;
     }
 
-    setState(() {
+    _safeSetState(() {
       _isCalendarLoading = true;
       _focusedDay = month;
     });
@@ -1146,7 +1162,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
       }
     }
 
-    setState(() {
+    _safeSetState(() {
       _isCalendarLoading = false;
     });
 
@@ -1209,7 +1225,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
 
           await dailyBox.put(hiveKey, ReportSummaryHive.fromApi(dailySummary));
           if (mounted) {
-            setState(() {});
+            _safeSetState(() {});
           }
         } else {
           developer.log('  → empty result (no data for this day)', name: 'HistoryRouteScreen');
@@ -1232,7 +1248,10 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
       await initializeDateFormatting(localeString, null);
     }
 
-    _fetchMonthlyData(_focusedDay);
+    // 延後抓取月資料，避免在開啟對話框瞬間觸發 setState 衝突
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _fetchMonthlyData(_focusedDay);
+    });
 
     if (!mounted) {
       return;
@@ -1328,7 +1347,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
   }
 
   void _onDaySelected(DateTime selectedDay, DateTime focusedDay) {
-    setState(() {
+    _safeSetState(() {
       _selectedCalendarDay = selectedDay;
       _focusedDay = focusedDay;
     });
