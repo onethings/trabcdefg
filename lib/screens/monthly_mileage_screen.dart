@@ -78,23 +78,17 @@ class _MonthlyMileageScreenState extends State<MonthlyMileageScreen> {
     });
 
     final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
-    final reportsApi = api.ReportsApi(traccarProvider.apiClient);
     final dailyBox = await Hive.openBox<ReportSummaryHive>('daily_summaries');
-    final serverVersion = await traccarProvider.fetchServerVersion();
     final today = DateTime.now();
 
-    developer.log('Server version: $serverVersion — fetching monthly data for ${month.year}-${month.month}', name: 'MonthlyMileageScreen');
+    developer.log('Fetching monthly data for ${month.year}-${month.month}', name: 'MonthlyMileageScreen');
 
     _dailySummaries.clear();
     final firstDayOfMonth = DateTime(month.year, month.month, 1);
 
-    // 如果是當月，則查詢到今天就好（避免查詢未來日期）；如果是過去的月份，則查詢到該月底
+    // 決定查詢的結束日期（若為當月則取至今天，若為過去月份則取至該月底）
     final lastDayOfMonth = DateTime(month.year, month.month + 1, 0);
-    final effectiveLastDay = lastDayOfMonth.isAfter(today)
-        ? DateTime(today.year, today.month, today.day).isBefore(firstDayOfMonth)
-              ? firstDayOfMonth
-              : DateTime(today.year, today.month, today.day)
-        : lastDayOfMonth;
+    final effectiveLastDay = lastDayOfMonth.isAfter(today) ? (DateTime(today.year, today.month, today.day).isBefore(firstDayOfMonth) ? firstDayOfMonth : DateTime(today.year, today.month, today.day)) : lastDayOfMonth;
 
     // 1. 先從 Hive 快取載入現有數據
     for (var date = firstDayOfMonth; !date.isAfter(lastDayOfMonth); date = date.add(const Duration(days: 1))) {
@@ -109,80 +103,50 @@ class _MonthlyMileageScreenState extends State<MonthlyMileageScreen> {
           await dailyBox.delete(hiveKey);
           continue;
         }
-        _dailySummaries[dayUtc] = api.ReportSummary(
-          distance: cachedSummary.distance,
-          averageSpeed: cachedSummary.averageSpeed,
-          maxSpeed: cachedSummary.maxSpeed,
-          spentFuel: cachedSummary.spentFuel,
-          engineHours: cachedSummary.engineHours,
-          // 如果 API 模型中有日期欄位可支援對應，若無則依賴回傳清單順序或解析
-        );
+        _dailySummaries[dayUtc] = api.ReportSummary(distance: cachedSummary.distance, averageSpeed: cachedSummary.averageSpeed, maxSpeed: cachedSummary.maxSpeed, spentFuel: cachedSummary.spentFuel, engineHours: cachedSummary.engineHours);
       }
     }
 
-    // 2. 一次性請求整個月份區間的資料 (from 1號 00:00:00 到 結算日 23:59:59)
+    // 2. 一次性發送帶有 daily=true 的完整區間請求
     final from = DateTime(firstDayOfMonth.year, firstDayOfMonth.month, firstDayOfMonth.day, 0, 0, 0).toUtc();
     final to = DateTime(effectiveLastDay.year, effectiveLastDay.month, effectiveLastDay.day, 23, 59, 59).toUtc();
 
     try {
-      List<api.ReportSummary>? summaryList;
-      try {
-        // 嘗試使用產生的 API 進行單次批量請求
-        summaryList = await reportsApi.getReportsSummary(from, to, deviceId: [_selectedDeviceId!]);
-      } catch (e) {
-        developer.log('Generated API batch request failed, trying raw API fallback: $e', name: 'MonthlyMileageScreen');
-        final response = await traccarProvider.apiClient.invokeAPI(
-          '/reports/summary',
-          'GET',
-          [
-            api.QueryParam('from', from.toIso8601String()),
-            api.QueryParam('to', to.toIso8601String()),
-            api.QueryParam('deviceId', _selectedDeviceId.toString()),
-            api.QueryParam('daily', 'true'), // 確保帶上 daily=true 參數一次返回每日清單
-          ],
-          null,
-          {},
-          {},
-          'application/json',
-        );
-        if (response.body.isNotEmpty) {
-          final decoded = json.decode(response.body) as List?;
-          if (decoded != null) {
-            summaryList = decoded
-                .map(
-                  (raw) => api.ReportSummary(
-                    distance: (raw['distance'] as num?)?.toDouble(),
-                    averageSpeed: (raw['averageSpeed'] as num?)?.toDouble(),
-                    maxSpeed: (raw['maxSpeed'] as num?)?.toDouble(),
-                    spentFuel: (raw['spentFuel'] as num?)?.toDouble(),
-                    engineHours: raw['engineHours'] as int?,
-                    // 某些 Traccar 版本會在 summary 物件中帶有 serverTime 或 startTime
-                    // 這裡我們假設 Traccar 回傳的 list 包含時間欄位，或我們用索引/欄位來對應日期
-                  ),
-                )
-                .toList();
-          }
-        }
-      }
+      final response = await traccarProvider.apiClient.invokeAPI(
+        '/reports/summary',
+        'GET',
+        [api.QueryParam('from', from.toIso8601String()), api.QueryParam('to', to.toIso8601String()), api.QueryParam('deviceId', _selectedDeviceId.toString()), api.QueryParam('daily', 'true')],
+        null,
+        {},
+        {},
+        'application/json',
+      );
 
-      // 如果有取得批量數據，將其配對填入 _dailySummaries 與更新 Hive 快取
-      // 註：Traccar 的 /reports/summary?daily=true 通常會依序回傳該區間每一天的 summary 物件
-      if (summaryList != null && summaryList.isNotEmpty) {
-        int index = 0;
-        for (var date = firstDayOfMonth; !date.isAfter(effectiveLastDay); date = date.add(const Duration(days: 1))) {
-          if (index < summaryList.length) {
-            final dailySummary = summaryList[index];
-            final dayUtc = DateTime.utc(date.year, date.month, date.day);
-            final String hiveKey = '${_selectedDeviceId}_${DateFormat('yyyy-MM-dd').format(dayUtc)}';
+      if (response.body.isNotEmpty) {
+        final decoded = json.decode(response.body) as List?;
+        if (decoded != null) {
+          for (final raw in decoded) {
+            final map = raw as Map<String, dynamic>;
+            final startTimeStr = map['startTime'] as String?;
 
-            // 確保不是全空的無效資料才存入
-            if (dailySummary.distance != null || dailySummary.engineHours != null) {
-              _dailySummaries[dayUtc] = dailySummary;
-              final newSummaryHive = ReportSummaryHive.fromApi(dailySummary);
+            if (startTimeStr != null) {
+              final startTime = DateTime.parse(startTimeStr);
+              final dayUtc = DateTime.utc(startTime.year, startTime.month, startTime.day);
+              final String hiveKey = '${_selectedDeviceId}_${DateFormat('yyyy-MM-dd').format(dayUtc)}';
+
+              final summary = api.ReportSummary(
+                distance: (map['distance'] as num?)?.toDouble(),
+                averageSpeed: (map['averageSpeed'] as num?)?.toDouble(),
+                maxSpeed: (map['maxSpeed'] as num?)?.toDouble(),
+                spentFuel: (map['spentFuel'] as num?)?.toDouble(),
+                engineHours: map['engineHours'] as int?,
+              );
+
+              _dailySummaries[dayUtc] = summary;
+              final newSummaryHive = ReportSummaryHive.fromApi(summary);
               await dailyBox.put(hiveKey, newSummaryHive);
             }
           }
-          index++;
         }
       }
     } catch (e) {
