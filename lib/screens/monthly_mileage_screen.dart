@@ -79,19 +79,21 @@ class _MonthlyMileageScreenState extends State<MonthlyMileageScreen> {
 
     final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
     final dailyBox = await Hive.openBox<ReportSummaryHive>('daily_summaries');
-    final today = DateTime.now();
+    final serverVersion = traccarProvider.serverVersion ?? await traccarProvider.fetchServerVersion();
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
 
-    developer.log('Fetching monthly data for ${month.year}-${month.month}', name: 'MonthlyMileageScreen');
+    developer.log('Server version: $serverVersion — fetching monthly data for ${month.year}-${month.month}', name: 'MonthlyMileageScreen');
 
     _dailySummaries.clear();
     final firstDayOfMonth = DateTime(month.year, month.month, 1);
-
-    // 決定查詢的結束日期（若為當月則取至今天，若為過去月份則取至該月底）
     final lastDayOfMonth = DateTime(month.year, month.month + 1, 0);
-    final effectiveLastDay = lastDayOfMonth.isAfter(today) ? (DateTime(today.year, today.month, today.day).isBefore(firstDayOfMonth) ? firstDayOfMonth : DateTime(today.year, today.month, today.day)) : lastDayOfMonth;
+    final effectiveLastDay = lastDayOfMonth.isAfter(today) ? (today.isBefore(firstDayOfMonth) ? firstDayOfMonth : today) : lastDayOfMonth;
 
     // 1. 先從 Hive 快取載入現有數據
-    for (var date = firstDayOfMonth; !date.isAfter(lastDayOfMonth); date = date.add(const Duration(days: 1))) {
+    final List<DateTime> missingDays = [];
+
+    for (var date = firstDayOfMonth; !date.isAfter(effectiveLastDay); date = date.add(const Duration(days: 1))) {
       final dayUtc = DateTime.utc(date.year, date.month, date.day);
       final String hiveKey = '${_selectedDeviceId}_${DateFormat('yyyy-MM-dd').format(dayUtc)}';
       final cachedSummary = dailyBox.get(hiveKey);
@@ -103,54 +105,139 @@ class _MonthlyMileageScreenState extends State<MonthlyMileageScreen> {
           await dailyBox.delete(hiveKey);
           continue;
         }
+
         _dailySummaries[dayUtc] = api.ReportSummary(distance: cachedSummary.distance, averageSpeed: cachedSummary.averageSpeed, maxSpeed: cachedSummary.maxSpeed, spentFuel: cachedSummary.spentFuel, engineHours: cachedSummary.engineHours);
+      }
+
+      // 判斷是否需要重新向伺服器請求：
+      // - 如果是「今天」，每次都要重新請求以取得最新數據。
+      // - 如果是「過去的日子」，且 Hive 裡沒有快取，才加入 missingDays 準備去抓。
+      final isToday = date.year == today.year && date.month == today.month && date.day == today.day;
+      if (isToday || cachedSummary == null) {
+        missingDays.add(date);
       }
     }
 
-    // 2. 一次性發送帶有 daily=true 的完整區間請求
-    final from = DateTime(firstDayOfMonth.year, firstDayOfMonth.month, firstDayOfMonth.day, 0, 0, 0).toUtc();
-    final to = DateTime(effectiveLastDay.year, effectiveLastDay.month, effectiveLastDay.day, 23, 59, 59).toUtc();
+    // 如果所有過去的日子都有快取，且今天已經抓過（或今天不在範圍內），就直接返回 UI
+    if (missingDays.isEmpty) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          if (_selectedDay != null) {
+            final selectedDayUtc = DateTime.utc(_selectedDay!.year, _selectedDay!.month, _selectedDay!.day);
+            _selectedDaySummary = _dailySummaries[selectedDayUtc];
+          }
+        });
+      }
+      return;
+    }
 
-    try {
-      final response = await traccarProvider.apiClient.invokeAPI(
-        '/reports/summary',
-        'GET',
-        [api.QueryParam('from', from.toIso8601String()), api.QueryParam('to', to.toIso8601String()), api.QueryParam('deviceId', _selectedDeviceId.toString()), api.QueryParam('daily', 'true')],
-        null,
-        {},
-        {},
-        'application/json',
-      );
+    // 2. 判斷版本：若為主版本 >= 6 或者是包含 6.x 的版本
+    bool isVersion6OrAbove = false;
+    if (serverVersion != null) {
+      final majorVersionStr = serverVersion.split('.').first;
+      final major = int.tryParse(majorVersionStr) ?? 4;
+      if (major >= 6) {
+        isVersion6OrAbove = true;
+      }
+    }
 
-      if (response.body.isNotEmpty) {
-        final decoded = json.decode(response.body) as List?;
-        if (decoded != null) {
-          for (final raw in decoded) {
-            final map = raw as Map<String, dynamic>;
-            final startTimeStr = map['startTime'] as String?;
+    if (isVersion6OrAbove) {
+      // --- v6.x 及後續版本：使用 daily=true 一次性獲取整月資料（針對缺少的或需要更新的區間） ---
+      try {
+        final from = DateTime(firstDayOfMonth.year, firstDayOfMonth.month, firstDayOfMonth.day, 0, 0, 0).toUtc();
+        final to = DateTime(effectiveLastDay.year, effectiveLastDay.month, effectiveLastDay.day, 23, 59, 59).toUtc();
 
-            if (startTimeStr != null) {
-              final startTime = DateTime.parse(startTimeStr);
-              final dayUtc = DateTime.utc(startTime.year, startTime.month, startTime.day);
-              final String hiveKey = '${_selectedDeviceId}_${DateFormat('yyyy-MM-dd').format(dayUtc)}';
+        final response = await traccarProvider.apiClient.invokeAPI(
+          '/reports/summary',
+          'GET',
+          [api.QueryParam('from', from.toIso8601String()), api.QueryParam('to', to.toIso8601String()), api.QueryParam('deviceId', _selectedDeviceId.toString()), api.QueryParam('daily', 'true')],
+          null,
+          {},
+          {},
+          'application/json',
+        );
 
-              final summary = api.ReportSummary(
-                distance: (map['distance'] as num?)?.toDouble(),
-                averageSpeed: (map['averageSpeed'] as num?)?.toDouble(),
-                maxSpeed: (map['maxSpeed'] as num?)?.toDouble(),
-                spentFuel: (map['spentFuel'] as num?)?.toDouble(),
-                engineHours: map['engineHours'] as int?,
-              );
+        if (response.body.isNotEmpty) {
+          final decoded = json.decode(response.body) as List?;
+          if (decoded != null) {
+            for (final raw in decoded) {
+              final map = raw as Map<String, dynamic>;
+              final startTimeStr = map['startTime'] as String?;
 
-              _dailySummaries[dayUtc] = summary;
-              final newSummaryHive = ReportSummaryHive.fromApi(summary);
-              await dailyBox.put(hiveKey, newSummaryHive);
+              if (startTimeStr != null) {
+                final startTime = DateTime.parse(startTimeStr);
+                final dayUtc = DateTime.utc(startTime.year, startTime.month, startTime.day);
+                final String hiveKey = '${_selectedDeviceId}_${DateFormat('yyyy-MM-dd').format(dayUtc)}';
+
+                final summary = api.ReportSummary(
+                  distance: (map['distance'] as num?)?.toDouble(),
+                  averageSpeed: (map['averageSpeed'] as num?)?.toDouble(),
+                  maxSpeed: (map['maxSpeed'] as num?)?.toDouble(),
+                  spentFuel: (map['spentFuel'] as num?)?.toDouble(),
+                  engineHours: map['engineHours'] as int?,
+                );
+
+                _dailySummaries[dayUtc] = summary;
+                final newSummaryHive = ReportSummaryHive.fromApi(summary);
+                await dailyBox.put(hiveKey, newSummaryHive);
+              }
             }
           }
         }
+      } catch (e) {
+        developer.log('Failed to fetch monthly summary batch (v6+): $e', name: 'MonthlyMileageScreen');
       }
-    } catch (e) {
-      developer.log('Failed to fetch monthly summary batch: $e', name: 'MonthlyMileageScreen');
+    } else {
+      // --- v4.4 舊版本：只針對 missingDays（沒有快取或今天是今天需要更新的日子）進行逐日查詢 ---
+      final List<Future<void>> fetchTasks = [];
+
+      for (var date in missingDays) {
+        final dayUtc = DateTime.utc(date.year, date.month, date.day);
+        final dayFrom = DateTime(date.year, date.month, date.day, 0, 0, 0).toUtc();
+        final dayTo = DateTime(date.year, date.month, date.day, 23, 59, 59).toUtc();
+        final String hiveKey = '${_selectedDeviceId}_${DateFormat('yyyy-MM-dd').format(dayUtc)}';
+
+        fetchTasks.add(() async {
+          try {
+            final response = await traccarProvider.apiClient.invokeAPI(
+              '/reports/summary',
+              'GET',
+              [api.QueryParam('from', dayFrom.toIso8601String()), api.QueryParam('to', dayTo.toIso8601String()), api.QueryParam('deviceId', _selectedDeviceId.toString())],
+              null,
+              {},
+              {},
+              'application/json',
+            );
+
+            if (response.body.isNotEmpty) {
+              final decoded = json.decode(response.body) as List?;
+              if (decoded != null && decoded.isNotEmpty) {
+                final raw = decoded.first as Map<String, dynamic>;
+                final summary = api.ReportSummary(
+                  distance: (raw['distance'] as num?)?.toDouble(),
+                  averageSpeed: (raw['averageSpeed'] as num?)?.toDouble(),
+                  maxSpeed: (raw['maxSpeed'] as num?)?.toDouble(),
+                  spentFuel: (raw['spentFuel'] as num?)?.toDouble(),
+                  engineHours: raw['engineHours'] as int?,
+                );
+
+                if ((summary.distance ?? 0) > 0 || (summary.engineHours ?? 0) > 0 || raw.containsKey('distance')) {
+                  _dailySummaries[dayUtc] = summary;
+                  final newSummaryHive = ReportSummaryHive.fromApi(summary);
+                  await dailyBox.put(hiveKey, newSummaryHive);
+                }
+              }
+            }
+          } catch (e) {
+            developer.log('Failed to fetch data for day $date (v4.4): $e', name: 'MonthlyMileageScreen');
+          }
+        }());
+      }
+
+      if (fetchTasks.isNotEmpty) {
+        await Future.wait(fetchTasks);
+      }
     }
 
     // 更新 UI
