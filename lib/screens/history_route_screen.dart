@@ -702,8 +702,8 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
         double latSpan = visibleRegion.northeast.latitude - visibleRegion.southwest.latitude;
         double lngSpan = visibleRegion.northeast.longitude - visibleRegion.southwest.longitude;
 
-        double latThreshold = latSpan * 0.3;
-        double lngThreshold = lngSpan * 0.3;
+        double latThreshold = latSpan * 0.35;
+        double lngThreshold = lngSpan * 0.35;
 
         bool isNearEdge =
             currentLatLng.latitude > (visibleRegion.northeast.latitude - latThreshold) ||

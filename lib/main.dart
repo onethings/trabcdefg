@@ -1,5 +1,4 @@
 // lib/main.dart
-// Main entry point for the TracDefg Flutter application.
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -38,16 +37,13 @@ import 'package:trabcdefg/services/websocket_service.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
 
 void main() async {
-  // Ensure that Flutter is initialized before running the app.
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Group initialization tasks into Future.wait for parallel execution.
-  // This reduces the time before runApp is called.
   final results = await Future.wait([
     () async {
       await Hive.initFlutter();
-      Hive.registerAdapter(ReportSummaryHiveAdapter());
-      Hive.registerAdapter(RoutePositionsHiveAdapter());
+      if (!Hive.isAdapterRegistered(0)) Hive.registerAdapter(ReportSummaryHiveAdapter());
+      if (!Hive.isAdapterRegistered(1)) Hive.registerAdapter(RoutePositionsHiveAdapter());
       await Hive.openBox('ui_settings');
     }(),
     SharedPreferences.getInstance(),
@@ -70,21 +66,11 @@ class TraccarApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Use MultiProvider to provide multiple services to the widget tree.
     return MultiProvider(
       providers: [
-        // Provide the API client with the initial server URL. The factory adds
-        // the JSON Accept header and the shared 401 handling (single-flight
-        // re-login + one retry).
         Provider<api.ApiClient>(create: (_) => ApiClientFactory.create(initialUrl != null ? '$initialUrl/api' : AppConstants.traccarApiUrl)),
-        // Provide the authentication service.
         Provider<AuthService>(create: (context) => AuthService(apiClient: context.read<api.ApiClient>())),
-        // Provide the WebSocket service.
-        Provider<WebSocketService>(
-          create: (_) => WebSocketService(),
-          dispose: (_, service) => service.dispose(),
-        ),
-        // Provide the main TraccarProvider for state management.
+        Provider<WebSocketService>(create: (_) => WebSocketService(), dispose: (_, service) => service.dispose()),
         ChangeNotifierProvider<TraccarProvider>(
           create: (context) => TraccarProvider(apiClient: context.read<api.ApiClient>(), webSocketService: context.read<WebSocketService>(), authService: context.read<AuthService>()),
         ),
@@ -92,12 +78,11 @@ class TraccarApp extends StatelessWidget {
         ChangeNotifierProvider<ThemeProvider>(create: (_) => ThemeProvider()),
         ChangeNotifierProvider<SettingsProvider>(create: (_) => SettingsProvider()),
       ],
-      // Changed MaterialApp to GetMaterialApp to correctly handle GetX localization.
       child: Consumer2<ThemeProvider, SettingsProvider>(
         builder: (context, themeProvider, settingsProvider, child) {
           return GetMaterialApp(
             debugShowCheckedModeBanner: false,
-            title: 'Trabcdefg', // Set the app title to "Trabcdefg" as per your request.
+            title: 'Trabcdefg',
             theme: themeProvider.getTheme(Brightness.light),
             darkTheme: themeProvider.getTheme(Brightness.dark),
             themeMode: themeProvider.themeMode,
@@ -106,21 +91,15 @@ class TraccarApp extends StatelessWidget {
               final brightness = Theme.of(context).brightness;
               return MediaQuery(
                 data: data.copyWith(textScaler: TextScaler.linear(settingsProvider.fontSizeScale)),
-                // Make every Cupertino widget (incl. CupertinoNavigationBar)
-                // follow the app theme's brightness so day/night mode works
-                // even when dark mode is forced from settings.
                 child: CupertinoTheme(
                   data: CupertinoThemeData(brightness: brightness),
                   child: child!,
                 ),
               );
             },
-            // Configure localization for the app using GetX properties.
             translations: LocalizationService(),
             locale: initialLanguageCode != null ? LocalizationService.getLocaleFromLang(initialLanguageCode!) : Get.deviceLocale ?? LocalizationService.fallbackLocale,
             fallbackLocale: LocalizationService.fallbackLocale,
-
-            // Define all the application routes.
             initialRoute: '/',
             routes: {
               '/': (context) => const SplashScreen(),
