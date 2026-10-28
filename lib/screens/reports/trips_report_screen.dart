@@ -16,8 +16,13 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:trabcdefg/providers/map_style_provider.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
+import 'package:trabcdefg/services/route_history_cache.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
+import 'package:trabcdefg/src/utils/route_history_analyzer.dart';
 import 'package:trabcdefg/widgets/offline_address_service.dart';
+
+// Traccar 報表的 speed 欄位單位為節 (knots)
+const double _knotsToKmh = 1.852;
 
 class TripReport {
   final int deviceId;
@@ -71,8 +76,8 @@ class TripReport {
       deviceId: json['deviceId'] as int,
       deviceName: json['deviceName'] as String,
       distance: (json['distance'] as num).toDouble(),
-      averageSpeed: (json['averageSpeed'] as num).toDouble(),
-      maxSpeed: (json['maxSpeed'] as num).toDouble(),
+      averageSpeed: (json['averageSpeed'] as num).toDouble() * _knotsToKmh,
+      maxSpeed: (json['maxSpeed'] as num).toDouble() * _knotsToKmh,
       spentFuel: (json['spentFuel'] as num).toDouble(),
       startOdometer: (json['startOdometer'] as num).toDouble(),
       endOdometer: (json['endOdometer'] as num).toDouble(),
@@ -91,6 +96,29 @@ class TripReport {
       driverName: json['driverName'] as String?,
     );
   }
+
+  /// 由本機軌跡快取推算的行程（速度已為 km/h）。
+  factory TripReport.fromAnalyzed(AnalyzedTrip trip, {required int deviceId, required String deviceName}) {
+    return TripReport(
+      deviceId: deviceId,
+      deviceName: deviceName,
+      distance: trip.distanceMeters,
+      averageSpeed: trip.averageSpeedKmh,
+      maxSpeed: trip.maxSpeedKmh,
+      spentFuel: 0,
+      startOdometer: 0,
+      endOdometer: 0,
+      startTime: trip.startTime,
+      endTime: trip.endTime,
+      startPositionId: 0,
+      endPositionId: 0,
+      startLat: trip.startLat,
+      startLon: trip.startLon,
+      endLat: trip.endLat,
+      endLon: trip.endLon,
+      duration: trip.durationMs,
+    );
+  }
 }
 
 class TripsReportScreen extends StatefulWidget {
@@ -106,7 +134,10 @@ class _TripsReportScreenState extends State<TripsReportScreen> {
   String? _deviceName;
   maplibre.MapLibreMapController? _mapController;
   final Set<String> _loadedIcons = {};
+  final Map<String, Uint8List> _iconBytes = {};
   bool _isStyleLoaded = false;
+  bool _isDrawing = false;
+  bool _pendingDraw = false;
 
   @override
   void initState() {
@@ -151,6 +182,16 @@ class _TripsReportScreenState extends State<TripsReportScreen> {
         _isLoading = false;
       });
       debugPrint('Failed to parse date strings.');
+      return;
+    }
+
+    // 軌跡頁快取只在單日查詢時可用；新鮮時直接使用，報表 API 沒有資料時再退回快取
+    final bool isSingleDayRange = fromDate.year == toDate.year && fromDate.month == toDate.month && fromDate.day == toDate.day;
+    final CachedRoutePositions? cachedRoute = isSingleDayRange ? await RouteHistoryCache.load(deviceId: deviceId, day: fromDate) : null;
+    final bool hasCachedRoute = cachedRoute != null && cachedRoute.positions.length >= 2;
+    final String deviceName = prefs.getString('selectedDeviceName') ?? '';
+    if (hasCachedRoute && cachedRoute.isFreshFor(fromDate)) {
+      _applyCachedTrips(cachedRoute.positions, deviceId, deviceName);
       return;
     }
 
@@ -201,58 +242,109 @@ class _TripsReportScreenState extends State<TripsReportScreen> {
         });
       }
     }
+
+    // 報表 API 沒有回傳資料時，改用軌跡頁快取推算行程
+    if (_tripsReport.isEmpty && hasCachedRoute) {
+      _applyCachedTrips(cachedRoute.positions, deviceId, deviceName);
+    }
+  }
+
+  void _applyCachedTrips(List<api.Position> positions, int deviceId, String deviceName) {
+    final analysis = RouteHistoryAnalyzer.analyze(positions);
+    _tripsReport = analysis.trips.map((trip) => TripReport.fromAnalyzed(trip, deviceId: deviceId, deviceName: deviceName)).toList();
+    _deviceName = deviceName;
+    if (!mounted) return;
+    setState(() {
+      _isLoading = false;
+    });
+    _createMapElements();
   }
 
   Future<void> _onStyleLoaded() async {
     _isStyleLoaded = true;
+    // 樣式（或整個地圖）重建後，先前上傳的圖片與圖層都會消失，必須重新上傳
+    _loadedIcons.clear();
     if (_tripsReport.isNotEmpty) {
-      _createMapElements();
+      await _preloadIcons();
+      await _createMapElements();
+    }
+  }
+
+  Future<void> _preloadIcons() async {
+    await Future.wait([
+      _ensureIcon("start_pin", "assets/images/start.png"),
+      _ensureIcon("end_pin", "assets/images/destination.png"),
+    ]);
+  }
+
+  Future<void> _ensureIcon(String iconId, String assetPath) async {
+    final controller = _mapController;
+    if (controller == null || _loadedIcons.contains(iconId)) return;
+    _loadedIcons.add(iconId);
+    try {
+      final Uint8List bytes = _iconBytes[iconId] ??= (await rootBundle.load(assetPath)).buffer.asUint8List();
+      await controller.addImage(iconId, bytes);
+    } catch (e) {
+      // 目前樣式已存在同一張圖片時會拋錯，可直接沿用
+      debugPrint('addImage failed for $iconId: $e');
     }
   }
 
   Future<void> _createMapElements() async {
-    if (_mapController == null || !_isStyleLoaded || _tripsReport.isEmpty) {
+    final controller = _mapController;
+    if (controller == null || !_isStyleLoaded || _tripsReport.isEmpty) {
+      return;
+    }
+    if (_isDrawing) {
+      _pendingDraw = true;
       return;
     }
 
-    await _mapController!.clearSymbols();
-    await _mapController!.clearLines();
+    _isDrawing = true;
+    try {
+      await controller.clearSymbols();
+      await controller.clearLines();
 
-    final List<maplibre.LatLng> allPoints = [];
+      final List<maplibre.LatLng> allPoints = [];
 
-    // Capture context properties synchronously before entering async sequence loops
-    if (!mounted) return;
-    final String lineHexColor = Theme.of(context).colorScheme.primary.toHex();
+      // Capture context properties synchronously before entering async sequence loops
+      if (!mounted) return;
+      final String lineHexColor = Theme.of(context).colorScheme.primary.toHex();
 
-    for (var i = 0; i < _tripsReport.length; i++) {
-      final trip = _tripsReport[i];
-      final start = maplibre.LatLng(trip.startLat, trip.startLon);
-      final end = maplibre.LatLng(trip.endLat, trip.endLon);
+      for (var i = 0; i < _tripsReport.length; i++) {
+        final trip = _tripsReport[i];
+        final start = maplibre.LatLng(trip.startLat, trip.startLon);
+        final end = maplibre.LatLng(trip.endLat, trip.endLon);
 
-      allPoints.add(start);
-      allPoints.add(end);
+        allPoints.add(start);
+        allPoints.add(end);
 
-      await _mapController!.addLine(maplibre.LineOptions(geometry: [start, end], lineColor: lineHexColor, lineWidth: 4.0));
+        await controller.addLine(maplibre.LineOptions(geometry: [start, end], lineColor: lineHexColor, lineWidth: 4.0));
 
-      await _addMarker(start, "start_$i", "assets/images/start.png");
-      await _addMarker(end, "end_$i", "assets/images/destination.png");
-    }
+        await _addMarker(start, "start_$i", "assets/images/start.png");
+        await _addMarker(end, "end_$i", "assets/images/destination.png");
+      }
 
-    if (allPoints.isNotEmpty) {
-      _zoomToFit(allPoints);
+      if (allPoints.isNotEmpty) {
+        _zoomToFit(allPoints);
+      }
+    } finally {
+      _isDrawing = false;
+      if (_pendingDraw) {
+        _pendingDraw = false;
+        await _createMapElements();
+      }
     }
   }
 
   Future<void> _addMarker(maplibre.LatLng point, String iconId, String assetPath) async {
-    final baseIconId = assetPath.contains("start") ? "start_pin" : "end_pin";
-    if (!_loadedIcons.contains(baseIconId)) {
-      final ByteData bytes = await rootBundle.load(assetPath);
-      final Uint8List list = bytes.buffer.asUint8List();
-      await _mapController!.addImage(baseIconId, list);
-      _loadedIcons.add(baseIconId);
-    }
+    final controller = _mapController;
+    if (controller == null) return;
 
-    await _mapController!.addSymbol(maplibre.SymbolOptions(geometry: point, iconImage: baseIconId, iconSize: 1.4, iconAnchor: "bottom"));
+    final baseIconId = assetPath.contains("start") ? "start_pin" : "end_pin";
+    await _ensureIcon(baseIconId, assetPath);
+
+    await controller.addSymbol(maplibre.SymbolOptions(geometry: point, iconImage: baseIconId, iconSize: 1.4, iconAnchor: "bottom"));
   }
 
   void _zoomToFit(List<maplibre.LatLng> points) {
@@ -282,6 +374,61 @@ class _TripsReportScreenState extends State<TripsReportScreen> {
       return '${(meters / 1000).toStringAsFixed(2)} ${'sharedKm'.tr}';
     }
     return '${meters.toStringAsFixed(2)} ${'sharedMeters'.tr}';
+  }
+
+  double get _totalDistance => _tripsReport.fold<double>(0, (sum, trip) => sum + trip.distance);
+
+  int get _totalDuration => _tripsReport.fold<int>(0, (sum, trip) => sum + trip.duration);
+
+  double get _maxSpeedKmh => _tripsReport.isEmpty ? 0 : _tripsReport.map((trip) => trip.maxSpeed).reduce(max);
+
+  double get _averageSpeedKmh {
+    if (_totalDuration <= 0) {
+      return 0;
+    }
+    // 總里程(公尺) / 總時長(秒) => m/s，再換算 km/h
+    return _totalDistance / (_totalDuration / 1000) * 3.6;
+  }
+
+  Widget _buildTripsSummaryCard(ThemeData theme) {
+    return Card(
+      elevation: 2,
+      margin: const EdgeInsets.only(bottom: 16),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('historyTripsSummary'.tr, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: theme.colorScheme.onSurface)),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(child: _buildSummaryItem(theme, 'historyTotalDistance'.tr, _formatDistance(_totalDistance))),
+                Expanded(child: _buildSummaryItem(theme, 'historyTotalDuration'.tr, _formatDuration(_totalDuration))),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(child: _buildSummaryItem(theme, 'historyMaxSpeed'.tr, '${_maxSpeedKmh.toStringAsFixed(1)} ${'sharedKmh'.tr}')),
+                Expanded(child: _buildSummaryItem(theme, 'historyAverageSpeed'.tr, '${_averageSpeedKmh.toStringAsFixed(1)} ${'sharedKmh'.tr}')),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSummaryItem(ThemeData theme, String label, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant)),
+        const SizedBox(height: 2),
+        Text(value, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: theme.colorScheme.onSurface)),
+      ],
+    );
   }
 
   @override
@@ -314,7 +461,11 @@ class _TripsReportScreenState extends State<TripsReportScreen> {
               children: [
                 maplibre.MapLibreMap(
                   key: ValueKey(mapProvider.isSatelliteMode),
-                  onMapCreated: (c) => _mapController = c,
+                  onMapCreated: (c) {
+                    _mapController = c;
+                    _isStyleLoaded = false;
+                    _loadedIcons.clear();
+                  },
                   onStyleLoadedCallback: _onStyleLoaded,
                   initialCameraPosition: maplibre.CameraPosition(target: initialCenter, zoom: 14.0),
                   styleString: mapProvider.getStyle(theme.brightness),
@@ -337,9 +488,12 @@ class _TripsReportScreenState extends State<TripsReportScreen> {
             flex: 1,
             child: ListView.builder(
               padding: const EdgeInsets.all(16.0),
-              itemCount: _tripsReport.length,
+              itemCount: _tripsReport.length + 1,
               itemBuilder: (context, index) {
-                final trip = _tripsReport[index];
+                if (index == 0) {
+                  return _buildTripsSummaryCard(theme);
+                }
+                final trip = _tripsReport[index - 1];
                 return GestureDetector(
                   onTap: () => _animateToPosition(maplibre.LatLng(trip.startLat, trip.startLon)),
                   child: Card(
@@ -351,7 +505,7 @@ class _TripsReportScreenState extends State<TripsReportScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            '${'reportTrips'.tr} ${index + 1}',
+                            '${'reportTrips'.tr} $index',
                             style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: theme.colorScheme.onSurface),
                           ),
                           const Divider(),
@@ -359,6 +513,7 @@ class _TripsReportScreenState extends State<TripsReportScreen> {
                           _buildTripDetailRow(theme, 'reportEndTime'.tr, DateFormat('yyyy-MM-dd HH:mm').format(trip.endTime.toLocal())),
                           _buildTripDetailRow(theme, 'reportDuration'.tr, _formatDuration(trip.duration)),
                           _buildTripDetailRow(theme, 'sharedDistance'.tr, _formatDistance(trip.distance)),
+                          _buildTripDetailRow(theme, 'historyMaxSpeed'.tr, '${trip.maxSpeed.toStringAsFixed(2)} ${'sharedKmh'.tr}'),
                           _buildTripDetailRow(theme, 'reportAverageSpeed'.tr, '${trip.averageSpeed.toStringAsFixed(2)} ${'sharedKmh'.tr}'),
                           ListTile(
                             title: Text('reportStartAddress'.tr, style: TextStyle(color: theme.colorScheme.onSurfaceVariant)),

@@ -11,6 +11,7 @@ import 'package:get/get.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
+import 'package:trabcdefg/services/route_history_cache.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
 
 class ChartReportScreen extends StatefulWidget {
@@ -53,6 +54,16 @@ class _ChartReportScreenState extends State<ChartReportScreen> {
       setState(() => _isLoading = false);
       return;
     }
+
+    // 軌跡頁快取只在單日查詢時可用；新鮮時直接使用，報表 API 沒有資料時再退回快取
+    final bool isSingleDayRange = fromDate.year == toDate.year && fromDate.month == toDate.month && fromDate.day == toDate.day;
+    final CachedRoutePositions? cachedRoute = isSingleDayRange ? await RouteHistoryCache.load(deviceId: deviceId, day: fromDate) : null;
+    final bool hasCachedRoute = cachedRoute != null && cachedRoute.positions.length >= 2;
+    if (hasCachedRoute && cachedRoute.isFreshFor(fromDate)) {
+      _applyCachedChart(cachedRoute.positions, prefs.getString('selectedDeviceName'));
+      return;
+    }
+
     try {
       final response = await traccarProvider.apiClient.invokeAPI(
         '/reports/route',
@@ -95,19 +106,7 @@ class _ChartReportScreenState extends State<ChartReportScreen> {
             return m;
           }).toList();
 
-          // Detect available numeric keys (skip id, time fields)
-          final keySet = <String>{};
-          final skipKeys = {'id', 'deviceId', 'fixTime', 'deviceTime', 'serverTime', 'latitude', 'longitude'};
-          for (final item in _rawItems) {
-            for (final key in item.keys) {
-              if (!skipKeys.contains(key) && item[key] is num) {
-                keySet.add(key);
-              }
-            }
-          }
-          _availableKeys
-            ..clear()
-            ..addAll(['speed', 'altitude', ...keySet.where((k) => k != 'speed' && k != 'altitude')]);
+          _detectAvailableKeys();
 
           final device = traccarProvider.devices.firstWhere((d) => d.id == deviceId, orElse: () => api.Device());
           _deviceName = device.name;
@@ -121,6 +120,61 @@ class _ChartReportScreenState extends State<ChartReportScreen> {
     } finally {
       setState(() => _isLoading = false);
     }
+
+    // 報表 API 沒有回傳資料時，改用軌跡頁快取繪製曲線
+    if (_rawItems.isEmpty && hasCachedRoute) {
+      _applyCachedChart(cachedRoute.positions, prefs.getString('selectedDeviceName'));
+    }
+  }
+
+  void _applyCachedChart(List<api.Position> positions, String? deviceName) {
+    _rawItems = positions.map(_cachedPositionToItem).toList();
+    _detectAvailableKeys();
+    _deviceName = deviceName;
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+  }
+
+  void _detectAvailableKeys() {
+    final keySet = <String>{};
+    const skipKeys = {'id', 'deviceId', 'fixTime', 'deviceTime', 'serverTime', 'latitude', 'longitude'};
+    for (final item in _rawItems) {
+      for (final key in item.keys) {
+        if (!skipKeys.contains(key) && item[key] is num) {
+          keySet.add(key);
+        }
+      }
+    }
+    _availableKeys
+      ..clear()
+      ..addAll(['speed', 'altitude', ...keySet.where((k) => k != 'speed' && k != 'altitude')]);
+  }
+
+  /// 將快取的軌跡點轉成圖表用的扁平資料，speed 維持 knots 以沿用繪圖時的換算。
+  Map<String, dynamic> _cachedPositionToItem(api.Position position) {
+    final item = <String, dynamic>{};
+    final fixTime = position.fixTime?.millisecondsSinceEpoch.toDouble();
+    final deviceTime = position.deviceTime?.millisecondsSinceEpoch.toDouble();
+    final serverTime = position.serverTime?.millisecondsSinceEpoch.toDouble();
+    if (fixTime != null) item['fixTime'] = fixTime;
+    if (deviceTime != null) item['deviceTime'] = deviceTime;
+    if (serverTime != null) item['serverTime'] = serverTime;
+    if (position.speed != null) item['speed'] = position.speed!.toDouble();
+    if (position.altitude != null) item['altitude'] = position.altitude!.toDouble();
+    if (position.course != null) item['course'] = position.course!.toDouble();
+    if (position.accuracy != null) item['accuracy'] = position.accuracy!.toDouble();
+    final attributes = position.attributes;
+    if (attributes is Map) {
+      for (final entry in attributes.entries) {
+        if (entry.value is num) {
+          item[entry.key.toString()] = (entry.value as num).toDouble();
+        }
+      }
+    }
+    item['id'] = position.id;
+    item['latitude'] = position.latitude?.toDouble() ?? 0;
+    item['longitude'] = position.longitude?.toDouble() ?? 0;
+    return item;
   }
 
   String _keyLabel(String key) {

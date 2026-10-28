@@ -23,6 +23,9 @@ import 'package:trabcdefg/models/report_summary_hive.dart';
 import 'package:trabcdefg/models/route_positions_hive.dart';
 import 'package:trabcdefg/providers/map_style_provider.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
+import 'package:trabcdefg/screens/reports/chart_report_screen.dart';
+import 'package:trabcdefg/screens/reports/stops_report_screen.dart';
+import 'package:trabcdefg/screens/reports/trips_report_screen.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
 import 'package:trabcdefg/src/utils/position_cleaner.dart';
 import 'package:trabcdefg/widgets/offline_address_service.dart';
@@ -198,6 +201,12 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
   static const String _startIconId = "start_pin";
   static const String _endIconId = "end_pin";
   final List<LatLng> _stopPoints = [];
+  final List<Symbol> _stopSymbols = [];
+
+  bool _showGeofences = false;
+  bool _isGeofenceLoading = false;
+  bool _showStopPoints = true;
+  List<api.Geofence> _geofences = [];
 
   Symbol? _playbackSymbol;
   int _lastCameraAnimTime = 0;
@@ -207,6 +216,10 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
   static const String _routeLayerId = "history_route_layer";
   static const String _playedSourceId = "played_route_source";
   static const String _playedLayerId = "played_layer";
+  static const String _geofenceSourceId = "history_geofence_source";
+  static const String _geofenceFillLayerId = "history_geofence_fill_layer";
+  static const String _geofenceLineLayerId = "history_geofence_line_layer";
+  static const List<String> _geofenceColors = ['#0F53FE', '#F39C12', '#27AE60', '#8E44AD', '#E74C3C', '#16A085'];
 
   @override
   void initState() {
@@ -216,6 +229,12 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     cleanExpiredRouteHistory();
     _loadPlaybackSpeedFromHive();
     _loadInitialParamsAndFetch();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    SystemChrome.setSystemUIOverlayStyle(Theme.of(context).brightness == Brightness.dark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark);
   }
 
   Future<void> _loadPlaybackSpeedFromHive() async {
@@ -273,11 +292,18 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
   Future<void> _onStyleLoaded() async {
     await _loadCustomIconsToMap();
     if (_positions.isEmpty) {
+      if (_showGeofences) {
+        await _drawGeofences();
+      }
       return;
     }
     final bool keepCamera = _keepCameraOnStyleReload;
     _keepCameraOnStyleReload = false;
     await _drawFullRoute(fitBounds: !keepCamera);
+    // 需在軌跡圖層建立後才重畫，belowLayerId 才找得到 _routeLayerId
+    if (_showGeofences) {
+      await _drawGeofences();
+    }
   }
 
   void _toggleMapType() {
@@ -504,6 +530,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     } catch (_) {}
     await _mapController!.clearLines();
     await _mapController!.clearSymbols();
+    _stopSymbols.clear();
   }
 
   Future<void> _drawFullRoute({bool fitBounds = true}) async {
@@ -547,13 +574,200 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
       _playbackSymbol = await _mapController!.addSymbol(SymbolOptions(geometry: LatLng(_positions.first.latitude!.toDouble(), _positions.first.longitude!.toDouble()), iconImage: _playbackIconId, iconSize: 1.8, zIndex: 10));
     }
 
-    for (int i = 0; i < _stopPoints.length; i++) {
-      await _mapController!.addSymbol(SymbolOptions(geometry: _stopPoints[i], iconImage: "pg_${i + 1}", iconSize: 3.5, iconAnchor: "center"));
+    if (_showStopPoints) {
+      await _drawStopSymbols();
     }
 
     if (fitBounds) {
       _animateCameraToBounds();
     }
+  }
+
+  // --- 圍欄與停留點 ---
+
+  Future<void> _toggleGeofences() async {
+    if (_showGeofences) {
+      _safeSetState(() => _showGeofences = false);
+      await _clearGeofenceLayers();
+      return;
+    }
+
+    if (_mapController == null || _isGeofenceLoading) return;
+
+    _safeSetState(() => _isGeofenceLoading = true);
+    try {
+      if (_geofences.isEmpty) {
+        final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
+        _geofences = await api.GeofencesApi(traccarProvider.apiClient).getGeofences(deviceId: _deviceId) ?? [];
+      }
+      if (_geofences.isEmpty) {
+        if (mounted) Get.snackbar('sharedGeofences'.tr, 'sharedNoData'.tr);
+        return;
+      }
+      _safeSetState(() => _showGeofences = true);
+      await _drawGeofences();
+    } catch (e) {
+      developer.log('Failed to load geofences: $e', name: 'HistoryRouteScreen');
+      if (mounted) Get.snackbar("Error", 'sharedNoData'.tr);
+    } finally {
+      _safeSetState(() => _isGeofenceLoading = false);
+    }
+  }
+
+  Future<void> _clearGeofenceLayers() async {
+    final controller = _mapController;
+    if (controller == null) return;
+    try {
+      await controller.removeLayer(_geofenceLineLayerId);
+    } catch (_) {}
+    try {
+      await controller.removeLayer(_geofenceFillLayerId);
+    } catch (_) {}
+    try {
+      await controller.removeSource(_geofenceSourceId);
+    } catch (_) {}
+  }
+
+  Future<void> _drawGeofences() async {
+    final controller = _mapController;
+    if (controller == null || !_showGeofences) return;
+
+    await _clearGeofenceLayers();
+
+    final List<Map<String, dynamic>> features = [];
+    for (int i = 0; i < _geofences.length; i++) {
+      features.addAll(_geofenceFeatures(_geofences[i], i));
+    }
+    if (features.isEmpty) return;
+
+    // 有軌跡時把圍欄壓在軌跡圖層下方
+    final String? belowLayerId = _positions.isNotEmpty ? _routeLayerId : null;
+    await controller.addSource(_geofenceSourceId, GeojsonSourceProperties(data: {"type": "FeatureCollection", "features": features}));
+    await controller.addFillLayer(_geofenceSourceId, _geofenceFillLayerId, FillLayerProperties(fillColor: ['get', 'color'], fillOpacity: 0.18), belowLayerId: belowLayerId);
+    await controller.addLineLayer(_geofenceSourceId, _geofenceLineLayerId, LineLayerProperties(lineColor: ['get', 'color'], lineWidth: 2.0), belowLayerId: belowLayerId);
+  }
+
+  List<Map<String, dynamic>> _geofenceFeatures(api.Geofence geofence, int index) {
+    final area = geofence.area;
+    if (area == null || area.isEmpty) return const [];
+    final properties = {"color": _geofenceColors[index % _geofenceColors.length], "name": geofence.name ?? ''};
+
+    if (area.startsWith('CIRCLE')) {
+      final int openParen = area.indexOf('(');
+      final int closeParen = area.lastIndexOf(')');
+      if (openParen < 0 || closeParen <= openParen) return const [];
+      final parts = area.substring(openParen + 1, closeParen).trim().split(RegExp(r'\s+'));
+      if (parts.length < 3) return const [];
+      final lat = double.tryParse(parts[0]);
+      final lon = double.tryParse(parts[1]);
+      final radius = double.tryParse(parts[2]);
+      if (lat == null || lon == null || radius == null) return const [];
+      return [
+        {
+          "type": "Feature",
+          "properties": properties,
+          "geometry": {"type": "Polygon", "coordinates": [_circleRing(lat, lon, radius)]},
+        },
+      ];
+    }
+
+    if (area.startsWith('POLYGON')) {
+      final int openParen = area.indexOf('((');
+      final int closeParen = area.lastIndexOf('))');
+      if (openParen < 0 || closeParen <= openParen) return const [];
+      final ring = _parseCoordinates(area.substring(openParen + 2, closeParen), closeRing: true);
+      if (ring.length < 4) return const [];
+      return [
+        {
+          "type": "Feature",
+          "properties": properties,
+          "geometry": {"type": "Polygon", "coordinates": [ring]},
+        },
+      ];
+    }
+
+    if (area.startsWith('LINESTRING')) {
+      final int openParen = area.indexOf('(');
+      final int closeParen = area.lastIndexOf(')');
+      if (openParen < 0 || closeParen <= openParen) return const [];
+      final line = _parseCoordinates(area.substring(openParen + 1, closeParen));
+      if (line.length < 2) return const [];
+      return [
+        {
+          "type": "Feature",
+          "properties": properties,
+          "geometry": {"type": "LineString", "coordinates": line},
+        },
+      ];
+    }
+
+    return const [];
+  }
+
+  /// Traccar 的 area 為「緯度 經度」，GeoJSON 需轉成 [經度, 緯度]。
+  List<List<double>> _parseCoordinates(String raw, {bool closeRing = false}) {
+    final coordinates = <List<double>>[];
+    for (final pair in raw.split(',')) {
+      final parts = pair.trim().split(RegExp(r'\s+'));
+      if (parts.length < 2) continue;
+      final lat = double.tryParse(parts[0]);
+      final lon = double.tryParse(parts[1]);
+      if (lat == null || lon == null) continue;
+      coordinates.add([lon, lat]);
+    }
+    if (closeRing && coordinates.length >= 3) {
+      final first = coordinates.first;
+      final last = coordinates.last;
+      if (first[0] != last[0] || first[1] != last[1]) {
+        coordinates.add([first[0], first[1]]);
+      }
+    }
+    return coordinates;
+  }
+
+  /// MapLibre 的 circle layer 半徑是像素，直接將圓轉為多邊形環。
+  List<List<double>> _circleRing(double lat, double lon, double radiusMeters) {
+    const int segments = 64;
+    final double dLat = radiusMeters / 111320.0;
+    final double dLon = radiusMeters / (111320.0 * max(cos(lat * pi / 180).abs(), 0.01));
+    final ring = <List<double>>[];
+    for (int i = 0; i < segments; i++) {
+      final double angle = 2 * pi * i / segments;
+      ring.add([lon + dLon * cos(angle), lat + dLat * sin(angle)]);
+    }
+    ring.add([ring.first[0], ring.first[1]]);
+    return ring;
+  }
+
+  Future<void> _toggleStopPoints() async {
+    final bool nextVisible = !_showStopPoints;
+    _safeSetState(() => _showStopPoints = nextVisible);
+    if (nextVisible) {
+      await _drawStopSymbols();
+    } else {
+      await _clearStopSymbols();
+    }
+  }
+
+  Future<void> _drawStopSymbols() async {
+    final controller = _mapController;
+    if (controller == null || !_showStopPoints) return;
+    await _clearStopSymbols();
+    for (int i = 0; i < _stopPoints.length; i++) {
+      final symbol = await controller.addSymbol(SymbolOptions(geometry: _stopPoints[i], iconImage: "pg_${i + 1}", iconSize: 3.5, iconAnchor: "center"));
+      _stopSymbols.add(symbol);
+    }
+  }
+
+  Future<void> _clearStopSymbols() async {
+    final controller = _mapController;
+    if (controller == null) return;
+    for (final symbol in _stopSymbols) {
+      try {
+        await controller.removeSymbol(symbol);
+      } catch (_) {}
+    }
+    _stopSymbols.clear();
   }
 
   void _setRouteColorMode(RouteColorMode mode) {
@@ -771,25 +985,28 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     return 12742 * asin(sqrt(a));
   }
 
+  // --- 報表頁跳轉 ---
+
+  Future<void> _syncReportPreferences() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (_deviceId != null) await prefs.setInt('selectedDeviceId', _deviceId!);
+    if (_selectedDeviceName != null) await prefs.setString('selectedDeviceName', _selectedDeviceName!);
+    if (_historyFrom != null) await prefs.setString('historyFrom', _historyFrom!.toIso8601String());
+    if (_historyTo != null) await prefs.setString('historyTo', _historyTo!.toIso8601String());
+  }
+
+  Future<void> _openReportPage(WidgetBuilder builder) async {
+    await _syncReportPreferences();
+    if (!mounted) return;
+    Navigator.of(context).push(MaterialPageRoute(builder: builder));
+  }
+
   // --- UI 元件建立 ---
 
   @override
   Widget build(BuildContext context) {
-    String devicePart = _selectedDeviceName != null ? ' | (${_selectedDeviceName!})' : '';
     final double safeTop = MediaQuery.of(context).padding.top;
     return Scaffold(
-      extendBodyBehindAppBar: true,
-      appBar: _isMinimalMode
-          ? null
-          : AppBar(
-              backgroundColor: Theme.of(context).colorScheme.surface.withValues(alpha: 0.85),
-              elevation: 0,
-              title: Text(
-                '${'reportReplay'.tr}: ${DateFormat('MM/dd').format(_historyFrom ?? DateTime.now())}$devicePart',
-                style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontSize: 16, fontWeight: FontWeight.bold),
-              ),
-              iconTheme: IconThemeData(color: Theme.of(context).colorScheme.onSurface),
-            ),
       body: Stack(
         children: [
           MapLibreMap(
@@ -813,6 +1030,14 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
           ),
           if (_isLoading) const Center(child: CircularProgressIndicator()),
 
+          if (!_isMinimalMode)
+            Positioned(
+              top: safeTop + 12,
+              left: 64,
+              right: 64,
+              child: Center(child: _buildDeviceDatePill()),
+            ),
+
           AnimatedPositioned(
             duration: const Duration(milliseconds: 250),
             curve: Curves.easeOutCubic,
@@ -833,12 +1058,20 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
               right: 12,
               child: Column(
                 children: [
+                  _mapFab(Icons.show_chart_rounded, () => _openReportPage((_) => const ChartReportScreen()), "btn_chart", tooltip: 'reportChart'.tr),
+                  const SizedBox(height: 8),
+                  _mapFab(Icons.route_rounded, () => _openReportPage((_) => const TripsReportScreen()), "btn_trips", tooltip: 'reportTrips'.tr),
+                  const SizedBox(height: 8),
+                  _mapFab(Icons.pause_circle_outline_rounded, () => _openReportPage((_) => const StopsReportScreen()), "btn_stops", tooltip: 'reportStops'.tr),
+                  const SizedBox(height: 8),
+                  _mapFab(Icons.pin_drop_rounded, _toggleStopPoints, "btn_stop_points", active: _showStopPoints, tooltip: 'historyStopPointsToggle'.tr),
+                  const SizedBox(height: 8),
                   _mapFab(Icons.palette_rounded, _showColorModeMenu, "btn_color_mode", active: _routeColorMode != RouteColorMode.single, tooltip: 'routeColorModeTooltip'.tr),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 8),
                   _mapFab(Icons.calendar_month, _showCalendarDialog, "btn_cal"),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 8),
                   _mapFab(Provider.of<MapStyleProvider>(context).isSatelliteMode ? Icons.map : Icons.satellite_alt, _toggleMapType, "btn_style"),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 8),
                   _mapFab(
                     Icons.center_focus_strong,
                     () {
@@ -854,9 +1087,9 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
             Positioned(
               top: 0,
               bottom: 0,
-              right: 12,
+              left: 12,
               child: Align(
-                alignment: Alignment.centerRight,
+                alignment: Alignment.centerLeft,
                 widthFactor: 1.0,
                 child: Column(mainAxisSize: MainAxisSize.min, children: [_mapFab(Icons.add, () => _zoomMap(1), "btn_zoom_in"), const SizedBox(height: 8), _mapFab(Icons.remove, () => _zoomMap(-1), "btn_zoom_out")]),
               ),
@@ -896,17 +1129,67 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     );
   }
 
+  Widget _buildDeviceDatePill() {
+    final theme = Theme.of(context);
+    final String dateLabel = DateFormat('yyyy/MM/dd').format(_historyFrom ?? DateTime.now());
+
+    return Material(
+      color: theme.colorScheme.surface.withValues(alpha: 0.92),
+      elevation: 2,
+      borderRadius: BorderRadius.circular(22),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(22),
+        onTap: _showCalendarDialog,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.directions_car_filled_rounded, size: 16, color: theme.colorScheme.primary),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  _selectedDeviceName ?? '--',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: theme.colorScheme.onSurface),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text('·', style: TextStyle(fontSize: 13, color: theme.colorScheme.onSurfaceVariant)),
+              const SizedBox(width: 8),
+              Text(dateLabel, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: theme.colorScheme.onSurface)),
+              const SizedBox(width: 6),
+              Icon(Icons.calendar_month_rounded, size: 15, color: theme.colorScheme.onSurfaceVariant),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildPlaybackPanel() {
     return Positioned(
       bottom: 24 + MediaQuery.of(context).padding.bottom,
       left: 16,
       right: 16,
-      child: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 220),
-        switchInCurve: Curves.easeOutCubic,
-        switchOutCurve: Curves.easeInCubic,
-        layoutBuilder: (currentChild, previousChildren) => Stack(alignment: Alignment.bottomCenter, children: [...previousChildren, ?currentChild]),
-        child: _isMinimalMode ? _buildMinimalPlaybackPanel() : _buildFullPlaybackPanel(),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Align(
+            alignment: Alignment.centerLeft,
+            child: _mapFab(_isGeofenceLoading ? Icons.hourglass_top_rounded : Icons.fence_rounded, _toggleGeofences, "btn_geofence", active: _showGeofences, tooltip: 'historyGeofenceToggle'.tr),
+          ),
+          const SizedBox(height: 10),
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 220),
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeInCubic,
+            layoutBuilder: (currentChild, previousChildren) => Stack(alignment: Alignment.bottomCenter, children: [...previousChildren, ?currentChild]),
+            child: _isMinimalMode ? _buildMinimalPlaybackPanel() : _buildFullPlaybackPanel(),
+          ),
+        ],
       ),
     );
   }

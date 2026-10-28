@@ -15,7 +15,9 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:trabcdefg/providers/map_style_provider.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
+import 'package:trabcdefg/services/route_history_cache.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
+import 'package:trabcdefg/src/utils/route_history_analyzer.dart';
 import 'package:trabcdefg/widgets/offline_address_service.dart';
 
 // Enum and Tile Provider removed as they are no longer needed with native MapLibre caching.
@@ -40,7 +42,7 @@ class StopReport {
   final double longitude;
   final String? address;
   final int duration;
-  final int engineHours;
+  final int? engineHours;
 
   StopReport({
     required this.deviceId,
@@ -58,7 +60,7 @@ class StopReport {
     required this.longitude,
     this.address,
     required this.duration,
-    required this.engineHours,
+    this.engineHours,
   });
 
   factory StopReport.fromJson(Map<String, dynamic> json) {
@@ -78,7 +80,27 @@ class StopReport {
       longitude: (json['longitude'] as num).toDouble(),
       address: json['address'] as String?,
       duration: json['duration'] as int,
-      engineHours: json['engineHours'] as int,
+      engineHours: json['engineHours'] as int?,
+    );
+  }
+
+  /// 由本機軌跡快取推算的停留。
+  factory StopReport.fromAnalyzed(AnalyzedStop stop, {required int deviceId, required String deviceName}) {
+    return StopReport(
+      deviceId: deviceId,
+      deviceName: deviceName,
+      distance: 0,
+      averageSpeed: 0,
+      maxSpeed: 0,
+      spentFuel: 0,
+      startOdometer: 0,
+      endOdometer: 0,
+      startTime: stop.startTime,
+      endTime: stop.endTime,
+      positionId: 0,
+      latitude: stop.latitude,
+      longitude: stop.longitude,
+      duration: stop.durationMs,
     );
   }
 }
@@ -96,7 +118,10 @@ class _StopsReportScreenState extends State<StopsReportScreen> {
   String? _deviceName;
   maplibre.MapLibreMapController? _mapController;
   final Set<String> _loadedIcons = {};
+  final Map<String, Uint8List> _iconBytes = {};
   bool _isStyleLoaded = false;
+  bool _isDrawing = false;
+  bool _pendingDraw = false;
   // Constants for manual tile URLs removed as we use MapStyleProvider now.
 
   @override
@@ -144,6 +169,16 @@ class _StopsReportScreenState extends State<StopsReportScreen> {
       return;
     }
 
+    // 軌跡頁快取只在單日查詢時可用；新鮮時直接使用，報表 API 沒有資料時再退回快取
+    final bool isSingleDayRange = fromDate.year == toDate.year && fromDate.month == toDate.month && fromDate.day == toDate.day;
+    final CachedRoutePositions? cachedRoute = isSingleDayRange ? await RouteHistoryCache.load(deviceId: deviceId, day: fromDate) : null;
+    final bool hasCachedRoute = cachedRoute != null && cachedRoute.positions.length >= 2;
+    final String deviceName = prefs.getString('selectedDeviceName') ?? '';
+    if (hasCachedRoute && cachedRoute.isFreshFor(fromDate)) {
+      _applyCachedStops(cachedRoute.positions, deviceId, deviceName);
+      return;
+    }
+
     try {
       final apiClient = traccarProvider.apiClient;
       final queryParams = [api.QueryParam('from', fromDate.toIso8601String()), api.QueryParam('to', toDate.toIso8601String()), api.QueryParam('deviceId', deviceId.toString())];
@@ -166,7 +201,7 @@ class _StopsReportScreenState extends State<StopsReportScreen> {
           final decodedData = json.decode(response.body);
 
           if (decodedData is List && decodedData.isNotEmpty) {
-            _stopsReport = decodedData.map((e) => StopReport.fromJson(e as Map<String, dynamic>)).toList();
+            _stopsReport = decodedData.map((e) => StopReport.fromJson(e as Map<String, dynamic>)).toList()..sort((a, b) => a.startTime.compareTo(b.startTime));
             if (_stopsReport.isNotEmpty) {
               _deviceName = _stopsReport.first.deviceName;
               _createMapElements();
@@ -187,47 +222,97 @@ class _StopsReportScreenState extends State<StopsReportScreen> {
         _isLoading = false;
       });
     }
+
+    // 報表 API 沒有回傳資料時，改用軌跡頁快取推算停留
+    if (_stopsReport.isEmpty && hasCachedRoute) {
+      _applyCachedStops(cachedRoute.positions, deviceId, deviceName);
+    }
+  }
+
+  void _applyCachedStops(List<api.Position> positions, int deviceId, String deviceName) {
+    final analysis = RouteHistoryAnalyzer.analyze(positions);
+    _stopsReport = analysis.stops.map((stop) => StopReport.fromAnalyzed(stop, deviceId: deviceId, deviceName: deviceName)).toList()..sort((a, b) => a.startTime.compareTo(b.startTime));
+    _deviceName = deviceName;
+    if (!mounted) return;
+    setState(() {
+      _isLoading = false;
+    });
+    _createMapElements();
   }
 
   Future<void> _onStyleLoaded() async {
     _isStyleLoaded = true;
+    // 樣式（或整個地圖）重建後，先前上傳的圖片與圖層都會消失，必須重新上傳
+    _loadedIcons.clear();
     if (_stopsReport.isNotEmpty) {
-      _createMapElements();
+      await _preloadIcons();
+      await _createMapElements();
+    }
+  }
+
+  /// 一次把所有會用到的停留圖示上傳到地圖，避免逐張載入造成 marker 延遲出現。
+  Future<void> _preloadIcons() async {
+    final controller = _mapController;
+    if (controller == null) return;
+    final iconIds = <String>{for (var i = 0; i < _stopsReport.length; i++) "p_${(i % 50) + 1}"};
+    await Future.wait(iconIds.map((iconId) => _ensureIcon(iconId, 'assets/images/$iconId.png')));
+  }
+
+  Future<void> _ensureIcon(String iconId, String assetPath) async {
+    final controller = _mapController;
+    if (controller == null || _loadedIcons.contains(iconId)) return;
+    _loadedIcons.add(iconId);
+    try {
+      final Uint8List bytes = _iconBytes[iconId] ??= (await rootBundle.load(assetPath)).buffer.asUint8List();
+      await controller.addImage(iconId, bytes);
+    } catch (e) {
+      // 目前樣式已存在同一張圖片時會拋錯，可直接沿用
+      debugPrint('addImage failed for $iconId: $e');
     }
   }
 
   Future<void> _createMapElements() async {
-    if (_mapController == null || !_isStyleLoaded || _stopsReport.isEmpty) {
+    final controller = _mapController;
+    if (controller == null || !_isStyleLoaded || _stopsReport.isEmpty) {
+      return;
+    }
+    if (_isDrawing) {
+      _pendingDraw = true;
       return;
     }
 
-    await _mapController!.clearSymbols();
+    _isDrawing = true;
+    try {
+      await controller.clearSymbols();
 
-    final List<maplibre.LatLng> points = [];
+      final List<maplibre.LatLng> points = [];
 
-    for (var i = 0; i < _stopsReport.length; i++) {
-      final stop = _stopsReport[i];
-      final point = maplibre.LatLng(stop.latitude, stop.longitude);
-      points.add(point);
-      // Cycle through p_1.png ... p_50.png so each stop gets its own icon.
-      final iconId = "p_${(i % 50) + 1}";
-      await _addMarker(point, iconId, "assets/images/$iconId.png");
-    }
+      for (var i = 0; i < _stopsReport.length; i++) {
+        final stop = _stopsReport[i];
+        final point = maplibre.LatLng(stop.latitude, stop.longitude);
+        points.add(point);
+        // Cycle through p_1.png ... p_50.png so each stop gets its own icon.
+        final iconId = "p_${(i % 50) + 1}";
+        await _addMarker(point, iconId, "assets/images/$iconId.png");
+      }
 
-    if (points.isNotEmpty) {
-      _zoomToFit(points);
+      if (points.isNotEmpty) {
+        _zoomToFit(points);
+      }
+    } finally {
+      _isDrawing = false;
+      if (_pendingDraw) {
+        _pendingDraw = false;
+        await _createMapElements();
+      }
     }
   }
 
   Future<void> _addMarker(maplibre.LatLng point, String iconId, String assetPath) async {
-    if (!_loadedIcons.contains(iconId)) {
-      final ByteData bytes = await rootBundle.load(assetPath);
-      final Uint8List list = bytes.buffer.asUint8List();
-      await _mapController!.addImage(iconId, list);
-      _loadedIcons.add(iconId);
-    }
-
-    await _mapController!.addSymbol(maplibre.SymbolOptions(geometry: point, iconImage: iconId, iconSize: 3.5, iconAnchor: "bottom"));
+    final controller = _mapController;
+    if (controller == null) return;
+    await _ensureIcon(iconId, assetPath);
+    await controller.addSymbol(maplibre.SymbolOptions(geometry: point, iconImage: iconId, iconSize: 3.5, iconAnchor: "bottom"));
   }
 
   void _zoomToFit(List<maplibre.LatLng> points) {
@@ -280,7 +365,11 @@ class _StopsReportScreenState extends State<StopsReportScreen> {
               children: [
                 maplibre.MapLibreMap(
                   key: ValueKey(mapProvider.isSatelliteMode),
-                  onMapCreated: (c) => _mapController = c,
+                  onMapCreated: (c) {
+                    _mapController = c;
+                    _isStyleLoaded = false;
+                    _loadedIcons.clear();
+                  },
                   onStyleLoadedCallback: _onStyleLoaded,
                   initialCameraPosition: maplibre.CameraPosition(target: initialCenter, zoom: 14.0),
                   styleString: mapProvider.getStyle(Theme.of(context).brightness),
@@ -303,9 +392,18 @@ class _StopsReportScreenState extends State<StopsReportScreen> {
             flex: 1,
             child: ListView.builder(
               padding: const EdgeInsets.all(16.0),
-              itemCount: _stopsReport.length,
+              itemCount: _stopsReport.length + 1,
               itemBuilder: (context, index) {
-                final stop = _stopsReport[index];
+                if (index == 0) {
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Text(
+                      'historyStopsCount'.trParams({'count': '${_stopsReport.length}'}),
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface),
+                    ),
+                  );
+                }
+                final stop = _stopsReport[index - 1];
                 return GestureDetector(
                   onTap: () => _animateToPosition(maplibre.LatLng(stop.latitude, stop.longitude)),
                   child: Card(
@@ -318,11 +416,12 @@ class _StopsReportScreenState extends State<StopsReportScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            '${'reportStops'.tr} ${index + 1}',
+                            '${'reportStops'.tr} $index',
                             style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface),
                           ),
                           const Divider(),
-                          _buildStopDetailRow('reportStartDate'.tr, DateFormat('yyyy-MM-dd HH:mm').format(stop.startTime.toLocal())),
+                          _buildStopDetailRow('historyStopTime'.tr, DateFormat('yyyy-MM-dd HH:mm').format(stop.startTime.toLocal())),
+                          _buildStopDetailRow('historyStopMinutes'.tr, (stop.duration / 60000).round().toString()),
                           _buildStopDetailRow('reportEndTime'.tr, DateFormat('yyyy-MM-dd HH:mm').format(stop.endTime.toLocal())),
                           _buildStopDetailRow('reportDuration'.tr, _formatDuration(stop.duration)),
                           ListTile(
@@ -343,7 +442,7 @@ class _StopsReportScreenState extends State<StopsReportScreen> {
                               ),
                             ),
                           ),
-                          _buildStopDetailRow('reportEngineHours'.tr, _formatDuration(stop.engineHours)),
+                          if (stop.engineHours != null) _buildStopDetailRow('reportEngineHours'.tr, _formatDuration(stop.engineHours!)),
                         ],
                       ),
                     ),
