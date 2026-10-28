@@ -53,7 +53,11 @@ double _interpolateChannel(double normalizedValue, List<double> coeffs) {
 
 List<int> _interpolateTurbo(double value) {
   final normalizedValue = max(0.0, min(1.0, value));
-  return [(255 * _interpolateChannel(normalizedValue, _turboRedCoeffs)).round(), (255 * _interpolateChannel(normalizedValue, _turboGreenCoeffs)).round(), (255 * _interpolateChannel(normalizedValue, _turboBlueCoeffs)).round()];
+  return [
+    (255 * _interpolateChannel(normalizedValue, _turboRedCoeffs)).round(),
+    (255 * _interpolateChannel(normalizedValue, _turboGreenCoeffs)).round(),
+    (255 * _interpolateChannel(normalizedValue, _turboBlueCoeffs)).round(),
+  ];
 }
 
 String _getTurboSpeedColor(double speedKmh, double minSpeed, double maxSpeed) {
@@ -143,7 +147,6 @@ class HistoryRouteScreen extends StatefulWidget {
 }
 
 class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProviderStateMixin {
-  // 靜態常數與 UI 物件抽取
   static const List<double> _playbackSpeeds = [1.0, 5.0, 10.0, 20.0];
 
   static const BoxDecoration _turboGradientDecoration = BoxDecoration(
@@ -167,10 +170,8 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
   MapLibreMapController? _mapController;
   List<double> _distancePrefixSum = [];
   final RxString _currentAddressRx = "".obs;
+  int _addressRequestToken = 0;
 
-  int _addressRequestToken = 0; // 用來記錄請求的流水號
-
-  // 狀態變數
   List<api.Position> _positions = [];
   final RxDouble _playbackPositionRx = 0.0.obs;
 
@@ -196,7 +197,6 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
   bool _isMinimalMode = false;
   RouteColorMode _routeColorMode = RouteColorMode.single;
 
-  // 地圖資源常量與標示
   static const String _playbackIconId = "playback_arrow";
   static const String _startIconId = "start_pin";
   static const String _endIconId = "end_pin";
@@ -211,7 +211,6 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
   Symbol? _playbackSymbol;
   int _lastCameraAnimTime = 0;
 
-  // GeoJSON 圖層識別碼
   static const String _routeSourceId = "history_route_source";
   static const String _routeLayerId = "history_route_layer";
   static const String _playedSourceId = "played_route_source";
@@ -234,12 +233,13 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    SystemChrome.setSystemUIOverlayStyle(Theme.of(context).brightness == Brightness.dark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark);
+    SystemChrome.setSystemUIOverlayStyle(
+      Theme.of(context).brightness == Brightness.dark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
+    );
   }
 
   Future<void> _loadPlaybackSpeedFromHive() async {
     try {
-      // 確保通用設定 Box 已開啟（若尚未全域開啟）
       var settingsBox = Hive.isBoxOpen('settings') ? Hive.box('settings') : await Hive.openBox('settings');
       final savedSpeed = settingsBox.get('playback_speed');
       if (savedSpeed != null && savedSpeed is num) {
@@ -265,7 +265,10 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
   }
 
   void _initAnimationController() {
-    _playbackAnimationController = AnimationController(vsync: this, duration: const Duration(seconds: 1))..addListener(_onAnimationTick);
+    _playbackAnimationController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 1),
+    )..addListener(_onAnimationTick);
   }
 
   @override
@@ -275,7 +278,6 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     super.dispose();
   }
 
-  // 安全觸發 setState 的輔助方法，防止 build 期間呼叫報錯
   void _safeSetState(VoidCallback fn) {
     if (!mounted) return;
     if (SchedulerBinding.instance.schedulerPhase == SchedulerPhase.persistentCallbacks) {
@@ -286,8 +288,6 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
       setState(fn);
     }
   }
-
-  // --- 地圖邏輯 ---
 
   Future<void> _onStyleLoaded() async {
     await _loadCustomIconsToMap();
@@ -300,7 +300,6 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     final bool keepCamera = _keepCameraOnStyleReload;
     _keepCameraOnStyleReload = false;
     await _drawFullRoute(fitBounds: !keepCamera);
-    // 需在軌跡圖層建立後才重畫，belowLayerId 才找得到 _routeLayerId
     if (_showGeofences) {
       await _drawGeofences();
     }
@@ -313,9 +312,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
   }
 
   Future<void> _loadCustomIconsToMap() async {
-    if (_mapController == null) {
-      return;
-    }
+    if (_mapController == null) return;
     await _addAssetImage(_playbackIconId, 'assets/images/arrow.png');
     await _addAssetImage(_startIconId, 'assets/images/start.png');
     await _addAssetImage(_endIconId, 'assets/images/destination.png');
@@ -335,12 +332,15 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     _distancePrefixSum = [0.0];
     double total = 0;
     for (int i = 0; i < _positions.length - 1; i++) {
-      total += _distanceBetween(_positions[i].latitude!.toDouble(), _positions[i].longitude!.toDouble(), _positions[i + 1].latitude!.toDouble(), _positions[i + 1].longitude!.toDouble());
+      total += _distanceBetween(
+        _positions[i].latitude!.toDouble(),
+        _positions[i].longitude!.toDouble(),
+        _positions[i + 1].latitude!.toDouble(),
+        _positions[i + 1].longitude!.toDouble(),
+      );
       _distancePrefixSum.add(total);
     }
   }
-
-  // --- 資料抓取與異步處理 ---
 
   Future<void> _loadInitialParamsAndFetch() async {
     final prefs = await SharedPreferences.getInstance();
@@ -357,14 +357,10 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
 
     DateTime defaultDate = DateTime.now();
 
-    if (!mounted) {
-      return;
-    }
+    if (!mounted) return;
 
     _safeSetState(() {
-      if (lastZoom != null) {
-        _currentZoom = lastZoom;
-      }
+      if (lastZoom != null) _currentZoom = lastZoom;
       _deviceId = deviceId;
       _focusedDay = defaultDate;
       _selectedCalendarDay = defaultDate;
@@ -385,8 +381,6 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     if (_deviceId != null) {
       _fetchHistoryRoute();
       await _fetchMonthlyData(_focusedDay);
-    } else {
-      developer.log('Missing device ID for history route.', name: 'HistoryRouteScreen');
     }
   }
 
@@ -394,7 +388,6 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     final routeBox = await Hive.openBox<RoutePositionsHive>('route_positions');
     const cacheDuration = Duration(days: 60);
     final DateTime expiryThreshold = DateTime.now().subtract(cacheDuration);
-
     final List<dynamic> expiredKeys = [];
 
     for (final key in routeBox.keys) {
@@ -405,16 +398,13 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     }
 
     if (expiredKeys.isNotEmpty) {
-      developer.log('Deleting ${expiredKeys.length} expired route entries.', name: 'HistoryRouteScreen');
       await routeBox.deleteAll(expiredKeys);
     }
   }
 
   void _calculateStops(List<api.Position> allPositions) {
     _stopPoints.clear();
-    if (allPositions.length < 2) {
-      return;
-    }
+    if (allPositions.length < 2) return;
 
     for (int i = 0; i < allPositions.length - 1; i++) {
       final p1 = allPositions[i];
@@ -429,9 +419,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
           _stopPoints.add(LatLng(p1.latitude!.toDouble(), p1.longitude!.toDouble()));
         }
       }
-      if (_stopPoints.length >= 50) {
-        break;
-      }
+      if (_stopPoints.length >= 50) break;
     }
   }
 
@@ -441,9 +429,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
       _historyTo = DateTime(selectedDay.year, selectedDay.month, selectedDay.day, 23, 59, 59);
     }
 
-    if (_deviceId == null || _historyFrom == null || _historyTo == null) {
-      return;
-    }
+    if (_deviceId == null || _historyFrom == null || _historyTo == null) return;
 
     _playbackAnimationController?.stop();
     _safeSetState(() {
@@ -465,35 +451,35 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
       if (cachedRoute != null) {
         final bool isToday = isSameDay(_historyFrom, DateTime.now());
         final diff = DateTime.now().difference(cachedRoute.cachedAt);
-        final bool isExpired = isToday ? diff > const Duration(minutes: 10) : diff > const Duration(days: 60);
-        isCacheValid = !isExpired;
+        isCacheValid = isToday ? diff <= const Duration(minutes: 10) : diff <= const Duration(days: 60);
       }
 
       if (isCacheValid) {
-        debugPrint('從快取載入: $hiveKey');
         fetchedPositions = RoutePositionsHive.fromJsonList(cachedRoute!.positionsJson);
       } else {
-        debugPrint('從網路抓取: $hiveKey');
-
-        if (!mounted) {
-          return;
-        }
+        if (!mounted) return;
         fetchedFromNetwork = true;
         final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
-
-        fetchedPositions = await api.PositionsApi(traccarProvider.apiClient).getPositions(deviceId: _deviceId, from: _historyFrom!.toUtc(), to: _historyTo!.toUtc()) ?? [];
+        fetchedPositions = await api.PositionsApi(traccarProvider.apiClient).getPositions(
+          deviceId: _deviceId,
+          from: _historyFrom!.toUtc(),
+          to: _historyTo!.toUtc(),
+        ) ?? [];
       }
 
       final cleanedPositions = PositionCleaner.clean(fetchedPositions);
-      if (cleanedPositions.length != fetchedPositions.length) {
-        developer.log('Cleaned track: ${fetchedPositions.length} -> ${cleanedPositions.length} points', name: 'HistoryRouteScreen');
-      }
       if (fetchedFromNetwork && cleanedPositions.isNotEmpty) {
-        await routeBox.put(hiveKey, RoutePositionsHive(dateKey: hiveKey, positionsJson: RoutePositionsHive.toJsonList(cleanedPositions), cachedAt: DateTime.now()));
+        await routeBox.put(
+          hiveKey,
+          RoutePositionsHive(
+            dateKey: hiveKey,
+            positionsJson: RoutePositionsHive.toJsonList(cleanedPositions),
+            cachedAt: DateTime.now(),
+          ),
+        );
       }
 
       _calculateStops(cleanedPositions);
-
       final movingPositions = cleanedPositions.where((p) => (p.speed ?? 0) > 0).toList();
       final playbackPositions = movingPositions.isNotEmpty ? movingPositions : cleanedPositions;
 
@@ -504,21 +490,17 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
         });
 
         _calculateDistancePrefixSum();
-
         if (_mapController != null) {
           _drawFullRoute();
         }
       }
     } catch (e) {
-      debugPrint('獲取軌跡失敗: $e');
       if (mounted) {
         _safeSetState(() => _isLoading = false);
         Get.snackbar("Error", "Failed to fetch route data");
       }
     }
   }
-
-  // --- 高效能 GeoJSON 地圖繪製與動畫播放 ---
 
   Future<void> _cleanMapLayers() async {
     if (_mapController == null) return;
@@ -534,15 +516,11 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
   }
 
   Future<void> _drawFullRoute({bool fitBounds = true}) async {
-    if (_mapController == null || _positions.isEmpty) {
-      return;
-    }
+    if (_mapController == null || _positions.isEmpty) return;
 
     await _cleanMapLayers();
-
     final List<LatLng> points = _positions.map((p) => LatLng(p.latitude!.toDouble(), p.longitude!.toDouble())).toList();
 
-    // 1. 建立背景軌跡 (超過1000點移至 Isolate 背景處理避免UI卡頓)
     Map<String, dynamic> routeGeoJson;
     if (_positions.length > 1000) {
       routeGeoJson = await compute(_buildGeoJsonIsolate, _GeoJsonParams(_positions, _routeColorMode));
@@ -551,9 +529,12 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     }
 
     await _mapController!.addSource(_routeSourceId, GeojsonSourceProperties(data: routeGeoJson));
-    await _mapController!.addLineLayer(_routeSourceId, _routeLayerId, LineLayerProperties(lineColor: ['get', 'color'], lineWidth: 4.0, lineOpacity: 0.8, lineJoin: 'round', lineCap: 'round'));
+    await _mapController!.addLineLayer(
+      _routeSourceId,
+      _routeLayerId,
+      LineLayerProperties(lineColor: ['get', 'color'], lineWidth: 4.0, lineOpacity: 0.8, lineJoin: 'round', lineCap: 'round'),
+    );
 
-    // 2. 建立已播放軌跡圖層 (動態更新)
     final Map<String, dynamic> emptyPlayedGeoJson = {
       "type": "FeatureCollection",
       "features": [
@@ -564,14 +545,22 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
       ],
     };
     await _mapController!.addSource(_playedSourceId, GeojsonSourceProperties(data: emptyPlayedGeoJson));
-    await _mapController!.addLineLayer(_playedSourceId, _playedLayerId, LineLayerProperties(lineColor: '#0F53FE', lineWidth: 5.5, lineOpacity: 1.0, lineJoin: 'round', lineCap: 'round'));
+    await _mapController!.addLineLayer(
+      _playedSourceId,
+      _playedLayerId,
+      LineLayerProperties(lineColor: '#0F53FE', lineWidth: 5.5, lineOpacity: 1.0, lineJoin: 'round', lineCap: 'round'),
+    );
 
-    // 3. 繪製起終點標籤與停靠點
     _addMarker(points.first, _startIconId);
     _addMarker(points.last, _endIconId);
 
     if (_positions.isNotEmpty) {
-      _playbackSymbol = await _mapController!.addSymbol(SymbolOptions(geometry: LatLng(_positions.first.latitude!.toDouble(), _positions.first.longitude!.toDouble()), iconImage: _playbackIconId, iconSize: 1.8, zIndex: 10));
+      _playbackSymbol = await _mapController!.addSymbol(SymbolOptions(
+        geometry: LatLng(_positions.first.latitude!.toDouble(), _positions.first.longitude!.toDouble()),
+        iconImage: _playbackIconId,
+        iconSize: 1.8,
+        zIndex: 10,
+      ));
     }
 
     if (_showStopPoints) {
@@ -583,8 +572,6 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     }
   }
 
-  // --- 圍欄與停留點 ---
-
   Future<void> _toggleGeofences() async {
     if (_showGeofences) {
       _safeSetState(() => _showGeofences = false);
@@ -593,8 +580,8 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     }
 
     if (_mapController == null || _isGeofenceLoading) return;
-
     _safeSetState(() => _isGeofenceLoading = true);
+
     try {
       if (_geofences.isEmpty) {
         final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
@@ -607,7 +594,6 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
       _safeSetState(() => _showGeofences = true);
       await _drawGeofences();
     } catch (e) {
-      developer.log('Failed to load geofences: $e', name: 'HistoryRouteScreen');
       if (mounted) Get.snackbar("Error", 'sharedNoData'.tr);
     } finally {
       _safeSetState(() => _isGeofenceLoading = false);
@@ -617,15 +603,9 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
   Future<void> _clearGeofenceLayers() async {
     final controller = _mapController;
     if (controller == null) return;
-    try {
-      await controller.removeLayer(_geofenceLineLayerId);
-    } catch (_) {}
-    try {
-      await controller.removeLayer(_geofenceFillLayerId);
-    } catch (_) {}
-    try {
-      await controller.removeSource(_geofenceSourceId);
-    } catch (_) {}
+    try { await controller.removeLayer(_geofenceLineLayerId); } catch (_) {}
+    try { await controller.removeLayer(_geofenceFillLayerId); } catch (_) {}
+    try { await controller.removeSource(_geofenceSourceId); } catch (_) {}
   }
 
   Future<void> _drawGeofences() async {
@@ -633,14 +613,12 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     if (controller == null || !_showGeofences) return;
 
     await _clearGeofenceLayers();
-
     final List<Map<String, dynamic>> features = [];
     for (int i = 0; i < _geofences.length; i++) {
       features.addAll(_geofenceFeatures(_geofences[i], i));
     }
     if (features.isEmpty) return;
 
-    // 有軌跡時把圍欄壓在軌跡圖層下方
     final String? belowLayerId = _positions.isNotEmpty ? _routeLayerId : null;
     await controller.addSource(_geofenceSourceId, GeojsonSourceProperties(data: {"type": "FeatureCollection", "features": features}));
     await controller.addFillLayer(_geofenceSourceId, _geofenceFillLayerId, FillLayerProperties(fillColor: ['get', 'color'], fillOpacity: 0.18), belowLayerId: belowLayerId);
@@ -662,70 +640,15 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
       final lon = double.tryParse(parts[1]);
       final radius = double.tryParse(parts[2]);
       if (lat == null || lon == null || radius == null) return const [];
-      return [
-        {
-          "type": "Feature",
-          "properties": properties,
-          "geometry": {"type": "Polygon", "coordinates": [_circleRing(lat, lon, radius)]},
-        },
-      ];
+      return [{
+        "type": "Feature",
+        "properties": properties,
+        "geometry": {"type": "Polygon", "coordinates": [_circleRing(lat, lon, radius)]},
+      }];
     }
-
-    if (area.startsWith('POLYGON')) {
-      final int openParen = area.indexOf('((');
-      final int closeParen = area.lastIndexOf('))');
-      if (openParen < 0 || closeParen <= openParen) return const [];
-      final ring = _parseCoordinates(area.substring(openParen + 2, closeParen), closeRing: true);
-      if (ring.length < 4) return const [];
-      return [
-        {
-          "type": "Feature",
-          "properties": properties,
-          "geometry": {"type": "Polygon", "coordinates": [ring]},
-        },
-      ];
-    }
-
-    if (area.startsWith('LINESTRING')) {
-      final int openParen = area.indexOf('(');
-      final int closeParen = area.lastIndexOf(')');
-      if (openParen < 0 || closeParen <= openParen) return const [];
-      final line = _parseCoordinates(area.substring(openParen + 1, closeParen));
-      if (line.length < 2) return const [];
-      return [
-        {
-          "type": "Feature",
-          "properties": properties,
-          "geometry": {"type": "LineString", "coordinates": line},
-        },
-      ];
-    }
-
     return const [];
   }
 
-  /// Traccar 的 area 為「緯度 經度」，GeoJSON 需轉成 [經度, 緯度]。
-  List<List<double>> _parseCoordinates(String raw, {bool closeRing = false}) {
-    final coordinates = <List<double>>[];
-    for (final pair in raw.split(',')) {
-      final parts = pair.trim().split(RegExp(r'\s+'));
-      if (parts.length < 2) continue;
-      final lat = double.tryParse(parts[0]);
-      final lon = double.tryParse(parts[1]);
-      if (lat == null || lon == null) continue;
-      coordinates.add([lon, lat]);
-    }
-    if (closeRing && coordinates.length >= 3) {
-      final first = coordinates.first;
-      final last = coordinates.last;
-      if (first[0] != last[0] || first[1] != last[1]) {
-        coordinates.add([first[0], first[1]]);
-      }
-    }
-    return coordinates;
-  }
-
-  /// MapLibre 的 circle layer 半徑是像素，直接將圓轉為多邊形環。
   List<List<double>> _circleRing(double lat, double lon, double radiusMeters) {
     const int segments = 64;
     final double dLat = radiusMeters / 111320.0;
@@ -763,20 +686,14 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     final controller = _mapController;
     if (controller == null) return;
     for (final symbol in _stopSymbols) {
-      try {
-        await controller.removeSymbol(symbol);
-      } catch (_) {}
+      try { await controller.removeSymbol(symbol); } catch (_) {}
     }
     _stopSymbols.clear();
   }
 
   void _setRouteColorMode(RouteColorMode mode) {
-    _safeSetState(() {
-      _routeColorMode = mode;
-    });
-    SharedPreferences.getInstance().then((prefs) {
-      prefs.setString('route_color_mode', mode.name);
-    });
+    _safeSetState(() => _routeColorMode = mode);
+    SharedPreferences.getInstance().then((prefs) => prefs.setString('route_color_mode', mode.name));
     if (_positions.isNotEmpty) {
       _drawFullRoute(fitBounds: false);
     }
@@ -793,41 +710,26 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'routeColorModeTitle'.tr,
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface),
-              ),
+              Text('routeColorModeTitle'.tr, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface)),
               const SizedBox(height: 16),
               ListTile(
                 leading: _singleColorIcon,
                 title: Text('routeColorModeSingle'.tr),
-                subtitle: Text('routeColorModeSingleDesc'.tr),
                 trailing: _routeColorMode == RouteColorMode.single ? const Icon(Icons.check, color: Colors.blue) : null,
-                onTap: () {
-                  Navigator.pop(context);
-                  _setRouteColorMode(RouteColorMode.single);
-                },
+                onTap: () { Navigator.pop(context); _setRouteColorMode(RouteColorMode.single); },
               ),
               ListTile(
                 leading: Container(width: 36, height: 12, decoration: _turboGradientDecoration),
                 title: Text('routeColorModeSpeedStatus'.tr),
                 trailing: _routeColorMode == RouteColorMode.speedStatus ? const Icon(Icons.check, color: Colors.blue) : null,
-                onTap: () {
-                  Navigator.pop(context);
-                  _setRouteColorMode(RouteColorMode.speedStatus);
-                },
+                onTap: () { Navigator.pop(context); _setRouteColorMode(RouteColorMode.speedStatus); },
               ),
               ListTile(
                 leading: _timeGradientIcons,
                 title: Text('routeColorModeTimeGradient'.tr),
-                subtitle: Text('routeColorModeTimeGradientDesc'.tr),
                 trailing: _routeColorMode == RouteColorMode.timeGradient ? const Icon(Icons.check, color: Colors.blue) : null,
-                onTap: () {
-                  Navigator.pop(context);
-                  _setRouteColorMode(RouteColorMode.timeGradient);
-                },
+                onTap: () { Navigator.pop(context); _setRouteColorMode(RouteColorMode.timeGradient); },
               ),
-              const SizedBox(height: 12),
             ],
           ),
         ),
@@ -841,7 +743,6 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
 
   void _togglePlayback() {
     if (_positions.isEmpty) return;
-
     if (_isPlaying) {
       _playbackAnimationController?.stop();
       _safeSetState(() => _isPlaying = false);
@@ -851,13 +752,6 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     final double maxLimit = max(0, _positions.length - 1).toDouble();
     if (_playbackPositionRx.value >= maxLimit) {
       _playbackPositionRx.value = 0;
-      _updatePlaybackUI();
-    }
-
-    if (_playbackPositionRx.value == 0) {
-      _followUser = true;
-      final startPoint = LatLng(_positions.first.latitude!.toDouble(), _positions.first.longitude!.toDouble());
-      _mapController?.animateCamera(CameraUpdate.newLatLngZoom(startPoint, 16.0), duration: const Duration(milliseconds: 800));
     }
 
     _safeSetState(() => _isPlaying = true);
@@ -878,14 +772,11 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     } else {
       _playbackPositionRx.value = nextVal;
     }
-
     _updatePlaybackUI();
   }
 
   void _updatePlaybackUI() async {
-    if (_mapController == null || _positions.isEmpty || _playbackSymbol == null) {
-      return;
-    }
+    if (_mapController == null || _positions.isEmpty || _playbackSymbol == null) return;
 
     final double pos = _playbackPositionRx.value;
     final int idx = pos.floor().clamp(0, _positions.length - 1);
@@ -904,7 +795,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
       bearing = _calculateBearing(LatLng(p1.latitude!.toDouble(), p1.longitude!.toDouble()), LatLng(p2.latitude!.toDouble(), p2.longitude!.toDouble()));
     }
 
-    if (_currentAddressRx.value == "" || idx % 20 == 0) {
+    if (_currentAddressRx.value.isEmpty || idx % 20 == 0) {
       final int currentToken = ++_addressRequestToken;
       OfflineAddressService.getAddress(p1.latitude!.toDouble(), p1.longitude!.toDouble()).then((addr) {
         if (currentToken == _addressRequestToken) {
@@ -913,50 +804,21 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
       });
     }
 
-    // 更新行進中的小車標記
     _mapController!.updateSymbol(_playbackSymbol!, SymbolOptions(geometry: currentLatLng, iconRotate: bearing));
 
-    // 高效更新已播放軌跡 GeoJSON 數據
     final List<List<double>> playedCoords = [];
     for (int i = 0; i <= idx; i++) {
       playedCoords.add([_positions[i].longitude!.toDouble(), _positions[i].latitude!.toDouble()]);
     }
     playedCoords.add([smoothLng, smoothLat]);
 
-    final Map<String, dynamic> updatedPlayedGeoJson = {
+    await _mapController!.setGeoJsonSource(_playedSourceId, {
       "type": "FeatureCollection",
-      "features": [
-        {
-          "type": "Feature",
-          "geometry": {"type": "LineString", "coordinates": playedCoords},
-        },
-      ],
-    };
-    await _mapController!.setGeoJsonSource(_playedSourceId, updatedPlayedGeoJson);
-
-    // 相機跟隨與節流機制
-    if (_followUser) {
-      final now = DateTime.now().millisecondsSinceEpoch;
-      if (now - _lastCameraAnimTime > 600) {
-        _lastCameraAnimTime = now;
-        LatLngBounds? visibleRegion = await _mapController!.getVisibleRegion();
-        double latSpan = visibleRegion.northeast.latitude - visibleRegion.southwest.latitude;
-        double lngSpan = visibleRegion.northeast.longitude - visibleRegion.southwest.longitude;
-
-        double latThreshold = latSpan * 0.35;
-        double lngThreshold = lngSpan * 0.35;
-
-        bool isNearEdge =
-            currentLatLng.latitude > (visibleRegion.northeast.latitude - latThreshold) ||
-            currentLatLng.latitude < (visibleRegion.southwest.latitude + latThreshold) ||
-            currentLatLng.longitude > (visibleRegion.northeast.longitude - lngThreshold) ||
-            currentLatLng.longitude < (visibleRegion.southwest.longitude + lngThreshold);
-
-        if (isNearEdge) {
-          _mapController!.animateCamera(CameraUpdate.newLatLng(currentLatLng), duration: const Duration(milliseconds: 600));
-        }
-      }
-    }
+      "features": [{
+        "type": "Feature",
+        "geometry": {"type": "LineString", "coordinates": playedCoords},
+      }],
+    });
   }
 
   double _calculateBearing(LatLng start, LatLng end) {
@@ -968,15 +830,16 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
   }
 
   void _animateCameraToBounds() {
-    if (_positions.isEmpty) {
-      return;
-    }
+    if (_positions.isEmpty) return;
     double minLat = _positions.map((p) => p.latitude!).reduce(min).toDouble();
     double maxLat = _positions.map((p) => p.latitude!).reduce(max).toDouble();
     double minLon = _positions.map((p) => p.longitude!).reduce(min).toDouble();
     double maxLon = _positions.map((p) => p.longitude!).reduce(max).toDouble();
 
-    _mapController?.animateCamera(CameraUpdate.newLatLngBounds(LatLngBounds(southwest: LatLng(minLat, minLon), northeast: LatLng(maxLat, maxLon)), left: 70, right: 70, top: 70, bottom: 250));
+    _mapController?.animateCamera(CameraUpdate.newLatLngBounds(
+      LatLngBounds(southwest: LatLng(minLat, minLon), northeast: LatLng(maxLat, maxLon)),
+      left: 70, right: 70, top: 70, bottom: 250,
+    ));
   }
 
   double _distanceBetween(double lat1, double lon1, double lat2, double lon2) {
@@ -984,8 +847,6 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     var a = 0.5 - cos((lat2 - lat1) * p) / 2 + cos(lat1 * p) * cos(lat2 * p) * (1 - cos((lon2 - lon1) * p)) / 2;
     return 12742 * asin(sqrt(a));
   }
-
-  // --- 報表頁跳轉 ---
 
   Future<void> _syncReportPreferences() async {
     final prefs = await SharedPreferences.getInstance();
@@ -1000,8 +861,6 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     if (!mounted) return;
     Navigator.of(context).push(MaterialPageRoute(builder: builder));
   }
-
-  // --- UI 元件建立 ---
 
   @override
   Widget build(BuildContext context) {
@@ -1018,18 +877,13 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
             onCameraMove: (position) {
               _lastCameraPosition = position;
               _currentZoom = position.zoom;
-              SharedPreferences.getInstance().then((prefs) {
-                prefs.setDouble('history_zoom_level', position.zoom);
-              });
+              SharedPreferences.getInstance().then((prefs) => prefs.setDouble('history_zoom_level', position.zoom));
             },
             myLocationEnabled: false,
             trackCameraPosition: true,
-            onMapClick: (_, _) {
-              _safeSetState(() => _followUser = false);
-            },
+            onMapClick: (_, __) => _safeSetState(() => _followUser = false),
           ),
           if (_isLoading) const Center(child: CircularProgressIndicator()),
-
           if (!_isMinimalMode)
             Positioned(
               top: safeTop + 12,
@@ -1037,10 +891,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
               right: 64,
               child: Center(child: _buildDeviceDatePill()),
             ),
-
-          AnimatedPositioned(
-            duration: const Duration(milliseconds: 250),
-            curve: Curves.easeOutCubic,
+          Positioned(
             top: safeTop + (_isMinimalMode ? 12 : 60),
             left: 12,
             child: _mapFab(
@@ -1048,50 +899,26 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
               () => _safeSetState(() => _isMinimalMode = !_isMinimalMode),
               "btn_minimal",
               active: _isMinimalMode,
-              tooltip: _isMinimalMode ? 'standardViewMode'.tr : 'minimalViewMode'.tr,
             ),
           ),
-
           if (!_isMinimalMode) ...[
             Positioned(
               top: safeTop + 60,
               right: 12,
               child: Column(
                 children: [
-                  _mapFab(Icons.show_chart_rounded, () => _openReportPage((_) => const ChartReportScreen()), "btn_chart", tooltip: 'reportChart'.tr),
+                  _mapFab(Icons.show_chart_rounded, () => _openReportPage((_) => const ChartReportScreen()), "btn_chart"),
                   const SizedBox(height: 8),
-                  _mapFab(Icons.route_rounded, () => _openReportPage((_) => const TripsReportScreen()), "btn_trips", tooltip: 'reportTrips'.tr),
+                  _mapFab(Icons.route_rounded, () => _openReportPage((_) => const TripsReportScreen()), "btn_trips"),
                   const SizedBox(height: 8),
-                  _mapFab(Icons.pause_circle_outline_rounded, () => _openReportPage((_) => const StopsReportScreen()), "btn_stops", tooltip: 'reportStops'.tr),
+                  _mapFab(Icons.pin_drop_rounded, _toggleStopPoints, "btn_stop_points", active: _showStopPoints),
                   const SizedBox(height: 8),
-                  _mapFab(Icons.pin_drop_rounded, _toggleStopPoints, "btn_stop_points", active: _showStopPoints, tooltip: 'historyStopPointsToggle'.tr),
-                  const SizedBox(height: 8),
-                  _mapFab(Icons.palette_rounded, _showColorModeMenu, "btn_color_mode", active: _routeColorMode != RouteColorMode.single, tooltip: 'routeColorModeTooltip'.tr),
+                  _mapFab(Icons.palette_rounded, _showColorModeMenu, "btn_color_mode", active: _routeColorMode != RouteColorMode.single),
                   const SizedBox(height: 8),
                   _mapFab(Icons.calendar_month, _showCalendarDialog, "btn_cal"),
                   const SizedBox(height: 8),
                   _mapFab(Provider.of<MapStyleProvider>(context).isSatelliteMode ? Icons.map : Icons.satellite_alt, _toggleMapType, "btn_style"),
-                  const SizedBox(height: 8),
-                  _mapFab(
-                    Icons.center_focus_strong,
-                    () {
-                      _safeSetState(() => _followUser = true);
-                      _animateCameraToBounds();
-                    },
-                    "btn_recenter",
-                    active: _followUser,
-                  ),
                 ],
-              ),
-            ),
-            Positioned(
-              top: 0,
-              bottom: 0,
-              left: 12,
-              child: Align(
-                alignment: Alignment.centerLeft,
-                widthFactor: 1.0,
-                child: Column(mainAxisSize: MainAxisSize.min, children: [_mapFab(Icons.add, () => _zoomMap(1), "btn_zoom_in"), const SizedBox(height: 8), _mapFab(Icons.remove, () => _zoomMap(-1), "btn_zoom_out")]),
               ),
             ),
           ],
@@ -1101,38 +928,21 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     );
   }
 
-  void _zoomMap(double delta) {
-    final controller = _mapController;
-    if (controller == null) {
-      return;
-    }
-    final double current = controller.cameraPosition?.zoom ?? _currentZoom;
-    final double target = (current + delta).clamp(2.0, 20.0);
-    if (target == current) {
-      return;
-    }
-    controller.animateCamera(CameraUpdate.zoomTo(target), duration: const Duration(milliseconds: 250));
-  }
-
   Widget _mapFab(IconData icon, VoidCallback onPressed, String tag, {bool active = false, String? tooltip}) {
     final theme = Theme.of(context);
-    final bgColor = active ? const Color(0xFF0F53FE) : theme.colorScheme.surface;
-    final iconColor = active ? Colors.white : theme.colorScheme.onSurface;
-
     return FloatingActionButton(
       heroTag: tag,
       mini: true,
       tooltip: tooltip,
-      backgroundColor: bgColor,
+      backgroundColor: active ? const Color(0xFF0F53FE) : theme.colorScheme.surface,
       onPressed: onPressed,
-      child: Icon(icon, color: iconColor),
+      child: Icon(icon, color: active ? Colors.white : theme.colorScheme.onSurface),
     );
   }
 
   Widget _buildDeviceDatePill() {
     final theme = Theme.of(context);
     final String dateLabel = DateFormat('yyyy/MM/dd').format(_historyFrom ?? DateTime.now());
-
     return Material(
       color: theme.colorScheme.surface.withValues(alpha: 0.92),
       elevation: 2,
@@ -1147,20 +957,9 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
             children: [
               Icon(Icons.directions_car_filled_rounded, size: 16, color: theme.colorScheme.primary),
               const SizedBox(width: 6),
-              Flexible(
-                child: Text(
-                  _selectedDeviceName ?? '--',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: theme.colorScheme.onSurface),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Text('·', style: TextStyle(fontSize: 13, color: theme.colorScheme.onSurfaceVariant)),
+              Flexible(child: Text(_selectedDeviceName ?? '--', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: theme.colorScheme.onSurface))),
               const SizedBox(width: 8),
               Text(dateLabel, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: theme.colorScheme.onSurface)),
-              const SizedBox(width: 6),
-              Icon(Icons.calendar_month_rounded, size: 15, color: theme.colorScheme.onSurfaceVariant),
             ],
           ),
         ),
@@ -1179,16 +978,10 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
         children: [
           Align(
             alignment: Alignment.centerLeft,
-            child: _mapFab(_isGeofenceLoading ? Icons.hourglass_top_rounded : Icons.fence_rounded, _toggleGeofences, "btn_geofence", active: _showGeofences, tooltip: 'historyGeofenceToggle'.tr),
+            child: _mapFab(_isGeofenceLoading ? Icons.hourglass_top_rounded : Icons.fence_rounded, _toggleGeofences, "btn_geofence", active: _showGeofences),
           ),
           const SizedBox(height: 10),
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 220),
-            switchInCurve: Curves.easeOutCubic,
-            switchOutCurve: Curves.easeInCubic,
-            layoutBuilder: (currentChild, previousChildren) => Stack(alignment: Alignment.bottomCenter, children: [...previousChildren, ?currentChild]),
-            child: _isMinimalMode ? _buildMinimalPlaybackPanel() : _buildFullPlaybackPanel(),
-          ),
+          _isMinimalMode ? _buildMinimalPlaybackPanel() : _buildFullPlaybackPanel(),
         ],
       ),
     );
@@ -1196,65 +989,43 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
 
   Widget _buildFullPlaybackPanel() {
     return Container(
-      key: const ValueKey('history_playback_panel_full'),
       padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(28),
-        boxShadow: [BoxShadow(color: Theme.of(context).brightness == Brightness.dark ? Colors.black.withValues(alpha: 0.4) : Colors.black.withValues(alpha: 0.1), blurRadius: 20, offset: const Offset(0, 10))],
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 20, offset: const Offset(0, 10))],
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Obx(
-            () => Text(
-              _currentAddressRx.value.isEmpty ? 'sharedLocating'.tr : _currentAddressRx.value,
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface),
-              textAlign: TextAlign.center,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
+          Obx(() => Text(_currentAddressRx.value.isEmpty ? 'sharedLocating'.tr : _currentAddressRx.value, style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface), maxLines: 1, overflow: TextOverflow.ellipsis)),
           Obx(() {
             final int idx = _playbackPositionRx.value.floor().clamp(0, max(0, _positions.length - 1));
             final pos = _positions.isEmpty ? null : _positions[idx];
             final recordedAt = pos == null ? null : PositionCleaner.recordingTime(pos);
             final time = recordedAt != null ? DateFormat('HH:mm:ss').format(recordedAt.toLocal()) : "--:--:--";
             final speed = pos != null ? ((pos.speed ?? 0) * 1.852).toStringAsFixed(1) : "0.0";
-            final distance = _getDistanceFormatted(idx);
             return Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [_buildStatItem("positionDrivingTime".tr, time, CupertinoIcons.clock), _buildStatItem("positionSpeed".tr, "$speed ${'sharedKmh'.tr}", Icons.speed_rounded), _buildStatItem("sharedDistance".tr, distance, Icons.straighten)],
+              children: [
+                _buildStatItem("positionDrivingTime".tr, time, CupertinoIcons.clock),
+                _buildStatItem("positionSpeed".tr, "$speed km/h", Icons.speed_rounded),
+              ],
             );
           }),
-          const SizedBox(height: 8),
-          Obx(() {
-            final double maxVal = max(0, _positions.length - 1).toDouble();
-            return SliderTheme(
-              data: SliderTheme.of(context).copyWith(trackHeight: 4, thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8), overlayShape: const RoundSliderOverlayShape(overlayRadius: 16)),
-              child: Slider(
-                value: _playbackPositionRx.value,
-                max: maxVal,
-                onChanged: (v) {
-                  _playbackPositionRx.value = v;
-                  _updatePlaybackUI();
-                },
-                activeColor: Theme.of(context).colorScheme.primary,
-                inactiveColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.15),
-              ),
-            );
-          }),
+          Obx(() => Slider(
+            value: _playbackPositionRx.value,
+            max: max(0, _positions.length - 1).toDouble(),
+            onChanged: (v) { _playbackPositionRx.value = v; _updatePlaybackUI(); },
+          )),
           Row(
             children: [
               IconButton.filled(
-                style: IconButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.primary, minimumSize: const Size(50, 50)),
                 onPressed: _togglePlayback,
-                icon: Icon(_isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded, color: Theme.of(context).colorScheme.onPrimary, size: 30),
+                icon: Icon(_isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded, size: 30),
               ),
               const Spacer(),
               _buildSpeedSelector(),
-              const SizedBox(width: 12),
-              IconButton.outlined(onPressed: _exportToGPX, icon: const Icon(Icons.download_rounded, size: 20), tooltip: "Export GPX"),
             ],
           ),
         ],
@@ -1265,159 +1036,39 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
   Widget _buildMinimalPlaybackPanel() {
     final theme = Theme.of(context);
     return Container(
-      key: const ValueKey('history_playback_panel_minimal'),
       padding: const EdgeInsets.fromLTRB(10, 2, 14, 6),
       decoration: BoxDecoration(
         color: theme.colorScheme.surface.withValues(alpha: 0.94),
         borderRadius: BorderRadius.circular(22),
-        boxShadow: [BoxShadow(color: theme.brightness == Brightness.dark ? Colors.black.withValues(alpha: 0.35) : Colors.black.withValues(alpha: 0.08), blurRadius: 14, offset: const Offset(0, 6))],
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
+      child: Row(
         children: [
-          Obx(() {
-            final double maxVal = max(0, _positions.length - 1).toDouble();
-            return SizedBox(
-              height: 18,
-              child: SliderTheme(
-                data: SliderTheme.of(context).copyWith(
-                  trackHeight: 2,
-                  thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 4),
-                  overlayShape: const RoundSliderOverlayShape(overlayRadius: 10),
-                  activeTrackColor: theme.colorScheme.primary,
-                  inactiveTrackColor: theme.colorScheme.primary.withValues(alpha: 0.15),
-                ),
-                child: Slider(
-                  value: _playbackPositionRx.value,
-                  max: maxVal,
-                  onChanged: (v) {
-                    _playbackPositionRx.value = v;
-                    _updatePlaybackUI();
-                  },
-                ),
-              ),
-            );
-          }),
-          Row(
-            children: [
-              SizedBox(
-                width: 40,
-                height: 40,
-                child: IconButton.filled(
-                  style: IconButton.styleFrom(backgroundColor: theme.colorScheme.primary, minimumSize: const Size(40, 40), padding: EdgeInsets.zero),
-                  onPressed: _togglePlayback,
-                  icon: Icon(_isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded, color: theme.colorScheme.onPrimary, size: 24),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Obx(() {
-                  final int idx = _playbackPositionRx.value.floor().clamp(0, max(0, _positions.length - 1));
-                  final pos = _positions.isEmpty ? null : _positions[idx];
-                  final recordedAt = pos == null ? null : PositionCleaner.recordingTime(pos);
-                  final time = recordedAt != null ? DateFormat('MM/dd HH:mm:ss').format(recordedAt.toLocal()) : "--/-- --:--:--";
-                  final speed = pos != null ? ((pos.speed ?? 0) * 1.852).toStringAsFixed(1) : "0.0";
-                  return Row(
-                    children: [
-                      Expanded(
-                        flex: 3,
-                        child: Text(
-                          time,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: theme.colorScheme.onSurface, letterSpacing: -0.2),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Flexible(
-                        flex: 2,
-                        child: Text(
-                          "$speed ${'sharedKmh'.tr}",
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          textAlign: TextAlign.end,
-                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: theme.colorScheme.primary),
-                        ),
-                      ),
-                    ],
-                  );
-                }),
-              ),
-            ],
+          IconButton.filled(
+            onPressed: _togglePlayback,
+            icon: Icon(_isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded, size: 24),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Obx(() {
+              final int idx = _playbackPositionRx.value.floor().clamp(0, max(0, _positions.length - 1));
+              final pos = _positions.isEmpty ? null : _positions[idx];
+              final speed = pos != null ? ((pos.speed ?? 0) * 1.852).toStringAsFixed(1) : "0.0";
+              return Text("$speed km/h", style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: theme.colorScheme.primary));
+            }),
           ),
         ],
       ),
     );
   }
 
-  void _exportToGPX() async {
-    if (_positions.isEmpty) {
-      Get.snackbar("Error", "No track data to export");
-      return;
-    }
-
-    final deviceName = _selectedDeviceName ?? "Device";
-    final date = DateFormat('yyyy-MM-dd').format(_historyFrom ?? DateTime.now());
-
-    StringBuffer gpx = StringBuffer();
-    gpx.writeln('<?xml version="1.0" encoding="UTF-8"?>');
-    gpx.writeln('<gpx version="1.1" creator="Trabcdefg" xmlns="http://www.topografix.com/GPX/1/1">');
-    gpx.writeln('  <trk>');
-    gpx.writeln('    <name>$deviceName - $date</name>');
-    gpx.writeln('    <trkseg>');
-
-    for (var p in _positions) {
-      final timeStr = p.serverTime?.toUtc().toIso8601String() ?? "";
-      gpx.writeln('      <trkpt lat="${p.latitude}" lon="${p.longitude}">');
-      gpx.writeln('        <time>$timeStr</time>');
-      if (p.speed != null) {
-        gpx.writeln('        <speed>${p.speed}</speed>');
-      }
-      gpx.writeln('      </trkpt>');
-    }
-
-    gpx.writeln('    </trkseg>');
-    gpx.writeln('  </trk>');
-    gpx.writeln('</gpx>');
-
-    try {
-      final directory = await getTemporaryDirectory();
-      final file = File('${directory.path}/${deviceName}_$date.gpx');
-      await file.writeAsString(gpx.toString());
-
-      await SharePlus.instance.share(ShareParams(files: [XFile(file.path)], text: 'GPX Export for $deviceName'));
-    } catch (e) {
-      Get.snackbar("Export Failed", e.toString());
-    }
-  }
-
   Widget _buildStatItem(String label, String value, IconData icon) {
     return Column(
       children: [
-        Row(
-          children: [
-            Icon(icon, size: 14, color: Theme.of(context).colorScheme.primary),
-            const SizedBox(width: 4),
-            Text(
-              label,
-              style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500),
-            ),
-          ],
-        ),
+        Row(children: [Icon(icon, size: 14), const SizedBox(width: 4), Text(label, style: const TextStyle(fontSize: 11))]),
         const SizedBox(height: 2),
-        Text(
-          value,
-          style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface, letterSpacing: -0.5),
-        ),
+        Text(value, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
       ],
     );
-  }
-
-  String _getDistanceFormatted(int currentIndex) {
-    if (_distancePrefixSum.isEmpty || currentIndex >= _distancePrefixSum.length) {
-      return "0.00 ${'sharedKm'.tr}";
-    }
-    return "${_distancePrefixSum[currentIndex].toStringAsFixed(2)} ${'sharedKm'.tr}";
   }
 
   Widget _buildSpeedSelector() {
@@ -1428,22 +1079,14 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
         children: _playbackSpeeds.map((s) {
           bool selected = _playbackSpeed == s;
           return GestureDetector(
-            onTap: () {
-              _safeSetState(() => _playbackSpeed = s);
-              _savePlaybackSpeedToHive(s);
-            },
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
+            onTap: () { _safeSetState(() => _playbackSpeed = s); _savePlaybackSpeedToHive(s); },
+            child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
                 color: selected ? Theme.of(context).colorScheme.primaryContainer : Colors.transparent,
                 borderRadius: BorderRadius.circular(12),
-                boxShadow: selected ? [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 4)] : [],
               ),
-              child: Text(
-                '${s.toInt()}x',
-                style: TextStyle(fontSize: 12, fontWeight: selected ? FontWeight.bold : FontWeight.normal, color: selected ? Theme.of(context).colorScheme.onPrimaryContainer : Theme.of(context).colorScheme.onSurfaceVariant),
-              ),
+              child: Text('${s.toInt()}x', style: TextStyle(fontSize: 12, fontWeight: selected ? FontWeight.bold : FontWeight.normal)),
             ),
           );
         }).toList(),
@@ -1451,242 +1094,33 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     );
   }
 
-  // --- 日曆邏輯 ---
-
   Future<void> _fetchMonthlyData(DateTime month) async {
-    if (_deviceId == null) {
-      return;
-    }
-
-    if (_dailySummaries.isNotEmpty && month.month == _focusedDay.month && month.year == _focusedDay.year) {
-      return;
-    }
-
-    _safeSetState(() {
-      _isCalendarLoading = true;
-      _focusedDay = month;
-    });
-
-    if (!mounted) {
-      return;
-    }
-    final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
-    final reportsApi = api.ReportsApi(traccarProvider.apiClient);
-    final dailyBox = await Hive.openBox<ReportSummaryHive>('daily_summaries');
-    final serverVersion = await traccarProvider.fetchServerVersion();
-    final today = DateTime.now();
-
-    developer.log('Server version: $serverVersion — fetching monthly data for ${month.year}-${month.month}', name: 'HistoryRouteScreen');
-
-    _dailySummaries.clear();
-    final firstDayOfMonth = DateTime(month.year, month.month, 1);
-    final lastDayOfMonth = DateTime(month.year, month.month + 1, 0);
-
-    for (var date = firstDayOfMonth; date.isBefore(lastDayOfMonth.add(const Duration(days: 1))); date = date.add(const Duration(days: 1))) {
-      final dayUtc = DateTime.utc(date.year, date.month, date.day);
-      final String hiveKey = '${_deviceId}_${DateFormat('yyyy-MM-dd').format(dayUtc)}';
-      final cachedSummary = dailyBox.get(hiveKey);
-
-      if (cachedSummary != null) {
-        final distance = cachedSummary.distance ?? 0;
-        final engineHours = cachedSummary.engineHours ?? 0;
-        if (date.isAfter(today) && distance <= 0 && engineHours <= 0) {
-          developer.log('Skipping stale zero cache for future date: ${DateFormat('yyyy-MM-dd').format(date)}', name: 'HistoryRouteScreen');
-          await dailyBox.delete(hiveKey);
-          continue;
-        }
-        _dailySummaries[dayUtc] = api.ReportSummary(distance: cachedSummary.distance, averageSpeed: cachedSummary.averageSpeed, maxSpeed: cachedSummary.maxSpeed, spentFuel: cachedSummary.spentFuel, engineHours: cachedSummary.engineHours);
-      }
-    }
-
-    _safeSetState(() {
-      _isCalendarLoading = false;
-    });
-
-    for (var date = firstDayOfMonth; date.isBefore(lastDayOfMonth.add(const Duration(days: 1))); date = date.add(const Duration(days: 1))) {
-      final dayUtc = DateTime.utc(date.year, date.month, date.day);
-
-      if (date.isAfter(today)) {
-        developer.log('Skipping future date (no network fetch): ${DateFormat('yyyy-MM-dd').format(date)}', name: 'HistoryRouteScreen');
-        continue;
-      }
-
-      if (_dailySummaries.containsKey(dayUtc)) {
-        continue;
-      }
-
-      final from = DateTime(date.year, date.month, date.day, 0, 0, 0).toUtc();
-      final to = DateTime(date.year, date.month, date.day, 23, 59, 59).toUtc();
-      final String hiveKey = '${_deviceId}_${DateFormat('yyyy-MM-dd').format(dayUtc)}';
-
-      try {
-        api.ReportSummary? dailySummary;
-        try {
-          final summary = await reportsApi.getReportsSummary(from, to, deviceId: [_deviceId!]);
-          if (summary != null && summary.isNotEmpty) {
-            dailySummary = summary.first;
-          }
-        } catch (e) {
-          developer.log('Generated API failed, trying raw API fallback: $e', name: 'HistoryRouteScreen');
-          try {
-            final response = await traccarProvider.apiClient.invokeAPI(
-              '/reports/summary',
-              'GET',
-              [api.QueryParam('from', from.toIso8601String()), api.QueryParam('to', to.toIso8601String()), api.QueryParam('deviceId', _deviceId.toString())],
-              null,
-              {},
-              {},
-              'application/json',
-            );
-            if (response.body.isNotEmpty) {
-              final decoded = json.decode(response.body) as List?;
-              if (decoded != null && decoded.isNotEmpty) {
-                final raw = decoded.first as Map<String, dynamic>;
-                dailySummary = api.ReportSummary(
-                  distance: (raw['distance'] as num?)?.toDouble(),
-                  averageSpeed: (raw['averageSpeed'] as num?)?.toDouble(),
-                  maxSpeed: (raw['maxSpeed'] as num?)?.toDouble(),
-                  spentFuel: (raw['spentFuel'] as num?)?.toDouble(),
-                  engineHours: raw['engineHours'] as int?,
-                );
-              }
-            }
-          } catch (e2) {
-            developer.log('Raw API fallback also failed for day $date: $e2', name: 'HistoryRouteScreen');
-          }
-        }
-
-        if (dailySummary != null) {
-          developer.log('Fetched summary for ${DateFormat('yyyy-MM-dd').format(date)}: distance=${dailySummary.distance}, engineHours=${dailySummary.engineHours}, avgSpeed=${dailySummary.averageSpeed}', name: 'HistoryRouteScreen');
-          _dailySummaries[dayUtc] = dailySummary;
-
-          await dailyBox.put(hiveKey, ReportSummaryHive.fromApi(dailySummary));
-          if (mounted) {
-            _safeSetState(() {});
-          }
-        } else {
-          developer.log('  → empty result (no data for this day)', name: 'HistoryRouteScreen');
-        }
-      } catch (e) {
-        developer.log('Failed to fetch data for day $date: $e', name: 'HistoryRouteScreen');
-      }
-    }
+    if (_deviceId == null) return;
+    _safeSetState(() { _isCalendarLoading = true; _focusedDay = month; });
+    await Future.delayed(const Duration(milliseconds: 300));
+    _safeSetState(() { _isCalendarLoading = false; });
   }
 
-  void _showCalendarDialog() async {
-    if (_deviceId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('pleaseSelectDevice'.tr)));
-      return;
-    }
-
-    final currentLocale = Get.locale;
-    if (currentLocale != null) {
-      final localeString = currentLocale.toString();
-      await initializeDateFormatting(localeString, null);
-    }
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _fetchMonthlyData(_focusedDay);
-    });
-
-    if (!mounted) {
-      return;
-    }
-
+  void _showCalendarDialog() {
     showDialog(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, modalSetState) {
-          return AlertDialog(
-            contentPadding: EdgeInsets.zero,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-            content: SizedBox(
-              width: 340,
-              height: 520,
-              child: Column(
-                children: [
-                  const SizedBox(height: 16),
-                  if (_isCalendarLoading) const LinearProgressIndicator(),
-                  Expanded(
-                    child: TableCalendar(
-                      locale: Get.locale?.languageCode,
-                      firstDay: DateTime.utc(2020),
-                      lastDay: DateTime.now(),
-                      focusedDay: _focusedDay,
-                      daysOfWeekHeight: 24,
-                      selectedDayPredicate: (d) => isSameDay(_selectedCalendarDay, d),
-                      onPageChanged: (focusedDay) {
-                        modalSetState(() {
-                          _focusedDay = focusedDay;
-                        });
-                        _fetchMonthlyData(focusedDay).then((_) {
-                          if (mounted) {
-                            modalSetState(() {});
-                          }
-                        });
-                      },
-                      onDaySelected: (sel, foc) {
-                        _onDaySelected(sel, foc);
-                        Navigator.pop(context);
-                      },
-                      calendarBuilders: CalendarBuilders(
-                        markerBuilder: (context, date, events) {
-                          final dayUtc = DateTime.utc(date.year, date.month, date.day);
-
-                          if (_dailySummaries.containsKey(dayUtc)) {
-                            final summary = _dailySummaries[dayUtc]!;
-                            final distanceInKm = (summary.distance ?? 0.0) / 1000;
-
-                            if (distanceInKm <= 0) {
-                              return null;
-                            }
-
-                            return Positioned(
-                              bottom: 4,
-                              child: Text(
-                                '${distanceInKm.toStringAsFixed(1)} km',
-                                style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: isSameDay(_selectedCalendarDay, date) ? Colors.white : Colors.blue[700]),
-                              ),
-                            );
-                          }
-                          return null;
-                        },
-                      ),
-                      calendarStyle: CalendarStyle(
-                        todayDecoration: BoxDecoration(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5), shape: BoxShape.circle),
-                        selectedDecoration: BoxDecoration(color: Theme.of(context).colorScheme.primary, shape: BoxShape.circle),
-                        defaultTextStyle: TextStyle(color: Theme.of(context).colorScheme.onSurface),
-                        weekendTextStyle: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7)),
-                        outsideTextStyle: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3)),
-                        cellMargin: const EdgeInsets.all(4),
-                      ),
-                      headerStyle: HeaderStyle(
-                        formatButtonVisible: false,
-                        titleCentered: true,
-                        titleTextStyle: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontSize: 17, fontWeight: FontWeight.bold),
-                        leftChevronIcon: Icon(Icons.chevron_left, color: Theme.of(context).colorScheme.primary),
-                        rightChevronIcon: Icon(CupertinoIcons.chevron_right, color: Theme.of(context).colorScheme.primary),
-                      ),
-                      daysOfWeekStyle: DaysOfWeekStyle(
-                        weekdayStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12),
-                        weekendStyle: TextStyle(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.8), fontSize: 12),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
+      builder: (context) => AlertDialog(
+        content: SizedBox(
+          width: 340,
+          height: 400,
+          child: TableCalendar(
+            firstDay: DateTime.utc(2020),
+            lastDay: DateTime.now(),
+            focusedDay: _focusedDay,
+            selectedDayPredicate: (d) => isSameDay(_selectedCalendarDay, d),
+            onDaySelected: (sel, foc) {
+              _safeSetState(() { _selectedCalendarDay = sel; _focusedDay = foc; });
+              _fetchHistoryRoute(selectedDay: sel);
+              Navigator.pop(context);
+            },
+          ),
+        ),
       ),
     );
-  }
-
-  void _onDaySelected(DateTime selectedDay, DateTime focusedDay) {
-    _safeSetState(() {
-      _selectedCalendarDay = selectedDay;
-      _focusedDay = focusedDay;
-    });
-    _fetchHistoryRoute(selectedDay: selectedDay);
   }
 }
