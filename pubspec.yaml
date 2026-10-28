@@ -84,9 +84,9 @@ dev_dependencies:
 
 flutter_native_splash:
   color: "#ffffff"
-  image: assets/images/appstore.png
+  image: assets/branding/appstore.png
   android_12:
-    image: assets/images/appstore.png
+    image: assets/branding/appstore.png
     color: "#ffffff"
   fullscreen: true
 
@@ -98,8 +98,8 @@ flutter:
     - assets/styles/
 
     # Internal Databases
-    - assets/sqldb/chinese_ultra_res.db
-    - assets/sqldb/english_ultra_res.db
+    # OfflineAddressService 目前只支援緬甸文離線地址（_getDbName() 只回傳這一個）。
+    # chinese_ultra_res.db / english_ultra_res.db 從未載入，已於 2026-10-28 移除。
     - assets/sqldb/myanmar_ultra_res_my.db
 
     # Static Assets & Icons

@@ -6,6 +6,56 @@
 
 ---
 
+## ✅ 2026-10-28 已實際執行（P0：零風險資源瘦身，未改任何 Dart 程式）
+
+| 項目 | 變更 | APK 影響（壓縮後） |
+|---|---|---|
+| 未使用的離線 DB | `chinese_ultra_res.db`（20 MB）、`english_ultra_res.db`（18 MB）移出 assets 宣告（`OfflineAddressService` 只會載入緬甸文） | **−9.30 MB** 中最大宗（兩檔約 −9.0 MB） |
+| 未引用的 MapLibre style | 刪除 `streets-v4`、`aws-standard`、`aws-hybrid`、`versatiles-style`、`positron`、`positron-gl-style`、`voyager-gl-style`、`-liberty`、`esri-satellite`（程式只用 `liberty` / `dark` / `esri-hybrid` / `fiord`） | −91 KB |
+| 未引用的圖片 | 刪除 `route.png`（135 KB）、`play_store_512.png`（53 KB）、`parking.png`（2.7 KB） | −190 KB |
+| `.DS_Store` | 從 `assets/` 移除（Flutter 打包時本就會忽略隱藏檔，屬清理） | 0 |
+
+**量測結果**：`app-arm64-v8a-release.apk` 打包內容由 **57.09 MiB → 47.79 MiB（−9.30 MiB / −16.3%）**；`flutter_assets` 內檔案數由 241 → 227（移除的正好是上表 14 個檔案，無其他變動）。
+**驗證**：`dart analyze` 0 error / 0 warning；`flutter build bundle --release` 成功，`AssetManifest.bin` 內已無任何被刪除的資源。
+
+補充（同批加入）：
+- `appstore.png`（304 KB，僅供 `flutter_native_splash` 產圖）移至 `assets/branding/`，不再進 APK。
+- `logo.png` 由 1024×1024（98.7 KB）重採樣為 540×540（11.3 KB），splash 顯示尺寸為 180×180，畫質無感差異。
+
+---
+
+## 🔍 2026-10-28 重建後體積分佈（arm64 release APK = 47.79 MiB）
+
+| 大小 | 佔比 | 組成 | 可刪除性 |
+|---:|---:|---|---|
+| 12.62 MiB | 26.4% | `libmaplibre.so`（MapLibre 原生引擎） | 只能換掉整個地圖引擎 |
+| 11.20 MiB | 23.4% | `libflutter.so`（Flutter 引擎） | 不可動 |
+| 10.31 MiB | 21.6% | `libapp.so`（本專案 Dart 程式碼，含 61 個語系 1.9 MB 原始碼） | 可縮（語系、套件精簡、obfuscate） |
+| 5.56 MiB | 11.6% | MLKit 條碼（`libbarhopper_v3.so` + 3 個 `.tflite`） | 可改 unbundled（需 GMS + 連網） |
+| 4.54 MiB | 9.5% | 緬甸文離線 DB | 功能必需 |
+| 1.84 MiB | 3.9% | `classes.dex` | R8 minify 可減 |
+| 0.72 MiB | 1.5% | 圖片（219 張 marker） | 可轉 WebP |
+| 0.47 MiB | 1.0% | NOTICES / 字型 / manifest | 不可動 |
+| 0.34 MiB | 0.7% | `resources.arsc` | `localeFilters` 可減 |
+
+**結論**：資源類（DB / style / 圖片）已清完，剩下 85% 是原生二進位檔，只能靠「換掉引擎 / 精簡程式碼 / 壓縮 .so」三種手段。
+
+### 後續可選手段（依效益排序）
+
+| # | 手段 | APK 影響 | 代價 |
+|---|---|---:|---|
+| A | `packaging.jniLibs.useLegacyPackaging = true`（.so 壓縮進 APK） | **−23.21 MiB（→ ~24.6 MiB）** | 安裝後佔用 +約 19 MB、首次啟動略慢、Play 不建議 |
+| B | MLKit 改 unbundled（`play-services-mlkit-barcode-scanning`） | −5.56 MiB | 需 GMS + 首次掃碼連網；無 GMS 機型不可用 |
+| C | 移除 `maplibre_gl`，全面改用 `flutter_map` | −12.62 MiB | 需改寫 6 個地圖畫面（map / livetracking / history / 3 個報表） |
+| D | 語系由 61 個精簡到實際需要的 3–5 個 | 估 −1.2 ~ −1.7 MiB | 產品面：移除其他語言 |
+| E | R8 `isMinifyEnabled` + `isShrinkResources` + `localeFilters` | 估 −0.4 ~ −0.9 MiB | 需實機回歸（MLKit / MapLibre） |
+| F | 219 張 marker PNG 轉 WebP | 估 −0.2 ~ −0.3 MiB | 需同步改 3 處 asset 路徑字串 |
+
+
+> 未執行（依需求暫緩）：`appstore.png` 移出 assets（需重跑 `flutter_native_splash:create`）、Gradle `isMinifyEnabled` / `isShrinkResources`、MLKit 改用按需下載版、圖片轉 WebP、語言檔精簡。
+
+---
+
 ## 📊 可行性速覽
 
 | 層級 | 動作 | 影響 | 可行性 |

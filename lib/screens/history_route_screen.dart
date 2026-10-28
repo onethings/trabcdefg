@@ -1,4 +1,3 @@
-// lib/screens/history_route_screen.dart
 import 'dart:async';
 import 'dart:convert';
 import 'dart:developer' as developer;
@@ -215,7 +214,35 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     _initAnimationController();
     OfflineAddressService.initDatabase();
     cleanExpiredRouteHistory();
+    _loadPlaybackSpeedFromHive();
     _loadInitialParamsAndFetch();
+  }
+
+  Future<void> _loadPlaybackSpeedFromHive() async {
+    try {
+      // 確保通用設定 Box 已開啟（若尚未全域開啟）
+      var settingsBox = Hive.isBoxOpen('settings') ? Hive.box('settings') : await Hive.openBox('settings');
+      final savedSpeed = settingsBox.get('playback_speed');
+      if (savedSpeed != null && savedSpeed is num) {
+        final speedDouble = savedSpeed.toDouble();
+        if (_playbackSpeeds.contains(speedDouble)) {
+          _safeSetState(() {
+            _playbackSpeed = speedDouble;
+          });
+        }
+      }
+    } catch (e) {
+      developer.log('Failed to load playback speed from Hive: $e', name: 'HistoryRouteScreen');
+    }
+  }
+
+  Future<void> _savePlaybackSpeedToHive(double speed) async {
+    try {
+      var settingsBox = Hive.isBoxOpen('settings') ? Hive.box('settings') : await Hive.openBox('settings');
+      await settingsBox.put('playback_speed', speed);
+    } catch (e) {
+      developer.log('Failed to save playback speed to Hive: $e', name: 'HistoryRouteScreen');
+    }
   }
 
   void _initAnimationController() {
@@ -1118,7 +1145,10 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
         children: _playbackSpeeds.map((s) {
           bool selected = _playbackSpeed == s;
           return GestureDetector(
-            onTap: () => _safeSetState(() => _playbackSpeed = s),
+            onTap: () {
+              _safeSetState(() => _playbackSpeed = s);
+              _savePlaybackSpeedToHive(s);
+            },
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
