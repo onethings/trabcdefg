@@ -211,6 +211,13 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
   Symbol? _playbackSymbol;
   int _lastCameraAnimTime = 0;
 
+  static const double _followZoomLevel = 16.0;
+  static const int _followCameraThrottleMs = 600;
+  static const int _focusCameraAnimMs = 800;
+
+  // 放大動畫進行中時暫停跟隨鏡頭，避免跟隨鏡頭取消放大動畫
+  int _suppressFollowCameraUntilMs = 0;
+
   // GeoJSON 圖層識別碼
   static const String _routeSourceId = "history_route_source";
   static const String _routeLayerId = "history_route_layer";
@@ -666,7 +673,10 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
         {
           "type": "Feature",
           "properties": properties,
-          "geometry": {"type": "Polygon", "coordinates": [_circleRing(lat, lon, radius)]},
+          "geometry": {
+            "type": "Polygon",
+            "coordinates": [_circleRing(lat, lon, radius)],
+          },
         },
       ];
     }
@@ -681,7 +691,10 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
         {
           "type": "Feature",
           "properties": properties,
-          "geometry": {"type": "Polygon", "coordinates": [ring]},
+          "geometry": {
+            "type": "Polygon",
+            "coordinates": [ring],
+          },
         },
       ];
     }
@@ -854,14 +867,28 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
       _updatePlaybackUI();
     }
 
-    if (_playbackPositionRx.value == 0) {
-      _followUser = true;
-      final startPoint = LatLng(_positions.first.latitude!.toDouble(), _positions.first.longitude!.toDouble());
-      _mapController?.animateCamera(CameraUpdate.newLatLngZoom(startPoint, 16.0), duration: const Duration(milliseconds: 800));
-    }
+    _followUser = true;
+    _focusCameraOnPlayback();
 
     _safeSetState(() => _isPlaying = true);
     _playbackAnimationController?.repeat();
+  }
+
+  // 開始播放時把鏡頭拉近到目前播放位置；已比跟隨等級更近時維持原縮放
+  void _focusCameraOnPlayback() {
+    final controller = _mapController;
+    if (controller == null || _positions.isEmpty) return;
+
+    final int idx = _playbackPositionRx.value.floor().clamp(0, _positions.length - 1);
+    final pos = _positions[idx];
+    final point = LatLng(pos.latitude!.toDouble(), pos.longitude!.toDouble());
+    final double currentZoom = controller.cameraPosition?.zoom ?? _currentZoom;
+    final double targetZoom = max(currentZoom, _followZoomLevel);
+    final int now = DateTime.now().millisecondsSinceEpoch;
+
+    _suppressFollowCameraUntilMs = now + _focusCameraAnimMs + 100;
+    _lastCameraAnimTime = now;
+    controller.animateCamera(CameraUpdate.newLatLngZoom(point, targetZoom), duration: const Duration(milliseconds: _focusCameraAnimMs));
   }
 
   void _onAnimationTick() {
@@ -937,9 +964,9 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     // 相機跟隨與節流機制
     if (_followUser) {
       final now = DateTime.now().millisecondsSinceEpoch;
-      if (now - _lastCameraAnimTime > 600) {
+      if (now >= _suppressFollowCameraUntilMs && now - _lastCameraAnimTime > _followCameraThrottleMs) {
         _lastCameraAnimTime = now;
-        LatLngBounds? visibleRegion = await _mapController!.getVisibleRegion();
+        LatLngBounds visibleRegion = await _mapController!.getVisibleRegion();
         double latSpan = visibleRegion.northeast.latitude - visibleRegion.southwest.latitude;
         double lngSpan = visibleRegion.northeast.longitude - visibleRegion.southwest.longitude;
 
@@ -1158,7 +1185,10 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
               const SizedBox(width: 8),
               Text('·', style: TextStyle(fontSize: 13, color: theme.colorScheme.onSurfaceVariant)),
               const SizedBox(width: 8),
-              Text(dateLabel, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: theme.colorScheme.onSurface)),
+              Text(
+                dateLabel,
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: theme.colorScheme.onSurface),
+              ),
               const SizedBox(width: 6),
               Icon(Icons.calendar_month_rounded, size: 15, color: theme.colorScheme.onSurfaceVariant),
             ],
