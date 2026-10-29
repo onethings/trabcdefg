@@ -5,7 +5,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart'; //
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timeago/timeago.dart' as timeago;
 import 'package:trabcdefg/l10n/timeago_my.dart'; // 新增 Myanmar TimeAgo
 import 'package:trabcdefg/providers/traccar_provider.dart';
@@ -28,11 +28,11 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
   int _mileageDays = 1; // 1 = today, 3 = last 3 days
   final Map<int, double> _mileageMap = {}; // deviceId -> distance in km
   bool _isLoadingMileage = false;
-  // final OfflineGeocoder _geocoder = OfflineGeocoder();
 
   // 演算法優化：快取地址減少重複計算
   final Map<String, String> _addressCache = {};
-  late Timer _refreshTimer;
+  
+  // 移除原本的全域 _refreshTimer，改由個別 _DeviceTimeAgoText 自行定時更新
 
   @override
   void initState() {
@@ -42,11 +42,7 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
     _searchController.addListener(() {
       setState(() => _searchQuery = _searchController.text);
     });
-
-    // 定時器：每分鐘刷新一次，更新 TimeAgo 與離線狀態
-    _refreshTimer = Timer.periodic(const Duration(minutes: 1), (_) {
-      if (mounted) setState(() {});
-    });
+    // 移除了每分鐘的全域 setState 定時器
   }
 
   // 讀取里程偏好
@@ -131,7 +127,7 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
 
   @override
   void dispose() {
-    _refreshTimer.cancel();
+    // 移除 _refreshTimer.cancel()
     _searchController.dispose();
     super.dispose();
   }
@@ -246,7 +242,7 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
       final bFav = provider.isFavorite(b.id!);
       if (aFav && !bFav) return -1;
       if (!aFav && bFav) return 1;
-      return 0; // 保持原有順序（通常是 API 返回的順序）
+      return 0; // 保持原有順序
     });
 
     return RefreshIndicator(
@@ -310,7 +306,6 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
     final double speedKmH = (position?.speed ?? 0.0) * 1.852;
     final DateTime? lastUpdate = position?.fixTime?.toUtc() ?? device.lastUpdate?.toUtc();
     final isStale = status == 'offline';
-    final lastSeen = lastUpdate == null ? '--' : timeago.format(lastUpdate, locale: Get.locale?.languageCode ?? 'zh');
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
@@ -392,8 +387,9 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
                 children: [
                   Icon(Icons.schedule_rounded, size: 13, color: theme.colorScheme.outline),
                   const SizedBox(width: 5),
+                  // 優化點：改用獨立的小元件局部每分鐘更新 TimeAgo，避免整頁重建
                   Expanded(
-                    child: Text(lastSeen, style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.outline, fontSize: 11)),
+                    child: _DeviceTimeAgoText(lastUpdate: lastUpdate),
                   ),
                   if (_showMileage) _buildMileageWidget(device.id!),
                 ],
@@ -534,6 +530,51 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
   }
 
   String? _getStatusText(int index) => [null, 'online', 'offline', 'unknown', 'favorite'][index];
+}
+
+// --- 新增：獨立的 TimeAgo 文字 Widget，每分鐘僅局部刷新該文字 ---
+class _DeviceTimeAgoText extends StatefulWidget {
+  final DateTime? lastUpdate;
+
+  const _DeviceTimeAgoText({required this.lastUpdate});
+
+  @override
+  State<_DeviceTimeAgoText> createState() => _DeviceTimeAgoTextState();
+}
+
+class _DeviceTimeAgoTextState extends State<_DeviceTimeAgoText> {
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    // 每分鐘刷新一次相對時間
+    _timer = Timer.periodic(const Duration(minutes: 1), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final lastSeen = widget.lastUpdate == null
+        ? '--'
+        : timeago.format(widget.lastUpdate!, locale: Get.locale?.languageCode ?? 'zh');
+
+    return Text(
+      lastSeen,
+      style: theme.textTheme.bodySmall?.copyWith(
+        color: theme.colorScheme.outline,
+        fontSize: 11,
+      ),
+    );
+  }
 }
 
 // --- 獨立的 ACC 計時器 Widget，只有這個小區塊每秒更新 ---
