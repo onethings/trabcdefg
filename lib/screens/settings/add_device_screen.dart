@@ -60,6 +60,20 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
     'categoryScooter',
   ];
 
+  // The server stores the canonical lower-case value ("car"); the localized
+  // label is only for display.
+  static String _categoryKeyToValue(String key) =>
+      key.substring('category'.length).toLowerCase();
+
+  static String? _normalizeCategoryValue(String? category) {
+    final trimmed = category?.trim();
+    if (trimmed == null || trimmed.isEmpty) return null;
+    final withoutPrefix = trimmed.toLowerCase().startsWith('category')
+        ? trimmed.substring('category'.length)
+        : trimmed;
+    return withoutPrefix.toLowerCase();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -70,7 +84,9 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
     _modelController = TextEditingController(text: d?.model ?? '');
     _contactController = TextEditingController(text: d?.contact ?? '');
     _groupId = d?.groupId;
-    _category = d?.category ?? (d == null ? 'categoryDefault'.tr : null);
+    _category = d == null
+        ? _categoryKeyToValue('categoryDefault')
+        : _normalizeCategoryValue(d.category);
     _disabled = d?.disabled ?? false;
 
     final attrs =
@@ -225,13 +241,19 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
       );
       final devicesApi = api.DevicesApi(traccarProvider.apiClient);
 
-      if (widget.device == null) {
-        await devicesApi.postDevices(device);
-      } else {
-        await devicesApi.putDevicesId(device.id!, device);
+      final saved = widget.device == null
+          ? await devicesApi.postDevices(device)
+          : await devicesApi.putDevicesId(device.id!, device);
+
+      // Prefer the server copy (it carries the generated id and normalised
+      // fields), then push it into the provider so every screen - the map in
+      // particular - updates without an app restart.
+      final result = saved ?? device;
+      if (result.id != null) {
+        traccarProvider.updateDevice(result);
       }
       if (mounted) {
-        Navigator.of(context).pop(device);
+        Navigator.of(context).pop(result);
       }
     } catch (e) {
       if (mounted) {
@@ -408,16 +430,23 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
   }
 
   List<DropdownMenuItem<String?>> _categoryItems() {
-    final options = _categoryKeys.map((k) => k.tr).toSet().toList();
-    if (_category != null && !options.contains(_category)) {
-      options.insert(0, _category!);
+    final items = <DropdownMenuItem<String?>>[];
+    final values = <String>{};
+    for (final key in _categoryKeys) {
+      final value = _categoryKeyToValue(key);
+      if (!values.add(value)) continue;
+      items.add(DropdownMenuItem<String?>(value: value, child: Text(key.tr)));
     }
-    return options
-        .map(
-          (value) =>
-              DropdownMenuItem<String?>(value: value, child: Text(value)),
-        )
-        .toList();
+    // Keep the current value selectable even if it is not one of the
+    // known categories (e.g. a value set from the Traccar web UI).
+    final current = _category;
+    if (current != null && !values.contains(current)) {
+      items.insert(
+        0,
+        DropdownMenuItem<String?>(value: current, child: Text(current)),
+      );
+    }
+    return items;
   }
 
   Widget _attributeRow(int index) {

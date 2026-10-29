@@ -586,6 +586,23 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     }
   }
 
+  /// Re-resolves the selected device from the provider so edited fields
+  /// (category, name, ...) reach the detail panel and the marker labels.
+  void _syncSelectedDeviceFromProvider(TraccarProvider provider) {
+    final int? deviceId = _currentDevice?.id ?? _selectedDeviceNotifier.value?.id;
+    if (deviceId == null) return;
+
+    final api.Device? fresh = provider.devices.firstWhereOrNull((d) => d.id == deviceId);
+    if (fresh == null) return;
+
+    if (!identical(fresh, _currentDevice)) {
+      _safeSetState(() => _currentDevice = fresh);
+    }
+    if (!identical(fresh, _selectedDeviceNotifier.value)) {
+      _selectedDeviceNotifier.value = fresh;
+    }
+  }
+
   void _updateSelectedDeviceLive(TraccarProvider provider) {
     final int? currentDeviceId = _currentDevice?.id;
     if (currentDeviceId == null) return;
@@ -1289,7 +1306,14 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                     ),
                   ),
                 ),
-                if (_isStyleLoaded) _DataUpdateListener(data: traccarProvider.positionsRevision, onUpdate: () => _scheduleMarkerUpdate(traccarProvider)),
+                if (_isStyleLoaded)
+                  _DataUpdateListener(
+                    data: Object.hash(traccarProvider.positionsRevision, traccarProvider.devicesRevision),
+                    onUpdate: () {
+                      _syncSelectedDeviceFromProvider(traccarProvider);
+                      _scheduleMarkerUpdate(traccarProvider);
+                    },
+                  ),
                 if (!_isPanelOpen) Positioned(left: _kEdgeInset, right: _kEdgeInset, bottom: MediaQuery.of(context).padding.bottom + _kControlGap, child: _buildBottomControls(traccarProvider, _currentDevice)),
               ],
             ),

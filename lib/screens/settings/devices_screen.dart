@@ -85,24 +85,15 @@ class _DevicesScreenState extends State<DevicesScreen> {
   }
 
   void _editDevice(api.Device device) async {
+    // AddDeviceScreen already persists the change and syncs the provider.
     final updatedDevice = await Navigator.push(context, MaterialPageRoute(builder: (context) => AddDeviceScreen(device: device)));
 
     // FIX: Guard BuildContext usage across async gap
     if (!mounted) return;
 
     if (updatedDevice != null) {
-      try {
-        final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
-        final devicesApi = api.DevicesApi(traccarProvider.apiClient);
-        await devicesApi.putDevicesId(updatedDevice.id!, updatedDevice);
-
-        if (!mounted) return;
-        _fetchDevices();
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('deviceUpdateSuccess'.tr)));
-      } catch (e) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('deviceUpdateFailed'.trParams({'error': e.toString()}))));
-      }
+      _fetchDevices();
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('deviceUpdateSuccess'.tr)));
     }
   }
 

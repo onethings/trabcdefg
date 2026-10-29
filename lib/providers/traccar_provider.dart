@@ -31,6 +31,11 @@ class TraccarProvider with ChangeNotifier {
   int _positionsRevision = 0;
   int get positionsRevision => _positionsRevision;
 
+  /// Bumped whenever the device list itself changes (category, name, ...),
+  /// so map markers can be redrawn even without a new position.
+  int _devicesRevision = 0;
+  int get devicesRevision => _devicesRevision;
+
   List<api.Event> _events = [];
   final Map<int, api.Event> _latestDeviceEvent = {};
   List<api.Geofence> _geofences = [];
@@ -198,6 +203,7 @@ class TraccarProvider with ChangeNotifier {
             }
           }
         }
+        _devicesRevision++;
         notifyListeners();
       }
 
@@ -261,9 +267,16 @@ class TraccarProvider with ChangeNotifier {
   List<api.Notification> get serverNotifications => _serverNotifications;
   bool get isLoading => _isLoading;
 
+  /// Applies a saved device to the in-memory list (adding it when it is new)
+  /// and bumps [devicesRevision] so views such as the map redraw immediately.
   void updateDevice(api.Device updatedDevice) {
     final index = _devices.indexWhere((device) => device.id == updatedDevice.id);
-    if (index == -1) return;
+    if (index == -1) {
+      _devices.add(updatedDevice);
+      _devicesRevision++;
+      notifyListeners();
+      return;
+    }
 
     final current = _devices[index];
     _devices[index] = api.Device(
@@ -281,6 +294,7 @@ class TraccarProvider with ChangeNotifier {
       category: updatedDevice.category,
       attributes: updatedDevice.attributes,
     );
+    _devicesRevision++;
     notifyListeners();
   }
 
@@ -322,6 +336,7 @@ class TraccarProvider with ChangeNotifier {
     _positions = [];
     _positionMap.clear();
     _positionsRevision++;
+    _devicesRevision++;
     _events = [];
     _latestDeviceEvent.clear();
     _geofences = [];
@@ -409,6 +424,7 @@ class TraccarProvider with ChangeNotifier {
         }
       }
       _positionsRevision++;
+      _devicesRevision++;
     } finally {
       _webSocketPositionsDuringFetch = null;
       _isLoading = false;
