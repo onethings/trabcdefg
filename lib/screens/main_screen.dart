@@ -24,7 +24,8 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   int _currentIndex = 0;
   final List<Widget> _screens = const [DeviceListScreen(), MapScreen(), SettingsScreen()];
-
+  // 新增一個變數用來追蹤是否已載入完成上次的 tab，避免畫面閃爍
+  bool _isInitialized = false;
   // 伺服器健康檢查：定期確認伺服器是否還在，並讓 401 的處理集中在一處。
   // 連線失敗或逾時只提示，不會把仍有效的登入狀態丟掉。
   Timer? _serverHealthTimer;
@@ -34,7 +35,13 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _loadLastTab();
+    _loadLastTab().then((_) {
+      if (mounted) {
+        setState(() {
+          _isInitialized = true;
+        });
+      }
+    });
     _startServerHealthCheck();
   }
 
@@ -157,6 +164,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
+    if (!_isInitialized) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
     return CupertinoTabScaffold(
       tabBar: CupertinoTabBar(
         currentIndex: _currentIndex,
