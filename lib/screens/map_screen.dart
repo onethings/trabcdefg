@@ -38,7 +38,8 @@ const double _kMaxMapZoom = 19.0;
 const double _kMarkerSelectionRadius = 64.0;
 const Duration _kSymbolTapGuard = Duration(milliseconds: 300);
 const Duration _kCameraEventGrace = Duration(milliseconds: 250);
-const int _kMaxTrailPoints = 3000;
+const int _kMaxTrailPoints = 1000; //3000
+const double _kMinTrailDistanceMeters = 5.0; // 新增：GPS 最小距離閥值（公尺），過濾飄移
 const double _kAddressRefreshMeters = 50;
 
 class MapScreen extends StatefulWidget {
@@ -643,12 +644,23 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     if (_trailPoints.isNotEmpty) {
       final maplibre.LatLng last = _trailPoints.last;
       if (last.latitude == point.latitude && last.longitude == point.longitude) return;
+      if (_metersBetween(last, point) < 5.0) return; // 5公尺內的飄移直接濾掉
     }
 
     _trailPoints.add(point);
+
+    // 當點數超過上限時，透過清空與重新加入壓縮後的點來維持 final 屬性
     if (_trailPoints.length > _kMaxTrailPoints) {
-      _trailPoints.removeRange(0, _trailPoints.length - _kMaxTrailPoints);
+      final compressed = _douglasPeucker(_trailPoints, 2.0);
+      _trailPoints.clear();
+      _trailPoints.addAll(compressed);
+
+      // 如果壓完還是超過上限，才強制切除最舊的點
+      if (_trailPoints.length > _kMaxTrailPoints) {
+        _trailPoints.removeRange(0, _trailPoints.length - _kMaxTrailPoints);
+      }
     }
+
     _pushTrailGeometry();
   }
 
@@ -681,6 +693,59 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     } catch (e) {
       debugPrint("Geocoder error: $e");
     }
+  }
+
+  // 放入 _MapScreenState 類別中的任意方法旁（例如 _metersBetween 附近）
+
+  List<maplibre.LatLng> _douglasPeucker(List<maplibre.LatLng> points, double tolerance) {
+    if (points.length <= 2) return points;
+
+    int maxIndex = 0;
+    double maxDist = 0.0;
+
+    final first = points.first;
+    final last = points.last;
+
+    for (int i = 1; i < points.length - 1; i++) {
+      final dist = _perpendicularDistance(points[i], first, last);
+      if (dist > maxDist) {
+        maxDist = dist;
+        maxIndex = i;
+      }
+    }
+
+    if (maxDist > tolerance) {
+      final left = _douglasPeucker(points.sublist(0, maxIndex + 1), tolerance);
+      final right = _douglasPeucker(points.sublist(maxIndex), tolerance);
+      return [...left.sublist(0, left.length - 1), ...right];
+    } else {
+      return [first, last];
+    }
+  }
+
+  // 計算點 p 到直線 ab 的垂直距離（公尺）
+  double _perpendicularDistance(maplibre.LatLng p, maplibre.LatLng a, maplibre.LatLng b) {
+    final double x = p.longitude;
+    final double y = p.latitude;
+    final double x1 = a.longitude;
+    final double y1 = a.latitude;
+    final double x2 = b.longitude;
+    final double y2 = b.latitude;
+
+    final double dx = x2 - x1;
+    final double dy = y2 - y1;
+
+    if (dx == 0 && dy == 0) {
+      return _metersBetween(a, p);
+    }
+
+    // 計算點到線段的垂直距離（利用向量叉積原理）
+    final double numerator = ((dy * x) - (dx * y) + (x2 * y1) - (y2 * x1)).abs();
+    final double denominator = math.sqrt(dx * dx + dy * dy);
+
+    // 將經緯度差值粗略轉換為公尺（赤道附近 1 度約 111,000 公尺）
+    final double degreesToMeters = 111000.0;
+    return (numerator / denominator) * degreesToMeters;
   }
 
   double _metersBetween(maplibre.LatLng a, maplibre.LatLng b) {
