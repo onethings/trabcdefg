@@ -2,13 +2,14 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import 'package:trabcdefg/services/auth_service.dart';
 import 'package:trabcdefg/services/auth_session_store.dart';
 import 'package:trabcdefg/services/websocket_service.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
 import 'package:trabcdefg/storage/user_database_helper.dart';
 
-class TraccarProvider with ChangeNotifier {
+class TraccarProvider with ChangeNotifier, WidgetsBindingObserver {
   static TraccarProvider? _instance;
   static TraccarProvider? get instance => _instance;
 
@@ -49,8 +50,13 @@ class TraccarProvider with ChangeNotifier {
   final Map<int, List<api.Position>> _prefetchedHistory = {};
   Map<int, List<api.Position>> get prefetchedHistory => _prefetchedHistory;
 
+  // --- 健康檢查與 Session 狀態管理相關變數 ---
+  Timer? _serverHealthTimer;
+  int _serverFailCount = 0;
+
   TraccarProvider({required this.apiClient, required this.webSocketService, required this.authService}) {
     _instance = this;
+    WidgetsBinding.instance.addObserver(this); // 註冊 App 生命週期觀察者
     _listenToWebSocket();
     _loadFavorites();
 
@@ -59,6 +65,80 @@ class TraccarProvider with ChangeNotifier {
     final sessionStore = AuthSessionStore.instance;
     sessionStore.onSessionUpdated = setSessionId;
     sessionStore.onSessionCleared = clearLocalSession;
+  }
+
+  // --- 生命週期處理 (App Lifecycle) ---
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // 重新喚醒時重置失敗計數器並重新開啟健康檢查與驗證
+      _serverFailCount = 0;
+      startServerHealthCheck();
+      validateSessionOnResume();
+    } else {
+      // 進入背景或關閉時暫停輪詢，避免產生無效連線錯誤
+      _serverHealthTimer?.cancel();
+    }
+  }
+
+  // --- 伺服器健康檢查與 Session 狀態驗證 ---
+  /// 啟動伺服器健康檢查（每 20 秒 ping 一次 GET /session）
+  void startServerHealthCheck() {
+    _serverHealthTimer?.cancel();
+    _serverHealthTimer = Timer.periodic(const Duration(seconds: 20), (_) => _checkServerHealth());
+  }
+
+  Future<void> _checkServerHealth() async {
+    if (_sessionId == null) return;
+    try {
+      final sessionApi = api.SessionApi(apiClient);
+      await sessionApi.getSession().timeout(const Duration(seconds: 10));
+      _serverFailCount = 0; // 伺服器回應正常
+    } catch (e) {
+      final isAuthFailure = e is api.ApiException && e.code == 401;
+      if (!isAuthFailure) {
+        _serverFailCount++;
+        debugPrint('Server unreachable (health check $_serverFailCount): $e');
+        if (_serverFailCount == 2) {
+          Get.snackbar('Error'.tr, 'Connection to server lost. Please check your network.'.tr, snackPosition: SnackPosition.BOTTOM);
+        }
+        return;
+      }
+
+      // 若為 401，且 AuthSessionStore 內的 session 已被清除（靜默重登失敗）
+      if (AuthSessionStore.instance.sessionId != null) return;
+      _serverHealthTimer?.cancel();
+      if (Get.currentRoute != '/login') {
+        Get.snackbar('Error'.tr, 'Your session has expired. Please log in again.'.tr, snackPosition: SnackPosition.BOTTOM);
+        Get.offAllNamed('/login');
+      }
+    }
+  }
+
+  /// App 從背景恢復時觸發 Session 驗證與資料重新讀取
+  Future<void> validateSessionOnResume() async {
+    final savedSessionId = AuthSessionStore.instance.sessionId;
+    if (savedSessionId == null) {
+      Get.offAllNamed('/login');
+      return;
+    }
+
+    if (_sessionId != savedSessionId) {
+      setSessionId(savedSessionId);
+    }
+
+    try {
+      final sessionApi = api.SessionApi(apiClient);
+      await sessionApi.getSession().timeout(const Duration(seconds: 10));
+      debugPrint('Session validated on resume — still active.');
+      // 驗證成功後同步刷新最新的即時資料
+      await fetchInitialData();
+    } catch (e) {
+      debugPrint('Session validation failed on resume: $e');
+      if (AuthSessionStore.instance.sessionId == null) {
+        Get.offAllNamed('/login');
+      }
+    }
   }
 
   String? get serverVersion => _serverVersion;
@@ -77,8 +157,6 @@ class TraccarProvider with ChangeNotifier {
     }
   }
 
-  // lib/providers/traccar_provider.dart (新增部分)
-
   // 里程相關狀態
   final Map<int, double> _mileageMap = {};
   Map<int, double> get mileageMap => _mileageMap;
@@ -86,7 +164,7 @@ class TraccarProvider with ChangeNotifier {
   bool _isLoadingMileage = false;
   bool get isLoadingMileage => _isLoadingMileage;
 
-  // 1. 取得里程資料邏輯移至 Provider
+  // 1. 取得里程資料邏輯
   Future<void> fetchMileageData(int mileageDays) async {
     if (_devices.isEmpty || _sessionId == null) return;
 
@@ -129,13 +207,13 @@ class TraccarProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  // 2. 刪除裝置邏輯移至 Provider
+  // 2. 刪除裝置邏輯
   Future<bool> deleteDevice(int deviceId) async {
     try {
       final devicesApi = api.DevicesApi(apiClient);
       await devicesApi.deleteDevicesId(deviceId);
 
-      // 本地快同步更新
+      // 本地快取同步更新
       _devices.removeWhere((d) => d.id == deviceId);
       _positionMap.remove(deviceId);
       _favoriteDeviceIds.remove(deviceId);
@@ -321,6 +399,8 @@ class TraccarProvider with ChangeNotifier {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this); // 移除觀察者
+    _serverHealthTimer?.cancel(); // 取消 Timer
     unawaited(_webSocketSubscription?.cancel());
     webSocketService.disconnect();
     final sessionStore = AuthSessionStore.instance;
@@ -392,6 +472,7 @@ class TraccarProvider with ChangeNotifier {
   }
 
   Future<void> clearSessionAndData() async {
+    _serverHealthTimer?.cancel();
     try {
       final path = '/session';
       final headerParams = <String, String>{'Cookie': 'JSESSIONID=$_sessionId'};
@@ -403,6 +484,7 @@ class TraccarProvider with ChangeNotifier {
   }
 
   Future<void> clearLocalSession() async {
+    _serverHealthTimer?.cancel();
     _sessionId = null;
     _serverVersion = null;
     _devices = [];

@@ -51,7 +51,7 @@ class MapScreen extends StatefulWidget {
   State<MapScreen> createState() => _MapScreenState();
 }
 
-class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
+class _MapScreenState extends State<MapScreen> {
   maplibre.MapLibreMapController? _mapController;
   maplibre.CameraPosition? _lastCameraPosition;
   bool _isStyleLoaded = false;
@@ -99,7 +99,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
+    
 
     _drawerSearchController.addListener(() {
       final String query = _drawerSearchController.text;
@@ -159,7 +159,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   void dispose() {
     _zoomDebounce?.cancel();
     _cameraAnimationGraceTimer?.cancel();
-    WidgetsBinding.instance.removeObserver(this);
+   
     _httpClient.close();
     _drawerSearchController.dispose();
     _panelOpenNotifier.dispose();
@@ -169,27 +169,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     super.dispose();
   }
 
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      if (mounted) {
-        final traccarProvider = context.read<TraccarProvider>();
-        traccarProvider
-            .fetchInitialData()
-            .then((_) {
-              if (mounted) {
-                _scheduleMarkerUpdate(traccarProvider);
-              }
-            })
-            .catchError((error) {
-              debugPrint("Session validation failed on resume: $error");
-              if (mounted && AuthSessionStore.instance.sessionId == null) {
-                Get.offAllNamed('/login');
-              }
-            });
-      }
-    }
-  }
+  
 
   void _onStyleLoaded() async {
     _safeSetState(() {
