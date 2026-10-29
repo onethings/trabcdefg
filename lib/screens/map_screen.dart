@@ -801,20 +801,15 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   Future<void> _deleteDevice(int deviceId) async {
     if (!mounted) return;
     final traccarProvider = context.read<TraccarProvider>();
-    final devicesApi = api.DevicesApi(traccarProvider.apiClient);
 
-    try {
-      await devicesApi.deleteDevicesId(deviceId);
+    // 直接使用 Provider 內的方法
+    final success = await traccarProvider.deleteDevice(deviceId);
 
+    if (success) {
       _bottomSheetController?.close();
-
-      await traccarProvider.fetchInitialData();
-
       Get.snackbar('Success'.tr, 'Device deleted successfully.'.tr, snackPosition: SnackPosition.BOTTOM, backgroundColor: Colors.green.shade100);
-    } on api.ApiException catch (e) {
-      Get.snackbar('Error'.tr, 'Failed to delete device: ${e.message}'.tr, snackPosition: SnackPosition.BOTTOM, backgroundColor: Colors.red.shade100);
-    } catch (e) {
-      Get.snackbar('Error'.tr, 'An unknown error occurred.'.tr, snackPosition: SnackPosition.BOTTOM, backgroundColor: Colors.red.shade100);
+    } else {
+      Get.snackbar('Error'.tr, 'Failed to delete device.'.tr, snackPosition: SnackPosition.BOTTOM, backgroundColor: Colors.red.shade100);
     }
   }
 

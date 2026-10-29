@@ -31,7 +31,7 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
 
   // 演算法優化：快取地址減少重複計算
   final Map<String, String> _addressCache = {};
-  
+
   // 移除原本的全域 _refreshTimer，改由個別 _DeviceTimeAgoText 自行定時更新
 
   @override
@@ -63,66 +63,32 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
     setState(() {
       _showMileage = !_showMileage;
       prefs.setBool('showMileage', _showMileage);
+      final provider = Provider.of<TraccarProvider>(context, listen: false);
       if (_showMileage) {
-        _mileageMap.clear();
+        provider.clearMileageMap();
         _fetchMileageData();
       }
     });
   }
 
-  // 設定里程天數 (1=今天, 3=最近3天)
+  // 設定里程天數
   Future<void> _setMileageDays(int days) async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
       _mileageDays = days;
       prefs.setInt('mileageDays', days);
-      _mileageMap.clear();
+      final provider = Provider.of<TraccarProvider>(context, listen: false);
+      provider.clearMileageMap();
       if (_showMileage) {
         _fetchMileageData();
       }
     });
   }
 
-  // 取得今天 (或最近3天) 的里程
+  // 簡化後的呼叫方法
   Future<void> _fetchMileageData() async {
     final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
-    if (traccarProvider.devices.isEmpty) return;
-
-    setState(() => _isLoadingMileage = true);
-
-    try {
-      final reportsApi = api.ReportsApi(traccarProvider.apiClient);
-      final deviceIds = traccarProvider.devices.map((d) => d.id!).toList();
-
-      if (deviceIds.isEmpty) return;
-
-      final now = DateTime.now().toUtc();
-      final from = _mileageDays == 1 ? DateTime(now.year, now.month, now.day).toUtc() : DateTime(now.year, now.month, now.day - 2).toUtc();
-      final to = DateTime(now.year, now.month, now.day, 23, 59, 59).toUtc();
-
-      final summaries = await reportsApi.getReportsSummary(from, to, deviceId: deviceIds);
-
-      if (summaries != null) {
-        final newMap = <int, double>{};
-        for (var s in summaries) {
-          if (s.deviceId != null && s.distance != null) {
-            newMap[s.deviceId!] = (s.distance! / 1000); // meters -> km
-          }
-        }
-        if (mounted) {
-          setState(() {
-            _mileageMap.clear();
-            _mileageMap.addAll(newMap);
-            _isLoadingMileage = false;
-          });
-        }
-      } else {
-        if (mounted) setState(() => _isLoadingMileage = false);
-      }
-    } catch (e) {
-      debugPrint('Failed to fetch mileage: $e');
-      if (mounted) setState(() => _isLoadingMileage = false);
-    }
+    await traccarProvider.fetchMileageData(_mileageDays);
   }
 
   @override
@@ -388,9 +354,7 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
                   Icon(Icons.schedule_rounded, size: 13, color: theme.colorScheme.outline),
                   const SizedBox(width: 5),
                   // 優化點：改用獨立的小元件局部每分鐘更新 TimeAgo，避免整頁重建
-                  Expanded(
-                    child: _DeviceTimeAgoText(lastUpdate: lastUpdate),
-                  ),
+                  Expanded(child: _DeviceTimeAgoText(lastUpdate: lastUpdate)),
                   if (_showMileage) _buildMileageWidget(device.id!),
                 ],
               ),
@@ -401,9 +365,10 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
     );
   }
 
-  // --- 里程顯示 Widget ---
+  // 讀取里程數時改從 Provider 取得
   Widget _buildMileageWidget(int deviceId) {
-    final mileage = _mileageMap[deviceId];
+    final traccarProvider = Provider.of<TraccarProvider>(context);
+    final mileage = traccarProvider.mileageMap[deviceId];
     if (mileage == null) return const SizedBox.shrink();
 
     final mileageLabel = _mileageDays == 1 ? 'dashboardTodayDistance'.tr : '${'dashboardTodayDistance'.tr} (3 ${'sharedDays'.tr})';
@@ -563,17 +528,9 @@ class _DeviceTimeAgoTextState extends State<_DeviceTimeAgoText> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final lastSeen = widget.lastUpdate == null
-        ? '--'
-        : timeago.format(widget.lastUpdate!, locale: Get.locale?.languageCode ?? 'zh');
+    final lastSeen = widget.lastUpdate == null ? '--' : timeago.format(widget.lastUpdate!, locale: Get.locale?.languageCode ?? 'zh');
 
-    return Text(
-      lastSeen,
-      style: theme.textTheme.bodySmall?.copyWith(
-        color: theme.colorScheme.outline,
-        fontSize: 11,
-      ),
-    );
+    return Text(lastSeen, style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.outline, fontSize: 11));
   }
 }
 

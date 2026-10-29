@@ -77,6 +77,79 @@ class TraccarProvider with ChangeNotifier {
     }
   }
 
+  // lib/providers/traccar_provider.dart (新增部分)
+
+  // 里程相關狀態
+  final Map<int, double> _mileageMap = {};
+  Map<int, double> get mileageMap => _mileageMap;
+
+  bool _isLoadingMileage = false;
+  bool get isLoadingMileage => _isLoadingMileage;
+
+  // 1. 取得里程資料邏輯移至 Provider
+  Future<void> fetchMileageData(int mileageDays) async {
+    if (_devices.isEmpty || _sessionId == null) return;
+
+    _isLoadingMileage = true;
+    notifyListeners();
+
+    try {
+      final reportsApi = api.ReportsApi(apiClient);
+      final deviceIds = _devices.map((d) => d.id!).toList();
+      if (deviceIds.isEmpty) {
+        _isLoadingMileage = false;
+        notifyListeners();
+        return;
+      }
+
+      final now = DateTime.now().toUtc();
+      final from = mileageDays == 1 ? DateTime(now.year, now.month, now.day).toUtc() : DateTime(now.year, now.month, now.day - 2).toUtc();
+      final to = DateTime(now.year, now.month, now.day, 23, 59, 59).toUtc();
+
+      final summaries = await reportsApi.getReportsSummary(from, to, deviceId: deviceIds);
+
+      _mileageMap.clear();
+      if (summaries != null) {
+        for (var s in summaries) {
+          if (s.deviceId != null && s.distance != null) {
+            _mileageMap[s.deviceId!] = s.distance! / 1000.0; // meters -> km
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Failed to fetch mileage: $e');
+    } finally {
+      _isLoadingMileage = false;
+      notifyListeners();
+    }
+  }
+
+  void clearMileageMap() {
+    _mileageMap.clear();
+    notifyListeners();
+  }
+
+  // 2. 刪除裝置邏輯移至 Provider
+  Future<bool> deleteDevice(int deviceId) async {
+    try {
+      final devicesApi = api.DevicesApi(apiClient);
+      await devicesApi.deleteDevicesId(deviceId);
+
+      // 本地快同步更新
+      _devices.removeWhere((d) => d.id == deviceId);
+      _positionMap.remove(deviceId);
+      _favoriteDeviceIds.remove(deviceId);
+
+      _devicesRevision++;
+      _positionsRevision++;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint('Failed to delete device: $e');
+      return false;
+    }
+  }
+
   bool isVersionAtLeast(String target) {
     if (_serverVersion == null) return false;
     try {
