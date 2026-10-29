@@ -99,7 +99,6 @@ class _MapScreenState extends State<MapScreen> {
   @override
   void initState() {
     super.initState();
-    
 
     _drawerSearchController.addListener(() {
       final String query = _drawerSearchController.text;
@@ -159,7 +158,7 @@ class _MapScreenState extends State<MapScreen> {
   void dispose() {
     _zoomDebounce?.cancel();
     _cameraAnimationGraceTimer?.cancel();
-   
+
     _httpClient.close();
     _drawerSearchController.dispose();
     _panelOpenNotifier.dispose();
@@ -168,8 +167,6 @@ class _MapScreenState extends State<MapScreen> {
     _selectedAddressNotifier.dispose();
     super.dispose();
   }
-
-  
 
   void _onStyleLoaded() async {
     _safeSetState(() {
