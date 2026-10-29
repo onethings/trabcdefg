@@ -69,45 +69,73 @@ class _SettingsScreenState extends State<SettingsScreen> {
             // 首次記錄
             await prefs.setString('last_known_sha256', remoteDigest);
             if (manualCheck && mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('已記錄當前版本，目前為最新版本！')));
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('updateCurrentLatest'.tr)));
             }
           } else if (localDigest != remoteDigest) {
             // 發現 SHA-256 改變（代表有重新上傳新版）
             if (!mounted) return;
-            showDialog(
+
+            // 使用 showModalBottomSheet 避免被底部導航欄擋住
+            showModalBottomSheet(
               context: context,
-              barrierDismissible: false,
-              builder: (context) => AlertDialog(
-                title: const Text('發現新版本'),
-                content: const Text('偵測到您重新上傳了新版本的 App，是否立即下載更新？'),
-                actions: [
-                  TextButton(onPressed: () => Navigator.pop(context), child: const Text('以後說')),
-                  ElevatedButton(
-                    onPressed: () async {
-                      await prefs.setString('last_known_sha256', remoteDigest);
-                      final uri = Uri.parse(downloadUrl);
-                      if (await canLaunchUrl(uri)) {
-                        await launchUrl(uri, mode: LaunchMode.externalApplication);
-                      }
-                      if (!mounted) return;
-                      Navigator.pop(context);
-                    },
-                    child: const Text('立即下載'),
+              isScrollControlled: true,
+              backgroundColor: Theme.of(context).colorScheme.surface,
+              shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+              builder: (context) => SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.all(24.0),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.system_update, color: Theme.of(context).colorScheme.primary),
+                          const SizedBox(width: 12),
+                          Text('updateNewVersionTitle'.tr, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      Text('updateNewVersionContent'.tr, style: TextStyle(fontSize: 14, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.8))),
+                      const SizedBox(height: 24),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(onPressed: () => Navigator.pop(context), child: Text('updateLater'.tr)),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: ElevatedButton(
+                              onPressed: () async {
+                                await prefs.setString('last_known_sha256', remoteDigest);
+                                final uri = Uri.parse(downloadUrl);
+                                if (await canLaunchUrl(uri)) {
+                                  await launchUrl(uri, mode: LaunchMode.externalApplication);
+                                }
+                                if (!context.mounted) return;
+                                Navigator.pop(context);
+                              },
+                              child: Text('updateNow'.tr),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
             );
           } else {
             // 手動檢查且 SHA-256 相同
             if (manualCheck && mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('目前已經是最新版本！')));
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('updateCurrentLatest'.tr)));
             }
           }
         }
       }
     } catch (e) {
       if (manualCheck && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('檢查更新失敗: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${'updateFailed'.tr}: $e')));
       }
     }
   }
@@ -478,7 +506,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Scaffold(
       body: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
+          // 增加底部 padding，避免被底部的導航欄 (BottomNavigationBar) 擋住
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 96),
           children: [
             Container(
               height: 148,
@@ -653,24 +682,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Row(
-                                  children: [
-                                    Icon(CupertinoIcons.info_circle, size: 17, color: colorScheme.primary),
-                                    const SizedBox(width: 8),
-                                    Text('sharedInfoTitle'.tr, style: Theme.of(context).textTheme.titleSmall),
-                                  ],
-                                ),
-                                // 檢查更新按鈕
-                                TextButton.icon(
-                                  onPressed: () => _checkGitHubReleaseUpdate(manualCheck: true),
-                                  icon: const Icon(Icons.system_update, size: 16),
-                                  label: const Text('檢查更新', style: TextStyle(fontSize: 12)),
-                                  style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), minimumSize: Size.zero, tapTargetSize: MaterialTapTargetSize.shrinkWrap),
-                                ),
-                              ],
+                            SizedBox(
+                              width: double.infinity,
+                              child: Wrap(
+                                alignment: WrapAlignment.spaceBetween,
+                                crossAxisAlignment: WrapCrossAlignment.center,
+                                spacing: 8,
+                                runSpacing: 4,
+                                children: [
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(CupertinoIcons.info_circle, size: 17, color: colorScheme.primary),
+                                      const SizedBox(width: 8),
+                                      Text('sharedInfoTitle'.tr, style: Theme.of(context).textTheme.titleSmall),
+                                    ],
+                                  ),
+                                  // 多語言的檢查更新按鈕（譯文較長時自動換行，避免溢出）
+                                  TextButton.icon(
+                                    onPressed: () => _checkGitHubReleaseUpdate(manualCheck: true),
+                                    icon: const Icon(Icons.system_update, size: 16),
+                                    label: Text('checkUpdate'.tr, style: const TextStyle(fontSize: 12)),
+                                    style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), minimumSize: Size.zero, tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                                  ),
+                                ],
+                              ),
                             ),
                             const SizedBox(height: 12),
                             Text('${'appVersion'.tr}: ${packageSnapshot.data == null ? '-' : '${packageSnapshot.data!.version}+${packageSnapshot.data!.buildNumber}'}', style: secondaryText),

@@ -727,4 +727,11 @@ const Map<String, String> enUs = {
   "historyStopsCount": "Total @count stops",
   "historyStopMinutes": "Stop Duration (min)",
   "historyStopTime": "Stop Time",
+  "checkUpdate": "Check for Updates",
+  "updateCurrentLatest": "You are using the latest version.",
+  "updateNewVersionTitle": "New Version Available",
+  "updateNewVersionContent": "A new version has been released. Download it now?",
+  "updateLater": "Later",
+  "updateNow": "Download",
+  "updateFailed": "Update check failed",
 };

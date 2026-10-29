@@ -721,4 +721,17 @@ const Map<String, String> zhTw = {
   "historyStopsCount": "共停留 @count 次",
   "historyStopMinutes": "停留時長(分)",
   "historyStopTime": "停留時間",
+  // ── 里程補充 ──
+  "reportGeofences": "圍欄",
+  "odometer": "里程錶",
+  "distance": "距離",
+  "totalDistance": "總距離",
+  "hours": "小時",
+  "checkUpdate": "檢查更新",
+  "updateCurrentLatest": "已是最新版本",
+  "updateNewVersionTitle": "發現新版本",
+  "updateNewVersionContent": "有新版本已發佈，是否立即下載？",
+  "updateLater": "稍後",
+  "updateNow": "立即下載",
+  "updateFailed": "檢查更新失敗",
 };
