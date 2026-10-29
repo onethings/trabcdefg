@@ -1095,8 +1095,8 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
                   const SizedBox(height: 8),
                   _mapFab(Icons.palette_rounded, _showColorModeMenu, "btn_color_mode", active: _routeColorMode != RouteColorMode.single, tooltip: 'routeColorModeTooltip'.tr),
                   const SizedBox(height: 8),
-                  _mapFab(Icons.calendar_month, _showCalendarDialog, "btn_cal"),
-                  const SizedBox(height: 8),
+                  // _mapFab(Icons.calendar_month, _showCalendarDialog, "btn_cal"),
+                  // const SizedBox(height: 8),
                   _mapFab(Provider.of<MapStyleProvider>(context).isSatelliteMode ? Icons.map : Icons.satellite_alt, _toggleMapType, "btn_style"),
                   const SizedBox(height: 8),
                   _mapFab(
