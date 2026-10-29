@@ -1,10 +1,14 @@
 // settings_screen.dart
 // A settings screen for the TracDefg app, allowing users to modify preferences and log out.
+import 'dart:convert';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:http/http.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:trabcdefg/providers/settings_provider.dart';
 import 'package:trabcdefg/providers/theme_provider.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
@@ -23,6 +27,7 @@ import 'package:trabcdefg/screens/settings/emulator_screen.dart';
 import 'package:trabcdefg/screens/reports/reports_screen.dart';
 import 'package:trabcdefg/services/auth_session_store.dart';
 import 'package:trabcdefg/services/localization_service.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -39,6 +44,72 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void initState() {
     super.initState();
     _serverVersion = context.read<TraccarProvider>().fetchServerVersion();
+  }
+
+  // 檢查 GitHub Releases 更新的方法 (透過 SHA-256 digest 比對)
+  Future<void> _checkGitHubReleaseUpdate({bool manualCheck = false}) async {
+    try {
+      final url = Uri.parse('https://api.github.com/repos/onethings/trabcdefg/releases/tags/debug-version');
+      final response = await http.get(url, headers: {'Accept': 'application/vnd.github+json'});
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final assets = data['assets'] as List;
+
+        final apkAsset = assets.firstWhere((asset) => asset['name'] == 'app-arm64-v8a-release.apk', orElse: () => null);
+
+        if (apkAsset != null) {
+          String remoteDigest = apkAsset['digest']; // 取得遠端 SHA-256
+          String downloadUrl = apkAsset['browser_download_url'];
+
+          final prefs = await SharedPreferences.getInstance();
+          String? localDigest = prefs.getString('last_known_sha256');
+
+          if (localDigest == null) {
+            // 首次記錄
+            await prefs.setString('last_known_sha256', remoteDigest);
+            if (manualCheck && mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('已記錄當前版本，目前為最新版本！')));
+            }
+          } else if (localDigest != remoteDigest) {
+            // 發現 SHA-256 改變（代表有重新上傳新版）
+            if (!mounted) return;
+            showDialog(
+              context: context,
+              barrierDismissible: false,
+              builder: (context) => AlertDialog(
+                title: const Text('發現新版本'),
+                content: const Text('偵測到您重新上傳了新版本的 App，是否立即下載更新？'),
+                actions: [
+                  TextButton(onPressed: () => Navigator.pop(context), child: const Text('以後說')),
+                  ElevatedButton(
+                    onPressed: () async {
+                      await prefs.setString('last_known_sha256', remoteDigest);
+                      final uri = Uri.parse(downloadUrl);
+                      if (await canLaunchUrl(uri)) {
+                        await launchUrl(uri, mode: LaunchMode.externalApplication);
+                      }
+                      if (!mounted) return;
+                      Navigator.pop(context);
+                    },
+                    child: const Text('立即下載'),
+                  ),
+                ],
+              ),
+            );
+          } else {
+            // 手動檢查且 SHA-256 相同
+            if (manualCheck && mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('目前已經是最新版本！')));
+            }
+          }
+        }
+      }
+    } catch (e) {
+      if (manualCheck && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('檢查更新失敗: $e')));
+      }
+    }
   }
 
   // Method to show the language selection dialog with more recognizable names
@@ -181,7 +252,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
         height: 420,
         padding: const EdgeInsets.symmetric(vertical: 12),
         color: Theme.of(context).colorScheme.surface,
-        // ListTile needs a Material ancestor; the Cupertino popup route has none.
         child: Material(
           type: MaterialType.transparency,
           child: SafeArea(
@@ -231,7 +301,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       builder: (context) => Container(
         padding: const EdgeInsets.symmetric(vertical: 12),
         color: Theme.of(context).colorScheme.surface,
-        // RadioListTile needs a Material ancestor; the Cupertino popup route has none.
         child: Material(
           type: MaterialType.transparency,
           child: SafeArea(
@@ -275,7 +344,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       builder: (context) => Container(
         padding: const EdgeInsets.symmetric(vertical: 12),
         color: Theme.of(context).colorScheme.surface,
-        // RadioListTile needs a Material ancestor; the Cupertino popup route has none.
         child: Material(
           type: MaterialType.transparency,
           child: SafeArea(
@@ -319,7 +387,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       builder: (context) => Container(
         padding: const EdgeInsets.symmetric(vertical: 12),
         color: Theme.of(context).colorScheme.surface,
-        // RadioListTile needs a Material ancestor; the Cupertino popup route has none.
         child: Material(
           type: MaterialType.transparency,
           child: SafeArea(
@@ -578,45 +645,57 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     final email = provider.currentUser?.email ?? AuthSessionStore.instance.email ?? '-';
                     final secondaryText = TextStyle(color: colorScheme.onSurface.withValues(alpha: 0.58), fontSize: 12);
 
-                      return Card(
-                        margin: EdgeInsets.zero,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Icon(CupertinoIcons.info_circle, size: 17, color: colorScheme.primary),
-                                  const SizedBox(width: 8),
-                                  Text('sharedInfoTitle'.tr, style: Theme.of(context).textTheme.titleSmall),
-                                ],
-                              ),
-                              const SizedBox(height: 12),
-                              Text('${'appVersion'.tr}: ${packageSnapshot.data == null ? '-' : '${packageSnapshot.data!.version}+${packageSnapshot.data!.buildNumber}'}', style: secondaryText),
-                              const SizedBox(height: 4),
-                              Text('${'settingsServer'.tr}: $serverUrl', style: secondaryText),
-                              const SizedBox(height: 4),
-                              FutureBuilder<String?>(
-                                future: _serverVersion,
-                                builder: (context, versionSnapshot) {
-                                  final version = versionSnapshot.data;
-                                  if (version == null) return const SizedBox.shrink();
-                                  return Padding(
-                                    padding: const EdgeInsets.only(bottom: 4),
-                                    child: Text('${'settingsServerVersion'.tr}: $version', style: secondaryText),
-                                  );
-                                },
-                              ),
-                              Text('${'userEmail'.tr}: $email', style: secondaryText),
-                            ],
-                          ),
+                    return Card(
+                      margin: EdgeInsets.zero,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Row(
+                                  children: [
+                                    Icon(CupertinoIcons.info_circle, size: 17, color: colorScheme.primary),
+                                    const SizedBox(width: 8),
+                                    Text('sharedInfoTitle'.tr, style: Theme.of(context).textTheme.titleSmall),
+                                  ],
+                                ),
+                                // 檢查更新按鈕
+                                TextButton.icon(
+                                  onPressed: () => _checkGitHubReleaseUpdate(manualCheck: true),
+                                  icon: const Icon(Icons.system_update, size: 16),
+                                  label: const Text('檢查更新', style: TextStyle(fontSize: 12)),
+                                  style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), minimumSize: Size.zero, tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            Text('${'appVersion'.tr}: ${packageSnapshot.data == null ? '-' : '${packageSnapshot.data!.version}+${packageSnapshot.data!.buildNumber}'}', style: secondaryText),
+                            const SizedBox(height: 4),
+                            Text('${'settingsServer'.tr}: $serverUrl', style: secondaryText),
+                            const SizedBox(height: 4),
+                            FutureBuilder<String?>(
+                              future: _serverVersion,
+                              builder: (context, versionSnapshot) {
+                                final version = versionSnapshot.data;
+                                if (version == null) return const SizedBox.shrink();
+                                return Padding(
+                                  padding: const EdgeInsets.only(bottom: 4),
+                                  child: Text('${'settingsServerVersion'.tr}: $version', style: secondaryText),
+                                );
+                              },
+                            ),
+                            Text('${'userEmail'.tr}: $email', style: secondaryText),
+                          ],
                         ),
-                      );
-                },
+                      ),
+                    );
+                  },
+                ),
               ),
-            ),
             ),
           ],
         ),
