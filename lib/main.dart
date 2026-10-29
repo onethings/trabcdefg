@@ -6,7 +6,9 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:timeago/timeago.dart' as timeago; // 引入 timeago 套件[cite: 6]
 import 'package:trabcdefg/constants.dart';
+import 'package:trabcdefg/l10n/timeago_my.dart'; // 引入 Myanmar TimeAgo[cite: 6]
 import 'package:trabcdefg/models/report_summary_hive.dart';
 import 'package:trabcdefg/models/route_positions_hive.dart';
 import 'package:trabcdefg/providers/map_style_provider.dart';
@@ -39,6 +41,9 @@ import 'package:trabcdefg/src/generated_api/api.dart' as api;
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // 於全域初始化階段執行一次 Timeago 語系註冊，避免重複開銷
+  _setupTimeagoLocales();
+
   final results = await Future.wait([
     () async {
       await Hive.initFlutter();
@@ -56,6 +61,48 @@ void main() async {
   final savedLanguageCode = prefs.getString('saved_language_code');
 
   runApp(TraccarApp(initialUrl: savedUrl, initialLanguageCode: savedLanguageCode));
+}
+
+/// 全域 TimeAgo 語系註冊函式
+void _setupTimeagoLocales() {
+  timeago.setLocaleMessages('ar', timeago.ArMessages());
+  timeago.setLocaleMessages('az', timeago.AzMessages());
+  timeago.setLocaleMessages('bn', timeago.BnMessages());
+  timeago.setLocaleMessages('ca', timeago.CaMessages());
+  timeago.setLocaleMessages('cs', timeago.CsMessages());
+  timeago.setLocaleMessages('da', timeago.DaMessages());
+  timeago.setLocaleMessages('de', timeago.DeMessages());
+  timeago.setLocaleMessages('en_short', timeago.EnShortMessages());
+  timeago.setLocaleMessages('et', timeago.EtMessages());
+  timeago.setLocaleMessages('fa', timeago.FaMessages());
+  timeago.setLocaleMessages('fi', timeago.FiMessages());
+  timeago.setLocaleMessages('fr', timeago.FrMessages());
+  timeago.setLocaleMessages('he', timeago.HeMessages());
+  timeago.setLocaleMessages('hi', timeago.HiMessages());
+  timeago.setLocaleMessages('hr', timeago.HrMessages());
+  timeago.setLocaleMessages('hu', timeago.HuMessages());
+  timeago.setLocaleMessages('id', timeago.IdMessages());
+  timeago.setLocaleMessages('it', timeago.ItMessages());
+  timeago.setLocaleMessages('ja', timeago.JaMessages());
+  timeago.setLocaleMessages('km', timeago.KmMessages());
+  timeago.setLocaleMessages('ko', timeago.KoMessages());
+  timeago.setLocaleMessages('lv', timeago.LvMessages());
+  timeago.setLocaleMessages('mn', timeago.MnMessages());
+  timeago.setLocaleMessages('nl', timeago.NlMessages());
+  timeago.setLocaleMessages('pl', timeago.PlMessages());
+  timeago.setLocaleMessages('pt_BR', timeago.PtBrMessages());
+  timeago.setLocaleMessages('ro', timeago.RoMessages());
+  timeago.setLocaleMessages('ru', timeago.RuMessages());
+  timeago.setLocaleMessages('sr', timeago.SrMessages());
+  timeago.setLocaleMessages('sv', timeago.SvMessages());
+  timeago.setLocaleMessages('ta', timeago.TaMessages());
+  timeago.setLocaleMessages('th', timeago.ThMessages());
+  timeago.setLocaleMessages('tk', timeago.TkMessages());
+  timeago.setLocaleMessages('tr', timeago.TrMessages());
+  timeago.setLocaleMessages('uk', timeago.UkMessages());
+  timeago.setLocaleMessages('vi', timeago.ViMessages());
+  timeago.setLocaleMessages('zh', timeago.ZhMessages());
+  timeago.setLocaleMessages('my', MyMessages()); // 註冊 Myanmar 語系[cite: 1]
 }
 
 class TraccarApp extends StatelessWidget {

@@ -7,7 +7,6 @@ import 'package:get/get.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timeago/timeago.dart' as timeago;
-import 'package:trabcdefg/l10n/timeago_my.dart'; // 新增 Myanmar TimeAgo
 import 'package:trabcdefg/providers/traccar_provider.dart';
 import 'package:trabcdefg/screens/livetracking_map_screen.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
@@ -27,27 +26,25 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
   bool _showMileage = false;
   int _mileageDays = 1; // 1 = today, 3 = last 3 days
   final Map<int, double> _mileageMap = {}; // deviceId -> distance in km
-  bool _isLoadingMileage = false;
+  final bool _isLoadingMileage = false;
 
   // 演算法優化：快取地址減少重複計算
   final Map<String, String> _addressCache = {};
-
-  // 移除原本的全域 _refreshTimer，改由個別 _DeviceTimeAgoText 自行定時更新
 
   @override
   void initState() {
     super.initState();
     _loadMileagePreference();
-    _setupTimeagoLocales();
+    // 註解：_setupTimeagoLocales() 已建議移至 main.dart 執行全域註冊，此處不再重複呼叫
     _searchController.addListener(() {
       setState(() => _searchQuery = _searchController.text);
     });
-    // 移除了每分鐘的全域 setState 定時器
   }
 
   // 讀取里程偏好
   Future<void> _loadMileagePreference() async {
     final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
     setState(() {
       _showMileage = prefs.getBool('showMileage') ?? false;
       _mileageDays = prefs.getInt('mileageDays') ?? 1;
@@ -60,83 +57,48 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
   // 切換里程顯示
   Future<void> _toggleMileage() async {
     final prefs = await SharedPreferences.getInstance();
+    final newShowMileage = !_showMileage;
+    await prefs.setBool('showMileage', newShowMileage);
+
+    if (!mounted) return;
     setState(() {
-      _showMileage = !_showMileage;
-      prefs.setBool('showMileage', _showMileage);
-      final provider = Provider.of<TraccarProvider>(context, listen: false);
-      if (_showMileage) {
-        provider.clearMileageMap();
-        _fetchMileageData();
-      }
+      _showMileage = newShowMileage;
     });
+
+    final provider = context.read<TraccarProvider>();
+    if (_showMileage) {
+      provider.clearMileageMap();
+      _fetchMileageData();
+    }
   }
 
   // 設定里程天數
   Future<void> _setMileageDays(int days) async {
     final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('mileageDays', days);
+
+    if (!mounted) return;
     setState(() {
       _mileageDays = days;
-      prefs.setInt('mileageDays', days);
-      final provider = Provider.of<TraccarProvider>(context, listen: false);
-      provider.clearMileageMap();
-      if (_showMileage) {
-        _fetchMileageData();
-      }
     });
+
+    final provider = context.read<TraccarProvider>();
+    provider.clearMileageMap();
+    if (_showMileage) {
+      _fetchMileageData();
+    }
   }
 
   // 簡化後的呼叫方法
   Future<void> _fetchMileageData() async {
-    final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
+    final traccarProvider = context.read<TraccarProvider>();
     await traccarProvider.fetchMileageData(_mileageDays);
   }
 
   @override
   void dispose() {
-    // 移除 _refreshTimer.cancel()
     _searchController.dispose();
     super.dispose();
-  }
-
-  void _setupTimeagoLocales() {
-    timeago.setLocaleMessages('ar', timeago.ArMessages());
-    timeago.setLocaleMessages('az', timeago.AzMessages());
-    timeago.setLocaleMessages('bn', timeago.BnMessages());
-    timeago.setLocaleMessages('ca', timeago.CaMessages());
-    timeago.setLocaleMessages('cs', timeago.CsMessages());
-    timeago.setLocaleMessages('da', timeago.DaMessages());
-    timeago.setLocaleMessages('de', timeago.DeMessages());
-    timeago.setLocaleMessages('en_short', timeago.EnShortMessages());
-    timeago.setLocaleMessages('et', timeago.EtMessages());
-    timeago.setLocaleMessages('fa', timeago.FaMessages());
-    timeago.setLocaleMessages('fi', timeago.FiMessages());
-    timeago.setLocaleMessages('fr', timeago.FrMessages());
-    timeago.setLocaleMessages('he', timeago.HeMessages());
-    timeago.setLocaleMessages('hi', timeago.HiMessages());
-    timeago.setLocaleMessages('hr', timeago.HrMessages());
-    timeago.setLocaleMessages('hu', timeago.HuMessages());
-    timeago.setLocaleMessages('id', timeago.IdMessages());
-    timeago.setLocaleMessages('it', timeago.ItMessages());
-    timeago.setLocaleMessages('ja', timeago.JaMessages());
-    timeago.setLocaleMessages('km', timeago.KmMessages());
-    timeago.setLocaleMessages('ko', timeago.KoMessages());
-    timeago.setLocaleMessages('lv', timeago.LvMessages());
-    timeago.setLocaleMessages('mn', timeago.MnMessages());
-    timeago.setLocaleMessages('nl', timeago.NlMessages());
-    timeago.setLocaleMessages('pl', timeago.PlMessages());
-    timeago.setLocaleMessages('pt_BR', timeago.PtBrMessages());
-    timeago.setLocaleMessages('ro', timeago.RoMessages());
-    timeago.setLocaleMessages('ru', timeago.RuMessages());
-    timeago.setLocaleMessages('sr', timeago.SrMessages());
-    timeago.setLocaleMessages('sv', timeago.SvMessages());
-    timeago.setLocaleMessages('ta', timeago.TaMessages());
-    timeago.setLocaleMessages('th', timeago.ThMessages());
-    timeago.setLocaleMessages('tk', timeago.TkMessages());
-    timeago.setLocaleMessages('tr', timeago.TrMessages());
-    timeago.setLocaleMessages('uk', timeago.UkMessages());
-    timeago.setLocaleMessages('vi', timeago.ViMessages());
-    timeago.setLocaleMessages('zh', timeago.ZhMessages());
-    timeago.setLocaleMessages('my', MyMessages()); // 關鍵修正：註冊 Myanmar 語系
   }
 
   Widget _buildAddressWidget(num? lat, num? lon) {
@@ -208,7 +170,7 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
       final bFav = provider.isFavorite(b.id!);
       if (aFav && !bFav) return -1;
       if (!aFav && bFav) return 1;
-      return 0; // 保持原有順序
+      return 0;
     });
 
     return RefreshIndicator(
@@ -219,30 +181,35 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
           await _fetchMileageData();
         }
       },
-      child: ListView.builder(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(12, 4, 12, 100),
-        itemCount: filteredDevices.isEmpty ? 1 : filteredDevices.length,
-        itemBuilder: (context, index) {
-          if (filteredDevices.isEmpty) {
-            return Padding(
-              padding: const EdgeInsets.only(top: 80),
-              child: Center(
-                child: Column(
-                  children: [
-                    Icon(Icons.search_off_rounded, size: 40, color: Theme.of(context).colorScheme.outline),
-                    const SizedBox(height: 12),
-                    Text('sharedNoData'.tr, style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.outline)),
-                  ],
+      child: filteredDevices.isEmpty
+          ? ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(12, 4, 12, 100),
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(top: 80),
+                  child: Center(
+                    child: Column(
+                      children: [
+                        Icon(Icons.search_off_rounded, size: 40, color: Theme.of(context).colorScheme.outline),
+                        const SizedBox(height: 12),
+                        Text('sharedNoData'.tr, style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.outline)),
+                      ],
+                    ),
+                  ),
                 ),
-              ),
-            );
-          }
-          final device = filteredDevices[index];
-          final position = provider.getPosition(device.id!);
-          return _buildDeviceCard(device, position, provider, now);
-        },
-      ),
+              ],
+            )
+          : ListView.builder(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(12, 4, 12, 100),
+              itemCount: filteredDevices.length,
+              itemBuilder: (context, index) {
+                final device = filteredDevices[index];
+                final position = provider.getPosition(device.id!);
+                return _buildDeviceCard(device, position, provider, now);
+              },
+            ),
     );
   }
 
@@ -353,7 +320,6 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
                 children: [
                   Icon(Icons.schedule_rounded, size: 13, color: theme.colorScheme.outline),
                   const SizedBox(width: 5),
-                  // 優化點：改用獨立的小元件局部每分鐘更新 TimeAgo，避免整頁重建
                   Expanded(child: _DeviceTimeAgoText(lastUpdate: lastUpdate)),
                   if (_showMileage) _buildMileageWidget(device.id!),
                 ],
@@ -365,7 +331,6 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
     );
   }
 
-  // 讀取里程數時改從 Provider 取得
   Widget _buildMileageWidget(int deviceId) {
     final traccarProvider = Provider.of<TraccarProvider>(context);
     final mileage = traccarProvider.mileageMap[deviceId];
@@ -497,7 +462,6 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
   String? _getStatusText(int index) => [null, 'online', 'offline', 'unknown', 'favorite'][index];
 }
 
-// --- 新增：獨立的 TimeAgo 文字 Widget，每分鐘僅局部刷新該文字 ---
 class _DeviceTimeAgoText extends StatefulWidget {
   final DateTime? lastUpdate;
 
@@ -513,7 +477,6 @@ class _DeviceTimeAgoTextState extends State<_DeviceTimeAgoText> {
   @override
   void initState() {
     super.initState();
-    // 每分鐘刷新一次相對時間
     _timer = Timer.periodic(const Duration(minutes: 1), (_) {
       if (mounted) setState(() {});
     });
@@ -534,7 +497,6 @@ class _DeviceTimeAgoTextState extends State<_DeviceTimeAgoText> {
   }
 }
 
-// --- 獨立的 ACC 計時器 Widget，只有這個小區塊每秒更新 ---
 class _AccTimerBadge extends StatefulWidget {
   final double speed;
   final bool isStale;
