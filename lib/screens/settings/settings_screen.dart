@@ -46,6 +46,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _serverVersion = context.read<TraccarProvider>().fetchServerVersion();
   }
 
+  // 顯示於導航欄上方，避免 SnackBar 被 CupertinoTabBar 蓋住
+  void _showUpdateMessage(String message) {
+    final bottomInset = MediaQuery.paddingOf(context).bottom;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message), behavior: SnackBarBehavior.floating, margin: EdgeInsets.fromLTRB(16, 0, 16, bottomInset + 8)));
+  }
+
   // 檢查 GitHub Releases 更新的方法 (透過 SHA-256 digest 比對)
   Future<void> _checkGitHubReleaseUpdate({bool manualCheck = false}) async {
     try {
@@ -69,19 +75,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
             // 首次記錄
             await prefs.setString('last_known_sha256', remoteDigest);
             if (manualCheck && mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('updateCurrentLatest'.tr)));
+              _showUpdateMessage('updateCurrentLatest'.tr);
             }
           } else if (localDigest != remoteDigest) {
             // 發現 SHA-256 改變（代表有重新上傳新版）
             if (!mounted) return;
 
-            // 使用 showModalBottomSheet 避免被底部導航欄擋住
+            // 使用 root navigator 顯示，確保面板繪製於底部導航欄之上
             showModalBottomSheet(
               context: context,
+              useRootNavigator: true,
               isScrollControlled: true,
               backgroundColor: Theme.of(context).colorScheme.surface,
               shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
               builder: (context) => SafeArea(
+                top: false,
                 child: Padding(
                   padding: const EdgeInsets.all(24.0),
                   child: Column(
@@ -128,14 +136,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
           } else {
             // 手動檢查且 SHA-256 相同
             if (manualCheck && mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('updateCurrentLatest'.tr)));
+              _showUpdateMessage('updateCurrentLatest'.tr);
             }
           }
         }
       }
     } catch (e) {
       if (manualCheck && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${'updateFailed'.tr}: $e')));
+        _showUpdateMessage('${'updateFailed'.tr}: $e');
       }
     }
   }
