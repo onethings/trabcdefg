@@ -1,5 +1,4 @@
 // lib/screens/reports/stops_report_screen.dart
-// A screen to display stops report on a map in the TracDefg app.
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
@@ -19,12 +18,6 @@ import 'package:trabcdefg/services/route_history_cache.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
 import 'package:trabcdefg/src/utils/route_history_analyzer.dart';
 import 'package:trabcdefg/widgets/offline_address_service.dart';
-
-// Enum and Tile Provider removed as they are no longer needed with native MapLibre caching.
-
-// Enum moved to provider
-
-// --- End of Map Caching & FlutterMap Imports/Definitions ---
 
 class StopReport {
   final int deviceId;
@@ -84,7 +77,6 @@ class StopReport {
     );
   }
 
-  /// 由本機軌跡快取推算的停留。
   factory StopReport.fromAnalyzed(AnalyzedStop stop, {required int deviceId, required String deviceName}) {
     return StopReport(
       deviceId: deviceId,
@@ -122,7 +114,10 @@ class _StopsReportScreenState extends State<StopsReportScreen> {
   bool _isStyleLoaded = false;
   bool _isDrawing = false;
   bool _pendingDraw = false;
-  // Constants for manual tile URLs removed as we use MapStyleProvider now.
+  int? _selectedStopIndex;
+
+  // 用來控制底部拖曳面板的收合與展開
+  final DraggableScrollableController _sheetController = DraggableScrollableController();
 
   @override
   void initState() {
@@ -132,29 +127,21 @@ class _StopsReportScreenState extends State<StopsReportScreen> {
 
   @override
   void dispose() {
+    _sheetController.dispose();
     super.dispose();
   }
 
-  // Future<void> _loadMarkerIcons() async { ... } // REMOVED: Replaced by Marker widgets
-
   Future<void> _fetchStopsReport() async {
-    setState(() {
-      _isLoading = true;
-    });
+    setState(() => _isLoading = true);
 
     final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
-
     final prefs = await SharedPreferences.getInstance();
     final deviceId = prefs.getInt('selectedDeviceId');
     final fromDateString = prefs.getString('historyFrom');
     final toDateString = prefs.getString('historyTo');
-    debugPrint('Fetched from SharedPreferences: deviceId=$deviceId, fromDate=$fromDateString, toDate=$toDateString');
 
     if (deviceId == null || fromDateString == null || toDateString == null) {
-      setState(() {
-        _isLoading = false;
-      });
-      debugPrint('Missing device ID or date range from SharedPreferences.');
+      setState(() => _isLoading = false);
       return;
     }
 
@@ -162,18 +149,15 @@ class _StopsReportScreenState extends State<StopsReportScreen> {
     final toDate = DateTime.tryParse(toDateString);
 
     if (fromDate == null || toDate == null) {
-      setState(() {
-        _isLoading = false;
-      });
-      debugPrint('Failed to parse date strings.');
+      setState(() => _isLoading = false);
       return;
     }
 
-    // 軌跡頁快取只在單日查詢時可用；新鮮時直接使用，報表 API 沒有資料時再退回快取
     final bool isSingleDayRange = fromDate.year == toDate.year && fromDate.month == toDate.month && fromDate.day == toDate.day;
     final CachedRoutePositions? cachedRoute = isSingleDayRange ? await RouteHistoryCache.load(deviceId: deviceId, day: fromDate) : null;
     final bool hasCachedRoute = cachedRoute != null && cachedRoute.positions.length >= 2;
     final String deviceName = prefs.getString('selectedDeviceName') ?? '';
+
     if (hasCachedRoute && cachedRoute.isFreshFor(fromDate)) {
       _applyCachedStops(cachedRoute.positions, deviceId, deviceName);
       return;
@@ -182,18 +166,8 @@ class _StopsReportScreenState extends State<StopsReportScreen> {
     try {
       final apiClient = traccarProvider.apiClient;
       final queryParams = [api.QueryParam('from', fromDate.toIso8601String()), api.QueryParam('to', toDate.toIso8601String()), api.QueryParam('deviceId', deviceId.toString())];
-      final path = '/reports/stops';
-      final headerParams = {'Accept': 'application/json'};
 
-      final http.Response response = await apiClient.invokeAPI(
-        path,
-        'GET',
-        queryParams,
-        null, // body
-        headerParams, // headerParams
-        {}, // formParams
-        'application/json', // contentType
-      );
+      final http.Response response = await apiClient.invokeAPI('/reports/stops', 'GET', queryParams, null, {'Accept': 'application/json'}, {}, 'application/json');
 
       if (response.statusCode == 200 && response.body.isNotEmpty) {
         final contentType = response.headers['content-type'];
@@ -208,22 +182,17 @@ class _StopsReportScreenState extends State<StopsReportScreen> {
             }
           }
         } else {
-          debugPrint('Warning: Expected JSON, but received content type: $contentType');
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to load stops report. The server returned a file instead of JSON. Please check the Traccar server settings for reports.'.tr)));
         }
       }
     } catch (e) {
-      debugPrint('Error fetching stops report: $e');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to load stops report.'.tr)));
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      setState(() => _isLoading = false);
     }
 
-    // 報表 API 沒有回傳資料時，改用軌跡頁快取推算停留
     if (_stopsReport.isEmpty && hasCachedRoute) {
       _applyCachedStops(cachedRoute.positions, deviceId, deviceName);
     }
@@ -234,15 +203,12 @@ class _StopsReportScreenState extends State<StopsReportScreen> {
     _stopsReport = analysis.stops.map((stop) => StopReport.fromAnalyzed(stop, deviceId: deviceId, deviceName: deviceName)).toList()..sort((a, b) => a.startTime.compareTo(b.startTime));
     _deviceName = deviceName;
     if (!mounted) return;
-    setState(() {
-      _isLoading = false;
-    });
+    setState(() => _isLoading = false);
     _createMapElements();
   }
 
   Future<void> _onStyleLoaded() async {
     _isStyleLoaded = true;
-    // 樣式（或整個地圖）重建後，先前上傳的圖片與圖層都會消失，必須重新上傳
     _loadedIcons.clear();
     if (_stopsReport.isNotEmpty) {
       await _preloadIcons();
@@ -250,7 +216,6 @@ class _StopsReportScreenState extends State<StopsReportScreen> {
     }
   }
 
-  /// 一次把所有會用到的停留圖示上傳到地圖，避免逐張載入造成 marker 延遲出現。
   Future<void> _preloadIcons() async {
     final controller = _mapController;
     if (controller == null) return;
@@ -266,16 +231,14 @@ class _StopsReportScreenState extends State<StopsReportScreen> {
       final Uint8List bytes = _iconBytes[iconId] ??= (await rootBundle.load(assetPath)).buffer.asUint8List();
       await controller.addImage(iconId, bytes);
     } catch (e) {
-      // 目前樣式已存在同一張圖片時會拋錯，可直接沿用
       debugPrint('addImage failed for $iconId: $e');
     }
   }
 
   Future<void> _createMapElements() async {
     final controller = _mapController;
-    if (controller == null || !_isStyleLoaded || _stopsReport.isEmpty) {
-      return;
-    }
+    if (controller == null || !_isStyleLoaded || _stopsReport.isEmpty) return;
+
     if (_isDrawing) {
       _pendingDraw = true;
       return;
@@ -284,20 +247,18 @@ class _StopsReportScreenState extends State<StopsReportScreen> {
     _isDrawing = true;
     try {
       await controller.clearSymbols();
-
       final List<maplibre.LatLng> points = [];
 
       for (var i = 0; i < _stopsReport.length; i++) {
         final stop = _stopsReport[i];
         final point = maplibre.LatLng(stop.latitude, stop.longitude);
         points.add(point);
-        // Cycle through p_1.png ... p_50.png so each stop gets its own icon.
         final iconId = "p_${(i % 50) + 1}";
         await _addMarker(point, iconId, "assets/images/$iconId.png");
       }
 
       if (points.isNotEmpty) {
-        _zoomToFit(points);
+        _zoomToFitAll();
       }
     } finally {
       _isDrawing = false;
@@ -312,156 +273,344 @@ class _StopsReportScreenState extends State<StopsReportScreen> {
     final controller = _mapController;
     if (controller == null) return;
     await _ensureIcon(iconId, assetPath);
-    await controller.addSymbol(maplibre.SymbolOptions(geometry: point, iconImage: iconId, iconSize: 3.5, iconAnchor: "bottom"));
+    await controller.addSymbol(maplibre.SymbolOptions(geometry: point, iconImage: iconId, iconSize: 3.0, iconAnchor: "bottom"));
   }
 
-  void _zoomToFit(List<maplibre.LatLng> points) {
-    if (points.isEmpty) return;
+  void _zoomToFitAll() {
+    if (_stopsReport.isEmpty) return;
+    final points = _stopsReport.map((s) => maplibre.LatLng(s.latitude, s.longitude)).toList();
     double minLat = points.map((p) => p.latitude).reduce(min);
     double maxLat = points.map((p) => p.latitude).reduce(max);
     double minLng = points.map((p) => p.longitude).reduce(min);
     double maxLng = points.map((p) => p.longitude).reduce(max);
 
-    _mapController?.animateCamera(maplibre.CameraUpdate.newLatLngBounds(maplibre.LatLngBounds(southwest: maplibre.LatLng(minLat, minLng), northeast: maplibre.LatLng(maxLat, maxLng)), left: 50, right: 50, top: 50, bottom: 50));
+    _mapController?.animateCamera(maplibre.CameraUpdate.newLatLngBounds(maplibre.LatLngBounds(southwest: maplibre.LatLng(minLat, minLng), northeast: maplibre.LatLng(maxLat, maxLng)), left: 60, right: 60, top: 80, bottom: 250));
   }
 
-  void _animateToPosition(maplibre.LatLng position) {
-    _mapController?.animateCamera(maplibre.CameraUpdate.newLatLng(position));
+  void _animateToPosition(maplibre.LatLng position, int index) {
+    setState(() => _selectedStopIndex = index);
+
+    if (_sheetController.isAttached && _sheetController.size > 0.4) {
+      _sheetController.animateTo(0.3, duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
+    }
+
+    _mapController?.animateCamera(maplibre.CameraUpdate.newLatLngZoom(position, 16.0));
   }
 
-  String _formatDuration(int milliseconds) {
+  static String formatDuration(int milliseconds) {
     int seconds = (milliseconds / 1000).round();
     int hours = seconds ~/ 3600;
     int minutes = (seconds % 3600) ~/ 60;
-    int remainingSeconds = seconds % 60;
-    return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${remainingSeconds.toString().padLeft(2, '0')}';
+    if (hours > 0) {
+      return '${hours}h ${minutes}m';
+    }
+    return '${minutes} min';
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
     if (_isLoading) {
       return Scaffold(
-        body: Center(child: CircularProgressIndicator(color: Theme.of(context).colorScheme.primary)),
+        body: Center(child: CircularProgressIndicator(color: colorScheme.primary)),
       );
     }
 
     if (_stopsReport.isEmpty) {
       return Scaffold(
         appBar: CupertinoNavigationBar(middle: Text(_deviceName ?? 'reportStops'.tr)),
-        body: Center(child: Text('sharedNoData'.tr)),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.location_off_outlined, size: 64, color: colorScheme.outline),
+              const SizedBox(height: 16),
+              Text('sharedNoData'.tr, style: theme.textTheme.titleMedium?.copyWith(color: colorScheme.outline)),
+            ],
+          ),
+        ),
       );
     }
 
     final mapProvider = Provider.of<MapStyleProvider>(context);
-    final initialCenter = _stopsReport.isNotEmpty ? maplibre.LatLng(_stopsReport.first.latitude, _stopsReport.first.longitude) : const maplibre.LatLng(21.9162, 95.9560);
+    final initialCenter = maplibre.LatLng(_stopsReport.first.latitude, _stopsReport.first.longitude);
 
     return Scaffold(
-      appBar: CupertinoNavigationBar(middle: Text('${'reportStops'.tr}: ${_deviceName ?? ''}')),
-      body: Column(
+      body: Stack(
         children: [
-          Expanded(
-            flex: 1,
-            child: Stack(
-              children: [
-                maplibre.MapLibreMap(
-                  key: ValueKey(mapProvider.isSatelliteMode),
-                  onMapCreated: (c) {
-                    _mapController = c;
-                    _isStyleLoaded = false;
-                    _loadedIcons.clear();
-                  },
-                  onStyleLoadedCallback: _onStyleLoaded,
-                  initialCameraPosition: maplibre.CameraPosition(target: initialCenter, zoom: 14.0),
-                  styleString: mapProvider.getStyle(Theme.of(context).brightness),
-                ),
-                Positioned(
-                  top: 10,
-                  right: 10,
-                  child: FloatingActionButton(
-                    heroTag: "btn_style_stop",
-                    mini: true,
-                    backgroundColor: Theme.of(context).colorScheme.surface,
-                    onPressed: () => mapProvider.toggleMapType(),
-                    child: Icon(mapProvider.isSatelliteMode ? Icons.map : Icons.satellite_alt, color: Theme.of(context).colorScheme.onSurface),
-                  ),
-                ),
-              ],
-            ),
+          maplibre.MapLibreMap(
+            key: ValueKey(mapProvider.isSatelliteMode),
+            onMapCreated: (c) {
+              _mapController = c;
+              _isStyleLoaded = false;
+              _loadedIcons.clear();
+            },
+            onStyleLoadedCallback: _onStyleLoaded,
+            initialCameraPosition: maplibre.CameraPosition(target: initialCenter, zoom: 14.0),
+            styleString: mapProvider.getStyle(theme.brightness),
           ),
-          Expanded(
-            flex: 1,
-            child: ListView.builder(
-              padding: const EdgeInsets.all(16.0),
-              itemCount: _stopsReport.length + 1,
-              itemBuilder: (context, index) {
-                if (index == 0) {
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: Text(
-                      'historyStopsCount'.trParams({'count': '${_stopsReport.length}'}),
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface),
-                    ),
-                  );
-                }
-                final stop = _stopsReport[index - 1];
-                return GestureDetector(
-                  onTap: () => _animateToPosition(maplibre.LatLng(stop.latitude, stop.longitude)),
-                  child: Card(
-                    // ... Card content (retaining existing style)
-                    elevation: 4,
-                    margin: const EdgeInsets.only(bottom: 16.0),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
+          SafeArea(
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: Container(
+                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: colorScheme.surface.withOpacity(0.9),
+                  borderRadius: BorderRadius.circular(30),
+                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 4))],
+                ),
+                child: Row(
+                  children: [
+                    IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => Navigator.of(context).pop()),
+                    Expanded(
                       child: Column(
+                        mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          Text('reportStops'.tr, style: theme.textTheme.labelMedium?.copyWith(color: colorScheme.secondary)),
                           Text(
-                            '${'reportStops'.tr} $index',
-                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface),
+                            _deviceName ?? '',
+                            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                            overflow: TextOverflow.ellipsis,
                           ),
-                          const Divider(),
-                          _buildStopDetailRow('historyStopTime'.tr, DateFormat('yyyy-MM-dd HH:mm').format(stop.startTime.toLocal())),
-                          _buildStopDetailRow('historyStopMinutes'.tr, (stop.duration / 60000).round().toString()),
-                          _buildStopDetailRow('reportEndTime'.tr, DateFormat('yyyy-MM-dd HH:mm').format(stop.endTime.toLocal())),
-                          _buildStopDetailRow('reportDuration'.tr, _formatDuration(stop.duration)),
-                          ListTile(
-                            title: Text('positionAddress'.tr, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
-                            trailing: ConstrainedBox(
-                              constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.5),
-                              child: FutureBuilder<String>(
-                                future: stop.address != null && stop.address!.isNotEmpty ? Future.value(stop.address) : OfflineAddressService.getAddress(stop.latitude, stop.longitude),
-                                builder: (context, snapshot) {
-                                  return Text(
-                                    snapshot.data ?? 'Address not available'.tr,
-                                    textAlign: TextAlign.right,
-                                    overflow: TextOverflow.ellipsis,
-                                    maxLines: 2,
-                                    style: TextStyle(fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface),
-                                  );
-                                },
-                              ),
-                            ),
-                          ),
-                          if (stop.engineHours != null) _buildStopDetailRow('reportEngineHours'.tr, _formatDuration(stop.engineHours!)),
                         ],
                       ),
                     ),
-                  ),
-                );
-              },
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(color: colorScheme.primaryContainer, borderRadius: BorderRadius.circular(12)),
+                      child: Text(
+                        '${_stopsReport.length} ${'stops'.tr}',
+                        style: TextStyle(color: colorScheme.onPrimaryContainer, fontWeight: FontWeight.bold, fontSize: 12),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                ),
+              ),
             ),
+          ),
+          Positioned(
+            top: 80,
+            right: 16,
+            child: Column(
+              children: [
+                _MapControlButton(icon: mapProvider.isSatelliteMode ? Icons.map_outlined : Icons.satellite_alt_outlined, onPressed: () => mapProvider.toggleMapType()),
+                const SizedBox(height: 8),
+                _MapControlButton(icon: Icons.center_focus_strong, onPressed: _zoomToFitAll),
+              ],
+            ),
+          ),
+          DraggableScrollableSheet(
+            controller: _sheetController,
+            initialChildSize: 0.35,
+            minChildSize: 0.15,
+            maxChildSize: 0.85,
+            snap: true,
+            builder: (context, scrollController) {
+              return Container(
+                decoration: BoxDecoration(
+                  color: colorScheme.surface,
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 12, offset: const Offset(0, -4))],
+                ),
+                child: Column(
+                  children: [
+                    Center(
+                      child: Container(
+                        margin: const EdgeInsets.only(top: 10, bottom: 6),
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(color: colorScheme.onSurfaceVariant.withOpacity(0.3), borderRadius: BorderRadius.circular(2)),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('historyStopsCount'.trParams({'count': '${_stopsReport.length}'}), style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+                          Text('Tap item to locate'.tr, style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.outline)),
+                        ],
+                      ),
+                    ),
+                    const Divider(height: 1),
+                    Expanded(
+                      child: ListView.builder(
+                        controller: scrollController,
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        itemCount: _stopsReport.length,
+                        itemBuilder: (context, index) {
+                          final stop = _stopsReport[index];
+                          final isSelected = _selectedStopIndex == index;
+                          return _StopTimelineTile(index: index + 1, stop: stop, isSelected: isSelected, isLast: index == _stopsReport.length - 1, onTap: () => _animateToPosition(maplibre.LatLng(stop.latitude, stop.longitude), index));
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
           ),
         ],
       ),
     );
   }
+}
 
-  Widget _buildStopDetailRow(String title, String value) {
-    return ListTile(
-      title: Text(title, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
-      trailing: Text(
-        value,
-        style: TextStyle(fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface),
+class _MapControlButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onPressed;
+
+  const _MapControlButton({required this.icon, required this.onPressed});
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Material(
+      color: colorScheme.surface.withOpacity(0.9),
+      shape: const CircleBorder(),
+      elevation: 4,
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: onPressed,
+        child: Padding(
+          padding: const EdgeInsets.all(10.0),
+          child: Icon(icon, color: colorScheme.onSurface, size: 22),
+        ),
+      ),
+    );
+  }
+}
+
+class _StopTimelineTile extends StatelessWidget {
+  final int index;
+  final StopReport stop;
+  final bool isSelected;
+  final bool isLast;
+  final VoidCallback onTap;
+
+  const _StopTimelineTile({required this.index, required this.stop, required this.isSelected, required this.isLast, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final durationStr = _StopsReportScreenState.formatDuration(stop.duration);
+
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Column(
+            children: [
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: isSelected ? colorScheme.primary : colorScheme.primaryContainer,
+                  shape: BoxShape.circle,
+                  border: isSelected ? Border.all(color: colorScheme.onPrimary, width: 2) : null,
+                ),
+                child: Center(
+                  child: Text(
+                    '$index',
+                    style: TextStyle(color: isSelected ? colorScheme.onPrimary : colorScheme.onPrimaryContainer, fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
+                ),
+              ),
+              if (!isLast)
+                Expanded(
+                  child: Container(width: 2, color: colorScheme.outlineVariant, margin: const EdgeInsets.symmetric(vertical: 4)),
+                ),
+            ],
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 16.0),
+              child: Card(
+                elevation: isSelected ? 3 : 0.5,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  side: isSelected ? BorderSide(color: colorScheme.primary, width: 1.5) : BorderSide(color: colorScheme.outlineVariant.withOpacity(0.5)),
+                ),
+                color: isSelected ? colorScheme.primaryContainer.withOpacity(0.15) : colorScheme.surface,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(16),
+                  onTap: onTap,
+                  child: Padding(
+                    padding: const EdgeInsets.all(14.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(Icons.access_time_rounded, size: 16, color: colorScheme.primary),
+                                const SizedBox(width: 4),
+                                Text(DateFormat('HH:mm').format(stop.startTime.toLocal()), style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+                                Text(' - ${DateFormat('HH:mm').format(stop.endTime.toLocal())}', style: theme.textTheme.bodyMedium?.copyWith(color: colorScheme.onSurfaceVariant)),
+                              ],
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(color: colorScheme.tertiaryContainer, borderRadius: BorderRadius.circular(8)),
+                              child: Text(
+                                durationStr,
+                                style: theme.textTheme.labelSmall?.copyWith(color: colorScheme.onTertiaryContainer, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.only(top: 2.0),
+                              child: Icon(Icons.location_on_outlined, size: 16, color: colorScheme.outline),
+                            ),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: FutureBuilder<String>(
+                                future: stop.address != null && stop.address!.isNotEmpty ? Future.value(stop.address) : OfflineAddressService.getAddress(stop.latitude, stop.longitude),
+                                builder: (context, snapshot) {
+                                  return Text(
+                                    snapshot.data ?? 'Address not available'.tr,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: theme.textTheme.bodyMedium?.copyWith(color: colorScheme.onSurface),
+                                  );
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (stop.engineHours != null) ...[
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Icon(Icons.build_circle_outlined, size: 14, color: colorScheme.outline),
+                              const SizedBox(width: 4),
+                              Text('${'reportEngineHours'.tr}: ${_StopsReportScreenState.formatDuration(stop.engineHours!)}', style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.outline)),
+                            ],
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -1,6 +1,5 @@
 // lib/screens/reports/chart_report_screen.dart
-// Chart report with dynamic attribute detection, multiple lines, time type selection.
-// Based on traccar-web ChartReportPage.
+// Modernized Chart Report Screen with dynamic attributes, clean Material 3 UI, dynamic legend, and statistics dashboard.
 import 'dart:convert';
 import 'dart:math';
 
@@ -31,6 +30,16 @@ class _ChartReportScreenState extends State<ChartReportScreen> {
   final Set<String> _selectedKeys = {'speed'};
   String _timeType = 'fixTime';
 
+  // Preset Color Palette for Chart Lines
+  static const List<Color> _chartColors = [
+    Color(0xFF2196F3), // Blue
+    Color(0xFF4CAF50), // Green
+    Color(0xFFFF9800), // Orange
+    Color(0xFFE91E63), // Pink
+    Color(0xFF9C27B0), // Purple
+    Color(0xFF00BCD4), // Cyan
+  ];
+
   @override
   void initState() {
     super.initState();
@@ -44,6 +53,7 @@ class _ChartReportScreenState extends State<ChartReportScreen> {
     final deviceId = prefs.getInt('selectedDeviceId');
     final fromDateString = prefs.getString('historyFrom');
     final toDateString = prefs.getString('historyTo');
+
     if (deviceId == null || fromDateString == null || toDateString == null) {
       setState(() => _isLoading = false);
       return;
@@ -55,10 +65,10 @@ class _ChartReportScreenState extends State<ChartReportScreen> {
       return;
     }
 
-    // 軌跡頁快取只在單日查詢時可用；新鮮時直接使用，報表 API 沒有資料時再退回快取
     final bool isSingleDayRange = fromDate.year == toDate.year && fromDate.month == toDate.month && fromDate.day == toDate.day;
     final CachedRoutePositions? cachedRoute = isSingleDayRange ? await RouteHistoryCache.load(deviceId: deviceId, day: fromDate) : null;
     final bool hasCachedRoute = cachedRoute != null && cachedRoute.positions.length >= 2;
+
     if (hasCachedRoute && cachedRoute.isFreshFor(fromDate)) {
       _applyCachedChart(cachedRoute.positions, prefs.getString('selectedDeviceName'));
       return;
@@ -77,7 +87,6 @@ class _ChartReportScreenState extends State<ChartReportScreen> {
       if (response.statusCode == 200 && response.body.isNotEmpty) {
         final data = json.decode(response.body) as List? ?? [];
         if (data.isNotEmpty) {
-          // Build flattened data with timestamps as ms
           _rawItems = data.map<Map<String, dynamic>>((pos) {
             final m = <String, dynamic>{};
             final p = pos as Map<String, dynamic>;
@@ -86,13 +95,11 @@ class _ChartReportScreenState extends State<ChartReportScreen> {
                 m[timeKey] = DateTime.parse(p[timeKey] as String).millisecondsSinceEpoch.toDouble();
               }
             }
-            // Copy numeric fields (speed as knots, convert to kmh for display)
             for (final key in ['speed', 'altitude', 'course', 'accuracy', 'bearing']) {
               if (p[key] != null && p[key] is num) {
                 m[key] = (p[key] as num).toDouble();
               }
             }
-            // Copy attributes
             if (p['attributes'] is Map) {
               for (final entry in (p['attributes'] as Map).entries) {
                 if (entry.value is num) {
@@ -107,7 +114,6 @@ class _ChartReportScreenState extends State<ChartReportScreen> {
           }).toList();
 
           _detectAvailableKeys();
-
           final device = traccarProvider.devices.firstWhere((d) => d.id == deviceId, orElse: () => api.Device());
           _deviceName = device.name;
         }
@@ -118,10 +124,9 @@ class _ChartReportScreenState extends State<ChartReportScreen> {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to load chart data.'.tr)));
       }
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
 
-    // 報表 API 沒有回傳資料時，改用軌跡頁快取繪製曲線
     if (_rawItems.isEmpty && hasCachedRoute) {
       _applyCachedChart(cachedRoute.positions, prefs.getString('selectedDeviceName'));
     }
@@ -150,7 +155,6 @@ class _ChartReportScreenState extends State<ChartReportScreen> {
       ..addAll(['speed', 'altitude', ...keySet.where((k) => k != 'speed' && k != 'altitude')]);
   }
 
-  /// 將快取的軌跡點轉成圖表用的扁平資料，speed 維持 knots 以沿用繪圖時的換算。
   Map<String, dynamic> _cachedPositionToItem(api.Position position) {
     final item = <String, dynamic>{};
     final fixTime = position.fixTime?.millisecondsSinceEpoch.toDouble();
@@ -194,141 +198,289 @@ class _ChartReportScreenState extends State<ChartReportScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
     return Scaffold(
-      appBar: CupertinoNavigationBar(middle: Text('${'reportChart'.tr}: ${_deviceName ?? ''}')),
+      backgroundColor: colorScheme.surfaceContainerLowest,
+      appBar: AppBar(
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('reportChart'.tr, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            if (_deviceName != null && _deviceName!.isNotEmpty) Text(_deviceName!, style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant)),
+          ],
+        ),
+        elevation: 0,
+        actions: [IconButton(icon: const Icon(Icons.refresh), onPressed: _fetchData, tooltip: 'Refresh')],
+      ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _rawItems.isEmpty
-          ? Center(child: Text('sharedNoData'.tr))
-          : Column(
-              children: [
-                // Filters row
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  child: Row(
-                    children: [
-                      Expanded(child: _buildMultiSelect()),
-                      const SizedBox(width: 12),
-                      Expanded(child: _buildTimeTypeSelect()),
-                    ],
+          ? _buildEmptyState()
+          : SafeArea(
+              child: Column(
+                children: [
+                  // Filter bar
+                  _buildFilterHeader(),
+
+                  // Chart Card
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      child: Card(
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                          side: BorderSide(color: colorScheme.outlineVariant.withOpacity(0.5)),
+                        ),
+                        color: colorScheme.surface,
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 20, 20, 16),
+                          child: Column(
+                            children: [
+                              _buildLegendBar(),
+                              const SizedBox(height: 16),
+                              Expanded(child: _buildChart()),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
-                ),
-                // Chart
-                Expanded(
-                  child: Padding(padding: const EdgeInsets.fromLTRB(8, 8, 16, 8), child: _buildChart()),
-                ),
-                // Stats
-                _buildStatsCard(),
-              ],
+
+                  // Stats Section
+                  _buildStatsSection(),
+                ],
+              ),
             ),
     );
   }
 
-  Widget _buildMultiSelect() {
-    final color = Theme.of(context).colorScheme;
-    return InkWell(
-      onTap: () {
-        showModalBottomSheet(
-          context: context,
-          isScrollControlled: true,
-          shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
-          builder: (ctx) {
-            return StatefulBuilder(
-              builder: (ctx, setSheetState) {
-                return Container(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
-                  constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.6),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'reportChartType'.tr,
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: color.onSurface),
-                      ),
-                      const Divider(),
-                      Flexible(
-                        child: ListView(
-                          shrinkWrap: true,
-                          children: _availableKeys.map((key) {
-                            final checked = _selectedKeys.contains(key);
-                            return CheckboxListTile(
-                              value: checked,
-                              title: Text(_keyLabel(key)),
-                              dense: true,
-                              controlAffinity: ListTileControlAffinity.leading,
-                              onChanged: (_) {
-                                setState(() {
-                                  if (checked) {
-                                    _selectedKeys.remove(key);
-                                  } else {
-                                    _selectedKeys.add(key);
-                                  }
-                                });
-                                setSheetState(() {});
-                              },
-                            );
-                          }).toList(),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton(onPressed: () => Navigator.pop(ctx), child: Text('sharedAccept'.tr)),
-                      ),
-                    ],
-                  ),
-                );
-              },
-            );
-          },
-        );
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-        decoration: BoxDecoration(
-          border: Border.all(color: color.onSurface.withValues(alpha: 0.3)),
-          borderRadius: BorderRadius.circular(4),
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(
-                _selectedKeys.isEmpty ? 'reportChartType'.tr : _selectedKeys.map((k) => _keyLabel(k)).join(', '),
-                style: TextStyle(fontSize: 13, color: _selectedKeys.isEmpty ? color.onSurfaceVariant : color.onSurface),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            Icon(CupertinoIcons.chevron_down, color: color.onSurfaceVariant),
-          ],
-        ),
+  Widget _buildEmptyState() {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.show_chart_rounded, size: 64, color: colorScheme.outline),
+          const SizedBox(height: 16),
+          Text(
+            'sharedNoData'.tr,
+            style: TextStyle(fontSize: 16, color: colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildTimeTypeSelect() {
-    return DropdownButtonHideUnderline(
-      child: DropdownButton<String>(
-        isExpanded: true,
-        value: _timeType,
-        dropdownColor: Theme.of(context).colorScheme.surface,
-        items: [
-          DropdownMenuItem(value: 'fixTime', child: Text('positionFixTime'.tr)),
-          DropdownMenuItem(value: 'deviceTime', child: Text('positionDeviceTime'.tr)),
-          DropdownMenuItem(value: 'serverTime', child: Text('positionServerTime'.tr)),
+  Widget _buildFilterHeader() {
+    final colorScheme = Theme.of(context).colorScheme;
+    final selectedText = _selectedKeys.isEmpty ? 'reportChartType'.tr : _selectedKeys.map((k) => _keyLabel(k)).join(', ');
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      child: Row(
+        children: [
+          // Dynamic Metrics Selector
+          Expanded(
+            flex: 3,
+            child: InkWell(
+              onTap: _showMultiSelectBottomSheet,
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: colorScheme.surfaceContainerHigh,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: colorScheme.outlineVariant.withOpacity(0.4)),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.tune_rounded, size: 18, color: colorScheme.primary),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        selectedText,
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: colorScheme.onSurface),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    Icon(Icons.arrow_drop_down, color: colorScheme.onSurfaceVariant),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+
+          // Time Type Dropdown
+          Expanded(
+            flex: 2,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+              decoration: BoxDecoration(
+                color: colorScheme.surfaceContainerHigh,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: colorScheme.outlineVariant.withOpacity(0.4)),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<String>(
+                  isExpanded: true,
+                  value: _timeType,
+                  icon: Icon(Icons.access_time_rounded, size: 18, color: colorScheme.primary),
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: colorScheme.onSurface),
+                  dropdownColor: colorScheme.surfaceContainerHigh,
+                  items: [
+                    DropdownMenuItem(value: 'fixTime', child: Text('positionFixTime'.tr)),
+                    DropdownMenuItem(value: 'deviceTime', child: Text('positionDeviceTime'.tr)),
+                    DropdownMenuItem(value: 'serverTime', child: Text('positionServerTime'.tr)),
+                  ],
+                  onChanged: (val) {
+                    if (val != null) setState(() => _timeType = val);
+                  },
+                ),
+              ),
+            ),
+          ),
         ],
-        onChanged: (val) => setState(() => _timeType = val!),
+      ),
+    );
+  }
+
+  void _showMultiSelectBottomSheet() {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: colorScheme.surface,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setSheetState) {
+            return Container(
+              padding: const EdgeInsets.all(20),
+              constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.65),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 36,
+                      height: 4,
+                      margin: const EdgeInsets.only(bottom: 16),
+                      decoration: BoxDecoration(color: colorScheme.outlineVariant, borderRadius: BorderRadius.circular(2)),
+                    ),
+                  ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'reportChartType'.tr,
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: colorScheme.onSurface),
+                      ),
+                      TextButton(
+                        onPressed: () {
+                          setState(() => _selectedKeys.clear());
+                          setSheetState(() {});
+                        },
+                        child: const Text('Clear All'),
+                      ),
+                    ],
+                  ),
+                  const Divider(),
+                  Expanded(
+                    child: ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: _availableKeys.length,
+                      itemBuilder: (context, index) {
+                        final key = _availableKeys[index];
+                        final checked = _selectedKeys.contains(key);
+                        return CheckboxListTile(
+                          value: checked,
+                          activeColor: colorScheme.primary,
+                          title: Text(_keyLabel(key), style: const TextStyle(fontSize: 14)),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          dense: true,
+                          controlAffinity: ListTileControlAffinity.leading,
+                          onChanged: (_) {
+                            setState(() {
+                              if (checked) {
+                                _selectedKeys.remove(key);
+                              } else {
+                                _selectedKeys.add(key);
+                              }
+                            });
+                            setSheetState(() {});
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 48,
+                    child: FilledButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      child: Text('sharedAccept'.tr, style: const TextStyle(fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildLegendBar() {
+    if (_selectedKeys.isEmpty) return const SizedBox.shrink();
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: _selectedKeys.toList().asMap().entries.map((entry) {
+          final idx = entry.key;
+          final key = entry.value;
+          final color = _chartColors[idx % _chartColors.length];
+
+          return Container(
+            margin: const EdgeInsets.only(right: 12),
+            child: Row(
+              children: [
+                Container(
+                  width: 10,
+                  height: 10,
+                  decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  _keyLabel(key),
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Theme.of(context).colorScheme.onSurface),
+                ),
+              ],
+            ),
+          );
+        }).toList(),
       ),
     );
   }
 
   Widget _buildChart() {
-    if (_rawItems.isEmpty) return Center(child: Text('sharedNoData'.tr));
-
-    final colorPalette = [Theme.of(context).colorScheme.primary, Theme.of(context).colorScheme.secondary, Theme.of(context).colorScheme.error, Colors.orange, Colors.teal, Colors.purple];
+    if (_rawItems.isEmpty || _selectedKeys.isEmpty) {
+      return Center(
+        child: Text('sharedNoData'.tr, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+      );
+    }
 
     final lineBars = <LineChartBarData>[];
     int ci = 0;
+
     for (final key in _selectedKeys) {
       final spots = <FlSpot>[];
       for (int i = 0; i < _rawItems.length; i++) {
@@ -340,17 +492,19 @@ class _ChartReportScreenState extends State<ChartReportScreen> {
       }
       if (spots.isEmpty) continue;
 
-      // Convert speed from knots to km/h
       final convertedSpots = (key == 'speed') ? spots.map((s) => FlSpot(s.x, s.y * 1.852)).toList() : spots;
+      final barColor = _chartColors[ci % _chartColors.length];
 
       lineBars.add(
         LineChartBarData(
           spots: convertedSpots,
           isCurved: true,
-          color: colorPalette[ci % colorPalette.length],
-          barWidth: 2,
+          curveSmoothness: 0.2,
+          color: barColor,
+          barWidth: 2.5,
+          isStrokeCapRound: true,
           dotData: const FlDotData(show: false),
-          belowBarData: BarAreaData(show: lineBars.isEmpty, color: colorPalette[ci % colorPalette.length].withValues(alpha: 0.1)),
+          belowBarData: BarAreaData(show: true, color: barColor.withOpacity(0.08)),
         ),
       );
       ci++;
@@ -360,6 +514,7 @@ class _ChartReportScreenState extends State<ChartReportScreen> {
 
     double minX = double.infinity, maxX = double.negativeInfinity;
     double minY = double.infinity, maxY = double.negativeInfinity;
+
     for (final bar in lineBars) {
       for (final s in bar.spots) {
         if (s.x < minX) minX = s.x;
@@ -372,14 +527,18 @@ class _ChartReportScreenState extends State<ChartReportScreen> {
     if (maxX == double.negativeInfinity) maxX = 1;
     if (minY == double.infinity) minY = 0;
     if (maxY == double.negativeInfinity) maxY = 100;
-    final yPad = (maxY - minY) * 0.1;
+    final yPad = (maxY - minY) == 0 ? 10.0 : (maxY - minY) * 0.15;
+
+    final colorScheme = Theme.of(context).colorScheme;
 
     return LineChart(
       LineChartData(
         gridData: FlGridData(
           show: true,
-          getDrawingHorizontalLine: (v) => FlLine(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.08), strokeWidth: 1),
-          getDrawingVerticalLine: (v) => FlLine(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.08), strokeWidth: 1),
+          drawVerticalLine: true,
+          horizontalInterval: ((maxY - minY + yPad) / 4).clamp(1.0, double.infinity),
+          getDrawingHorizontalLine: (v) => FlLine(color: colorScheme.outlineVariant.withOpacity(0.3), strokeWidth: 1, dashArray: [4, 4]),
+          getDrawingVerticalLine: (v) => FlLine(color: colorScheme.outlineVariant.withOpacity(0.3), strokeWidth: 1, dashArray: [4, 4]),
         ),
         titlesData: FlTitlesData(
           rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
@@ -388,30 +547,31 @@ class _ChartReportScreenState extends State<ChartReportScreen> {
             sideTitles: SideTitles(
               showTitles: true,
               reservedSize: 28,
+              interval: ((maxX - minX) / 4).clamp(1.0, double.infinity),
               getTitlesWidget: (v, m) => SideTitleWidget(
                 meta: m,
-                child: Text(_fmtTime(v), style: TextStyle(fontSize: 9, color: Theme.of(context).colorScheme.onSurface)),
+                child: Text(
+                  _fmtTime(v),
+                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.w500, color: colorScheme.onSurfaceVariant),
+                ),
               ),
             ),
           ),
           leftTitles: AxisTitles(
             sideTitles: SideTitles(
               showTitles: true,
-              reservedSize: 44,
+              reservedSize: 40,
               getTitlesWidget: (v, m) => SideTitleWidget(
                 meta: m,
-                child: Text(v.toStringAsFixed(0), style: TextStyle(fontSize: 9, color: Theme.of(context).colorScheme.onSurface)),
+                child: Text(
+                  v.toStringAsFixed(0),
+                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.w500, color: colorScheme.onSurfaceVariant),
+                ),
               ),
             ),
           ),
         ),
-        borderData: FlBorderData(
-          show: true,
-          border: Border(
-            left: BorderSide(color: Theme.of(context).colorScheme.onSurface),
-            bottom: BorderSide(color: Theme.of(context).colorScheme.onSurface),
-          ),
-        ),
+        borderData: FlBorderData(show: false),
         minX: minX,
         maxX: maxX,
         minY: (minY - yPad).clamp(0, double.infinity),
@@ -419,10 +579,11 @@ class _ChartReportScreenState extends State<ChartReportScreen> {
         lineBarsData: lineBars,
         lineTouchData: LineTouchData(
           touchTooltipData: LineTouchTooltipData(
+            getTooltipColor: (_) => colorScheme.surfaceContainerHighest,
             getTooltipItems: (spots) => spots.map((s) {
               final idx = lineBars.indexOf(s.bar);
               final label = idx >= 0 && idx < _selectedKeys.length ? _keyLabel(_selectedKeys.elementAt(idx)) : '';
-              return LineTooltipItem('$label: ${s.y.toStringAsFixed(1)}', TextStyle(color: Theme.of(context).colorScheme.onSurface, fontWeight: FontWeight.bold));
+              return LineTooltipItem('$label\n${s.y.toStringAsFixed(1)}', TextStyle(color: colorScheme.onSurface, fontWeight: FontWeight.bold, fontSize: 12));
             }).toList(),
           ),
         ),
@@ -435,46 +596,73 @@ class _ChartReportScreenState extends State<ChartReportScreen> {
     return '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
   }
 
-  Widget _buildStatsCard() {
+  Widget _buildStatsSection() {
     if (_rawItems.isEmpty) return const SizedBox.shrink();
-    final speeds = _rawItems.map((m) => (m['speed'] as double?)?.let((v) => v * 1.852) ?? 0.0);
-    final maxS = speeds.reduce(max);
-    final avgS = speeds.reduce((a, b) => a + b) / speeds.length;
+
+    final speeds = _rawItems.map((m) => (m['speed'] as double?)?.let((v) => v * 1.852) ?? 0.0).toList();
+    final maxS = speeds.isNotEmpty ? speeds.reduce(max) : 0.0;
+    final avgS = speeds.isNotEmpty ? speeds.reduce((a, b) => a + b) / speeds.length : 0.0;
+    final colorScheme = Theme.of(context).colorScheme;
 
     return Container(
-      margin: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-      child: Card(
-        elevation: 2,
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(left: 4, bottom: 8),
+            child: Text(
+              'reportSummary'.tr,
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: colorScheme.onSurface),
+            ),
+          ),
+          Row(
             children: [
-              Text(
-                'reportSummary'.tr,
-                style: TextStyle(fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface),
+              Expanded(
+                child: _buildStatCard(icon: Icons.speed_rounded, iconColor: Colors.orange, title: 'reportMaximumSpeed'.tr, value: '${maxS.toStringAsFixed(1)} ${'sharedKmh'.tr}'),
               ),
-              const Divider(height: 8),
-              _statRow('reportMaximumSpeed'.tr, '${maxS.toStringAsFixed(1)} ${'sharedKmh'.tr}'),
-              _statRow('reportAverageSpeed'.tr, '${avgS.toStringAsFixed(1)} ${'sharedKmh'.tr}'),
-              _statRow('reportPositions'.tr, '${_rawItems.length}'),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _buildStatCard(icon: Icons.av_timer_rounded, iconColor: Colors.blue, title: 'reportAverageSpeed'.tr, value: '${avgS.toStringAsFixed(1)} ${'sharedKmh'.tr}'),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _buildStatCard(icon: Icons.pin_drop_rounded, iconColor: Colors.teal, title: 'reportPositions'.tr, value: '${_rawItems.length}'),
+              ),
             ],
           ),
-        ),
+        ],
       ),
     );
   }
 
-  Widget _statRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  Widget _buildStatCard({required IconData icon, required Color iconColor, required String title, required String value}) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: colorScheme.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: colorScheme.outlineVariant.withOpacity(0.4)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 13)),
+          Icon(icon, size: 20, color: iconColor),
+          const SizedBox(height: 8),
+          Text(
+            title,
+            style: TextStyle(fontSize: 11, color: colorScheme.onSurfaceVariant),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 2),
           Text(
             value,
-            style: TextStyle(fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface, fontSize: 13),
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: colorScheme.onSurface),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),

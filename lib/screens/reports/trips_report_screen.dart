@@ -1,11 +1,10 @@
 // lib/screens/reports/trips_report_screen.dart
-// A screen to display trips report in the TracDefg app.
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 
-import 'package:flutter/foundation.dart'; // Added for debugPrint
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
@@ -21,7 +20,6 @@ import 'package:trabcdefg/src/generated_api/api.dart' as api;
 import 'package:trabcdefg/src/utils/route_history_analyzer.dart';
 import 'package:trabcdefg/widgets/offline_address_service.dart';
 
-// Traccar 報表的 speed 欄位單位為節 (knots)
 const double _knotsToKmh = 1.852;
 
 class TripReport {
@@ -97,7 +95,6 @@ class TripReport {
     );
   }
 
-  /// 由本機軌跡快取推算的行程（速度已為 km/h）。
   factory TripReport.fromAnalyzed(AnalyzedTrip trip, {required int deviceId, required String deviceName}) {
     return TripReport(
       deviceId: deviceId,
@@ -138,6 +135,7 @@ class _TripsReportScreenState extends State<TripsReportScreen> {
   bool _isStyleLoaded = false;
   bool _isDrawing = false;
   bool _pendingDraw = false;
+  int? _selectedIndex;
 
   @override
   void initState() {
@@ -145,31 +143,17 @@ class _TripsReportScreenState extends State<TripsReportScreen> {
     _fetchTripsReport();
   }
 
-  @override
-  void dispose() {
-    super.dispose();
-  }
-
   Future<void> _fetchTripsReport() async {
-    setState(() {
-      _isLoading = true;
-    });
+    setState(() => _isLoading = true);
 
     final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
-
     final prefs = await SharedPreferences.getInstance();
     final deviceId = prefs.getInt('selectedDeviceId');
     final fromDateString = prefs.getString('historyFrom');
     final toDateString = prefs.getString('historyTo');
 
-    debugPrint('Fetched from SharedPreferences: deviceId=$deviceId, fromDate=$fromDateString, toDate=$toDateString');
-
     if (deviceId == null || fromDateString == null || toDateString == null) {
-      if (!mounted) return;
-      setState(() {
-        _isLoading = false;
-      });
-      debugPrint('Missing device ID or date range from SharedPreferences.');
+      if (mounted) setState(() => _isLoading = false);
       return;
     }
 
@@ -177,19 +161,15 @@ class _TripsReportScreenState extends State<TripsReportScreen> {
     final toDate = DateTime.tryParse(toDateString);
 
     if (fromDate == null || toDate == null) {
-      if (!mounted) return;
-      setState(() {
-        _isLoading = false;
-      });
-      debugPrint('Failed to parse date strings.');
+      if (mounted) setState(() => _isLoading = false);
       return;
     }
 
-    // 軌跡頁快取只在單日查詢時可用；新鮮時直接使用，報表 API 沒有資料時再退回快取
     final bool isSingleDayRange = fromDate.year == toDate.year && fromDate.month == toDate.month && fromDate.day == toDate.day;
     final CachedRoutePositions? cachedRoute = isSingleDayRange ? await RouteHistoryCache.load(deviceId: deviceId, day: fromDate) : null;
     final bool hasCachedRoute = cachedRoute != null && cachedRoute.positions.length >= 2;
     final String deviceName = prefs.getString('selectedDeviceName') ?? '';
+
     if (hasCachedRoute && cachedRoute.isFreshFor(fromDate)) {
       _applyCachedTrips(cachedRoute.positions, deviceId, deviceName);
       return;
@@ -201,15 +181,7 @@ class _TripsReportScreenState extends State<TripsReportScreen> {
       const path = '/reports/trips';
       final headerParams = {'Accept': 'application/json'};
 
-      final http.Response response = await apiClient.invokeAPI(
-        path,
-        'GET',
-        queryParams,
-        null, // body
-        headerParams, // headerParams
-        {}, // formParams
-        'application/json', // contentType
-      );
+      final http.Response response = await apiClient.invokeAPI(path, 'GET', queryParams, null, headerParams, {}, 'application/json');
 
       if (!mounted) return;
 
@@ -226,24 +198,17 @@ class _TripsReportScreenState extends State<TripsReportScreen> {
             }
           }
         } else {
-          debugPrint('Warning: Expected JSON, but received content type: $contentType');
-          if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to load trips report. The server returned a file instead of JSON. Please check the Traccar server settings for reports.'.tr)));
         }
       }
     } catch (e) {
-      debugPrint('Error fetching trips report: $e');
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to load trips report.'.tr)));
-    } finally {
       if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to load trips report.'.tr)));
       }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
 
-    // 報表 API 沒有回傳資料時，改用軌跡頁快取推算行程
     if (_tripsReport.isEmpty && hasCachedRoute) {
       _applyCachedTrips(cachedRoute.positions, deviceId, deviceName);
     }
@@ -253,16 +218,12 @@ class _TripsReportScreenState extends State<TripsReportScreen> {
     final analysis = RouteHistoryAnalyzer.analyze(positions);
     _tripsReport = analysis.trips.map((trip) => TripReport.fromAnalyzed(trip, deviceId: deviceId, deviceName: deviceName)).toList();
     _deviceName = deviceName;
-    if (!mounted) return;
-    setState(() {
-      _isLoading = false;
-    });
+    if (mounted) setState(() => _isLoading = false);
     _createMapElements();
   }
 
   Future<void> _onStyleLoaded() async {
     _isStyleLoaded = true;
-    // 樣式（或整個地圖）重建後，先前上傳的圖片與圖層都會消失，必須重新上傳
     _loadedIcons.clear();
     if (_tripsReport.isNotEmpty) {
       await _preloadIcons();
@@ -271,10 +232,7 @@ class _TripsReportScreenState extends State<TripsReportScreen> {
   }
 
   Future<void> _preloadIcons() async {
-    await Future.wait([
-      _ensureIcon("start_pin", "assets/images/start.png"),
-      _ensureIcon("end_pin", "assets/images/destination.png"),
-    ]);
+    await Future.wait([_ensureIcon("start_pin", "assets/images/start.png"), _ensureIcon("end_pin", "assets/images/destination.png")]);
   }
 
   Future<void> _ensureIcon(String iconId, String assetPath) async {
@@ -285,16 +243,14 @@ class _TripsReportScreenState extends State<TripsReportScreen> {
       final Uint8List bytes = _iconBytes[iconId] ??= (await rootBundle.load(assetPath)).buffer.asUint8List();
       await controller.addImage(iconId, bytes);
     } catch (e) {
-      // 目前樣式已存在同一張圖片時會拋錯，可直接沿用
       debugPrint('addImage failed for $iconId: $e');
     }
   }
 
   Future<void> _createMapElements() async {
     final controller = _mapController;
-    if (controller == null || !_isStyleLoaded || _tripsReport.isEmpty) {
-      return;
-    }
+    if (controller == null || !_isStyleLoaded || _tripsReport.isEmpty) return;
+
     if (_isDrawing) {
       _pendingDraw = true;
       return;
@@ -306,10 +262,8 @@ class _TripsReportScreenState extends State<TripsReportScreen> {
       await controller.clearLines();
 
       final List<maplibre.LatLng> allPoints = [];
-
-      // Capture context properties synchronously before entering async sequence loops
       if (!mounted) return;
-      final String lineHexColor = Theme.of(context).colorScheme.primary.toHex();
+      final String primaryColorHex = Theme.of(context).colorScheme.primary.toHex();
 
       for (var i = 0; i < _tripsReport.length; i++) {
         final trip = _tripsReport[i];
@@ -319,13 +273,14 @@ class _TripsReportScreenState extends State<TripsReportScreen> {
         allPoints.add(start);
         allPoints.add(end);
 
-        await controller.addLine(maplibre.LineOptions(geometry: [start, end], lineColor: lineHexColor, lineWidth: 4.0));
+        final bool isSelected = _selectedIndex == i;
+        await controller.addLine(maplibre.LineOptions(geometry: [start, end], lineColor: isSelected ? Theme.of(context).colorScheme.error.toHex() : primaryColorHex, lineWidth: isSelected ? 6.0 : 3.5, lineOpacity: isSelected ? 1.0 : 0.7));
 
         await _addMarker(start, "start_$i", "assets/images/start.png");
         await _addMarker(end, "end_$i", "assets/images/destination.png");
       }
 
-      if (allPoints.isNotEmpty) {
+      if (allPoints.isNotEmpty && _selectedIndex == null) {
         _zoomToFit(allPoints);
       }
     } finally {
@@ -340,11 +295,9 @@ class _TripsReportScreenState extends State<TripsReportScreen> {
   Future<void> _addMarker(maplibre.LatLng point, String iconId, String assetPath) async {
     final controller = _mapController;
     if (controller == null) return;
-
     final baseIconId = assetPath.contains("start") ? "start_pin" : "end_pin";
     await _ensureIcon(baseIconId, assetPath);
-
-    await controller.addSymbol(maplibre.SymbolOptions(geometry: point, iconImage: baseIconId, iconSize: 1.4, iconAnchor: "bottom"));
+    await controller.addSymbol(maplibre.SymbolOptions(geometry: point, iconImage: baseIconId, iconSize: 1.2, iconAnchor: "bottom"));
   }
 
   void _zoomToFit(List<maplibre.LatLng> points) {
@@ -354,109 +307,92 @@ class _TripsReportScreenState extends State<TripsReportScreen> {
     double minLng = points.map((p) => p.longitude).reduce(min);
     double maxLng = points.map((p) => p.longitude).reduce(max);
 
-    _mapController?.animateCamera(maplibre.CameraUpdate.newLatLngBounds(maplibre.LatLngBounds(southwest: maplibre.LatLng(minLat, minLng), northeast: maplibre.LatLng(maxLat, maxLng)), left: 50, right: 50, top: 50, bottom: 50));
+    _mapController?.animateCamera(maplibre.CameraUpdate.newLatLngBounds(maplibre.LatLngBounds(southwest: maplibre.LatLng(minLat, minLng), northeast: maplibre.LatLng(maxLat, maxLng)), left: 60, right: 60, top: 60, bottom: 60));
   }
 
-  void _animateToPosition(maplibre.LatLng position) {
-    _mapController?.animateCamera(maplibre.CameraUpdate.newLatLng(position));
+  void _onTripSelected(int index, TripReport trip) {
+    setState(() {
+      _selectedIndex = index;
+    });
+    _createMapElements();
+
+    // 平移並放大至該行程起終點範圍
+    final start = maplibre.LatLng(trip.startLat, trip.startLon);
+    final end = maplibre.LatLng(trip.endLat, trip.endLon);
+    _zoomToFit([start, end]);
   }
 
   String _formatDuration(int milliseconds) {
     int seconds = (milliseconds / 1000).round();
     int hours = seconds ~/ 3600;
     int minutes = (seconds % 3600) ~/ 60;
-    int remainingSeconds = seconds % 60;
-    return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${remainingSeconds.toString().padLeft(2, '0')}';
+    if (hours > 0) {
+      return '${hours}h ${minutes}m';
+    }
+    return '${minutes}m ${seconds % 60}s';
   }
 
   String _formatDistance(double meters) {
     if (meters >= 1000) {
-      return '${(meters / 1000).toStringAsFixed(2)} ${'sharedKm'.tr}';
+      return '${(meters / 1000).toStringAsFixed(1)} ${'sharedKm'.tr}';
     }
-    return '${meters.toStringAsFixed(2)} ${'sharedMeters'.tr}';
+    return '${meters.toStringAsFixed(0)} ${'sharedMeters'.tr}';
   }
 
   double get _totalDistance => _tripsReport.fold<double>(0, (sum, trip) => sum + trip.distance);
-
   int get _totalDuration => _tripsReport.fold<int>(0, (sum, trip) => sum + trip.duration);
-
   double get _maxSpeedKmh => _tripsReport.isEmpty ? 0 : _tripsReport.map((trip) => trip.maxSpeed).reduce(max);
-
-  double get _averageSpeedKmh {
-    if (_totalDuration <= 0) {
-      return 0;
-    }
-    // 總里程(公尺) / 總時長(秒) => m/s，再換算 km/h
-    return _totalDistance / (_totalDuration / 1000) * 3.6;
-  }
-
-  Widget _buildTripsSummaryCard(ThemeData theme) {
-    return Card(
-      elevation: 2,
-      margin: const EdgeInsets.only(bottom: 16),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('historyTripsSummary'.tr, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: theme.colorScheme.onSurface)),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(child: _buildSummaryItem(theme, 'historyTotalDistance'.tr, _formatDistance(_totalDistance))),
-                Expanded(child: _buildSummaryItem(theme, 'historyTotalDuration'.tr, _formatDuration(_totalDuration))),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(child: _buildSummaryItem(theme, 'historyMaxSpeed'.tr, '${_maxSpeedKmh.toStringAsFixed(1)} ${'sharedKmh'.tr}')),
-                Expanded(child: _buildSummaryItem(theme, 'historyAverageSpeed'.tr, '${_averageSpeedKmh.toStringAsFixed(1)} ${'sharedKmh'.tr}')),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSummaryItem(ThemeData theme, String label, String value) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant)),
-        const SizedBox(height: 2),
-        Text(value, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: theme.colorScheme.onSurface)),
-      ],
-    );
-  }
+  double get _averageSpeedKmh => _totalDuration <= 0 ? 0 : _totalDistance / (_totalDuration / 1000) * 3.6;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final mapProvider = Provider.of<MapStyleProvider>(context);
 
     if (_isLoading) {
       return Scaffold(
-        body: Center(child: CircularProgressIndicator(color: theme.colorScheme.primary)),
+        appBar: AppBar(title: Text('reportTrips'.tr)),
+        body: const Center(child: CircularProgressIndicator()),
       );
     }
 
     if (_tripsReport.isEmpty) {
       return Scaffold(
-        appBar: CupertinoNavigationBar(middle: Text(_deviceName ?? 'reportTrips'.tr)),
-        body: Center(child: Text('sharedNoData'.tr)),
+        appBar: AppBar(title: Text(_deviceName ?? 'reportTrips'.tr)),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.directions_car_outlined, size: 64, color: theme.colorScheme.outline),
+              const SizedBox(height: 16),
+              Text('sharedNoData'.tr, style: theme.textTheme.titleMedium?.copyWith(color: theme.colorScheme.outline)),
+            ],
+          ),
+        ),
       );
     }
 
-    final mapProvider = Provider.of<MapStyleProvider>(context);
-    final initialCenter = _tripsReport.isNotEmpty ? maplibre.LatLng(_tripsReport.first.startLat, _tripsReport.first.startLon) : const maplibre.LatLng(21.9162, 95.9560);
+    final initialCenter = maplibre.LatLng(_tripsReport.first.startLat, _tripsReport.first.startLon);
 
     return Scaffold(
-      appBar: CupertinoNavigationBar(middle: Text('${'reportTrips'.tr}: ${_deviceName ?? ''}')),
+      backgroundColor: theme.colorScheme.surfaceContainerLowest,
+      appBar: AppBar(
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('reportTrips'.tr, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            if (_deviceName != null) Text(_deviceName!, style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+          ],
+        ),
+        centerTitle: false,
+        elevation: 0,
+        scrolledUnderElevation: 2,
+      ),
       body: Column(
         children: [
-          Expanded(
-            flex: 1,
+          // 地圖展示區域
+          SizedBox(
+            height: MediaQuery.of(context).size.height * 0.35,
             child: Stack(
               children: [
                 maplibre.MapLibreMap(
@@ -467,74 +403,49 @@ class _TripsReportScreenState extends State<TripsReportScreen> {
                     _loadedIcons.clear();
                   },
                   onStyleLoadedCallback: _onStyleLoaded,
-                  initialCameraPosition: maplibre.CameraPosition(target: initialCenter, zoom: 14.0),
+                  initialCameraPosition: maplibre.CameraPosition(target: initialCenter, zoom: 13.0),
                   styleString: mapProvider.getStyle(theme.brightness),
                 ),
                 Positioned(
-                  top: 10,
-                  right: 10,
-                  child: FloatingActionButton(
+                  top: 12,
+                  right: 12,
+                  child: FloatingActionButton.small(
                     heroTag: "btn_style_trip",
-                    mini: true,
+                    elevation: 3,
                     backgroundColor: theme.colorScheme.surface,
                     onPressed: () => mapProvider.toggleMapType(),
-                    child: Icon(mapProvider.isSatelliteMode ? Icons.map : Icons.satellite_alt, color: theme.colorScheme.onSurface),
+                    child: Icon(mapProvider.isSatelliteMode ? Icons.map_outlined : Icons.satellite_alt_outlined, color: theme.colorScheme.primary),
                   ),
                 ),
               ],
             ),
           ),
+
+          // 報表總覽與列表
           Expanded(
-            flex: 1,
-            child: ListView.builder(
-              padding: const EdgeInsets.all(16.0),
-              itemCount: _tripsReport.length + 1,
-              itemBuilder: (context, index) {
-                if (index == 0) {
-                  return _buildTripsSummaryCard(theme);
-                }
-                final trip = _tripsReport[index - 1];
-                return GestureDetector(
-                  onTap: () => _animateToPosition(maplibre.LatLng(trip.startLat, trip.startLon)),
-                  child: Card(
-                    elevation: 4,
-                    margin: const EdgeInsets.only(bottom: 16.0),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '${'reportTrips'.tr} $index',
-                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: theme.colorScheme.onSurface),
-                          ),
-                          const Divider(),
-                          _buildTripDetailRow(theme, 'reportStartTime'.tr, DateFormat('yyyy-MM-dd HH:mm').format(trip.startTime.toLocal())),
-                          _buildTripDetailRow(theme, 'reportEndTime'.tr, DateFormat('yyyy-MM-dd HH:mm').format(trip.endTime.toLocal())),
-                          _buildTripDetailRow(theme, 'reportDuration'.tr, _formatDuration(trip.duration)),
-                          _buildTripDetailRow(theme, 'sharedDistance'.tr, _formatDistance(trip.distance)),
-                          _buildTripDetailRow(theme, 'historyMaxSpeed'.tr, '${trip.maxSpeed.toStringAsFixed(2)} ${'sharedKmh'.tr}'),
-                          _buildTripDetailRow(theme, 'reportAverageSpeed'.tr, '${trip.averageSpeed.toStringAsFixed(2)} ${'sharedKmh'.tr}'),
-                          ListTile(
-                            title: Text('reportStartAddress'.tr, style: TextStyle(color: theme.colorScheme.onSurfaceVariant)),
-                            subtitle: FutureBuilder<String>(
-                              future: trip.startAddress != null && trip.startAddress!.isNotEmpty ? Future.value(trip.startAddress) : OfflineAddressService.getAddress(trip.startLat, trip.startLon),
-                              builder: (context, snapshot) => Text(snapshot.data ?? '...', style: TextStyle(color: theme.colorScheme.onSurface)),
-                            ),
-                          ),
-                          ListTile(
-                            title: Text('reportEndAddress'.tr, style: TextStyle(color: theme.colorScheme.onSurfaceVariant)),
-                            subtitle: FutureBuilder<String>(
-                              future: trip.endAddress != null && trip.endAddress!.isNotEmpty ? Future.value(trip.endAddress) : OfflineAddressService.getAddress(trip.endLat, trip.endLon),
-                              builder: (context, snapshot) => Text(snapshot.data ?? '...', style: TextStyle(color: theme.colorScheme.onSurface)),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                );
-              },
+            child: Container(
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surface,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, -3))],
+              ),
+              child: ClipRRect(
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                child: ListView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+                  itemCount: _tripsReport.length + 1,
+                  itemBuilder: (context, index) {
+                    if (index == 0) {
+                      return _buildSummaryHeader(theme);
+                    }
+                    final tripIndex = index - 1;
+                    final trip = _tripsReport[tripIndex];
+                    final isSelected = _selectedIndex == tripIndex;
+
+                    return _buildTripCard(theme, trip, tripIndex, isSelected);
+                  },
+                ),
+              ),
             ),
           ),
         ],
@@ -542,13 +453,219 @@ class _TripsReportScreenState extends State<TripsReportScreen> {
     );
   }
 
-  Widget _buildTripDetailRow(ThemeData theme, String title, String value) {
-    return ListTile(
-      title: Text(title, style: TextStyle(color: theme.colorScheme.onSurfaceVariant)),
-      trailing: Text(
-        value,
-        style: TextStyle(fontWeight: FontWeight.bold, color: theme.colorScheme.onSurface),
+  /// 頂部數據總覽 Dashboard 卡片
+  Widget _buildSummaryHeader(ThemeData theme) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primaryContainer.withOpacity(0.3),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: theme.colorScheme.primary.withOpacity(0.1)),
       ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.analytics_outlined, size: 20, color: theme.colorScheme.primary),
+              const SizedBox(width: 8),
+              Text(
+                'historyTripsSummary'.tr,
+                style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold, color: theme.colorScheme.onSurface),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          GridView.count(
+            crossAxisCount: 2,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            childAspectRatio: 2.8,
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
+            children: [
+              _buildKpiTile(theme, Icons.route, 'historyTotalDistance'.tr, _formatDistance(_totalDistance)),
+              _buildKpiTile(theme, Icons.timer_outlined, 'historyTotalDuration'.tr, _formatDuration(_totalDuration)),
+              _buildKpiTile(theme, Icons.speed, 'historyMaxSpeed'.tr, '${_maxSpeedKmh.toStringAsFixed(1)} ${'sharedKmh'.tr}'),
+              _buildKpiTile(theme, Icons.functions, 'historyAverageSpeed'.tr, '${_averageSpeedKmh.toStringAsFixed(1)} ${'sharedKmh'.tr}'),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildKpiTile(ThemeData theme, IconData icon, String label, String value) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(color: theme.colorScheme.surface, borderRadius: BorderRadius.circular(12)),
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: theme.colorScheme.primary),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  label,
+                  style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                Text(
+                  value,
+                  style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold, color: theme.colorScheme.onSurface),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 單筆行程卡片 (時間軸設計)
+  /// 單筆行程卡片 (時間軸設計)
+  Widget _buildTripCard(ThemeData theme, TripReport trip, int index, bool isSelected) {
+    final String startTimeStr = DateFormat('HH:mm').format(trip.startTime.toLocal());
+    final String endTimeStr = DateFormat('HH:mm').format(trip.endTime.toLocal());
+    final String dateStr = DateFormat('yyyy-MM-dd').format(trip.startTime.toLocal());
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Material(
+        color: isSelected ? theme.colorScheme.primaryContainer.withOpacity(0.15) : theme.colorScheme.surface,
+        // 移除這裡原本的 borderRadius: BorderRadius.circular(16)，改由 shape 統一控制
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(color: isSelected ? theme.colorScheme.primary : theme.colorScheme.outlineVariant.withOpacity(0.5), width: isSelected ? 2 : 1),
+        ),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: () => _onTripSelected(index, trip),
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // 卡片頁眉：行程編號、日期、距離標籤
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(color: theme.colorScheme.primary.withOpacity(0.1), borderRadius: BorderRadius.circular(6)),
+                          child: Text(
+                            '#${index + 1}',
+                            style: TextStyle(fontWeight: FontWeight.bold, color: theme.colorScheme.primary, fontSize: 12),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(dateStr, style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+                      ],
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(color: theme.colorScheme.secondaryContainer, borderRadius: BorderRadius.circular(20)),
+                      child: Text(
+                        _formatDistance(trip.distance),
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: theme.colorScheme.onSecondaryContainer),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+
+                // 時間軸 (起點與終點)
+                _buildTimelineNode(theme, isStart: true, timeStr: startTimeStr, lat: trip.startLat, lon: trip.startLon, providedAddress: trip.startAddress),
+                _buildTimelineConnector(theme, duration: _formatDuration(trip.duration)),
+                _buildTimelineNode(theme, isStart: false, timeStr: endTimeStr, lat: trip.endLat, lon: trip.endLon, providedAddress: trip.endAddress),
+
+                const SizedBox(height: 12),
+                const Divider(height: 1),
+                const SizedBox(height: 8),
+
+                // 速度細節
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _buildSpeedStat(theme, 'historyMaxSpeed'.tr, '${trip.maxSpeed.toStringAsFixed(1)} ${'sharedKmh'.tr}'),
+                    Container(height: 16, width: 1, color: theme.colorScheme.outlineVariant),
+                    _buildSpeedStat(theme, 'reportAverageSpeed'.tr, '${trip.averageSpeed.toStringAsFixed(1)} ${'sharedKmh'.tr}'),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTimelineNode(ThemeData theme, {required bool isStart, required String timeStr, required double lat, required double lon, String? providedAddress}) {
+    final color = isStart ? Colors.green : Colors.red;
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 45,
+          child: Text(
+            timeStr,
+            style: theme.textTheme.labelMedium?.copyWith(fontWeight: FontWeight.bold, color: theme.colorScheme.onSurface),
+          ),
+        ),
+        Icon(isStart ? Icons.circle : Icons.location_on, size: 16, color: color),
+        const SizedBox(width: 8),
+        Expanded(
+          child: FutureBuilder<String>(
+            future: (providedAddress != null && providedAddress.isNotEmpty) ? Future.value(providedAddress) : OfflineAddressService.getAddress(lat, lon),
+            builder: (context, snapshot) {
+              return Text(
+                snapshot.data ?? '...',
+                style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurface),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTimelineConnector(ThemeData theme, {required String duration}) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 45 + 7), // 避開時間寬度與點
+      child: Row(
+        children: [
+          Container(width: 2, height: 24, color: theme.colorScheme.outlineVariant),
+          const SizedBox(width: 12),
+          Icon(Icons.schedule, size: 12, color: theme.colorScheme.onSurfaceVariant),
+          const SizedBox(width: 4),
+          Text(duration, style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSpeedStat(ThemeData theme, String label, String value) {
+    return Column(
+      children: [
+        Text(label, style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+        const SizedBox(height: 2),
+        Text(
+          value,
+          style: theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.bold, color: theme.colorScheme.onSurface),
+        ),
+      ],
     );
   }
 }
