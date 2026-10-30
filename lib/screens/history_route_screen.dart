@@ -186,6 +186,9 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
   );
 
   MapLibreMapController? _mapController;
+  // 繪製序列化：避免並行的 _drawFullRoute 交錯 add/remove 圖層
+  Future<void> _drawQueue = Future<void>.value();
+  int _latestDrawRequest = 0;
   List<double> _distancePrefixSum = [];
   final RxString _currentAddressRx = "".obs;
 
@@ -237,8 +240,14 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
   static const String _playbackIconId = "playback_arrow";
   static const String _startIconId = "start_pin";
   static const String _endIconId = "end_pin";
+  static const int _maxStopIconCount = 50; // 對應 assets/images/pg_1..50.png
   final List<LatLng> _stopPoints = [];
   final List<Symbol> _stopSymbols = [];
+
+  // 已註冊到目前 style 的圖示 id；style 重載後需重新註冊
+  final Set<String> _loadedIconIds = {};
+  // 資產位元組快取（只存壓縮後的 PNG，不含解碼後的 bitmap）
+  final Map<String, Uint8List> _iconAssetCache = {};
 
   bool _showGeofences = false;
   bool _isGeofenceLoading = false;
@@ -378,19 +387,48 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     if (_mapController == null) {
       return;
     }
-    await _addAssetImage(_playbackIconId, 'assets/images/arrow.png');
-    await _addAssetImage(_startIconId, 'assets/images/start.png');
-    await _addAssetImage(_endIconId, 'assets/images/destination.png');
+    // 新 style 會清掉已註冊的圖示，id 快取必須同步失效
+    _loadedIconIds.clear();
+    await Future.wait([
+      _ensureMapIcon(_playbackIconId, 'assets/images/arrow.png'),
+      _ensureMapIcon(_startIconId, 'assets/images/start.png'),
+      _ensureMapIcon(_endIconId, 'assets/images/destination.png'),
+    ]);
+    // 停靠點編號圖示改由 _ensureStopIcons 依實際停靠數載入
+  }
 
-    for (int i = 1; i <= 50; i++) {
-      await _addAssetImage("pg_$i", "assets/images/pg_$i.png");
+  /// 註冊單一圖示。資產缺失或 id 重複只記錄 log，不可中斷後續圖層繪製。
+  Future<bool> _ensureMapIcon(String id, String assetPath) async {
+    final controller = _mapController;
+    if (controller == null || _loadedIconIds.contains(id)) {
+      return _loadedIconIds.contains(id);
+    }
+    try {
+      Uint8List? bytes = _iconAssetCache[assetPath];
+      if (bytes == null) {
+        final ByteData data = await rootBundle.load(assetPath);
+        bytes = data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
+        _iconAssetCache[assetPath] = bytes;
+      }
+      await controller.addImage(id, bytes);
+      _loadedIconIds.add(id);
+      return true;
+    } catch (e) {
+      developer.log('Failed to load map icon "$id" from $assetPath: $e', name: 'HistoryRouteScreen');
+      return false;
     }
   }
 
-  Future<void> _addAssetImage(String id, String assetPath) async {
-    final ByteData bytes = await rootBundle.load(assetPath);
-    final Uint8List list = bytes.buffer.asUint8List();
-    await _mapController?.addImage(id, list);
+  /// 停靠點編號圖示：只載入實際需要的張數，並併發註冊；回傳註冊成功的 icon id
+  Future<Set<String>> _ensureStopIcons(int count) async {
+    final int limit = min(count, _maxStopIconCount);
+    final List<bool> results = await Future.wait([
+      for (int i = 1; i <= limit; i++) _ensureMapIcon("pg_$i", "assets/images/pg_$i.png"),
+    ]);
+    return {
+      for (int i = 1; i <= limit; i++)
+        if (results[i - 1]) "pg_$i",
+    };
   }
 
   void _calculateDistancePrefixSum() {
@@ -491,7 +529,8 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
           _stopPoints.add(LatLng(p1.latitude!.toDouble(), p1.longitude!.toDouble()));
         }
       }
-      if (_stopPoints.length >= 50) {
+      if (_stopPoints.length >= _maxStopIconCount) {
+        developer.log('Stop points truncated at $_maxStopIconCount (no numbered icon beyond it).', name: 'HistoryRouteScreen');
         break;
       }
     }
@@ -576,7 +615,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
         _refreshAddressNow(); // 先解析起點路名
 
         if (_mapController != null) {
-          _drawFullRoute();
+          unawaited(_drawFullRoute());
         }
       }
     } catch (e) {
@@ -603,8 +642,21 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     _stopSymbols.clear();
   }
 
-  Future<void> _drawFullRoute({bool fitBounds = true}) async {
-    if (_mapController == null || _positions.isEmpty) {
+  /// 對外入口：請求會排進序列，只執行最後一個，避免圖層 add/remove 交錯
+  Future<void> _drawFullRoute({bool fitBounds = true}) {
+    final int request = ++_latestDrawRequest;
+    _drawQueue = _drawQueue.then<void>((_) async {
+      if (request != _latestDrawRequest) return; // 已有更新的請求，這次直接跳過
+      await _drawFullRouteNow(fitBounds: fitBounds);
+    }).catchError((Object error, StackTrace stackTrace) {
+      developer.log('Failed to draw route: $error', name: 'HistoryRouteScreen');
+    });
+    return _drawQueue;
+  }
+
+  Future<void> _drawFullRouteNow({bool fitBounds = true}) async {
+    final controller = _mapController;
+    if (controller == null || _positions.isEmpty) {
       return;
     }
 
@@ -620,8 +672,8 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
       routeGeoJson = _buildGeoJsonIsolate(_GeoJsonParams(_positions, _routeColorMode));
     }
 
-    await _mapController!.addSource(_routeSourceId, GeojsonSourceProperties(data: routeGeoJson));
-    await _mapController!.addLineLayer(_routeSourceId, _routeLayerId, LineLayerProperties(lineColor: ['get', 'color'], lineWidth: 4.0, lineOpacity: 0.8, lineJoin: 'round', lineCap: 'round'));
+    await controller.addSource(_routeSourceId, GeojsonSourceProperties(data: routeGeoJson));
+    await controller.addLineLayer(_routeSourceId, _routeLayerId, LineLayerProperties(lineColor: ['get', 'color'], lineWidth: 4.0, lineOpacity: 0.8, lineJoin: 'round', lineCap: 'round'));
 
     // 2. 建立已播放軌跡圖層 (動態更新)
     final Map<String, dynamic> emptyPlayedGeoJson = {
@@ -633,15 +685,24 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
         },
       ],
     };
-    await _mapController!.addSource(_playedSourceId, GeojsonSourceProperties(data: emptyPlayedGeoJson));
-    await _mapController!.addLineLayer(_playedSourceId, _playedLayerId, LineLayerProperties(lineColor: '#0F53FE', lineWidth: 5.5, lineOpacity: 1.0, lineJoin: 'round', lineCap: 'round'));
+    await controller.addSource(_playedSourceId, GeojsonSourceProperties(data: emptyPlayedGeoJson));
+    await controller.addLineLayer(_playedSourceId, _playedLayerId, LineLayerProperties(lineColor: '#0F53FE', lineWidth: 5.5, lineOpacity: 1.0, lineJoin: 'round', lineCap: 'round'));
 
-    // 3. 繪製起終點標籤與停靠點
-    _addMarker(points.first, _startIconId);
-    _addMarker(points.last, _endIconId);
+    // 3. 繪製起終點標籤與停靠點（圖示失敗不可影響軌跡顯示）
+    try {
+      await controller.addSymbols([
+        SymbolOptions(geometry: points.first, iconImage: _startIconId, iconSize: 1.8, iconAnchor: "bottom"),
+        SymbolOptions(geometry: points.last, iconImage: _endIconId, iconSize: 1.8, iconAnchor: "bottom"),
+      ]);
+    } catch (e) {
+      developer.log('Failed to add start/end markers: $e', name: 'HistoryRouteScreen');
+    }
 
-    if (_positions.isNotEmpty) {
-      _playbackSymbol = await _mapController!.addSymbol(SymbolOptions(geometry: LatLng(_positions.first.latitude!.toDouble(), _positions.first.longitude!.toDouble()), iconImage: _playbackIconId, iconSize: 1.8, zIndex: 10));
+    try {
+      _playbackSymbol = await controller.addSymbol(SymbolOptions(geometry: LatLng(_positions.first.latitude!.toDouble(), _positions.first.longitude!.toDouble()), iconImage: _playbackIconId, iconSize: 1.8, zIndex: 10));
+    } catch (e) {
+      _playbackSymbol = null;
+      developer.log('Failed to add playback marker: $e', name: 'HistoryRouteScreen');
     }
 
     if (_showStopPoints) {
@@ -834,9 +895,20 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     final controller = _mapController;
     if (controller == null || !_showStopPoints) return;
     await _clearStopSymbols();
-    for (int i = 0; i < _stopPoints.length; i++) {
-      final symbol = await controller.addSymbol(SymbolOptions(geometry: _stopPoints[i], iconImage: "pg_${i + 1}", iconSize: 3.5, iconAnchor: "center"));
-      _stopSymbols.add(symbol);
+    if (_stopPoints.isEmpty) return;
+
+    final Set<String> readyIcons = await _ensureStopIcons(_stopPoints.length);
+    final List<SymbolOptions> options = [
+      for (int i = 0; i < _stopPoints.length; i++)
+        if (readyIcons.contains("pg_${i + 1}")) SymbolOptions(geometry: _stopPoints[i], iconImage: "pg_${i + 1}", iconSize: 3.5, iconAnchor: "center"),
+    ];
+    if (options.isEmpty) return;
+
+    try {
+      final List<Symbol> symbols = await controller.addSymbols(options);
+      _stopSymbols.addAll(symbols);
+    } catch (e) {
+      developer.log('Failed to draw stop symbols: $e', name: 'HistoryRouteScreen');
     }
   }
 
@@ -859,7 +931,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
       prefs.setString('route_color_mode', mode.name);
     });
     if (_positions.isNotEmpty) {
-      _drawFullRoute(fitBounds: false);
+      unawaited(_drawFullRoute(fitBounds: false));
     }
   }
 
@@ -1190,10 +1262,6 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
         ],
       ),
     );
-  }
-
-  void _addMarker(LatLng point, String iconId) {
-    _mapController?.addSymbol(SymbolOptions(geometry: point, iconImage: iconId, iconSize: 1.8, iconAnchor: "bottom"));
   }
 
   void _togglePlayback() {
