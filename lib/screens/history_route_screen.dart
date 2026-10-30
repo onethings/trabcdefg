@@ -200,6 +200,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
   int _addressRequestedAtMs = 0; // 上次真正送出請求的時間（遠端限流）
   int _lastTickAtMs = 0;
   double _frameRate = 60.0; // 實測播放 tick 頻率（fps）
+  double _addressLatencyMs = 0; // 路名請求的實測往返時間（慢網路時要預取得更遠）
 
   static const int _addressRemoteMinGapMs = 1550; // 對齊 Nominatim 1.5s 限流
   static const int _addressSchedulerThrottleMs = 200; // 排程器節流
@@ -1248,11 +1249,12 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     _addressRequestedAtMs = 0;
   }
 
-  /// 播放每個 tick 前進 0.05 × 倍速，所以「1.5s 限流」的時間內會走過的點數，
+  /// 播放每個 tick 前進 0.05 × 倍速，所以「一次請求往返所需的時間」內會走過的點數，
   /// 就是該提前預取的點數：請求在標記抵達該點時剛好回來，路名才不會落後。
   int _addressLeadPoints() {
     final double pointsPerSecond = 0.05 * _playbackSpeed * _frameRate;
-    return max(0, (pointsPerSecond * _addressRemoteMinGapMs / 1000).round());
+    final double cycleMs = max(_addressRemoteMinGapMs.toDouble(), _addressLatencyMs);
+    return max(0, (pointsPerSecond * cycleMs / 1000).round());
   }
 
   bool _isAddressCached(api.Position p) => OfflineAddressService.getAddressFromCache(p.latitude!.toDouble(), p.longitude!.toDouble()) != null;
@@ -1261,7 +1263,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     final int now = DateTime.now().millisecondsSinceEpoch;
     if (_lastTickAtMs > 0) {
       final int dt = now - _lastTickAtMs;
-      if (dt > 0) _frameRate = (_frameRate * 0.9 + (1000 / dt) * 0.1).clamp(24.0, 144.0);
+      if (dt > 0) _frameRate = (_frameRate * 0.9 + (1000 / dt) * 0.1).clamp(24.0, 144.0).toDouble();
     }
     _lastTickAtMs = now;
   }
@@ -1314,11 +1316,16 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     _addressRequestedAtMs = now;
     _addressInFlightIdx = targetIdx;
     _addressInFlightLeadIdx = lead;
+    final int sentAtMs = now;
 
     OfflineAddressService.getAddress(targetLat, targetLng).then((addr) {
       if (!mounted || token != _addressRequestToken) return;
       final int leadAtRequest = _addressInFlightLeadIdx;
       _addressInFlightIdx = -1;
+
+      // 追蹤實際往返時間（含服務層 1.5s 限流），慢網路時下一輪會預取得更遠
+      final double rttMs = (DateTime.now().millisecondsSinceEpoch - sentAtMs).toDouble();
+      _addressLatencyMs = _addressLatencyMs == 0 ? rttMs : (_addressLatencyMs * 0.7 + rttMs * 0.3).clamp(0.0, 15000.0).toDouble();
 
       final int nowIdx = _playbackPositionRx.value.floor().clamp(0, _positions.length - 1);
       // 播放已跑得比目標點更遠（超過一個請求週期）→ 這筆結果沒有意義，改用目前位置重發
