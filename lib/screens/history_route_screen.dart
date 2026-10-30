@@ -189,6 +189,8 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
   DateTime? _selectedCalendarDay = DateTime.now();
   final Map<DateTime, api.ReportSummary> _dailySummaries = {};
   bool _isCalendarLoading = false;
+  bool _isDialogDevicePickerOpen = false;
+  final TextEditingController _dialogDeviceSearchController = TextEditingController();
   double _currentZoom = 14.0;
 
   CameraPosition? _lastCameraPosition;
@@ -211,7 +213,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
   Symbol? _playbackSymbol;
   int _lastCameraAnimTime = 0;
 
-  static const double _followZoomLevel = 16.0;
+  static const double _followZoomLevel = 15.0; //16.0
   static const int _followCameraThrottleMs = 600;
   static const int _focusCameraAnimMs = 800;
 
@@ -279,6 +281,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
   void dispose() {
     _playbackAnimationController?.stop();
     _playbackAnimationController?.dispose();
+    _dialogDeviceSearchController.dispose();
     super.dispose();
   }
 
@@ -1603,6 +1606,208 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     }
   }
 
+  Widget _buildDialogCurrentDeviceButton(VoidCallback refreshDialog) {
+    final theme = Theme.of(context);
+    final int deviceCount = Provider.of<TraccarProvider>(context, listen: false).devices.length;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Material(
+        color: theme.colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () {
+            _isDialogDevicePickerOpen = true;
+            refreshDialog();
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            child: Row(
+              children: [
+                Icon(Icons.directions_car_filled_rounded, size: 18, color: theme.colorScheme.primary),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    _selectedDeviceName ?? '--',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: theme.colorScheme.onSurface),
+                  ),
+                ),
+                if (deviceCount > 1) Text('$deviceCount', style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant)),
+                const SizedBox(width: 4),
+                Icon(Icons.expand_more_rounded, size: 20, color: theme.colorScheme.onSurfaceVariant),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDialogDevicePicker(VoidCallback refreshDialog) {
+    final theme = Theme.of(context);
+    final devices = Provider.of<TraccarProvider>(context, listen: false).devices;
+    final String query = _dialogDeviceSearchController.text.trim().toLowerCase();
+    final List<api.Device> filtered = query.isEmpty
+        ? devices
+        : devices.where((device) {
+            final String name = (device.name ?? '').toLowerCase();
+            final String uniqueId = (device.uniqueId ?? '').toLowerCase();
+            return name.contains(query) || uniqueId.contains(query) || '${device.id}'.contains(query);
+          }).toList();
+
+    void closePicker() {
+      _isDialogDevicePickerOpen = false;
+      _dialogDeviceSearchController.clear();
+      refreshDialog();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 8, 0),
+          child: Row(
+            children: [
+              Icon(Icons.directions_car_filled_rounded, size: 18, color: theme.colorScheme.primary),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'sharedDevice'.tr,
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: theme.colorScheme.onSurface),
+                ),
+              ),
+              IconButton(tooltip: 'sharedCancel'.tr, visualDensity: VisualDensity.compact, icon: const Icon(Icons.close_rounded, size: 20), onPressed: closePicker),
+            ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: TextField(
+            controller: _dialogDeviceSearchController,
+            autofocus: devices.length > 5,
+            textInputAction: TextInputAction.search,
+            style: const TextStyle(fontSize: 14),
+            decoration: InputDecoration(
+              isDense: true,
+              hintText: 'sharedSearchDevices'.tr,
+              hintStyle: const TextStyle(fontSize: 13),
+              prefixIcon: const Icon(Icons.search_rounded, size: 20),
+              prefixIconConstraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+              suffixIcon: query.isEmpty
+                  ? null
+                  : IconButton(
+                      visualDensity: VisualDensity.compact,
+                      icon: const Icon(Icons.clear_rounded, size: 18),
+                      onPressed: () {
+                        _dialogDeviceSearchController.clear();
+                        refreshDialog();
+                      },
+                    ),
+              contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            onChanged: (_) => refreshDialog(),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Expanded(
+          child: filtered.isEmpty
+              ? Center(
+                  child: Text('sharedNoData'.tr, style: TextStyle(fontSize: 13, color: theme.colorScheme.onSurfaceVariant)),
+                )
+              : ListView.builder(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  itemCount: filtered.length,
+                  itemBuilder: (context, index) {
+                    final device = filtered[index];
+                    final bool selected = device.id == _deviceId;
+                    return ListTile(
+                      dense: true,
+                      visualDensity: VisualDensity.compact,
+                      selected: selected,
+                      selectedTileColor: theme.colorScheme.primary.withValues(alpha: 0.08),
+                      leading: Icon(Icons.directions_car_filled_rounded, size: 20, color: selected ? theme.colorScheme.primary : theme.colorScheme.onSurfaceVariant),
+                      title: Text(
+                        device.name ?? '--',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 14, fontWeight: selected ? FontWeight.bold : FontWeight.w500, color: selected ? theme.colorScheme.primary : theme.colorScheme.onSurface),
+                      ),
+                      trailing: selected ? Icon(Icons.check_circle_rounded, size: 20, color: theme.colorScheme.primary) : null,
+                      onTap: () {
+                        _isDialogDevicePickerOpen = false;
+                        _dialogDeviceSearchController.clear();
+                        unawaited(_switchDeviceFromCalendar(device, refreshDialog));
+                        refreshDialog();
+                      },
+                    );
+                  },
+                ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _switchDeviceFromCalendar(api.Device device, VoidCallback refreshDialog) async {
+    final int? newDeviceId = device.id;
+    if (newDeviceId == null || newDeviceId == _deviceId) {
+      return;
+    }
+
+    _safeSetState(() {
+      _deviceId = newDeviceId;
+      _selectedDeviceName = device.name;
+      // 公里數標記依裝置計算，切換後必須重抓
+      _dailySummaries.clear();
+    });
+    refreshDialog();
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('selectedDeviceId', newDeviceId);
+    if (device.name != null) {
+      await prefs.setString('selectedDeviceName', device.name!);
+    }
+
+    // 舊裝置的軌跡與圍欄先移除；新裝置當天沒資料時 _drawFullRoute 會直接 return，舊軌跡會留在畫面上
+    await _cleanMapLayers();
+    await _clearGeofenceLayers();
+    _geofences = [];
+
+    if (!mounted) {
+      return;
+    }
+
+    final Future<void> monthlyFuture = _fetchMonthlyData(_focusedDay);
+    refreshDialog();
+    await monthlyFuture;
+
+    if (!mounted) {
+      return;
+    }
+    refreshDialog();
+
+    await _fetchHistoryRoute(selectedDay: _selectedCalendarDay ?? DateTime.now());
+
+    if (!mounted) {
+      return;
+    }
+    if (!_showGeofences) {
+      return;
+    }
+    try {
+      final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
+      _geofences = await api.GeofencesApi(traccarProvider.apiClient).getGeofences(deviceId: _deviceId) ?? [];
+      if (mounted) {
+        await _drawGeofences();
+      }
+    } catch (e) {
+      developer.log('Failed to reload geofences after device switch: $e', name: 'HistoryRouteScreen');
+    }
+  }
+
   void _showCalendarDialog() async {
     if (_deviceId == null) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('pleaseSelectDevice'.tr)));
@@ -1623,93 +1828,107 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
       return;
     }
 
+    bool isDialogOpen = true;
+    _isDialogDevicePickerOpen = false;
+    _dialogDeviceSearchController.clear();
+
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, modalSetState) {
+          void refreshDialog() {
+            if (isDialogOpen) modalSetState(() {});
+          }
+
           return AlertDialog(
             contentPadding: EdgeInsets.zero,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
             content: SizedBox(
               width: 340,
-              height: 520,
+              height: 580,
               child: Column(
                 children: [
-                  const SizedBox(height: 16),
-                  if (_isCalendarLoading) const LinearProgressIndicator(),
-                  Expanded(
-                    child: TableCalendar(
-                      locale: Get.locale?.languageCode,
-                      firstDay: DateTime.utc(2020),
-                      lastDay: DateTime.now(),
-                      focusedDay: _focusedDay,
-                      daysOfWeekHeight: 24,
-                      selectedDayPredicate: (d) => isSameDay(_selectedCalendarDay, d),
-                      onPageChanged: (focusedDay) {
-                        modalSetState(() {
-                          _focusedDay = focusedDay;
-                        });
-                        _fetchMonthlyData(focusedDay).then((_) {
-                          if (mounted) {
-                            modalSetState(() {});
-                          }
-                        });
-                      },
-                      onDaySelected: (sel, foc) {
-                        _onDaySelected(sel, foc);
-                        Navigator.pop(context);
-                      },
-                      calendarBuilders: CalendarBuilders(
-                        markerBuilder: (context, date, events) {
-                          final dayUtc = DateTime.utc(date.year, date.month, date.day);
-
-                          if (_dailySummaries.containsKey(dayUtc)) {
-                            final summary = _dailySummaries[dayUtc]!;
-                            final distanceInKm = (summary.distance ?? 0.0) / 1000;
-
-                            if (distanceInKm <= 0) {
-                              return null;
+                  if (_isDialogDevicePickerOpen)
+                    Expanded(child: _buildDialogDevicePicker(refreshDialog))
+                  else ...[
+                    const SizedBox(height: 12),
+                    _buildDialogCurrentDeviceButton(refreshDialog),
+                    const SizedBox(height: 4),
+                    if (_isCalendarLoading) const LinearProgressIndicator(),
+                    Expanded(
+                      child: TableCalendar(
+                        locale: Get.locale?.languageCode,
+                        firstDay: DateTime.utc(2020),
+                        lastDay: DateTime.now(),
+                        focusedDay: _focusedDay,
+                        daysOfWeekHeight: 24,
+                        selectedDayPredicate: (d) => isSameDay(_selectedCalendarDay, d),
+                        onPageChanged: (focusedDay) {
+                          modalSetState(() {
+                            _focusedDay = focusedDay;
+                          });
+                          _fetchMonthlyData(focusedDay).then((_) {
+                            if (mounted) {
+                              modalSetState(() {});
                             }
-
-                            return Positioned(
-                              bottom: 4,
-                              child: Text(
-                                '${distanceInKm.toStringAsFixed(1)} km',
-                                style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: isSameDay(_selectedCalendarDay, date) ? Colors.white : Colors.blue[700]),
-                              ),
-                            );
-                          }
-                          return null;
+                          });
                         },
-                      ),
-                      calendarStyle: CalendarStyle(
-                        todayDecoration: BoxDecoration(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5), shape: BoxShape.circle),
-                        selectedDecoration: BoxDecoration(color: Theme.of(context).colorScheme.primary, shape: BoxShape.circle),
-                        defaultTextStyle: TextStyle(color: Theme.of(context).colorScheme.onSurface),
-                        weekendTextStyle: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7)),
-                        outsideTextStyle: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3)),
-                        cellMargin: const EdgeInsets.all(4),
-                      ),
-                      headerStyle: HeaderStyle(
-                        formatButtonVisible: false,
-                        titleCentered: true,
-                        titleTextStyle: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontSize: 17, fontWeight: FontWeight.bold),
-                        leftChevronIcon: Icon(Icons.chevron_left, color: Theme.of(context).colorScheme.primary),
-                        rightChevronIcon: Icon(CupertinoIcons.chevron_right, color: Theme.of(context).colorScheme.primary),
-                      ),
-                      daysOfWeekStyle: DaysOfWeekStyle(
-                        weekdayStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12),
-                        weekendStyle: TextStyle(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.8), fontSize: 12),
+                        onDaySelected: (sel, foc) {
+                          _onDaySelected(sel, foc);
+                          Navigator.pop(context);
+                        },
+                        calendarBuilders: CalendarBuilders(
+                          markerBuilder: (context, date, events) {
+                            final dayUtc = DateTime.utc(date.year, date.month, date.day);
+
+                            if (_dailySummaries.containsKey(dayUtc)) {
+                              final summary = _dailySummaries[dayUtc]!;
+                              final distanceInKm = (summary.distance ?? 0.0) / 1000;
+
+                              if (distanceInKm <= 0) {
+                                return null;
+                              }
+
+                              return Positioned(
+                                bottom: 4,
+                                child: Text(
+                                  '${distanceInKm.toStringAsFixed(1)} km',
+                                  style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: isSameDay(_selectedCalendarDay, date) ? Colors.white : Colors.blue[700]),
+                                ),
+                              );
+                            }
+                            return null;
+                          },
+                        ),
+                        calendarStyle: CalendarStyle(
+                          todayDecoration: BoxDecoration(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5), shape: BoxShape.circle),
+                          selectedDecoration: BoxDecoration(color: Theme.of(context).colorScheme.primary, shape: BoxShape.circle),
+                          defaultTextStyle: TextStyle(color: Theme.of(context).colorScheme.onSurface),
+                          weekendTextStyle: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7)),
+                          outsideTextStyle: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3)),
+                          cellMargin: const EdgeInsets.all(4),
+                        ),
+                        headerStyle: HeaderStyle(
+                          formatButtonVisible: false,
+                          titleCentered: true,
+                          titleTextStyle: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontSize: 17, fontWeight: FontWeight.bold),
+                          leftChevronIcon: Icon(Icons.chevron_left, color: Theme.of(context).colorScheme.primary),
+                          rightChevronIcon: Icon(CupertinoIcons.chevron_right, color: Theme.of(context).colorScheme.primary),
+                        ),
+                        daysOfWeekStyle: DaysOfWeekStyle(
+                          weekdayStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12),
+                          weekendStyle: TextStyle(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.8), fontSize: 12),
+                        ),
                       ),
                     ),
-                  ),
+                  ],
                 ],
               ),
             ),
           );
         },
       ),
-    );
+    ).whenComplete(() => isDialogOpen = false);
   }
 
   void _onDaySelected(DateTime selectedDay, DateTime focusedDay) {
