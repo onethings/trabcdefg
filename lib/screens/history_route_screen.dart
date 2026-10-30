@@ -38,6 +38,27 @@ enum RouteColorMode {
   timeGradient, // 時間漸層分色 (早:淺藍, 午:中藍, 晚:深藍)
 }
 
+/// 土地面積單位，[squareMeters] 代表 1 個單位等於多少平方公尺
+enum AreaUnit {
+  acre(4046.8564224, 'areaUnitAcre', 3),
+  hectare(10000.0, 'areaUnitHectare', 3),
+  squareMeter(1.0, 'areaUnitSquareMeter', 0),
+  squareKilometer(1000000.0, 'areaUnitSquareKilometer', 4),
+  jia(9699.17, 'areaUnitJia', 3), // 台甲 = 2934 坪
+  fen(969.917, 'areaUnitFen', 2), // 1 分 = 0.1 甲
+  mu(666.6667, 'areaUnitMu', 3), // 市畝
+  ping(3.305785, 'areaUnitPing', 1),
+  squareFoot(0.09290304, 'areaUnitSquareFoot', 0);
+
+  const AreaUnit(this.squareMeters, this.labelKey, this.decimals);
+
+  final double squareMeters;
+  final String labelKey;
+  final int decimals;
+
+  double fromSquareMeters(double m2) => m2 / squareMeters;
+}
+
 // --- Turbo Colormap 演算法與係數 ---
 const List<double> _turboRedCoeffs = [0.13572138, 4.6153926, -42.66032258, 132.13108234, -152.94239396, 59.28637943];
 const List<double> _turboGreenCoeffs = [0.09140261, 2.19418839, 4.84296658, -14.18503333, 4.27729857, 2.82956604];
@@ -170,6 +191,19 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
 
   int _addressRequestToken = 0; // 用來記錄請求的流水號
 
+  // --- 路名請求智慧排程（依倍速跳點預取 + 暫停即時校正）---
+  int _addressShownIdx = -1; // 目前顯示路名對應的播放索引
+  int _addressCacheCheckedIdx = -1; // 上次查快取的索引（避免每 frame 重查）
+  int _addressInFlightIdx = -1; // 進行中請求的目標索引（-1 = 閒置）
+  int _addressInFlightLeadIdx = 0; // 該次請求的預取領先點數
+  int _addressScheduledAtMs = 0; // 上次執行排程的時間（節流）
+  int _addressRequestedAtMs = 0; // 上次真正送出請求的時間（遠端限流）
+  int _lastTickAtMs = 0;
+  double _frameRate = 60.0; // 實測播放 tick 頻率（fps）
+
+  static const int _addressRemoteMinGapMs = 1550; // 對齊 Nominatim 1.5s 限流
+  static const int _addressSchedulerThrottleMs = 200; // 排程器節流
+
   // 狀態變數
   List<api.Position> _positions = [];
   final RxDouble _playbackPositionRx = 0.0.obs;
@@ -210,6 +244,11 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
   bool _showStopPoints = true;
   List<api.Geofence> _geofences = [];
 
+  // 土地面積量測
+  bool _isMeasureMode = false;
+  final List<LatLng> _measurePoints = [];
+  AreaUnit _areaUnit = AreaUnit.acre;
+
   Symbol? _playbackSymbol;
   int _lastCameraAnimTime = 0;
 
@@ -230,6 +269,14 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
   static const String _geofenceLineLayerId = "history_geofence_line_layer";
   static const List<String> _geofenceColors = ['#0F53FE', '#F39C12', '#27AE60', '#8E44AD', '#E74C3C', '#16A085'];
 
+  // 面積量測圖層
+  static const String _measureSourceId = "measure_area_source";
+  static const String _measureFillLayerId = "measure_area_fill_layer";
+  static const String _measureLineLayerId = "measure_area_line_layer";
+  static const String _measureVertexSourceId = "measure_vertex_source";
+  static const String _measureVertexLayerId = "measure_vertex_layer";
+  static const String _areaUnitPrefsKey = 'measure_area_unit';
+
   @override
   void initState() {
     super.initState();
@@ -237,6 +284,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     OfflineAddressService.initDatabase();
     cleanExpiredRouteHistory();
     _loadPlaybackSpeedFromHive();
+    _loadAreaUnitFromPrefs();
     _loadInitialParamsAndFetch();
   }
 
@@ -304,6 +352,9 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     if (_positions.isEmpty) {
       if (_showGeofences) {
         await _drawGeofences();
+      }
+      if (_isMeasureMode) {
+        await _drawMeasureOverlay();
       }
       return;
     }
@@ -461,7 +512,13 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
       _isPlaying = false;
       _positions = [];
       _playbackPositionRx.value = 0.0;
+      _currentAddressRx.value = "";
+      _resetAddressSchedule();
+      // 換日期/車輛後舊量測點已失去意義
+      _isMeasureMode = false;
+      _measurePoints.clear();
     });
+    _clearMeasureLayers();
 
     List<api.Position> fetchedPositions = [];
     bool fetchedFromNetwork = false;
@@ -511,9 +568,11 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
         _safeSetState(() {
           _positions = playbackPositions;
           _isLoading = false;
+          _resetAddressSchedule();
         });
 
         _calculateDistancePrefixSum();
+        _refreshAddressNow(); // 先解析起點路名
 
         if (_mapController != null) {
           _drawFullRoute();
@@ -590,6 +649,11 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
 
     if (fitBounds) {
       _animateCameraToBounds();
+    }
+
+    // 量測圖層需在軌跡圖層之後重建，才會保持在最上層
+    if (_isMeasureMode) {
+      await _drawMeasureOverlay();
     }
   }
 
@@ -851,6 +915,282 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     );
   }
 
+  // --- 土地面積量測 ---
+
+  Future<void> _loadAreaUnitFromPrefs() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final String? saved = prefs.getString(_areaUnitPrefsKey);
+      if (saved == null) return;
+      final AreaUnit unit = AreaUnit.values.firstWhere((e) => e.name == saved, orElse: () => AreaUnit.acre);
+      _safeSetState(() => _areaUnit = unit);
+    } catch (e) {
+      developer.log('Failed to load area unit from prefs: $e', name: 'HistoryRouteScreen');
+    }
+  }
+
+  void _setAreaUnit(AreaUnit unit) {
+    _safeSetState(() => _areaUnit = unit);
+    SharedPreferences.getInstance().then((prefs) => prefs.setString(_areaUnitPrefsKey, unit.name));
+  }
+
+  void _enterMeasureMode() {
+    _playbackAnimationController?.stop();
+    _safeSetState(() {
+      _isPlaying = false;
+      _followUser = false;
+      _isMeasureMode = true;
+      _measurePoints.clear();
+    });
+    _clearMeasureLayers();
+    Get.snackbar('historyMeasureTooltip'.tr, 'historyMeasureHint'.tr, snackPosition: SnackPosition.TOP, margin: const EdgeInsets.all(16), duration: const Duration(seconds: 2));
+  }
+
+  Future<void> _exitMeasureMode() async {
+    _safeSetState(() {
+      _isMeasureMode = false;
+      _measurePoints.clear();
+    });
+    await _clearMeasureLayers();
+  }
+
+  void _undoMeasurePoint() {
+    if (_measurePoints.isEmpty) return;
+    _safeSetState(() => _measurePoints.removeLast());
+    _drawMeasureOverlay();
+  }
+
+  void _clearMeasurePoints() {
+    if (_measurePoints.isEmpty) return;
+    _safeSetState(_measurePoints.clear);
+    _drawMeasureOverlay();
+  }
+
+  Future<void> _addMeasurePoint(LatLng raw) async {
+    final LatLng snapped = _snapMeasurePointToTrack(raw);
+    _safeSetState(() => _measurePoints.add(snapped));
+    await _drawMeasureOverlay();
+  }
+
+  /// 手指不易精準點在軌跡上，點擊處附近（約 22 畫面像素）有軌跡點時吸附過去
+  LatLng _snapMeasurePointToTrack(LatLng raw) {
+    if (_positions.isEmpty) return raw;
+    final double zoom = _mapController?.cameraPosition?.zoom ?? _currentZoom;
+    final double metersPerPixel = 156543.03392 * cos(raw.latitude * pi / 180) / pow(2, zoom);
+    final double threshold = metersPerPixel * 22;
+    final double latSpan = threshold / 111320.0;
+    final double lngSpan = latSpan / max(0.01, cos(raw.latitude * pi / 180));
+
+    LatLng best = raw;
+    double bestMeters = double.infinity;
+    for (final p in _positions) {
+      final double lat = p.latitude!.toDouble();
+      final double lng = p.longitude!.toDouble();
+      if ((lat - raw.latitude).abs() > latSpan || (lng - raw.longitude).abs() > lngSpan) continue;
+      final double d = _distanceBetween(raw.latitude, raw.longitude, lat, lng) * 1000;
+      if (d < bestMeters) {
+        bestMeters = d;
+        best = LatLng(lat, lng);
+      }
+    }
+    return bestMeters <= threshold ? best : raw;
+  }
+
+  /// 球面多邊形面積（與 Turf 的 ringArea 相同算法），回傳平方公尺
+  double _measureAreaSquareMeters() {
+    if (_measurePoints.length < 3) return 0;
+    const double earthRadius = 6378137.0;
+    double total = 0;
+    for (int i = 0; i < _measurePoints.length; i++) {
+      final p1 = _measurePoints[i];
+      final p2 = _measurePoints[(i + 1) % _measurePoints.length];
+      total += (p2.longitude - p1.longitude) * pi / 180 * (2 + sin(p1.latitude * pi / 180) + sin(p2.latitude * pi / 180));
+    }
+    return (total * earthRadius * earthRadius / 2).abs();
+  }
+
+  double _measurePerimeterMeters() {
+    final pts = _measurePoints;
+    if (pts.length < 2) return 0;
+    double total = 0;
+    for (int i = 1; i < pts.length; i++) {
+      total += _distanceBetween(pts[i - 1].latitude, pts[i - 1].longitude, pts[i].latitude, pts[i].longitude);
+    }
+    if (pts.length >= 3) {
+      total += _distanceBetween(pts.last.latitude, pts.last.longitude, pts.first.latitude, pts.first.longitude);
+    }
+    return total * 1000;
+  }
+
+  String _formatAreaValue(double squareMeters, AreaUnit unit) {
+    final String pattern = unit.decimals == 0 ? '#,##0' : '#,##0.${'0' * unit.decimals}';
+    return NumberFormat(pattern, 'en_US').format(unit.fromSquareMeters(squareMeters));
+  }
+
+  Future<void> _clearMeasureLayers() async {
+    final controller = _mapController;
+    if (controller == null) return;
+    for (final id in [_measureVertexLayerId, _measureLineLayerId, _measureFillLayerId]) {
+      try {
+        await controller.removeLayer(id);
+      } catch (_) {}
+    }
+    for (final id in [_measureVertexSourceId, _measureSourceId]) {
+      try {
+        await controller.removeSource(id);
+      } catch (_) {}
+    }
+  }
+
+  /// 可重複呼叫：先清再畫，確保量測圖層在軌跡之上
+  Future<void> _drawMeasureOverlay() async {
+    final controller = _mapController;
+    if (controller == null) return;
+    await _clearMeasureLayers();
+    if (!_isMeasureMode || _measurePoints.isEmpty) return;
+
+    final List<List<double>> ring = _measurePoints.map((p) => [p.longitude, p.latitude]).toList();
+    final List<Map<String, dynamic>> features = [];
+    if (ring.length >= 3) {
+      features.add({
+        "type": "Feature",
+        "properties": {"kind": "fill"},
+        "geometry": {
+          "type": "Polygon",
+          "coordinates": [
+            [...ring, ring.first],
+          ],
+        },
+      });
+    }
+    if (ring.length >= 2) {
+      features.add({
+        "type": "Feature",
+        "properties": {"kind": "line"},
+        "geometry": {
+          "type": "LineString",
+          "coordinates": ring.length >= 3 ? [...ring, ring.first] : ring,
+        },
+      });
+    }
+
+    if (features.isNotEmpty) {
+      await controller.addSource(_measureSourceId, GeojsonSourceProperties(data: {"type": "FeatureCollection", "features": features}));
+      await controller.addFillLayer(_measureSourceId, _measureFillLayerId, FillLayerProperties(fillColor: '#FF9800', fillOpacity: 0.22), filter: ['==', 'kind', 'fill'], enableInteraction: false);
+      await controller.addLineLayer(
+        _measureSourceId,
+        _measureLineLayerId,
+        LineLayerProperties(lineColor: '#EF6C00', lineWidth: 2.5, lineDasharray: [2, 1.5], lineJoin: 'round'),
+        filter: ['==', 'kind', 'line'],
+        enableInteraction: false,
+      );
+    }
+
+    final Map<String, dynamic> vertices = {
+      "type": "FeatureCollection",
+      "features": _measurePoints
+          .map(
+            (p) => {
+              "type": "Feature",
+              "geometry": {
+                "type": "Point",
+                "coordinates": [p.longitude, p.latitude],
+              },
+            },
+          )
+          .toList(),
+    };
+    await controller.addSource(_measureVertexSourceId, GeojsonSourceProperties(data: vertices));
+    await controller.addCircleLayer(
+      _measureVertexSourceId,
+      _measureVertexLayerId,
+      CircleLayerProperties(circleColor: '#EF6C00', circleRadius: 5, circleStrokeColor: '#FFFFFF', circleStrokeWidth: 2),
+      enableInteraction: false,
+    );
+  }
+
+  Widget _buildMeasurePanel() {
+    final theme = Theme.of(context);
+    final double m2 = _measureAreaSquareMeters();
+    final double perimeter = _measurePerimeterMeters();
+    final bool hasArea = _measurePoints.length >= 3;
+    final List<AreaUnit> secondaryUnits = [AreaUnit.hectare, AreaUnit.squareMeter, AreaUnit.jia].where((u) => u != _areaUnit).take(2).toList();
+
+    return Container(
+      key: const ValueKey('history_measure_panel'),
+      padding: const EdgeInsets.fromLTRB(16, 4, 8, 10),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: theme.brightness == Brightness.dark ? 0.4 : 0.1), blurRadius: 16, offset: const Offset(0, 8))],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.square_foot, size: 18, color: theme.colorScheme.primary),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  'historyMeasureTooltip'.tr,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: theme.colorScheme.onSurface),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text('${_measurePoints.length}', style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant)),
+              IconButton(visualDensity: VisualDensity.compact, icon: const Icon(Icons.undo, size: 20), onPressed: _measurePoints.isEmpty ? null : _undoMeasurePoint, tooltip: 'historyMeasureUndo'.tr),
+              IconButton(visualDensity: VisualDensity.compact, icon: const Icon(Icons.delete_outline, size: 20), onPressed: _measurePoints.isEmpty ? null : _clearMeasurePoints, tooltip: 'historyMeasureClear'.tr),
+              IconButton(visualDensity: VisualDensity.compact, icon: const Icon(Icons.close_rounded, size: 20), onPressed: _exitMeasureMode, tooltip: 'historyMeasureExit'.tr),
+            ],
+          ),
+          if (hasArea)
+            Text.rich(
+              TextSpan(
+                children: [
+                  TextSpan(text: _formatAreaValue(m2, _areaUnit), style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: theme.colorScheme.primary, letterSpacing: -0.5)),
+                  TextSpan(text: ' ${_areaUnit.labelKey.tr}', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: theme.colorScheme.primary)),
+                ],
+              ),
+            )
+          else
+            Text('historyMeasureNeedThree'.tr, style: TextStyle(fontSize: 13, color: theme.colorScheme.onSurfaceVariant)),
+          if (hasArea)
+            Text(
+              secondaryUnits.map((u) => '${_formatAreaValue(m2, u)} ${u.labelKey.tr}').join(' · '),
+              style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurfaceVariant),
+            ),
+          Text(
+            '${'historyMeasurePerimeter'.tr}: ${NumberFormat('#,##0.0', 'en_US').format(perimeter)} ${'sharedMeter'.tr}',
+            style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurfaceVariant),
+          ),
+          const SizedBox(height: 6),
+          SizedBox(
+            height: 36,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              children: AreaUnit.values.map((u) {
+                return Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: ChoiceChip(
+                    label: Text(u.labelKey.tr, style: const TextStyle(fontSize: 11)),
+                    selected: _areaUnit == u,
+                    visualDensity: VisualDensity.compact,
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    onSelected: (_) => _setAreaUnit(u),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _addMarker(LatLng point, String iconId) {
     _mapController?.addSymbol(SymbolOptions(geometry: point, iconImage: iconId, iconSize: 1.8, iconAnchor: "bottom"));
   }
@@ -861,6 +1201,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     if (_isPlaying) {
       _playbackAnimationController?.stop();
       _safeSetState(() => _isPlaying = false);
+      _refreshAddressNow(); // 暫停時立刻校正目前位置的路名
       return;
     }
 
@@ -873,6 +1214,8 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     _followUser = true;
     _focusCameraOnPlayback();
 
+    _lastTickAtMs = 0;
+    _addressRequestedAtMs = 0; // 重新開始時立刻允許預取
     _safeSetState(() => _isPlaying = true);
     _playbackAnimationController?.repeat();
   }
@@ -894,8 +1237,119 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     controller.animateCamera(CameraUpdate.newLatLngZoom(point, targetZoom), duration: const Duration(milliseconds: _focusCameraAnimMs));
   }
 
+  /// 換日期 / 換車輛 / 重新載入軌跡時，丟掉所有排程狀態與在飛請求
+  void _resetAddressSchedule() {
+    _addressRequestToken++; // 讓所有在飛的回覆失效
+    _addressShownIdx = -1;
+    _addressCacheCheckedIdx = -1;
+    _addressInFlightIdx = -1;
+    _addressInFlightLeadIdx = 0;
+    _addressScheduledAtMs = 0;
+    _addressRequestedAtMs = 0;
+  }
+
+  /// 播放每個 tick 前進 0.05 × 倍速，所以「1.5s 限流」的時間內會走過的點數，
+  /// 就是該提前預取的點數：請求在標記抵達該點時剛好回來，路名才不會落後。
+  int _addressLeadPoints() {
+    final double pointsPerSecond = 0.05 * _playbackSpeed * _frameRate;
+    return max(0, (pointsPerSecond * _addressRemoteMinGapMs / 1000).round());
+  }
+
+  bool _isAddressCached(api.Position p) => OfflineAddressService.getAddressFromCache(p.latitude!.toDouble(), p.longitude!.toDouble()) != null;
+
+  void _trackFrameRate() {
+    final int now = DateTime.now().millisecondsSinceEpoch;
+    if (_lastTickAtMs > 0) {
+      final int dt = now - _lastTickAtMs;
+      if (dt > 0) _frameRate = (_frameRate * 0.9 + (1000 / dt) * 0.1).clamp(24.0, 144.0);
+    }
+    _lastTickAtMs = now;
+  }
+
+  /// 顯示層：目前位置的位址若已在 Hive 快取，立即更新（零網路成本）
+  void _applyCachedAddress(int idx) {
+    if (idx < 0 || idx >= _positions.length) return;
+    if (idx == _addressShownIdx) return;
+    final api.Position p = _positions[idx];
+    final String? cached = OfflineAddressService.getAddressFromCache(p.latitude!.toDouble(), p.longitude!.toDouble());
+    if (cached == null || cached == _currentAddressRx.value) return;
+    _currentAddressRx.value = cached;
+    _addressShownIdx = idx;
+  }
+
+  /// 請求層：單一 in-flight；播放中依倍速往前「跳點預取」，避免回放跑到新路時還顯示舊路名
+  void _scheduleAddressRequest(int idx, {bool forceCurrent = false}) {
+    if (_positions.isEmpty) return;
+    final int now = DateTime.now().millisecondsSinceEpoch;
+    if (!forceCurrent && now - _addressScheduledAtMs < _addressSchedulerThrottleMs) return;
+    _addressScheduledAtMs = now;
+
+    final int cur = idx.clamp(0, _positions.length - 1);
+    _applyCachedAddress(cur);
+
+    // 一次只允許一個請求在飛；回覆回來時會自行判斷是否過期並補發
+    if (_addressInFlightIdx >= 0) return;
+
+    // 依倍速往前找第一個「還沒快取」的點，這才是真正需要請求的位置
+    final int lead = forceCurrent ? 0 : _addressLeadPoints();
+    final int end = min(_positions.length - 1, cur + lead);
+    int? target;
+    for (int i = cur; i <= end; i++) {
+      if (!_isAddressCached(_positions[i])) {
+        target = i;
+        break;
+      }
+    }
+    if (target == null) return; // 前方路段都已在快取內
+
+    // 遠端查詢限流；暫停 / 拖曳 / 換倍速的強制校正不受此限
+    if (!forceCurrent && now - _addressRequestedAtMs < _addressRemoteMinGapMs) return;
+
+    final int targetIdx = target;
+    final api.Position targetPosition = _positions[targetIdx];
+    final double targetLat = targetPosition.latitude!.toDouble();
+    final double targetLng = targetPosition.longitude!.toDouble();
+    final int token = ++_addressRequestToken;
+
+    _addressRequestedAtMs = now;
+    _addressInFlightIdx = targetIdx;
+    _addressInFlightLeadIdx = lead;
+
+    OfflineAddressService.getAddress(targetLat, targetLng).then((addr) {
+      if (!mounted || token != _addressRequestToken) return;
+      final int leadAtRequest = _addressInFlightLeadIdx;
+      _addressInFlightIdx = -1;
+
+      final int nowIdx = _playbackPositionRx.value.floor().clamp(0, _positions.length - 1);
+      // 播放已跑得比目標點更遠（超過一個請求週期）→ 這筆結果沒有意義，改用目前位置重發
+      if (nowIdx - targetIdx > max(4, leadAtRequest)) {
+        if (_isPlaying) {
+          _addressRequestedAtMs = 0;
+          _scheduleAddressRequest(nowIdx);
+        }
+        return;
+      }
+
+      if (addr.isEmpty || addr.startsWith('Error')) return;
+      if (addr != _currentAddressRx.value) _currentAddressRx.value = addr;
+      _addressShownIdx = targetIdx;
+    });
+  }
+
+  /// 暫停 / 拖曳結束 / 換倍速：立刻校正「目前位置」的路名
+  void _refreshAddressNow() {
+    if (_positions.isEmpty) return;
+    final int cur = _playbackPositionRx.value.floor().clamp(0, _positions.length - 1);
+    _addressRequestToken++; // 讓先前預取的回覆失效，避免暫停後又被「前方路名」蓋掉
+    _addressInFlightIdx = -1;
+    _addressScheduledAtMs = 0;
+    _addressRequestedAtMs = 0;
+    _scheduleAddressRequest(cur, forceCurrent: true);
+  }
+
   void _onAnimationTick() {
     if (!_isPlaying || _positions.isEmpty) return;
+    _trackFrameRate();
 
     final double maxLimit = max(0, _positions.length - 1).toDouble();
     double step = 0.05 * _playbackSpeed;
@@ -905,6 +1359,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
       _playbackPositionRx.value = maxLimit;
       _playbackAnimationController?.stop();
       _safeSetState(() => _isPlaying = false);
+      _refreshAddressNow(); // 播完停在終點，校正終點路名
     } else {
       _playbackPositionRx.value = nextVal;
     }
@@ -934,13 +1389,13 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
       bearing = _calculateBearing(LatLng(p1.latitude!.toDouble(), p1.longitude!.toDouble()), LatLng(p2.latitude!.toDouble(), p2.longitude!.toDouble()));
     }
 
-    if (_currentAddressRx.value == "" || idx % 20 == 0) {
-      final int currentToken = ++_addressRequestToken;
-      OfflineAddressService.getAddress(p1.latitude!.toDouble(), p1.longitude!.toDouble()).then((addr) {
-        if (currentToken == _addressRequestToken) {
-          _currentAddressRx.value = addr;
-        }
-      });
+    // 路名：換一個點就查一次快取（零成本）；播放中依倍速跳點預取
+    if (idx != _addressCacheCheckedIdx) {
+      _addressCacheCheckedIdx = idx;
+      _applyCachedAddress(idx);
+    }
+    if (_isPlaying) {
+      _scheduleAddressRequest(idx);
     }
 
     // 更新行進中的小車標記
@@ -1054,7 +1509,11 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
             },
             myLocationEnabled: false,
             trackCameraPosition: true,
-            onMapClick: (_, _) {
+            onMapClick: (_, LatLng point) {
+              if (_isMeasureMode) {
+                _addMeasurePoint(point);
+                return;
+              }
               _safeSetState(() => _followUser = false);
             },
           ),
@@ -1210,10 +1669,29 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Align(
-            alignment: Alignment.centerLeft,
-            child: _mapFab(_isGeofenceLoading ? Icons.hourglass_top_rounded : Icons.fence_rounded, _toggleGeofences, "btn_geofence", active: _showGeofences, tooltip: 'historyGeofenceToggle'.tr),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              _mapFab(_isGeofenceLoading ? Icons.hourglass_top_rounded : Icons.fence_rounded, _toggleGeofences, "btn_geofence", active: _showGeofences, tooltip: 'historyGeofenceToggle'.tr),
+              _mapFab(
+                Icons.square_foot,
+                () {
+                  if (_isMeasureMode) {
+                    _exitMeasureMode();
+                  } else {
+                    _enterMeasureMode();
+                  }
+                },
+                "btn_measure",
+                active: _isMeasureMode,
+                tooltip: 'historyMeasureTooltip'.tr,
+              ),
+            ],
           ),
+          if (_isMeasureMode) ...[
+            const SizedBox(height: 10),
+            _buildMeasurePanel(),
+          ],
           const SizedBox(height: 10),
           AnimatedSwitcher(
             duration: const Duration(milliseconds: 220),
@@ -1272,6 +1750,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
                   _playbackPositionRx.value = v;
                   _updatePlaybackUI();
                 },
+                onChangeEnd: (_) => _refreshAddressNow(), // 拖曳結束立刻校正路名
                 activeColor: Theme.of(context).colorScheme.primary,
                 inactiveColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.15),
               ),
@@ -1327,6 +1806,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
                     _playbackPositionRx.value = v;
                     _updatePlaybackUI();
                   },
+                  onChangeEnd: (_) => _refreshAddressNow(), // 拖曳結束立刻校正路名
                 ),
               ),
             );
@@ -1464,6 +1944,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
             onTap: () {
               _safeSetState(() => _playbackSpeed = s);
               _savePlaybackSpeedToHive(s);
+              _addressRequestedAtMs = 0; // 倍速變了，預取領先量與節奏立即重算
             },
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),
