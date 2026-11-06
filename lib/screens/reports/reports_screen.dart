@@ -1,5 +1,4 @@
 // lib/screens/reports/reports_screen.dart
-//  A screen to select and configure reports in the TracDefg app.
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -10,6 +9,8 @@ import 'package:trabcdefg/src/utils/cupertino_pickers.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
 
+enum DateRangePreset { custom, today, thisWeek, thisMonth, lastMonth }
+
 class ReportsScreen extends StatefulWidget {
   const ReportsScreen({super.key});
 
@@ -18,80 +19,100 @@ class ReportsScreen extends StatefulWidget {
 }
 
 class _ReportsScreenState extends State<ReportsScreen> {
-  DateTime _selectedDate = DateTime.now();
-  api.Device? _selectedDevice;
+  DateTime _fromDate = DateTime.now();
+  DateTime _toDate = DateTime.now();
 
-  // Report types available on all server versions (v4.4+)
-  static const _basicReports = {
-    'summary',
-    'stops',
-    'route',
-    'trips',
-    'events',
-    'chart',
-  };
+  api.Device? _selectedDevice;
+  bool _selectAllDevices = false;
+  DateRangePreset _selectedPreset = DateRangePreset.custom;
+
+  static const _basicReports = {'summary', 'stops', 'route', 'trips', 'events', 'chart'};
 
   @override
   void initState() {
     super.initState();
     _loadLastDevice();
+    _applyPreset(DateRangePreset.today); // 預設進來選今天
+  }
+
+  void _applyPreset(DateRangePreset preset) {
+    final now = DateTime.now();
+    setState(() {
+      _selectedPreset = preset;
+      if (preset == DateRangePreset.today) {
+        _fromDate = DateTime(now.year, now.month, now.day, 0, 0, 0);
+        _toDate = DateTime(now.year, now.month, now.day, 23, 59, 59);
+      } else if (preset == DateRangePreset.thisWeek) {
+        // 以週一作為每週第一天
+        int weekday = now.weekday;
+        DateTime startOfWeek = now.subtract(Duration(days: weekday - 1));
+        _fromDate = DateTime(startOfWeek.year, startOfWeek.month, startOfWeek.day, 0, 0, 0);
+        _toDate = DateTime(now.year, now.month, now.day, 23, 59, 59);
+      } else if (preset == DateRangePreset.thisMonth) {
+        _fromDate = DateTime(now.year, now.month, 1, 0, 0, 0);
+        _toDate = DateTime(now.year, now.month + 1, 0, 23, 59, 59);
+      } else if (preset == DateRangePreset.lastMonth) {
+        _fromDate = DateTime(now.year, now.month - 1, 1, 0, 0, 0);
+        _toDate = DateTime(now.year, now.month, 0, 23, 59, 59);
+      }
+    });
   }
 
   bool _isReportAvailable(TraccarProvider provider, String type) {
-    // If server version is unknown (still loading), show all for safety
     if (provider.serverVersion == null) return true;
-    // v4.4 only supports basic reports; v5.0+ supports all
     return provider.isVersionAtLeast('5.0') || _basicReports.contains(type);
   }
 
   Future<void> _loadLastDevice() async {
     final prefs = await SharedPreferences.getInstance();
+    final isAll = prefs.getBool('selectAllDevices') ?? false;
+    if (isAll) {
+      setState(() {
+        _selectAllDevices = true;
+        _selectedDevice = null;
+      });
+      return;
+    }
+
     final lastDeviceId = prefs.getInt('selectedDeviceId');
     if (lastDeviceId != null && lastDeviceId != 0) {
       if (!mounted) return;
-      final traccarProvider = Provider.of<TraccarProvider>(
-        context,
-        listen: false,
-      );
-      final device = traccarProvider.devices.firstWhereOrNull(
-        (d) => d.id == lastDeviceId,
-      );
+      final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
+      final device = traccarProvider.devices.firstWhereOrNull((d) => d.id == lastDeviceId);
       if (device != null) {
         setState(() {
           _selectedDevice = device;
+          _selectAllDevices = false;
         });
       }
     }
   }
 
-  Future<void> _selectDate(BuildContext context) async {
-    final picked = await showCupertinoDatePickerSheet(
-      context,
-      initialDate: _selectedDate,
-      firstDate: DateTime(2000),
-      lastDate: DateTime.now(),
-    );
+  Future<void> _selectDate(BuildContext context, bool isFrom) async {
+    final initial = isFrom ? _fromDate : _toDate;
+    final picked = await showCupertinoDatePickerSheet(context, initialDate: initial, firstDate: DateTime(2000), lastDate: DateTime.now().add(const Duration(days: 1)));
 
     if (picked != null) {
       setState(() {
-        _selectedDate = picked;
+        if (isFrom) {
+          _fromDate = picked;
+        } else {
+          _toDate = picked;
+        }
+        // 手動調整日期後，將預設切換為自訂日期 (custom)
+        _selectedPreset = DateRangePreset.custom;
       });
     }
   }
 
   void _showDeviceSelectionDialog(BuildContext context) {
-    final traccarProvider = Provider.of<TraccarProvider>(
-      context,
-      listen: false,
-    );
+    final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
     showCupertinoModalPopup<void>(
       context: context,
       builder: (BuildContext context) => Container(
         height: 420,
         padding: const EdgeInsets.symmetric(vertical: 12),
         color: Theme.of(context).colorScheme.surface,
-        // ListTile needs a Material ancestor; the Cupertino popup route has none.
-        // A transparent Material keeps the Cupertino background while providing it.
         child: Material(
           type: MaterialType.transparency,
           child: SafeArea(
@@ -100,41 +121,43 @@ class _ReportsScreenState extends State<ReportsScreen> {
               children: [
                 Padding(
                   padding: const EdgeInsets.only(bottom: 8),
-                  child: Text(
-                    'sharedDevice'.tr,
-                    style: const TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
+                  child: Text('sharedDevice'.tr, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
                 ),
                 Expanded(
-                  child: SingleChildScrollView(
-                    child: ListBody(
-                      children: traccarProvider.devices.map((device) {
+                  child: ListView(
+                    children: [
+                      ListTile(
+                        leading: const Icon(Icons.devices_other),
+                        title: Text('deviceStatusAll'.tr),
+                        selected: _selectAllDevices,
+                        onTap: () async {
+                          setState(() {
+                            _selectAllDevices = true;
+                            _selectedDevice = null;
+                          });
+                          final prefs = await SharedPreferences.getInstance();
+                          await prefs.setBool('selectAllDevices', true);
+                          if (context.mounted) Navigator.pop(context);
+                        },
+                      ),
+                      const Divider(),
+                      ...traccarProvider.devices.map((device) {
                         return ListTile(
                           title: Text(device.name ?? 'sharedNoData'.tr),
-                          selected: _selectedDevice?.id == device.id,
+                          selected: !_selectAllDevices && _selectedDevice?.id == device.id,
                           onTap: () async {
                             setState(() {
                               _selectedDevice = device;
+                              _selectAllDevices = false;
                             });
-
-                            // FIXED: Capture the navigator state before entering the async gap
-                            final navigator = Navigator.of(context);
-
                             final prefs = await SharedPreferences.getInstance();
-                            await prefs.setInt(
-                              'selectedDeviceId',
-                              device.id ?? 0,
-                            );
-
-                            // FIXED: Use the captured navigator safely
-                            navigator.pop();
+                            await prefs.setBool('selectAllDevices', false);
+                            await prefs.setInt('selectedDeviceId', device.id ?? 0);
+                            if (context.mounted) Navigator.pop(context);
                           },
                         );
-                      }).toList(),
-                    ),
+                      }),
+                    ],
                   ),
                 ),
               ],
@@ -146,48 +169,31 @@ class _ReportsScreenState extends State<ReportsScreen> {
   }
 
   void _navigateToReport(String reportType) async {
-    if (_selectedDevice == null) {
-      _showDeviceSelectionDialog(context);
-      return;
-    }
-
     final prefs = await SharedPreferences.getInstance();
 
-    final fromDate = DateTime.utc(
-      _selectedDate.year,
-      _selectedDate.month,
-      _selectedDate.day,
-    );
+    final fromUtc = DateTime.utc(_fromDate.year, _fromDate.month, _fromDate.day, _fromDate.hour, _fromDate.minute, _fromDate.second);
+    final toUtc = DateTime.utc(_toDate.year, _toDate.month, _toDate.day, _toDate.hour, _toDate.minute, _toDate.second);
 
-    // Create a DateTime for the end of the selected day in UTC
-    final toDate = fromDate
-        .add(const Duration(days: 1))
-        .subtract(const Duration(milliseconds: 1));
-    await prefs.setInt('selectedDeviceId', _selectedDevice?.id ?? 0);
-    await prefs.setString('historyFrom', fromDate.toIso8601String());
-    await prefs.setString('historyTo', toDate.toIso8601String());
-    await prefs.setString(
-      'selectedDeviceName',
-      _selectedDevice!.name.toString(),
-    );
+    await prefs.setBool('selectAllDevices', _selectAllDevices);
+    if (!_selectAllDevices && _selectedDevice != null) {
+      await prefs.setInt('selectedDeviceId', _selectedDevice!.id ?? 0);
+      await prefs.setString('selectedDeviceName', _selectedDevice!.name.toString());
+    } else {
+      await prefs.remove('selectedDeviceId');
+      await prefs.setString('selectedDeviceName', 'deviceStatusAll'.tr);
+    }
 
-    // FIXED: Added a mounted check to ensure context is still active
+    await prefs.setString('historyFrom', fromUtc.toIso8601String());
+    await prefs.setString('historyTo', toUtc.toIso8601String());
+
     if (!mounted) return;
-    // 使用 root navigator：報表頁位於 CupertinoTabView 的 tab 內，local navigator
-    // 沒有註冊 /reports/* 路由，必須導到根 GetMaterialApp 的 navigator
-    Navigator.of(
-      context,
-      rootNavigator: true,
-    ).pushNamed('/reports/$reportType');
+    Navigator.of(context, rootNavigator: true).pushNamed('/reports/$reportType');
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: CupertinoNavigationBar(
-        middle: Text('reportTitle'.tr),
-        automaticallyImplyLeading: true,
-      ),
+      appBar: CupertinoNavigationBar(middle: Text('reportTitle'.tr), automaticallyImplyLeading: true),
       body: ListView(
         children: [
           Padding(
@@ -195,67 +201,56 @@ class _ReportsScreenState extends State<ReportsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'reportConfigure'.tr,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+                Text('reportConfigure'.tr, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 16),
                 Card(
                   elevation: 2,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   child: ListTile(
-                    leading: Icon(
-                      CupertinoIcons.car_fill,
-                      color: _selectedDevice != null
-                          ? Theme.of(context).colorScheme.primary
-                          : Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                    title: Text(
-                      _selectedDevice?.name ?? 'reportDevice'.tr,
-                      style: TextStyle(
-                        fontWeight: _selectedDevice != null
-                            ? FontWeight.bold
-                            : FontWeight.normal,
-                        color: _selectedDevice != null
-                            ? Theme.of(context).colorScheme.onSurface
-                            : Theme.of(context).colorScheme.error,
-                      ),
-                    ),
-                    subtitle: _selectedDevice == null
-                        ? Text('pleaseSelectDevice'.tr)
-                        : null,
+                    leading: Icon(CupertinoIcons.car_fill, color: (_selectedDevice != null || _selectAllDevices) ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurfaceVariant),
+                    title: Text(_selectAllDevices ? 'deviceStatusAll'.tr : (_selectedDevice?.name ?? 'reportDevice'.tr), style: TextStyle(fontWeight: (_selectedDevice != null || _selectAllDevices) ? FontWeight.bold : FontWeight.normal)),
                     trailing: const Icon(Icons.arrow_forward_ios, size: 16),
                     onTap: () => _showDeviceSelectionDialog(context),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                // 日期快捷切換按鈕列 (加入 Today, This Week, This Month, Last Month, Custom)
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      FilterChip(label: Text('reportToday'.tr), selected: _selectedPreset == DateRangePreset.today, onSelected: (_) => _applyPreset(DateRangePreset.today)),
+                      const SizedBox(width: 8),
+                      FilterChip(label: Text('reportThisWeek'.tr), selected: _selectedPreset == DateRangePreset.thisWeek, onSelected: (_) => _applyPreset(DateRangePreset.thisWeek)),
+                      const SizedBox(width: 8),
+                      FilterChip(label: Text('reportThisMonth'.tr), selected: _selectedPreset == DateRangePreset.thisMonth, onSelected: (_) => _applyPreset(DateRangePreset.thisMonth)),
+                      const SizedBox(width: 8),
+                      FilterChip(label: Text('reportPreviousMonth'.tr), selected: _selectedPreset == DateRangePreset.lastMonth, onSelected: (_) => _applyPreset(DateRangePreset.lastMonth)),
+                      const SizedBox(width: 8),
+                      FilterChip(label: Text('reportCustom'.tr), selected: _selectedPreset == DateRangePreset.custom, onSelected: (_) => _applyPreset(DateRangePreset.custom)),
+                    ],
                   ),
                 ),
                 const SizedBox(height: 8),
                 Card(
                   elevation: 2,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: ListTile(
-                    leading: Icon(
-                      CupertinoIcons.calendar_today,
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
-                    title: Text(
-                      '${'reportFrom'.tr}: ${DateFormat('yyyy-MM-dd').format(_selectedDate)}',
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.onSurface,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  child: Column(
+                    children: [
+                      ListTile(
+                        leading: const Icon(CupertinoIcons.calendar),
+                        title: Text('${'reportFrom'.tr}: ${DateFormat('yyyy-MM-dd HH:mm').format(_fromDate)}'),
+                        trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                        onTap: () => _selectDate(context, true),
                       ),
-                    ),
-                    trailing: Icon(
-                      Icons.arrow_forward_ios,
-                      size: 16,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                    onTap: () => _selectDate(context),
+                      const Divider(height: 1),
+                      ListTile(
+                        leading: const Icon(CupertinoIcons.calendar),
+                        title: Text('${'reportTo'.tr}: ${DateFormat('yyyy-MM-dd HH:mm').format(_toDate)}'),
+                        trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                        onTap: () => _selectDate(context, false),
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -283,29 +278,16 @@ class _ReportsScreenState extends State<ReportsScreen> {
     );
   }
 
-  List<Widget> _buildReportSection(
-    BuildContext context,
-    List<_ReportDef> defs,
-  ) {
+  List<Widget> _buildReportSection(BuildContext context, List<_ReportDef> defs) {
     final provider = Provider.of<TraccarProvider>(context, listen: false);
     return defs.where((d) => _isReportAvailable(provider, d.type)).map((d) {
-      return _buildReportItem(d);
+      return ListTile(
+        leading: Icon(d.icon, color: Theme.of(context).colorScheme.primary),
+        title: Text(d.title),
+        trailing: const Icon(CupertinoIcons.chevron_right),
+        onTap: () => _navigateToReport(d.type),
+      );
     }).toList();
-  }
-
-  Widget _buildReportItem(_ReportDef def) {
-    return ListTile(
-      leading: Icon(def.icon, color: Theme.of(context).colorScheme.primary),
-      title: Text(
-        def.title,
-        style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
-      ),
-      trailing: Icon(
-        CupertinoIcons.chevron_right,
-        color: Theme.of(context).colorScheme.onSurfaceVariant,
-      ),
-      onTap: () => _navigateToReport(def.type),
-    );
   }
 }
 

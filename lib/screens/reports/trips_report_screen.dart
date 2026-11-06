@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
+import 'package:hive_flutter/hive_flutter.dart'; // 確保引入 Hive
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:maplibre_gl/maplibre_gl.dart' as maplibre;
@@ -140,6 +141,7 @@ class _TripsReportScreenState extends State<TripsReportScreen> {
   @override
   void initState() {
     super.initState();
+    SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp, DeviceOrientation.portraitDown]);
     _fetchTripsReport();
   }
 
@@ -192,6 +194,17 @@ class _TripsReportScreenState extends State<TripsReportScreen> {
 
           if (decodedData is List && decodedData.isNotEmpty) {
             _tripsReport = decodedData.map((e) => TripReport.fromJson(e as Map<String, dynamic>)).toList();
+
+            // 【將 Trips Report 請求結果快取至 Hive】
+            try {
+              final tripsBox = Hive.isBoxOpen('trips_reports_cache') ? Hive.box('trips_reports_cache') : await Hive.openBox('trips_reports_cache');
+
+              final cacheKey = '${deviceId}_${fromDateString.substring(0, 10)}';
+              await tripsBox.put(cacheKey, response.body);
+            } catch (cacheErr) {
+              debugPrint('Failed to save trips report to Hive: $cacheErr');
+            }
+
             if (_tripsReport.isNotEmpty) {
               _deviceName = _tripsReport.first.deviceName;
               _createMapElements();
@@ -316,7 +329,6 @@ class _TripsReportScreenState extends State<TripsReportScreen> {
     });
     _createMapElements();
 
-    // 平移並放大至該行程起終點範圍
     final start = maplibre.LatLng(trip.startLat, trip.startLon);
     final end = maplibre.LatLng(trip.endLat, trip.endLon);
     _zoomToFit([start, end]);
@@ -390,7 +402,6 @@ class _TripsReportScreenState extends State<TripsReportScreen> {
       ),
       body: Column(
         children: [
-          // 地圖展示區域
           SizedBox(
             height: MediaQuery.of(context).size.height * 0.35,
             child: Stack(
@@ -420,8 +431,6 @@ class _TripsReportScreenState extends State<TripsReportScreen> {
               ],
             ),
           ),
-
-          // 報表總覽與列表
           Expanded(
             child: Container(
               decoration: BoxDecoration(
@@ -453,7 +462,6 @@ class _TripsReportScreenState extends State<TripsReportScreen> {
     );
   }
 
-  /// 頂部數據總覽 Dashboard 卡片
   Widget _buildSummaryHeader(ThemeData theme) {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -529,8 +537,6 @@ class _TripsReportScreenState extends State<TripsReportScreen> {
     );
   }
 
-  /// 單筆行程卡片 (時間軸設計)
-  /// 單筆行程卡片 (時間軸設計)
   Widget _buildTripCard(ThemeData theme, TripReport trip, int index, bool isSelected) {
     final String startTimeStr = DateFormat('HH:mm').format(trip.startTime.toLocal());
     final String endTimeStr = DateFormat('HH:mm').format(trip.endTime.toLocal());
@@ -540,7 +546,6 @@ class _TripsReportScreenState extends State<TripsReportScreen> {
       margin: const EdgeInsets.only(bottom: 12),
       child: Material(
         color: isSelected ? theme.colorScheme.primaryContainer.withOpacity(0.15) : theme.colorScheme.surface,
-        // 移除這裡原本的 borderRadius: BorderRadius.circular(16)，改由 shape 統一控制
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
           side: BorderSide(color: isSelected ? theme.colorScheme.primary : theme.colorScheme.outlineVariant.withOpacity(0.5), width: isSelected ? 2 : 1),
@@ -553,7 +558,6 @@ class _TripsReportScreenState extends State<TripsReportScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // 卡片頁眉：行程編號、日期、距離標籤
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -582,17 +586,12 @@ class _TripsReportScreenState extends State<TripsReportScreen> {
                   ],
                 ),
                 const SizedBox(height: 12),
-
-                // 時間軸 (起點與終點)
                 _buildTimelineNode(theme, isStart: true, timeStr: startTimeStr, lat: trip.startLat, lon: trip.startLon, providedAddress: trip.startAddress),
                 _buildTimelineConnector(theme, duration: _formatDuration(trip.duration)),
                 _buildTimelineNode(theme, isStart: false, timeStr: endTimeStr, lat: trip.endLat, lon: trip.endLon, providedAddress: trip.endAddress),
-
                 const SizedBox(height: 12),
                 const Divider(height: 1),
                 const SizedBox(height: 8),
-
-                // 速度細節
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
@@ -643,7 +642,7 @@ class _TripsReportScreenState extends State<TripsReportScreen> {
 
   Widget _buildTimelineConnector(ThemeData theme, {required String duration}) {
     return Padding(
-      padding: const EdgeInsets.only(left: 45 + 7), // 避開時間寬度與點
+      padding: const EdgeInsets.only(left: 45 + 7),
       child: Row(
         children: [
           Container(width: 2, height: 24, color: theme.colorScheme.outlineVariant),

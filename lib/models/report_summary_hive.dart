@@ -1,5 +1,4 @@
 // lib/models/report_summary_hive.dart
-// Model to store report summary data in Hive database.
 import 'package:hive/hive.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
 
@@ -22,9 +21,23 @@ class ReportSummaryHive extends HiveObject {
   @HiveField(4)
   final int? engineHours;
 
-  ReportSummaryHive({this.distance, this.averageSpeed, this.maxSpeed, this.spentFuel, this.engineHours});
+  @HiveField(5)
+  final int? deviceId; // 新增：裝置 ID
 
-  factory ReportSummaryHive.fromApi(api.ReportSummary apiSummary) {
-    return ReportSummaryHive(distance: apiSummary.distance?.toDouble(), averageSpeed: apiSummary.averageSpeed?.toDouble(), maxSpeed: apiSummary.maxSpeed?.toDouble(), spentFuel: apiSummary.spentFuel?.toDouble(), engineHours: apiSummary.engineHours);
+  @HiveField(6)
+  final String? dateStr; // 新增：日期 (yyyy-MM-dd)
+
+  ReportSummaryHive({this.distance, this.averageSpeed, this.maxSpeed, this.spentFuel, this.engineHours, this.deviceId, this.dateStr});
+
+  factory ReportSummaryHive.fromApi(api.ReportSummary apiSummary, {int? deviceId, String? dateStr}) {
+    return ReportSummaryHive(
+      distance: apiSummary.distance?.toDouble(),
+      averageSpeed: apiSummary.averageSpeed?.toDouble(),
+      maxSpeed: apiSummary.maxSpeed?.toDouble(),
+      spentFuel: apiSummary.spentFuel?.toDouble(),
+      engineHours: apiSummary.engineHours,
+      deviceId: deviceId ?? apiSummary.deviceId,
+      dateStr: dateStr,
+    );
   }
 }
