@@ -374,8 +374,7 @@ class _SummaryReportScreenState extends State<SummaryReportScreen> {
     await Printing.layoutPdf(onLayout: (format) async => pdf.save());
   }
 
-  /// 彈出 Filter 設定對話框 (使用現有已有的翻譯 Key)
-  /// 彈出 Filter 設定對話框 (設定寬度避免多語言字串被擋住)
+  /// 彈出 Filter 設定對話框 (優化版面，將 Accept 與 Cancel 按鈕移至底部 actions，避免擋到選項)
   void _showFilterDialog() {
     showDialog(
       context: context,
@@ -383,85 +382,106 @@ class _SummaryReportScreenState extends State<SummaryReportScreen> {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
-              // 透過 constraints 設定對話框的最小寬度，讓多語言顯示更寬裕
               constraints: const BoxConstraints(minWidth: 320, maxWidth: 400),
-              title: Text('reportConfigure'.tr, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
+              title: Row(
                 children: [
-                  CheckboxListTile(
-                    title: Text(
-                      'distance'.tr,
-                      style: const TextStyle(color: Colors.blue, fontWeight: FontWeight.bold),
-                    ),
-                    value: _selectedFields.contains(SummaryFieldOption.km),
-                    onChanged: (bool? checked) {
-                      setDialogState(() {
-                        if (checked == true) {
-                          _selectedFields.add(SummaryFieldOption.km);
-                        } else if (_selectedFields.length > 1) {
-                          _selectedFields.remove(SummaryFieldOption.km);
-                        }
-                      });
-                    },
-                  ),
-                  CheckboxListTile(
-                    title: Text(
-                      'reportEngineHours'.tr,
-                      style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
-                    ),
-                    value: _selectedFields.contains(SummaryFieldOption.engineHours),
-                    onChanged: (bool? checked) {
-                      setDialogState(() {
-                        if (checked == true) {
-                          _selectedFields.add(SummaryFieldOption.engineHours);
-                        } else if (_selectedFields.length > 1) {
-                          _selectedFields.remove(SummaryFieldOption.engineHours);
-                        }
-                      });
-                    },
-                  ),
-                  CheckboxListTile(
-                    title: Text(
-                      'reportAverageSpeed'.tr,
-                      style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold),
-                    ),
-                    value: _selectedFields.contains(SummaryFieldOption.averageSpeed),
-                    onChanged: (bool? checked) {
-                      setDialogState(() {
-                        if (checked == true) {
-                          _selectedFields.add(SummaryFieldOption.averageSpeed);
-                        } else if (_selectedFields.length > 1) {
-                          _selectedFields.remove(SummaryFieldOption.averageSpeed);
-                        }
-                      });
-                    },
-                  ),
-                  CheckboxListTile(
-                    title: Text(
-                      'odometer'.tr,
-                      style: const TextStyle(color: Colors.purple, fontWeight: FontWeight.bold),
-                    ),
-                    value: _selectedFields.contains(SummaryFieldOption.odometer),
-                    onChanged: (bool? checked) {
-                      setDialogState(() {
-                        if (checked == true) {
-                          _selectedFields.add(SummaryFieldOption.odometer);
-                        } else if (_selectedFields.length > 1) {
-                          _selectedFields.remove(SummaryFieldOption.odometer);
-                        }
-                      });
-                    },
-                  ),
+                  const Icon(CupertinoIcons.slider_horizontal_3, size: 20),
+                  const SizedBox(width: 8),
+                  Text('reportConfigure'.tr, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                 ],
               ),
+              // 使用 SingleChildScrollView 避免在小螢幕或橫屏時內容過長被擠壓
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    CheckboxListTile(
+                      title: Text(
+                        'distance'.tr,
+                        style: const TextStyle(color: Colors.blue, fontWeight: FontWeight.bold),
+                      ),
+                      value: _selectedFields.contains(SummaryFieldOption.km),
+                      onChanged: (bool? checked) {
+                        setDialogState(() {
+                          if (checked == true) {
+                            _selectedFields.add(SummaryFieldOption.km);
+                          } else if (_selectedFields.length > 1) {
+                            _selectedFields.remove(SummaryFieldOption.km);
+                          }
+                        });
+                      },
+                    ),
+                    CheckboxListTile(
+                      title: Text(
+                        'reportEngineHours'.tr,
+                        style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+                      ),
+                      value: _selectedFields.contains(SummaryFieldOption.engineHours),
+                      onChanged: (bool? checked) {
+                        setDialogState(() {
+                          if (checked == true) {
+                            _selectedFields.add(SummaryFieldOption.engineHours);
+                          } else if (_selectedFields.length > 1) {
+                            _selectedFields.remove(SummaryFieldOption.engineHours);
+                          }
+                        });
+                      },
+                    ),
+                    CheckboxListTile(
+                      title: Text(
+                        'reportAverageSpeed'.tr,
+                        style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold),
+                      ),
+                      value: _selectedFields.contains(SummaryFieldOption.averageSpeed),
+                      onChanged: (bool? checked) {
+                        setDialogState(() {
+                          if (checked == true) {
+                            _selectedFields.add(SummaryFieldOption.averageSpeed);
+                          } else if (_selectedFields.length > 1) {
+                            _selectedFields.remove(SummaryFieldOption.averageSpeed);
+                          }
+                        });
+                      },
+                    ),
+                    CheckboxListTile(
+                      title: Text(
+                        'odometer'.tr,
+                        style: const TextStyle(color: Colors.purple, fontWeight: FontWeight.bold),
+                      ),
+                      value: _selectedFields.contains(SummaryFieldOption.odometer),
+                      onChanged: (bool? checked) {
+                        setDialogState(() {
+                          if (checked == true) {
+                            _selectedFields.add(SummaryFieldOption.odometer);
+                          } else if (_selectedFields.length > 1) {
+                            _selectedFields.remove(SummaryFieldOption.odometer);
+                          }
+                        });
+                      },
+                    ),
+                  ],
+                ),
+              ),
+              // 將確認與取消按鈕正確放置於底部 actions 區塊，完全脫離中間選項
               actions: [
                 TextButton(
                   onPressed: () {
                     Navigator.of(context).pop();
-                    setState(() {});
-                    _saveUserFilterPreference(); // 記住使用者習慣 (Hive)
                   },
+                  child: Text('sharedCancel'.tr, style: TextStyle(color: Colors.grey[700])),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    setState(() {});
+                    _saveUserFilterPreference(); // 儲存使用者習慣至 Hive
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Theme.of(context).colorScheme.primary,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
                   child: Text('sharedAccept'.tr),
                 ),
               ],
