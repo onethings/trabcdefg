@@ -22,12 +22,7 @@ import 'package:trabcdefg/screens/reports/trips_report_screen.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
 
 /// Filter 可選欄位枚舉
-enum SummaryFieldOption {
-  km,
-  engineHours,
-  averageSpeed,
-  odometer,
-}
+enum SummaryFieldOption { km, engineHours, averageSpeed, odometer }
 
 class DailySummaryItem {
   final int deviceId;
@@ -39,22 +34,13 @@ class DailySummaryItem {
   final double? startOdometer;
   final double? endOdometer;
 
-  DailySummaryItem({
-    required this.deviceId,
-    required this.deviceName,
-    required this.dateStr,
-    required this.distanceKm,
-    this.engineHours,
-    this.averageSpeed,
-    this.startOdometer,
-    this.endOdometer,
-  });
+  DailySummaryItem({required this.deviceId, required this.deviceName, required this.dateStr, required this.distanceKm, this.engineHours, this.averageSpeed, this.startOdometer, this.endOdometer});
 
   factory DailySummaryItem.fromJson(Map<String, dynamic> json) {
     final startTimeStr = json['startTime'] as String? ?? DateTime.now().toIso8601String();
     final dateOnly = startTimeStr.substring(0, 10);
     final distanceMeters = (json['distance'] as num?)?.toDouble() ?? 0.0;
-    
+
     // 檢查是否有 engineHours 數據 (毫秒轉小時)
     double? hours;
     if (json.containsKey('engineHours') && json['engineHours'] != null) {
@@ -86,13 +72,7 @@ class DailyMetric {
   double? startOdometer;
   double? endOdometer;
 
-  DailyMetric({
-    required this.km,
-    this.engineHours,
-    this.averageSpeed,
-    this.startOdometer,
-    this.endOdometer,
-  });
+  DailyMetric({required this.km, this.engineHours, this.averageSpeed, this.startOdometer, this.endOdometer});
 }
 
 class SummaryReportScreen extends StatefulWidget {
@@ -110,10 +90,7 @@ class _SummaryReportScreenState extends State<SummaryReportScreen> {
   List<String> _daysList = [];
 
   // 用戶選擇顯示的數據欄位 (預設顯示 Km 與 EngH)
-  Set<SummaryFieldOption> _selectedFields = {
-    SummaryFieldOption.km,
-    SummaryFieldOption.engineHours,
-  };
+  Set<SummaryFieldOption> _selectedFields = {SummaryFieldOption.km, SummaryFieldOption.engineHours};
 
   static const String _hiveFilterBoxName = 'user_preferences';
   static const String _hiveFilterKey = 'summary_report_selected_fields';
@@ -129,12 +106,7 @@ class _SummaryReportScreenState extends State<SummaryReportScreen> {
   @override
   void dispose() {
     // 離開報表總覽時恢復全方向
-    SystemChrome.setPreferredOrientations([
-      DeviceOrientation.portraitUp,
-      DeviceOrientation.portraitDown,
-      DeviceOrientation.landscapeLeft,
-      DeviceOrientation.landscapeRight
-    ]);
+    SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp, DeviceOrientation.portraitDown, DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight]);
     super.dispose();
   }
 
@@ -198,13 +170,9 @@ class _SummaryReportScreenState extends State<SummaryReportScreen> {
 
       final targetDays = _generateDateList(fromDt, toDt);
 
-      final box = Hive.isBoxOpen('summary_reports')
-          ? Hive.box<ReportSummaryHive>('summary_reports')
-          : await Hive.openBox<ReportSummaryHive>('summary_reports');
+      final box = Hive.isBoxOpen('summary_reports') ? Hive.box<ReportSummaryHive>('summary_reports') : await Hive.openBox<ReportSummaryHive>('summary_reports');
 
-      final List<api.Device> targetDevices = selectAll
-          ? traccarProvider.devices.where((d) => d.id != null).toList()
-          : traccarProvider.devices.where((d) => d.id == deviceId).toList();
+      final List<api.Device> targetDevices = selectAll ? traccarProvider.devices.where((d) => d.id != null).toList() : traccarProvider.devices.where((d) => d.id == deviceId).toList();
 
       final Map<int, Map<String, dynamic>> matrix = {};
       final Set<String> daysSet = Set.from(targetDays);
@@ -227,11 +195,7 @@ class _SummaryReportScreenState extends State<SummaryReportScreen> {
             double? enMs = cachedItem.engineHours?.toDouble();
             double? en = enMs != null ? (enMs / 3600000.0) : null;
 
-            daysMap[day] = DailyMetric(
-              km: km,
-              engineHours: en,
-              averageSpeed: cachedItem.averageSpeed,
-            );
+            daysMap[day] = DailyMetric(km: km, engineHours: en, averageSpeed: cachedItem.averageSpeed);
           }
         }
         if (!dayHasDataInCache || day == todayStr) {
@@ -247,11 +211,7 @@ class _SummaryReportScreenState extends State<SummaryReportScreen> {
         final reqTo = '${missingDays.last}T23:59:59Z';
 
         final apiClient = traccarProvider.apiClient;
-        final queryParams = <api.QueryParam>[
-          api.QueryParam('from', reqFrom),
-          api.QueryParam('to', reqTo),
-          api.QueryParam('daily', true.toString())
-        ];
+        final queryParams = <api.QueryParam>[api.QueryParam('from', reqFrom), api.QueryParam('to', reqTo), api.QueryParam('daily', true.toString())];
 
         for (var dev in targetDevices) {
           queryParams.add(api.QueryParam('deviceId', dev.id.toString()));
@@ -269,24 +229,12 @@ class _SummaryReportScreenState extends State<SummaryReportScreen> {
             }
             var daysMap = matrix[item.deviceId]!['days'] as Map<String, DailyMetric>;
 
-            daysMap[item.dateStr] = DailyMetric(
-              km: item.distanceKm,
-              engineHours: item.engineHours,
-              averageSpeed: item.averageSpeed,
-              startOdometer: item.startOdometer,
-              endOdometer: item.endOdometer,
-            );
+            daysMap[item.dateStr] = DailyMetric(km: item.distanceKm, engineHours: item.engineHours, averageSpeed: item.averageSpeed, startOdometer: item.startOdometer, endOdometer: item.endOdometer);
 
             final cacheKey = '${item.deviceId}_${item.dateStr}';
             await box.put(
               cacheKey,
-              ReportSummaryHive(
-                distance: item.distanceKm * 1000.0,
-                deviceId: item.deviceId,
-                dateStr: item.dateStr,
-                engineHours: item.engineHours != null ? (item.engineHours! * 3600000.0).round() : null,
-                averageSpeed: item.averageSpeed,
-              ),
+              ReportSummaryHive(distance: item.distanceKm * 1000.0, deviceId: item.deviceId, dateStr: item.dateStr, engineHours: item.engineHours != null ? (item.engineHours! * 3600000.0).round() : null, averageSpeed: item.averageSpeed),
             );
           }
         }
@@ -320,20 +268,20 @@ class _SummaryReportScreenState extends State<SummaryReportScreen> {
     final List<String> lines = [];
 
     if (_selectedFields.contains(SummaryFieldOption.km)) {
-      lines.add('${metric.km.round()} km');
+      lines.add('${metric.km.round()} ${'sharedKm'.tr}');
     }
     if (_selectedFields.contains(SummaryFieldOption.engineHours)) {
       if (metric.engineHours != null && metric.engineHours! > 0) {
-        lines.add('${metric.engineHours!.toStringAsFixed(1)} h');
+        lines.add('${metric.engineHours!.toStringAsFixed(1)} ${'sharedHourAbbreviation'.tr}');
       } else {
-        lines.add('0 h');
+        lines.add('0 ${'sharedHourAbbreviation'.tr}');
       }
     }
     if (_selectedFields.contains(SummaryFieldOption.averageSpeed)) {
       if (metric.averageSpeed != null && metric.averageSpeed! > 0) {
-        lines.add('${metric.averageSpeed!.toStringAsFixed(1)} kn');
+        lines.add('${metric.averageSpeed!.toStringAsFixed(1)} ${'sharedKn'.tr}');
       } else {
-        lines.add('0 kn');
+        lines.add('0 ${'sharedKn'.tr}');
       }
     }
     if (_selectedFields.contains(SummaryFieldOption.odometer)) {
@@ -374,7 +322,7 @@ class _SummaryReportScreenState extends State<SummaryReportScreen> {
       await file.writeAsString(csvRows.join('\n'));
 
       final xFile = XFile(file.path);
-      await Share.shareXFiles([xFile], text: 'Monthly Summary Report CSV');
+      await Share.shareXFiles([xFile], text: '${'reportSummary'.tr} CSV');
     } catch (e) {
       debugPrint('Export/Share CSV failed: $e');
     }
@@ -408,7 +356,7 @@ class _SummaryReportScreenState extends State<SummaryReportScreen> {
           return pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
-              pw.Text('Monthly Summary Report - $_titleName', style: const pw.TextStyle(fontSize: 16)),
+              pw.Text('${'reportSummary'.tr} - $_titleName', style: const pw.TextStyle(fontSize: 16)),
               pw.SizedBox(height: 10),
               pw.Table.fromTextArray(
                 headers: headers,
@@ -426,7 +374,8 @@ class _SummaryReportScreenState extends State<SummaryReportScreen> {
     await Printing.layoutPdf(onLayout: (format) async => pdf.save());
   }
 
-  /// 彈出 Filter 設定對話框 (使用正確的 StatefulBuilder)
+  /// 彈出 Filter 設定對話框 (使用現有已有的翻譯 Key)
+  /// 彈出 Filter 設定對話框 (設定寬度避免多語言字串被擋住)
   void _showFilterDialog() {
     showDialog(
       context: context,
@@ -434,12 +383,17 @@ class _SummaryReportScreenState extends State<SummaryReportScreen> {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
-              title: const Text('顯示數據篩選', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              // 透過 constraints 設定對話框的最小寬度，讓多語言顯示更寬裕
+              constraints: const BoxConstraints(minWidth: 320, maxWidth: 400),
+              title: Text('reportConfigure'.tr, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   CheckboxListTile(
-                    title: const Text('公里數 (Km)', style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold)),
+                    title: Text(
+                      'distance'.tr,
+                      style: const TextStyle(color: Colors.blue, fontWeight: FontWeight.bold),
+                    ),
                     value: _selectedFields.contains(SummaryFieldOption.km),
                     onChanged: (bool? checked) {
                       setDialogState(() {
@@ -452,7 +406,10 @@ class _SummaryReportScreenState extends State<SummaryReportScreen> {
                     },
                   ),
                   CheckboxListTile(
-                    title: const Text('引擎工時 (EngH)', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+                    title: Text(
+                      'reportEngineHours'.tr,
+                      style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+                    ),
                     value: _selectedFields.contains(SummaryFieldOption.engineHours),
                     onChanged: (bool? checked) {
                       setDialogState(() {
@@ -465,7 +422,10 @@ class _SummaryReportScreenState extends State<SummaryReportScreen> {
                     },
                   ),
                   CheckboxListTile(
-                    title: const Text('平均車速 (Avg Spd)', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
+                    title: Text(
+                      'reportAverageSpeed'.tr,
+                      style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold),
+                    ),
                     value: _selectedFields.contains(SummaryFieldOption.averageSpeed),
                     onChanged: (bool? checked) {
                       setDialogState(() {
@@ -478,7 +438,10 @@ class _SummaryReportScreenState extends State<SummaryReportScreen> {
                     },
                   ),
                   CheckboxListTile(
-                    title: const Text('里程錶 (Odometer)', style: TextStyle(color: Colors.purple, fontWeight: FontWeight.bold)),
+                    title: Text(
+                      'odometer'.tr,
+                      style: const TextStyle(color: Colors.purple, fontWeight: FontWeight.bold),
+                    ),
                     value: _selectedFields.contains(SummaryFieldOption.odometer),
                     onChanged: (bool? checked) {
                       setDialogState(() {
@@ -499,7 +462,7 @@ class _SummaryReportScreenState extends State<SummaryReportScreen> {
                     setState(() {});
                     _saveUserFilterPreference(); // 記住使用者習慣 (Hive)
                   },
-                  child: const Text('確定'),
+                  child: Text('sharedAccept'.tr),
                 ),
               ],
             );
@@ -520,20 +483,14 @@ class _SummaryReportScreenState extends State<SummaryReportScreen> {
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            IconButton(
-              icon: const Icon(CupertinoIcons.slider_horizontal_3, size: 22),
-              onPressed: _showFilterDialog,
-            ),
+            IconButton(icon: const Icon(CupertinoIcons.slider_horizontal_3, size: 22), onPressed: _showFilterDialog),
             PopupMenuButton<String>(
               icon: const Icon(CupertinoIcons.share),
               onSelected: (value) {
                 if (value == 'csv') _exportCSV();
                 if (value == 'pdf') _exportPDF();
               },
-              itemBuilder: (BuildContext context) => [
-                PopupMenuItem(value: 'csv', child: Text('reportExport'.tr)),
-                PopupMenuItem(value: 'pdf', child: Text('reportPrint'.tr))
-              ],
+              itemBuilder: (BuildContext context) => [PopupMenuItem(value: 'csv', child: Text('reportExport'.tr)), PopupMenuItem(value: 'pdf', child: Text('reportPrint'.tr))],
             ),
           ],
         ),
@@ -541,213 +498,198 @@ class _SummaryReportScreenState extends State<SummaryReportScreen> {
       body: _isLoading
           ? Center(child: CircularProgressIndicator(color: theme.colorScheme.primary))
           : _matrixData.isEmpty
-              ? Center(child: Text('sharedNoData'.tr))
-              : SingleChildScrollView(
-                  scrollDirection: Axis.vertical,
-                  padding: const EdgeInsets.all(8.0),
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        border: Border.all(color: borderColor, width: 1.0),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: DataTable(
-                        horizontalMargin: 6,
-                        columnSpacing: 8,
-                        dataRowMinHeight: 44,
-                        dataRowMaxHeight: 60,
-                        headingRowHeight: 44,
-                        headingRowColor: WidgetStateProperty.all(theme.colorScheme.surfaceContainerHighest.withOpacity(0.5)),
-                        border: TableBorder(
-                          horizontalInside: BorderSide(color: borderColor, width: 0.5),
-                          verticalInside: BorderSide(color: borderColor, width: 0.5),
+          ? Center(child: Text('sharedNoData'.tr))
+          : SingleChildScrollView(
+              scrollDirection: Axis.vertical,
+              padding: const EdgeInsets.all(8.0),
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Container(
+                  decoration: BoxDecoration(
+                    border: Border.all(color: borderColor, width: 1.0),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: DataTable(
+                    horizontalMargin: 6,
+                    columnSpacing: 8,
+                    dataRowMinHeight: 44,
+                    dataRowMaxHeight: 60,
+                    headingRowHeight: 44,
+                    headingRowColor: WidgetStateProperty.all(theme.colorScheme.surfaceContainerHighest.withOpacity(0.5)),
+                    border: TableBorder(
+                      horizontalInside: BorderSide(color: borderColor, width: 0.5),
+                      verticalInside: BorderSide(color: borderColor, width: 0.5),
+                    ),
+                    columns: [
+                      const DataColumn(
+                        label: SizedBox(
+                          width: 24,
+                          child: Text(
+                            'No.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
+                          ),
                         ),
-                        columns: [
-                          const DataColumn(
-                            label: SizedBox(
-                              width: 24,
-                              child: Text(
-                                'No.',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
-                              ),
+                      ),
+                      DataColumn(
+                        label: SizedBox(
+                          width: 80,
+                          child: Text(
+                            'reportDevice'.tr,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 10),
+                          ),
+                        ),
+                      ),
+                      ..._daysList.map(
+                        (day) => DataColumn(
+                          label: SizedBox(
+                            width: 42,
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  day.substring(8),
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 10, color: Colors.blue),
+                                ),
+                              ],
                             ),
                           ),
-                          DataColumn(
-                            label: SizedBox(
+                        ),
+                      ),
+                    ],
+                    rows: _matrixData.entries.toList().asMap().entries.map((entry) {
+                      int index = entry.key + 1;
+                      var mapEntry = entry.value;
+                      int deviceId = mapEntry.key;
+                      String deviceName = mapEntry.value['deviceName'];
+                      Map<String, DailyMetric> daysMap = mapEntry.value['days'];
+
+                      return DataRow(
+                        cells: [
+                          DataCell(
+                            SizedBox(
+                              width: 24,
+                              child: Text(index.toString(), textAlign: TextAlign.center, style: const TextStyle(fontSize: 10)),
+                            ),
+                          ),
+                          DataCell(
+                            SizedBox(
                               width: 80,
                               child: Text(
-                                'reportDevice'.tr,
+                                deviceName,
                                 textAlign: TextAlign.center,
-                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 10),
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 10),
                               ),
                             ),
                           ),
-                          ..._daysList.map(
-                            (day) => DataColumn(
-                              label: SizedBox(
+                          ..._daysList.map((day) {
+                            final metric = daysMap[day];
+                            double km = metric?.km ?? 0.0;
+                            double? engineHours = metric?.engineHours;
+                            double? avgSpeed = metric?.averageSpeed;
+                            double? startOdo = metric?.startOdometer;
+                            double? endOdo = metric?.endOdometer;
+
+                            int roundedKm = km.round();
+                            bool hasEngineHours = engineHours != null && engineHours > 0;
+                            bool hasAvgSpeed = avgSpeed != null && avgSpeed > 0;
+                            bool hasOdo = startOdo != null && endOdo != null;
+
+                            return DataCell(
+                              SizedBox(
                                 width: 42,
                                 child: Column(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    Text(
-                                      day.substring(8),
-                                      textAlign: TextAlign.center,
-                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 10, color: Colors.blue),
-                                    ),
+                                    // 1. 公里數 (Km)
+                                    if (_selectedFields.contains(SummaryFieldOption.km))
+                                      roundedKm > 0
+                                          ? InkWell(
+                                              onTap: () async {
+                                                final prefs = await SharedPreferences.getInstance();
+                                                await prefs.setInt('selectedDeviceId', deviceId);
+                                                await prefs.setString('selectedDeviceName', deviceName);
+
+                                                final startTime = DateTime.parse('${day}T00:00:00Z').toIso8601String();
+                                                final endTime = DateTime.parse('${day}T23:59:59Z').toIso8601String();
+
+                                                await prefs.setString('historyFrom', startTime);
+                                                await prefs.setString('historyTo', endTime);
+
+                                                await Get.to(() => const TripsReportScreen());
+
+                                                if (mounted) {
+                                                  SystemChrome.setPreferredOrientations([DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight]);
+                                                }
+                                              },
+                                              child: Text(
+                                                '$roundedKm ${'sharedKm'.tr}',
+                                                textAlign: TextAlign.center,
+                                                style: const TextStyle(fontSize: 8.5, color: Colors.blue, decoration: TextDecoration.underline),
+                                              ),
+                                            )
+                                          : Text(
+                                              '-',
+                                              textAlign: TextAlign.center,
+                                              style: TextStyle(fontSize: 8.5, color: Colors.blue.withOpacity(0.5)),
+                                            ),
+
+                                    // 2. 引擎工時 (EngH)
+                                    if (_selectedFields.contains(SummaryFieldOption.engineHours))
+                                      hasEngineHours
+                                          ? Text(
+                                              '${engineHours.toStringAsFixed(1)}${'sharedHourAbbreviation'.tr}',
+                                              textAlign: TextAlign.center,
+                                              style: const TextStyle(fontSize: 8.5, color: Colors.red, fontWeight: FontWeight.bold),
+                                            )
+                                          : Text(
+                                              '-',
+                                              textAlign: TextAlign.center,
+                                              style: TextStyle(fontSize: 8.5, color: Colors.red.withOpacity(0.3)),
+                                            ),
+
+                                    // 3. 平均車速 (Avg Spd)
+                                    if (_selectedFields.contains(SummaryFieldOption.averageSpeed))
+                                      hasAvgSpeed
+                                          ? Text(
+                                              '${avgSpeed.toStringAsFixed(1)}${'sharedKn'.tr}',
+                                              textAlign: TextAlign.center,
+                                              style: const TextStyle(fontSize: 8.5, color: Colors.green),
+                                            )
+                                          : Text(
+                                              '-',
+                                              textAlign: TextAlign.center,
+                                              style: TextStyle(fontSize: 8.5, color: Colors.green.withOpacity(0.3)),
+                                            ),
+
+                                    // 4. 里程錶 (Odometer)
+                                    if (_selectedFields.contains(SummaryFieldOption.odometer))
+                                      hasOdo
+                                          ? Text(
+                                              '${(startOdo / 1000).round()}-${(endOdo / 1000).round()}k',
+                                              textAlign: TextAlign.center,
+                                              style: const TextStyle(fontSize: 7.5, color: Colors.purple),
+                                            )
+                                          : Text(
+                                              '-',
+                                              textAlign: TextAlign.center,
+                                              style: TextStyle(fontSize: 7.5, color: Colors.purple.withOpacity(0.3)),
+                                            ),
                                   ],
                                 ),
                               ),
-                            ),
-                          ),
+                            );
+                          }),
                         ],
-                        rows: _matrixData.entries.toList().asMap().entries.map((entry) {
-                          int index = entry.key + 1;
-                          var mapEntry = entry.value;
-                          int deviceId = mapEntry.key;
-                          String deviceName = mapEntry.value['deviceName'];
-                          Map<String, DailyMetric> daysMap = mapEntry.value['days'];
-
-                          return DataRow(
-                            cells: [
-                              DataCell(
-                                SizedBox(
-                                  width: 24,
-                                  child: Text(index.toString(), textAlign: TextAlign.center, style: const TextStyle(fontSize: 10)),
-                                ),
-                              ),
-                              DataCell(
-                                SizedBox(
-                                  width: 80,
-                                  child: Text(
-                                    deviceName,
-                                    textAlign: TextAlign.center,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 10),
-                                  ),
-                                ),
-                              ),
-                              ..._daysList.map((day) {
-                                final metric = daysMap[day];
-                                double km = metric?.km ?? 0.0;
-                                double? engineHours = metric?.engineHours;
-                                double? avgSpeed = metric?.averageSpeed;
-                                double? startOdo = metric?.startOdometer;
-                                double? endOdo = metric?.endOdometer;
-
-                                int roundedKm = km.round();
-                                bool hasEngineHours = engineHours != null && engineHours > 0;
-                                bool hasAvgSpeed = avgSpeed != null && avgSpeed > 0;
-                                bool hasOdo = startOdo != null && endOdo != null;
-
-                                return DataCell(
-                                  SizedBox(
-                                    width: 42,
-                                    child: Column(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: [
-                                        // 1. 公里數 (Km)
-                                        if (_selectedFields.contains(SummaryFieldOption.km))
-                                          roundedKm > 0
-                                              ? InkWell(
-                                                  onTap: () async {
-                                                    final prefs = await SharedPreferences.getInstance();
-                                                    await prefs.setInt('selectedDeviceId', deviceId);
-                                                    await prefs.setString('selectedDeviceName', deviceName);
-
-                                                    final startTime = DateTime.parse('${day}T00:00:00Z').toIso8601String();
-                                                    final endTime = DateTime.parse('${day}T23:59:59Z').toIso8601String();
-
-                                                    await prefs.setString('historyFrom', startTime);
-                                                    await prefs.setString('historyTo', endTime);
-
-                                                    await Get.to(() => const TripsReportScreen());
-
-                                                    if (mounted) {
-                                                      SystemChrome.setPreferredOrientations(
-                                                          [DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight]);
-                                                    }
-                                                  },
-                                                  child: Text(
-                                                    '$roundedKm km',
-                                                    textAlign: TextAlign.center,
-                                                    style: const TextStyle(
-                                                      fontSize: 8.5,
-                                                      color: Colors.blue,
-                                                      decoration: TextDecoration.underline,
-                                                    ),
-                                                  ),
-                                                )
-                                              : Text(
-                                                  '-',
-                                                  textAlign: TextAlign.center,
-                                                  style: TextStyle(fontSize: 8.5, color: Colors.blue.withOpacity(0.5)),
-                                                ),
-
-                                        // 2. 引擎工時 (EngH)
-                                        if (_selectedFields.contains(SummaryFieldOption.engineHours))
-                                          hasEngineHours
-                                              ? Text(
-                                                  '${engineHours.toStringAsFixed(1)}h',
-                                                  textAlign: TextAlign.center,
-                                                  style: const TextStyle(
-                                                    fontSize: 8.5,
-                                                    color: Colors.red,
-                                                    fontWeight: FontWeight.bold,
-                                                  ),
-                                                )
-                                              : Text(
-                                                  '-',
-                                                  textAlign: TextAlign.center,
-                                                  style: TextStyle(fontSize: 8.5, color: Colors.red.withOpacity(0.3)),
-                                                ),
-
-                                        // 3. 平均車速 (Avg Spd)
-                                        if (_selectedFields.contains(SummaryFieldOption.averageSpeed))
-                                          hasAvgSpeed
-                                              ? Text(
-                                                  '${avgSpeed.toStringAsFixed(1)}kn',
-                                                  textAlign: TextAlign.center,
-                                                  style: const TextStyle(
-                                                    fontSize: 8.5,
-                                                    color: Colors.green,
-                                                  ),
-                                                )
-                                              : Text(
-                                                  '-',
-                                                  textAlign: TextAlign.center,
-                                                  style: TextStyle(fontSize: 8.5, color: Colors.green.withOpacity(0.3)),
-                                                ),
-
-                                        // 4. 里程錶 (Odometer)
-                                        if (_selectedFields.contains(SummaryFieldOption.odometer))
-                                          hasOdo
-                                              ? Text(
-                                                  '${(startOdo / 1000).round()}-${(endOdo / 1000).round()}k',
-                                                  textAlign: TextAlign.center,
-                                                  style: const TextStyle(
-                                                    fontSize: 7.5,
-                                                    color: Colors.purple,
-                                                  ),
-                                                )
-                                              : Text(
-                                                  '-',
-                                                  textAlign: TextAlign.center,
-                                                  style: TextStyle(fontSize: 7.5, color: Colors.purple.withOpacity(0.3)),
-                                                ),
-                                      ],
-                                    ),
-                                  ),
-                                );
-                              }),
-                            ],
-                          );
-                        }).toList(),
-                      ),
-                    ),
+                      );
+                    }).toList(),
                   ),
                 ),
+              ),
+            ),
     );
   }
 }
