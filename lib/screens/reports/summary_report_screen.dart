@@ -26,16 +26,42 @@ class DailySummaryItem {
   final String deviceName;
   final String dateStr; // 格式: yyyy-MM-dd
   final double distanceKm;
+  final double? engineHours; // 改為可空，若無數據為 null
 
-  DailySummaryItem({required this.deviceId, required this.deviceName, required this.dateStr, required this.distanceKm});
+  DailySummaryItem({
+    required this.deviceId,
+    required this.deviceName,
+    required this.dateStr,
+    required this.distanceKm,
+    this.engineHours,
+  });
 
   factory DailySummaryItem.fromJson(Map<String, dynamic> json) {
     final startTimeStr = json['startTime'] as String? ?? DateTime.now().toIso8601String();
     final dateOnly = startTimeStr.substring(0, 10);
     final distanceMeters = (json['distance'] as num?)?.toDouble() ?? 0.0;
+    
+    // 檢查是否有 engineHours 數據
+    double? hours;
+    if (json.containsKey('engineHours') && json['engineHours'] != null) {
+      final engineMs = (json['engineHours'] as num).toDouble();
+      hours = engineMs / 3600000.0;
+    }
 
-    return DailySummaryItem(deviceId: json['deviceId'] as int, deviceName: json['deviceName'] as String? ?? '', dateStr: dateOnly, distanceKm: distanceMeters / 1000.0);
+    return DailySummaryItem(
+      deviceId: json['deviceId'] as int,
+      deviceName: json['deviceName'] as String? ?? '',
+      dateStr: dateOnly,
+      distanceKm: distanceMeters / 1000.0,
+      engineHours: hours,
+    );
   }
+}
+
+class DailyMetric {
+  double km;
+  double? engineHours; // 若設備協議不支援，則為 null
+  DailyMetric({required this.km, this.engineHours});
 }
 
 class SummaryReportScreen extends StatefulWidget {
@@ -118,12 +144,12 @@ class _SummaryReportScreenState extends State<SummaryReportScreen> {
           if (cachedItem != null && cachedItem.distance != null) {
             dayHasDataInCache = true;
             if (!matrix.containsKey(dev.id)) {
-              matrix[dev.id!] = {'deviceName': dev.name ?? '', 'days': <String, double>{}};
+              matrix[dev.id!] = {'deviceName': dev.name ?? '', 'days': <String, DailyMetric>{}};
             }
-            var daysMap = matrix[dev.id!]!['days'] as Map<String, double>;
+            var daysMap = matrix[dev.id!]!['days'] as Map<String, DailyMetric>;
 
             double km = (cachedItem.distance! / 1000.0);
-            daysMap[day] = km;
+            daysMap[day] = DailyMetric(km: km, engineHours: null);
           }
         }
         if (!dayHasDataInCache || day == todayStr) {
@@ -153,11 +179,11 @@ class _SummaryReportScreenState extends State<SummaryReportScreen> {
 
           for (var item in fetchedItems) {
             if (!matrix.containsKey(item.deviceId)) {
-              matrix[item.deviceId] = {'deviceName': item.deviceName, 'days': <String, double>{}};
+              matrix[item.deviceId] = {'deviceName': item.deviceName, 'days': <String, DailyMetric>{}};
             }
-            var daysMap = matrix[item.deviceId]!['days'] as Map<String, double>;
+            var daysMap = matrix[item.deviceId]!['days'] as Map<String, DailyMetric>;
 
-            daysMap[item.dateStr] = item.distanceKm;
+            daysMap[item.dateStr] = DailyMetric(km: item.distanceKm, engineHours: item.engineHours);
 
             final cacheKey = '${item.deviceId}_${item.dateStr}';
             await box.put(cacheKey, ReportSummaryHive(distance: item.distanceKm * 1000.0, deviceId: item.deviceId, dateStr: item.dateStr));
@@ -167,7 +193,7 @@ class _SummaryReportScreenState extends State<SummaryReportScreen> {
 
       for (var dev in targetDevices) {
         if (!matrix.containsKey(dev.id)) {
-          matrix[dev.id!] = {'deviceName': dev.name ?? '', 'days': <String, double>{}};
+          matrix[dev.id!] = {'deviceName': dev.name ?? '', 'days': <String, DailyMetric>{}};
         }
       }
 
@@ -191,19 +217,23 @@ class _SummaryReportScreenState extends State<SummaryReportScreen> {
     if (_matrixData.isEmpty) return;
 
     List<String> csvRows = [];
-    List<String> header = ['No.', 'Vehicle Number (km)', ..._daysList.map((d) => d.substring(8))];
+    List<String> header = ['No.', 'Vehicle Number (km / EngH)', ..._daysList.map((d) => d.substring(8))];
     csvRows.add(header.join(','));
 
     int index = 1;
     _matrixData.forEach((deviceId, data) {
       String vehicleName = data['deviceName'] ?? '';
-      Map<String, double> daysMap = data['days'];
+      Map<String, DailyMetric> daysMap = data['days'];
 
       List<String> row = [index.toString(), '"$vehicleName"'];
       for (var day in _daysList) {
-        double km = daysMap[day] ?? 0.0;
-        // 匯出時同樣四捨五入無小數
-        row.add(km.round().toString());
+        DailyMetric? metric = daysMap[day];
+        double km = metric?.km ?? 0.0;
+        double? en = metric?.engineHours;
+        String val = en != null && en > 0 
+            ? '"${km.round()}km / ${en.toStringAsFixed(1)}h"'
+            : '"${km.round()}km"';
+        row.add(val);
       }
       csvRows.add(row.join(','));
       index++;
@@ -228,16 +258,24 @@ class _SummaryReportScreenState extends State<SummaryReportScreen> {
       pw.Page(
         pageFormat: const PdfPageFormat(841.89, 595.27),
         build: (pw.Context context) {
-          List<String> headers = ['No.', 'Vehicle (km)', ..._daysList.map((d) => d.substring(8))];
+          List<String> headers = ['No.', 'Vehicle', ..._daysList.map((d) => d.substring(8))];
 
           int index = 1;
           List<List<String>> data = [];
           _matrixData.forEach((deviceId, info) {
             String name = info['deviceName'];
-            Map<String, double> daysMap = info['days'];
+            Map<String, DailyMetric> daysMap = info['days'];
             List<String> row = [index.toString(), name];
             for (var day in _daysList) {
-              row.add((daysMap[day] ?? 0.0).round().toString());
+              DailyMetric? metric = daysMap[day];
+              int km = (metric?.km ?? 0.0).round();
+              double? en = metric?.engineHours;
+              
+              if (en != null && en > 0) {
+                row.add('$km km\n${en.toStringAsFixed(1)} h');
+              } else {
+                row.add('$km km');
+              }
             }
             data.add(row);
             index++;
@@ -246,7 +284,7 @@ class _SummaryReportScreenState extends State<SummaryReportScreen> {
           return pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
-              pw.Text('Monthly Summary Report - $_titleName (km)', style: const pw.TextStyle(fontSize: 16)),
+              pw.Text('Monthly Summary Report - $_titleName (km & Engine Hours)', style: const pw.TextStyle(fontSize: 16)),
               pw.SizedBox(height: 10),
               pw.Table.fromTextArray(
                 headers: headers,
@@ -271,7 +309,7 @@ class _SummaryReportScreenState extends State<SummaryReportScreen> {
 
     return Scaffold(
       appBar: CupertinoNavigationBar(
-        middle: Text('${'reportSummary'.tr}: $_titleName (${'sharedKm'.tr})'),
+        middle: Text('${'reportSummary'.tr}: $_titleName (${'sharedKm'.tr} / EngH)'),
         trailing: PopupMenuButton<String>(
           icon: const Icon(CupertinoIcons.share),
           onSelected: (value) {
@@ -298,9 +336,9 @@ class _SummaryReportScreenState extends State<SummaryReportScreen> {
                   child: DataTable(
                     horizontalMargin: 6,
                     columnSpacing: 8,
-                    dataRowMinHeight: 30,
-                    dataRowMaxHeight: 34,
-                    headingRowHeight: 34,
+                    dataRowMinHeight: 38,
+                    dataRowMaxHeight: 42,
+                    headingRowHeight: 40,
                     headingRowColor: WidgetStateProperty.all(theme.colorScheme.surfaceContainerHighest.withOpacity(0.5)),
                     border: TableBorder(
                       horizontalInside: BorderSide(color: borderColor, width: 0.5),
@@ -309,7 +347,7 @@ class _SummaryReportScreenState extends State<SummaryReportScreen> {
                     columns: [
                       const DataColumn(
                         label: SizedBox(
-                          width: 22,
+                          width: 24,
                           child: Text(
                             'No.',
                             textAlign: TextAlign.center,
@@ -321,20 +359,30 @@ class _SummaryReportScreenState extends State<SummaryReportScreen> {
                         label: SizedBox(
                           width: 80,
                           child: Text(
-                            '${'reportDevice'.tr} (${'sharedKm'.tr})',
+                            '${'reportDevice'.tr}\n(${'sharedKm'.tr} / EngH)',
                             textAlign: TextAlign.center,
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 10),
                           ),
                         ),
                       ),
                       ..._daysList.map(
                         (day) => DataColumn(
                           label: SizedBox(
-                            width: 24,
-                            child: Text(
-                              day.substring(8),
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
+                            width: 32,
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  day.substring(8), // 上面藍色日期標題
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 9, color: Colors.blue),
+                                ),
+                                const Text(
+                                  'EngH', // 下面紅色 Engine Hour 標題
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 9, color: Colors.red),
+                                ),
+                              ],
                             ),
                           ),
                         ),
@@ -345,13 +393,13 @@ class _SummaryReportScreenState extends State<SummaryReportScreen> {
                       var mapEntry = entry.value;
                       int deviceId = mapEntry.key;
                       String deviceName = mapEntry.value['deviceName'];
-                      Map<String, double> daysMap = mapEntry.value['days'];
+                      Map<String, DailyMetric> daysMap = mapEntry.value['days'];
 
                       return DataRow(
                         cells: [
                           DataCell(
                             SizedBox(
-                              width: 22,
+                              width: 24,
                               child: Text(index.toString(), textAlign: TextAlign.center, style: const TextStyle(fontSize: 10)),
                             ),
                           ),
@@ -367,47 +415,70 @@ class _SummaryReportScreenState extends State<SummaryReportScreen> {
                             ),
                           ),
                           ..._daysList.map((day) {
-                            double km = daysMap[day] ?? 0.0;
-                            int roundedKm = km.round(); // 四捨五入取整數
+                            final metric = daysMap[day];
+                            double km = metric?.km ?? 0.0;
+                            double? engineHours = metric?.engineHours;
+                            
+                            int roundedKm = km.round();
+                            bool hasEngineHours = engineHours != null && engineHours > 0;
 
                             return DataCell(
                               SizedBox(
-                                width: 24,
-                                child: roundedKm > 0
-                                    ? InkWell(
-                                        onTap: () async {
-                                          final prefs = await SharedPreferences.getInstance();
-                                          await prefs.setInt('selectedDeviceId', deviceId);
-                                          await prefs.setString('selectedDeviceName', deviceName);
+                                width: 32,
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    // 上面：Km (藍色字)
+                                    roundedKm > 0
+                                        ? InkWell(
+                                            onTap: () async {
+                                              final prefs = await SharedPreferences.getInstance();
+                                              await prefs.setInt('selectedDeviceId', deviceId);
+                                              await prefs.setString('selectedDeviceName', deviceName);
 
-                                          // 使用標準 UTC ISO8601 時間字串
-                                          final startTime = DateTime.parse('${day}T00:00:00Z').toIso8601String();
-                                          final endTime = DateTime.parse('${day}T23:59:59Z').toIso8601String();
+                                              final startTime = DateTime.parse('${day}T00:00:00Z').toIso8601String();
+                                              final endTime = DateTime.parse('${day}T23:59:59Z').toIso8601String();
 
-                                          await prefs.setString('historyFrom', startTime);
-                                          await prefs.setString('historyTo', endTime);
+                                              await prefs.setString('historyFrom', startTime);
+                                              await prefs.setString('historyTo', endTime);
 
-                                          // 1. 跳轉至 TripsReportScreen 並等待其關閉返回
-                                          await Get.to(() => const TripsReportScreen());
+                                              await Get.to(() => const TripsReportScreen());
 
-                                          // 2. 當從 TripsReportScreen 返回 SummaryReportScreen 的瞬間，立刻重新強制設回橫屏！
-                                          if (mounted) {
-                                            SystemChrome.setPreferredOrientations([DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight]);
-                                          }
-                                        },
-                                        child: Center(
-                                          child: Text(
-                                            '$roundedKm', // 顯示不帶小數點的整數公里數
+                                              if (mounted) {
+                                                SystemChrome.setPreferredOrientations([DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight]);
+                                              }
+                                            },
+                                            child: Text(
+                                              '$roundedKm',
+                                              textAlign: TextAlign.center,
+                                              style: const TextStyle(
+                                                fontSize: 9,
+                                                color: Colors.blue,
+                                                decoration: TextDecoration.underline,
+                                              ),
+                                            ),
+                                          )
+                                        : Text(
+                                            '-',
                                             textAlign: TextAlign.center,
-                                            style: TextStyle(fontSize: 10, color: theme.colorScheme.primary, decoration: TextDecoration.underline),
+                                            style: TextStyle(fontSize: 9, color: Colors.blue.withOpacity(0.5)),
                                           ),
-                                        ),
-                                      )
-                                    : Text(
-                                        '-',
+                                    
+                                    // 下面：Engine Hour (僅在有數據時顯示紅色數字，沒有數據時不顯示)
+                                    if (hasEngineHours) ...[
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        engineHours.toStringAsFixed(1),
                                         textAlign: TextAlign.center,
-                                        style: TextStyle(fontSize: 10, color: theme.disabledColor),
+                                        style: const TextStyle(
+                                          fontSize: 9,
+                                          color: Colors.red,
+                                          fontWeight: FontWeight.bold,
+                                        ),
                                       ),
+                                    ],
+                                  ],
+                                ),
                               ),
                             );
                           }),
