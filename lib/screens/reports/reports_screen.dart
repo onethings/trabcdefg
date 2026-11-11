@@ -52,8 +52,20 @@ class _ReportsScreenState extends State<ReportsScreen> {
         _fromDate = DateTime(now.year, now.month, 1, 0, 0, 0);
         _toDate = DateTime(now.year, now.month + 1, 0, 23, 59, 59);
       } else if (preset == DateRangePreset.lastMonth) {
-        _fromDate = DateTime(now.year, now.month - 1, 1, 0, 0, 0);
+        // 直接以當前日期手動往回推算上個月，絕對不會抓錯
+        int year = now.year;
+        int month = now.month - 1;
+        if (month == 0) {
+          month = 12;
+          year -= 1;
+        }
+        // 上個月 1 號
+        _fromDate = DateTime(year, month, 1, 0, 0, 0);
+
+        // 上個月最後一天 (利用當前年份、當前月份的 0 號)
         _toDate = DateTime(now.year, now.month, 0, 23, 59, 59);
+
+        print('【強制修正】上個月區間 -> From: $_fromDate, To: $_toDate');
       }
     });
   }

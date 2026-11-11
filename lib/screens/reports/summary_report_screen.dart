@@ -140,7 +140,17 @@ class _SummaryReportScreenState extends State<SummaryReportScreen> {
     final List<String> days = [];
     DateTime curr = DateTime(from.year, from.month, from.day);
     final end = DateTime(to.year, to.month, to.day);
+    
+    // 鎖定只能是 from 的那個月份
+    final targetMonth = from.month;
+    final targetYear = from.year;
+
     while (!curr.isAfter(end)) {
+      // 🛡️ 絕對防護網：只要日期的年月超過了目標年月，立刻停止迴圈！
+      if (curr.year > targetYear || (curr.year == targetYear && curr.month > targetMonth)) {
+        break;
+      }
+
       days.add(DateFormat('yyyy-MM-dd').format(curr));
       curr = curr.add(const Duration(days: 1));
     }
@@ -165,11 +175,15 @@ class _SummaryReportScreenState extends State<SummaryReportScreen> {
     }
 
     try {
-      final DateTime fromDt = DateTime.parse(fromDateString).toLocal();
-      final DateTime toDt = DateTime.parse(toDateString).toLocal();
+      final DateTime parsedFrom = DateTime.parse(fromDateString).toLocal();
+      final DateTime parsedTo = DateTime.parse(toDateString).toLocal();
+
+      // 強制將時分秒歸零，確保只比較年月日，避免時區進位多算一天
+      final DateTime fromDt = DateTime(parsedFrom.year, parsedFrom.month, parsedFrom.day);
+      final DateTime toDt = DateTime(parsedTo.year, parsedTo.month, parsedTo.day);
 
       final targetDays = _generateDateList(fromDt, toDt);
-
+      print('Target Days List: $targetDays');
       final box = Hive.isBoxOpen('summary_reports') ? Hive.box<ReportSummaryHive>('summary_reports') : await Hive.openBox<ReportSummaryHive>('summary_reports');
 
       final List<api.Device> targetDevices = selectAll ? traccarProvider.devices.where((d) => d.id != null).toList() : traccarProvider.devices.where((d) => d.id == deviceId).toList();
@@ -293,12 +307,48 @@ class _SummaryReportScreenState extends State<SummaryReportScreen> {
     return lines.isEmpty ? ['-'] : lines;
   }
 
+  /// 格式化 Total 統計資料欄位
+  List<String> _formatTotalLines(Map<String, DailyMetric> daysMap) {
+    double totalKm = 0.0;
+    double totalEngineHours = 0.0;
+    double totalSpeedSum = 0.0;
+    int speedCount = 0;
+
+    daysMap.values.forEach((metric) {
+      totalKm += metric.km;
+      if (metric.engineHours != null) {
+        totalEngineHours += metric.engineHours!;
+      }
+      if (metric.averageSpeed != null && metric.averageSpeed! > 0) {
+        totalSpeedSum += metric.averageSpeed!;
+        speedCount++;
+      }
+    });
+
+    final List<String> lines = [];
+    if (_selectedFields.contains(SummaryFieldOption.km)) {
+      lines.add('${totalKm.round()} ${'sharedKm'.tr}');
+    }
+    if (_selectedFields.contains(SummaryFieldOption.engineHours)) {
+      lines.add('${totalEngineHours.toStringAsFixed(1)} ${'sharedHourAbbreviation'.tr}');
+    }
+    if (_selectedFields.contains(SummaryFieldOption.averageSpeed)) {
+      double avgSpd = speedCount > 0 ? (totalSpeedSum / speedCount) : 0.0;
+      lines.add('${avgSpd.toStringAsFixed(1)} ${'sharedKn'.tr}');
+    }
+    if (_selectedFields.contains(SummaryFieldOption.odometer)) {
+      lines.add('-');
+    }
+
+    return lines.isEmpty ? ['-'] : lines;
+  }
+
   /// 匯出 CSV (所見即所得)
   Future<void> _exportCSV() async {
     if (_matrixData.isEmpty) return;
 
     List<String> csvRows = [];
-    List<String> header = ['No.', 'Vehicle Number', ..._daysList.map((d) => d.substring(8))];
+    List<String> header = ['No.', 'Vehicle Number', ..._daysList.map((d) => d.substring(8)), 'Total'];
     csvRows.add(header.join(','));
 
     int index = 1;
@@ -312,6 +362,11 @@ class _SummaryReportScreenState extends State<SummaryReportScreen> {
         List<String> lines = _formatMetricLines(metric);
         row.add('"${lines.join(' / ')}"');
       }
+
+      // 加上 Total 欄位
+      List<String> totalLines = _formatTotalLines(daysMap);
+      row.add('"${totalLines.join(' / ')}"');
+
       csvRows.add(row.join(','));
       index++;
     });
@@ -336,7 +391,7 @@ class _SummaryReportScreenState extends State<SummaryReportScreen> {
       pw.Page(
         pageFormat: const PdfPageFormat(841.89, 595.27),
         build: (pw.Context context) {
-          List<String> headers = ['No.', 'Vehicle', ..._daysList.map((d) => d.substring(8))];
+          List<String> headers = ['No.', 'Vehicle', ..._daysList.map((d) => d.substring(8)), 'Total'];
 
           int index = 1;
           List<List<String>> data = [];
@@ -349,6 +404,11 @@ class _SummaryReportScreenState extends State<SummaryReportScreen> {
               List<String> lines = _formatMetricLines(metric);
               row.add(lines.join('\n'));
             }
+
+            // 加上 Total 欄位
+            List<String> totalLines = _formatTotalLines(daysMap);
+            row.add(totalLines.join('\n'));
+
             data.add(row);
             index++;
           });
@@ -374,7 +434,7 @@ class _SummaryReportScreenState extends State<SummaryReportScreen> {
     await Printing.layoutPdf(onLayout: (format) async => pdf.save());
   }
 
-  /// 彈出 Filter 設定對話框 (優化版面，將 Accept 與 Cancel 按鈕移至底部 actions，避免擋到選項)
+  /// 彈出 Filter 設定對話框
   void _showFilterDialog() {
     showDialog(
       context: context,
@@ -390,7 +450,6 @@ class _SummaryReportScreenState extends State<SummaryReportScreen> {
                   Text('reportConfigure'.tr, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                 ],
               ),
-              // 使用 SingleChildScrollView 避免在小螢幕或橫屏時內容過長被擠壓
               content: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -463,7 +522,6 @@ class _SummaryReportScreenState extends State<SummaryReportScreen> {
                   ],
                 ),
               ),
-              // 將確認與取消按鈕正確放置於底部 actions 區塊，完全脫離中間選項
               actions: [
                 TextButton(
                   onPressed: () {
@@ -475,7 +533,7 @@ class _SummaryReportScreenState extends State<SummaryReportScreen> {
                   onPressed: () {
                     Navigator.of(context).pop();
                     setState(() {});
-                    _saveUserFilterPreference(); // 儲存使用者習慣至 Hive
+                    _saveUserFilterPreference();
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Theme.of(context).colorScheme.primary,
@@ -578,6 +636,17 @@ class _SummaryReportScreenState extends State<SummaryReportScreen> {
                           ),
                         ),
                       ),
+                      // 新增 Total 欄位標題
+                      const DataColumn(
+                        label: SizedBox(
+                          width: 48,
+                          child: Text(
+                            'Total',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 10, color: Colors.deepOrange),
+                          ),
+                        ),
+                      ),
                     ],
                     rows: _matrixData.entries.toList().asMap().entries.map((entry) {
                       int index = entry.key + 1;
@@ -585,6 +654,27 @@ class _SummaryReportScreenState extends State<SummaryReportScreen> {
                       int deviceId = mapEntry.key;
                       String deviceName = mapEntry.value['deviceName'];
                       Map<String, DailyMetric> daysMap = mapEntry.value['days'];
+
+                      // 計算全期間累計總額
+                      double totalKm = 0.0;
+                      double totalEngineHours = 0.0;
+                      double totalSpeedSum = 0.0;
+                      int speedCount = 0;
+
+                      daysMap.values.forEach((metric) {
+                        totalKm += metric.km;
+                        if (metric.engineHours != null) {
+                          totalEngineHours += metric.engineHours!;
+                        }
+                        if (metric.averageSpeed != null && metric.averageSpeed! > 0) {
+                          totalSpeedSum += metric.averageSpeed!;
+                          speedCount++;
+                        }
+                      });
+
+                      int totalRoundedKm = totalKm.round();
+                      bool hasTotalEngineHours = totalEngineHours > 0;
+                      double avgSpeed = speedCount > 0 ? (totalSpeedSum / speedCount) : 0.0;
 
                       return DataRow(
                         cells: [
@@ -703,6 +793,53 @@ class _SummaryReportScreenState extends State<SummaryReportScreen> {
                               ),
                             );
                           }),
+                          // 總結 (Total) 數據 Cell
+                          DataCell(
+                            SizedBox(
+                              width: 48,
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  if (_selectedFields.contains(SummaryFieldOption.km))
+                                    Text(
+                                      '$totalRoundedKm ${'sharedKm'.tr}',
+                                      textAlign: TextAlign.center,
+                                      style: const TextStyle(fontSize: 8.5, color: Colors.blue, fontWeight: FontWeight.bold),
+                                    ),
+                                  if (_selectedFields.contains(SummaryFieldOption.engineHours))
+                                    hasTotalEngineHours
+                                        ? Text(
+                                            '${totalEngineHours.toStringAsFixed(1)}${'sharedHourAbbreviation'.tr}',
+                                            textAlign: TextAlign.center,
+                                            style: const TextStyle(fontSize: 8.5, color: Colors.red, fontWeight: FontWeight.bold),
+                                          )
+                                        : Text(
+                                            '-',
+                                            textAlign: TextAlign.center,
+                                            style: TextStyle(fontSize: 8.5, color: Colors.red.withOpacity(0.3)),
+                                          ),
+                                  if (_selectedFields.contains(SummaryFieldOption.averageSpeed))
+                                    speedCount > 0
+                                        ? Text(
+                                            '${avgSpeed.toStringAsFixed(1)}${'sharedKn'.tr}',
+                                            textAlign: TextAlign.center,
+                                            style: const TextStyle(fontSize: 8.5, color: Colors.green, fontWeight: FontWeight.bold),
+                                          )
+                                        : Text(
+                                            '-',
+                                            textAlign: TextAlign.center,
+                                            style: TextStyle(fontSize: 8.5, color: Colors.green.withOpacity(0.3)),
+                                          ),
+                                  if (_selectedFields.contains(SummaryFieldOption.odometer))
+                                    Text(
+                                      '-',
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(fontSize: 7.5, color: Colors.purple.withOpacity(0.3)),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ),
                         ],
                       );
                     }).toList(),
