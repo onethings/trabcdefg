@@ -202,6 +202,15 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
   int _addressScheduledAtMs = 0; // 上次執行排程的時間（節流）
   int _addressRequestedAtMs = 0; // 上次真正送出請求的時間（遠端限流）
   int _lastTickAtMs = 0;
+
+  // 已播放軌跡：只補新增點，平台通道更新壓到約 10Hz 且同一時間只跑一個
+  static const int _playedPushIntervalMs = 100;
+  final List<List<double>> _playedCoords = [];
+  int _lastPlayedIdx = -1;
+  int _lastPlayedPushAtMs = 0;
+  bool _playedPushInFlight = false;
+
+  Timer? _zoomSaveTimer;
   double _frameRate = 60.0; // 實測播放 tick 頻率（fps）
   double _addressLatencyMs = 0; // 路名請求的實測往返時間（慢網路時要預取得更遠）
 
@@ -339,6 +348,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
   void dispose() {
     _playbackAnimationController?.stop();
     _playbackAnimationController?.dispose();
+    _zoomSaveTimer?.cancel();
     _dialogDeviceSearchController.dispose();
     super.dispose();
   }
@@ -484,7 +494,6 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
 
     if (_deviceId != null) {
       _fetchHistoryRoute();
-      await _fetchMonthlyData(_focusedDay);
     } else {
       developer.log('Missing device ID for history route.', name: 'HistoryRouteScreen');
     }
@@ -607,6 +616,9 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
       if (mounted) {
         _safeSetState(() {
           _positions = playbackPositions;
+          _playedCoords.clear();
+          _lastPlayedIdx = -1;
+          _playedPushInFlight = false;
           _isLoading = false;
           _resetAddressSchedule();
         });
@@ -687,6 +699,9 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     };
     await controller.addSource(_playedSourceId, GeojsonSourceProperties(data: emptyPlayedGeoJson));
     await controller.addLineLayer(_playedSourceId, _playedLayerId, LineLayerProperties(lineColor: '#0F53FE', lineWidth: 5.5, lineOpacity: 1.0, lineJoin: 'round', lineCap: 'round'));
+    _playedCoords.clear();
+    _lastPlayedIdx = -1;
+    _playedPushInFlight = false;
 
     // 3. 繪製起終點標籤與停靠點（圖示失敗不可影響軌跡顯示）
     try {
@@ -1422,6 +1437,42 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     _scheduleAddressRequest(cur, forceCurrent: true);
   }
 
+  void _pushPlayedGeometry(int idx, double smoothLng, double smoothLat) {
+    final controller = _mapController;
+    if (controller == null) return;
+
+    // 往回拖曳時重建整條路徑
+    if (idx < _lastPlayedIdx) {
+      _playedCoords.clear();
+      _lastPlayedIdx = -1;
+    }
+    for (var i = _lastPlayedIdx + 1; i <= idx; i++) {
+      _playedCoords.add([_positions[i].longitude!.toDouble(), _positions[i].latitude!.toDouble()]);
+    }
+    _lastPlayedIdx = idx;
+
+    final now = DateTime.now().millisecondsSinceEpoch;
+    if (_playedPushInFlight || now - _lastPlayedPushAtMs < _playedPushIntervalMs) {
+      return;
+    }
+    _playedPushInFlight = true;
+    _lastPlayedPushAtMs = now;
+
+    final coordinates = [..._playedCoords, [smoothLng, smoothLat]];
+    final geoJson = <String, dynamic>{
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "geometry": {"type": "LineString", "coordinates": coordinates},
+        },
+      ],
+    };
+    controller.setGeoJsonSource(_playedSourceId, geoJson).whenComplete(() {
+      _playedPushInFlight = false;
+    });
+  }
+
   void _onAnimationTick() {
     if (!_isPlaying || _positions.isEmpty) return;
     _trackFrameRate();
@@ -1476,23 +1527,8 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     // 更新行進中的小車標記
     _mapController!.updateSymbol(_playbackSymbol!, SymbolOptions(geometry: currentLatLng, iconRotate: bearing));
 
-    // 高效更新已播放軌跡 GeoJSON 數據
-    final List<List<double>> playedCoords = [];
-    for (int i = 0; i <= idx; i++) {
-      playedCoords.add([_positions[i].longitude!.toDouble(), _positions[i].latitude!.toDouble()]);
-    }
-    playedCoords.add([smoothLng, smoothLat]);
-
-    final Map<String, dynamic> updatedPlayedGeoJson = {
-      "type": "FeatureCollection",
-      "features": [
-        {
-          "type": "Feature",
-          "geometry": {"type": "LineString", "coordinates": playedCoords},
-        },
-      ],
-    };
-    await _mapController!.setGeoJsonSource(_playedSourceId, updatedPlayedGeoJson);
+    // 已播放軌跡：只補新增點，並把平台通道更新壓到約 10Hz
+    _pushPlayedGeometry(idx, smoothLng, smoothLat);
 
     // 相機跟隨與節流機制
     if (_followUser) {
@@ -1578,8 +1614,11 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
             onCameraMove: (position) {
               _lastCameraPosition = position;
               _currentZoom = position.zoom;
-              SharedPreferences.getInstance().then((prefs) {
-                prefs.setDouble('history_zoom_level', position.zoom);
+              _zoomSaveTimer?.cancel();
+              _zoomSaveTimer = Timer(const Duration(milliseconds: 300), () {
+                SharedPreferences.getInstance().then((prefs) {
+                  prefs.setDouble('history_zoom_level', _currentZoom);
+                });
               });
             },
             myLocationEnabled: false,
@@ -2092,16 +2131,10 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
       _isCalendarLoading = false;
     });
 
-    for (var date = firstDayOfMonth; date.isBefore(lastDayOfMonth.add(const Duration(days: 1))); date = date.add(const Duration(days: 1))) {
+    Future<void> fetchDay(DateTime date) async {
       final dayUtc = DateTime.utc(date.year, date.month, date.day);
-
-      if (date.isAfter(today)) {
-        developer.log('Skipping future date (no network fetch): ${DateFormat('yyyy-MM-dd').format(date)}', name: 'HistoryRouteScreen');
-        continue;
-      }
-
-      if (_dailySummaries.containsKey(dayUtc)) {
-        continue;
+      if (date.isAfter(today) || _dailySummaries.containsKey(dayUtc)) {
+        return;
       }
 
       final from = DateTime(date.year, date.month, date.day, 0, 0, 0).toUtc();
@@ -2148,16 +2181,27 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
         if (dailySummary != null) {
           developer.log('Fetched summary for ${DateFormat('yyyy-MM-dd').format(date)}: distance=${dailySummary.distance}, engineHours=${dailySummary.engineHours}, avgSpeed=${dailySummary.averageSpeed}', name: 'HistoryRouteScreen');
           _dailySummaries[dayUtc] = dailySummary;
-
           await dailyBox.put(hiveKey, ReportSummaryHive.fromApi(dailySummary));
-          if (mounted) {
-            _safeSetState(() {});
-          }
         } else {
           developer.log('  → empty result (no data for this day)', name: 'HistoryRouteScreen');
         }
       } catch (e) {
         developer.log('Failed to fetch data for day $date: $e', name: 'HistoryRouteScreen');
+      }
+    }
+
+    final List<DateTime> pendingDays = [];
+    for (var date = firstDayOfMonth; date.isBefore(lastDayOfMonth.add(const Duration(days: 1))); date = date.add(const Duration(days: 1))) {
+      pendingDays.add(date);
+    }
+
+    // 每天一個請求很慢，改以 4 個並行抓取，每批結束才刷新一次 UI
+    const int concurrency = 4;
+    for (var i = 0; i < pendingDays.length; i += concurrency) {
+      final chunk = pendingDays.sublist(i, min(i + concurrency, pendingDays.length));
+      await Future.wait(chunk.map(fetchDay));
+      if (mounted) {
+        _safeSetState(() {});
       }
     }
   }
