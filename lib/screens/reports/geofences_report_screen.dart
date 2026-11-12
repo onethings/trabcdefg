@@ -1,7 +1,6 @@
 // lib/screens/reports/geofences_report_screen.dart
 // A screen to display geofence enter/exit intervals report.
 // Based on traccar-web GeofenceReportPage.
-import 'dart:convert';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -21,8 +20,15 @@ class GeofenceItem {
 
   GeofenceItem({required this.deviceId, required this.deviceName, required this.geofenceId, required this.startTime, required this.endTime});
 
-  factory GeofenceItem.fromJson(Map<String, dynamic> json) {
-    return GeofenceItem(deviceId: json['deviceId'] as int, deviceName: json['deviceName'] as String, geofenceId: json['geofenceId'] as int, startTime: DateTime.parse(json['startTime'] as String), endTime: DateTime.parse(json['endTime'] as String));
+  factory GeofenceItem.fromApi(api.ReportGeofences item) {
+    final start = item.startTime ?? DateTime.fromMillisecondsSinceEpoch(0);
+    return GeofenceItem(
+      deviceId: item.deviceId ?? 0,
+      deviceName: item.deviceName ?? '',
+      geofenceId: item.geofenceId ?? 0,
+      startTime: start,
+      endTime: item.endTime ?? start,
+    );
   }
 
   Duration get duration => endTime.difference(startTime);
@@ -53,21 +59,17 @@ class _GeofencesReportScreenState extends State<GeofencesReportScreen> {
   Future<void> _fetchGeofences() async {
     final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
     try {
-      final response = await traccarProvider.apiClient.invokeAPI('/geofences', 'GET', [], null, {'Accept': 'application/json'}, {}, 'application/json');
-      if (response.statusCode == 200 && response.body.isNotEmpty) {
-        final data = json.decode(response.body);
-        if (data is List) {
-          _allGeofences = data.map((g) => api.Geofence.fromJson(g)).whereType<api.Geofence>().toList();
-          for (final gf in _allGeofences) {
-            final id = gf.id;
-            final name = gf.name;
-            if (id != null && name != null) {
-              _geofenceNames[id] = name;
-            }
-          }
-        }
-      }
-    } catch (_) {}
+      final geofences = await api.GeofencesApi(traccarProvider.apiClient).getGeofences() ?? [];
+      if (!mounted) return;
+      setState(() {
+        _allGeofences = geofences;
+        _geofenceNames
+          ..clear()
+          ..addEntries(geofences.where((g) => g.id != null && g.name != null).map((g) => MapEntry(g.id!, g.name!)));
+      });
+    } catch (e) {
+      debugPrint('Error fetching geofences: $e');
+    }
   }
 
   Future<void> _fetchReport() async {
@@ -88,16 +90,15 @@ class _GeofencesReportScreenState extends State<GeofencesReportScreen> {
       return;
     }
     try {
-      final queryParams = [api.QueryParam('from', fromDate.toIso8601String()), api.QueryParam('to', toDate.toIso8601String()), api.QueryParam('deviceId', deviceId.toString())];
-      if (_selectedGeofenceId != null) {
-        queryParams.add(api.QueryParam('geofenceId', _selectedGeofenceId.toString()));
-      }
-      final response = await traccarProvider.apiClient.invokeAPI('/reports/geofences', 'GET', queryParams, null, {'Accept': 'application/json'}, {}, 'application/json');
-      if (response.statusCode == 200 && response.body.isNotEmpty) {
-        final data = json.decode(response.body);
-        if (data is List) {
-          _items = data.map((e) => GeofenceItem.fromJson(e as Map<String, dynamic>)).toList();
-        }
+      final reportsApi = api.ReportsApi(traccarProvider.apiClient);
+      final typedItems = await reportsApi.getReportsGeofences(
+        fromDate,
+        toDate,
+        deviceId: [deviceId],
+        geofenceId: _selectedGeofenceId != null ? [_selectedGeofenceId!] : null,
+      ) ?? [];
+      if (mounted) {
+        setState(() => _items = typedItems.map(GeofenceItem.fromApi).toList());
       }
     } catch (e) {
       debugPrint('Error fetching geofences report: $e');
