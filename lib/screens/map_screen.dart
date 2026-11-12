@@ -17,12 +17,14 @@ import 'package:trabcdefg/providers/map_style_provider.dart';
 import 'package:trabcdefg/providers/settings_provider.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
 import 'package:trabcdefg/screens/settings/geofences_screen.dart' hide AppMapType, TileCacheService;
+import 'package:trabcdefg/services/auth_session_store.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
 import 'package:trabcdefg/src/utils/position_coordinates.dart';
 import 'package:trabcdefg/widgets/offline_address_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../services/marker_icon_service.dart';
+import '../services/tile_cache_service.dart';
 import '../widgets/device_detail_panel.dart';
 import 'share_device_screen.dart';
 
@@ -37,6 +39,7 @@ const double _kMarkerSelectionRadius = 64.0;
 const Duration _kSymbolTapGuard = Duration(milliseconds: 300);
 const Duration _kCameraEventGrace = Duration(milliseconds: 250);
 const int _kMaxTrailPoints = 1000; //3000
+const double _kMinTrailDistanceMeters = 5.0; // 新增：GPS 最小距離閥值（公尺），過濾飄移
 const double _kAddressRefreshMeters = 50;
 
 class MapScreen extends StatefulWidget {
@@ -59,6 +62,7 @@ class _MapScreenState extends State<MapScreen> {
   final Map<int, _MarkerRenderState> _markerRenderStates = {};
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   api.Device? _currentDevice;
+  final TileCacheService _cacheService = TileCacheService();
   late MarkerIconService _iconService;
   final http.Client _httpClient = http.Client();
 
@@ -83,6 +87,7 @@ class _MapScreenState extends State<MapScreen> {
   final ValueNotifier<String> _selectedAddressNotifier = ValueNotifier("");
   int _deviceSelectionGeneration = 0;
 
+  bool _isCacheInitialized = false;
   Timer? _zoomDebounce;
 
   final TextEditingController _drawerSearchController = TextEditingController();
@@ -104,7 +109,15 @@ class _MapScreenState extends State<MapScreen> {
     _loadDrawerSortMode();
 
     _iconService = MarkerIconService(loadedIcons: _loadedIcons);
-    OfflineAddressService.initDatabase();
+    _cacheService.init().then((_) {
+      OfflineAddressService.initDatabase();
+
+      if (mounted) {
+        _safeSetState(() {
+          _isCacheInitialized = true;
+        });
+      }
+    });
 
     _currentDevice = widget.selectedDevice;
 
@@ -364,7 +377,7 @@ class _MapScreenState extends State<MapScreen> {
                 for (final device in devices)
                   ListTile(
                     leading: const Icon(Icons.directions_car_rounded),
-                    title: Text(device.name ?? 'deviceUnknown'.tr),
+                    title: Text(device.name ?? 'Unknown Device'.tr),
                     onTap: () {
                       Navigator.of(popupContext).pop();
                       _onDeviceSelected(device, forceShowPanel: true, zoomToMax: true);
@@ -736,18 +749,18 @@ class _MapScreenState extends State<MapScreen> {
       context: context,
       builder: (BuildContext context) {
         return CupertinoAlertDialog(
-          title: Text('deviceDeleteConfirmTitle'.tr),
-          content: Text('deviceDeleteConfirmMessage'.trParams({'name': device.name ?? 'deviceUnknown'.tr})),
+          title: Text('Delete Device'.tr),
+          content: Text('Are you sure you want to delete the device "${device.name}"?'.tr),
           actions: <Widget>[
             CupertinoDialogAction(
-              child: Text('sharedCancel'.tr),
+              child: Text('Cancel'.tr),
               onPressed: () {
                 Navigator.of(context).pop(false);
               },
             ),
             CupertinoDialogAction(
               textStyle: const TextStyle(color: CupertinoColors.systemRed),
-              child: Text('sharedDelete'.tr),
+              child: Text('Delete'.tr),
               onPressed: () {
                 Navigator.of(context).pop(true);
               },
@@ -771,9 +784,9 @@ class _MapScreenState extends State<MapScreen> {
 
     if (success) {
       _bottomSheetController?.close();
-      Get.snackbar('sharedSuccess'.tr, 'deviceDeleteSuccess'.tr, snackPosition: SnackPosition.BOTTOM, backgroundColor: Colors.green.shade100);
+      Get.snackbar('Success'.tr, 'Device deleted successfully.'.tr, snackPosition: SnackPosition.BOTTOM, backgroundColor: Colors.green.shade100);
     } else {
-      Get.snackbar('sharedError'.tr, 'deviceDeleteFailed'.tr, snackPosition: SnackPosition.BOTTOM, backgroundColor: Colors.red.shade100);
+      Get.snackbar('Error'.tr, 'Failed to delete device.'.tr, snackPosition: SnackPosition.BOTTOM, backgroundColor: Colors.red.shade100);
     }
   }
 
@@ -885,7 +898,7 @@ class _MapScreenState extends State<MapScreen> {
                   Padding(
                     padding: const EdgeInsets.only(bottom: 8),
                     child: Text(
-                      device.name ?? 'mapMoreOptions'.tr,
+                      device.name ?? 'More Options'.tr,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
@@ -1119,7 +1132,7 @@ class _MapScreenState extends State<MapScreen> {
                       decoration: InputDecoration(
                         hintText: 'sharedSearchDevices'.tr,
                         prefixIcon: const Icon(CupertinoIcons.search),
-                        suffixIcon: _drawerSearchQuery.isEmpty ? null : IconButton(icon: const Icon(Icons.close_rounded), tooltip: 'sharedCancel'.tr, onPressed: () => _drawerSearchController.clear()),
+                        suffixIcon: _drawerSearchQuery.isEmpty ? null : IconButton(icon: const Icon(Icons.close_rounded), tooltip: 'Cancel'.tr, onPressed: () => _drawerSearchController.clear()),
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide.none),
                         filled: true,
                         fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
@@ -1161,7 +1174,7 @@ class _MapScreenState extends State<MapScreen> {
                           children: [
                             Expanded(
                               child: Text(
-                                device.name ?? 'deviceUnknown'.tr,
+                                device.name ?? 'Unknown Device'.tr,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(fontWeight: FontWeight.w500, color: _getStatusColor(device.status)),
@@ -1194,6 +1207,21 @@ class _MapScreenState extends State<MapScreen> {
       builder: (context, traccarProvider, mapStyleProvider, child) {
         if (traccarProvider.isLoading && traccarProvider.devices.isEmpty) {
           return const Scaffold(body: Center(child: CircularProgressIndicator()));
+        }
+
+        if (!_isCacheInitialized) {
+          return Scaffold(
+            body: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const CircularProgressIndicator(),
+                  const SizedBox(height: _kControlGap),
+                  Text('Initializing Map Assets...'.tr, style: Theme.of(context).textTheme.bodySmall),
+                ],
+              ),
+            ),
+          );
         }
 
         double initialLat = 0, initialLng = 0, initialZoom = 2.0;
@@ -1542,7 +1570,7 @@ class _DeviceSwitcherBarState extends State<_DeviceSwitcherBar> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
-                          widget.deviceName ?? 'deviceUnknown'.tr,
+                          widget.deviceName ?? 'Unknown Device'.tr,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           textAlign: TextAlign.center,
