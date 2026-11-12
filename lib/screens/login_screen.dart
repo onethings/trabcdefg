@@ -136,7 +136,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       if (!mounted) return;
       // 401 — wrong email/password or expired account
       if (e.statusCode == 401) {
-        Get.snackbar('Error'.tr, 'loginFailed'.tr, snackPosition: SnackPosition.BOTTOM);
+        Get.snackbar('sharedError'.tr, 'loginFailed'.tr, snackPosition: SnackPosition.BOTTOM);
         return;
       }
       // 400 — surface the server message, e.g. "Account has expired"
@@ -144,7 +144,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
         showCupertinoDialog<void>(
           context: context,
           builder: (context) => CupertinoAlertDialog(
-            title: Text('Error'.tr),
+            title: Text('sharedError'.tr),
             content: Text('loginFailed'.tr),
             actions: [CupertinoDialogAction(onPressed: () => Navigator.of(context).pop(), child: const Text('OK'))],
           ),
@@ -152,16 +152,16 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
         return;
       }
       // Other 4xx / 5xx — show the server-provided message
-      Get.snackbar('Error'.tr, e.message, snackPosition: SnackPosition.BOTTOM);
+      Get.snackbar('sharedError'.tr, e.message, snackPosition: SnackPosition.BOTTOM);
     } on api.ApiException catch (_) {
       // Network-level failure (DNS / TLS / connection refused / timeout).
       // No URL talk here — the user never sets the server address.
       if (mounted) {
-        Get.snackbar('Error'.tr, 'serverUnreachable'.tr, snackPosition: SnackPosition.BOTTOM);
+        Get.snackbar('sharedError'.tr, 'serverUnreachable'.tr, snackPosition: SnackPosition.BOTTOM);
       }
     } catch (e) {
       if (mounted) {
-        Get.snackbar('Error'.tr, e.toString(), snackPosition: SnackPosition.BOTTOM);
+        Get.snackbar('sharedError'.tr, e.toString(), snackPosition: SnackPosition.BOTTOM);
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);

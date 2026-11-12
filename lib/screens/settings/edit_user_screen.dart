@@ -204,7 +204,7 @@ class _EditUserScreenState extends State<EditUserScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('userDeleteFailed'.trParams({'error': e.toString()}))));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('userDeleteFailedUnexpected'.trParams({'error': e.toString()}))));
       }
     } finally {
       if (mounted) {

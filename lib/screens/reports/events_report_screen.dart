@@ -153,13 +153,13 @@ class _EventsReportScreenState extends State<EventsReportScreen> {
         } else {
           debugPrint('Warning: Expected JSON, but received content type: $contentType');
           if (!mounted) return; // Added mounted check guard
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to load events report. The server returned a file instead of JSON.'.tr)));
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('eventsReportNotJson'.tr)));
         }
       }
     } catch (e) {
       debugPrint('Error fetching events report: $e');
       if (!mounted) return; // Added mounted check guard
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to load events report.'.tr)));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('reportEventsLoadFailed'.tr)));
     } finally {
       setState(() {
         _isLoading = false;

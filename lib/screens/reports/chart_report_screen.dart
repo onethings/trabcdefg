@@ -121,7 +121,7 @@ class _ChartReportScreenState extends State<ChartReportScreen> {
     } catch (e) {
       debugPrint('Chart fetch error: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to load chart data.'.tr)));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('reportChartLoadFailed'.tr)));
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);

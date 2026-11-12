@@ -150,7 +150,7 @@ class ConnectionsScreenState extends State<ConnectionsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: CupertinoNavigationBar(middle: Text('Connections'.tr)),
+      appBar: CupertinoNavigationBar(middle: Text('sharedConnections'.tr)),
       body: SingleChildScrollView(
         child: Column(
           children: [

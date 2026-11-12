@@ -148,7 +148,7 @@ class _DeviceDetailPanelState extends State<DeviceDetailPanel> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              widget.device.name ?? 'Unknown Device'.tr,
+                              widget.device.name ?? 'deviceUnknown'.tr,
                               style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, letterSpacing: -0.5, color: Theme.of(context).colorScheme.onSurface),
                             ),
                             const SizedBox(height: 2),
@@ -419,7 +419,7 @@ class _DeviceDetailPanelState extends State<DeviceDetailPanel> {
 
     // No valid GPS fix yet -> tell the user instead of silently doing nothing.
     if (lat == null || lng == null || (lat == 0.0 && lng == 0.0)) {
-      _showMapMessage('No GPS Signal'.tr);
+      _showMapMessage('deviceNoGps'.tr);
       return;
     }
 
@@ -449,7 +449,7 @@ class _DeviceDetailPanelState extends State<DeviceDetailPanel> {
       }
     }
 
-    _showMapMessage('Could not open maps'.tr);
+    _showMapMessage('deviceOpenMapsFailed'.tr);
   }
 
   void _showMapMessage(String message) {

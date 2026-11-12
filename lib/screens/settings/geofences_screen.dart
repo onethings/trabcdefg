@@ -134,7 +134,7 @@ class GeofencesScreenState extends State<GeofencesScreen> {
       context: context,
       builder: (ctx) => CupertinoAlertDialog(
         title: Text('sharedRemoveConfirm'.tr),
-        content: Text('Are you sure you want to delete this geofence?'.tr),
+        content: Text('geofenceDeleteConfirm'.tr),
         actions: [
           CupertinoDialogAction(onPressed: () => Navigator.pop(ctx, false), child: Text('sharedCancel'.tr)),
           CupertinoDialogAction(
@@ -160,7 +160,7 @@ class GeofencesScreenState extends State<GeofencesScreen> {
       setState(() {
         _geofencesFuture = _fetchGeofences();
       });
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('sharedRemoveConfirm'.tr)));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('geofenceDeleteSuccess'.tr)));
     } catch (e) {
       debugPrint('Delete geofence error: $e');
       if (!mounted) return;
@@ -711,7 +711,7 @@ class AddGeofenceScreenState extends State<AddGeofenceScreen> {
                 Navigator.pop(context, geofence);
               } else {
                 if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_geofenceType == 'CIRCLE' ? 'Please enter a name and select a point on the map.'.tr : 'Please enter a name and draw a polygon with at least 3 points.'.tr)));
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_geofenceType == 'CIRCLE' ? 'geofenceNeedPoint'.tr : 'geofenceNeedPolygon'.tr)));
               }
             },
           ),
@@ -866,7 +866,7 @@ class AddGeofenceScreenState extends State<AddGeofenceScreen> {
                           alignment: Alignment.centerRight,
                           child: TextButton.icon(
                             icon: const Icon(CupertinoIcons.xmark, size: 18),
-                            label: Text('Clear Points'.tr),
+                            label: Text('geofenceClearPoints'.tr),
                             onPressed: () {
                               setState(() {
                                 _polygonPoints.clear();

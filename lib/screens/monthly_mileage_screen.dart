@@ -352,7 +352,7 @@ class _MonthlyMileageScreenState extends State<MonthlyMileageScreen> {
       decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(14)),
       child: Column(
         children: [
-          _buildDetailRow('Date'.tr, DateFormat('yyyy-MM-dd').format(_selectedDay!), secondaryLabel),
+          _buildDetailRow('sharedDate'.tr, DateFormat('yyyy-MM-dd').format(_selectedDay!), secondaryLabel),
           _buildSeparator(separatorColor),
           _buildDetailRow('sharedDistance'.tr, '$distanceInKm ${'sharedKm'.tr}', secondaryLabel),
           _buildSeparator(separatorColor),

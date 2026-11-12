@@ -51,7 +51,7 @@ class _ScheduledReportsScreenState extends State<ScheduledReportsScreen> {
     } catch (e) {
       debugPrint('Scheduled reports error: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to load scheduled reports.'.tr)));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('reportScheduledLoadFailed'.tr)));
       }
     } finally {
       setState(() => _isLoading = false);
@@ -98,10 +98,10 @@ class _ScheduledReportsScreenState extends State<ScheduledReportsScreen> {
                 children: [
                   Icon(Icons.schedule_send, size: 64, color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.4)),
                   const SizedBox(height: 16),
-                  Text('No scheduled reports configured.'.tr, style: TextStyle(fontSize: 16, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                  Text('reportNoScheduledReports'.tr, style: TextStyle(fontSize: 16, color: Theme.of(context).colorScheme.onSurfaceVariant)),
                   const SizedBox(height: 8),
                   Text(
-                    'Create one from a report using the Schedule option.'.tr,
+                    'reportCreateFromSchedule'.tr,
                     textAlign: TextAlign.center,
                     style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.7)),
                   ),

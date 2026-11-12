@@ -85,7 +85,7 @@ class _LogsReportScreenState extends State<LogsReportScreen> {
     } catch (e) {
       debugPrint('Audit error: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to load audit logs.'.tr)));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('reportAuditLogsLoadFailed'.tr)));
       }
     } finally {
       setState(() => _isLoading = false);

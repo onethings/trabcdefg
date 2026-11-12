@@ -183,12 +183,12 @@ class _StopsReportScreenState extends State<StopsReportScreen> {
           }
         } else {
           if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to load stops report. The server returned a file instead of JSON. Please check the Traccar server settings for reports.'.tr)));
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('stopsReportNotJson'.tr)));
         }
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to load stops report.'.tr)));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('reportStopsLoadFailed'.tr)));
     } finally {
       setState(() => _isLoading = false);
     }
@@ -383,7 +383,7 @@ class _StopsReportScreenState extends State<StopsReportScreen> {
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(color: colorScheme.primaryContainer, borderRadius: BorderRadius.circular(12)),
                       child: Text(
-                        '${_stopsReport.length} ${'stops'.tr}',
+                        '${_stopsReport.length} ${'sharedStops'.tr}',
                         style: TextStyle(color: colorScheme.onPrimaryContainer, fontWeight: FontWeight.bold, fontSize: 12),
                       ),
                     ),
@@ -433,7 +433,7 @@ class _StopsReportScreenState extends State<StopsReportScreen> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text('historyStopsCount'.trParams({'count': '${_stopsReport.length}'}), style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
-                          Text('Tap item to locate'.tr, style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.outline)),
+                          Text('sharedTapToLocate'.tr, style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.outline)),
                         ],
                       ),
                     ),
@@ -583,7 +583,7 @@ class _StopTimelineTile extends StatelessWidget {
                                 future: stop.address != null && stop.address!.isNotEmpty ? Future.value(stop.address) : OfflineAddressService.getAddress(stop.latitude, stop.longitude),
                                 builder: (context, snapshot) {
                                   return Text(
-                                    snapshot.data ?? 'Address not available'.tr,
+                                    snapshot.data ?? 'sharedAddressNotAvailable'.tr,
                                     maxLines: 2,
                                     overflow: TextOverflow.ellipsis,
                                     style: theme.textTheme.bodyMedium?.copyWith(color: colorScheme.onSurface),

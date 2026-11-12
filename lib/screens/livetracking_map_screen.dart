@@ -38,7 +38,7 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
   final double _mapCenterOffset = 0.007;
   final double _mapCenterOnset = 0.008;
 
-  String _currentStreetName = 'Fetching Address...'.tr;
+  String _currentStreetName = 'deviceFetchingAddress'.tr;
   final Set<String> _loadedIcons = {};
 
   // Style strings moved to provider

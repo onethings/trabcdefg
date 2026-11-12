@@ -377,7 +377,7 @@ class _MapScreenState extends State<MapScreen> {
                 for (final device in devices)
                   ListTile(
                     leading: const Icon(Icons.directions_car_rounded),
-                    title: Text(device.name ?? 'Unknown Device'.tr),
+                    title: Text(device.name ?? 'deviceUnknown'.tr),
                     onTap: () {
                       Navigator.of(popupContext).pop();
                       _onDeviceSelected(device, forceShowPanel: true, zoomToMax: true);
@@ -749,18 +749,18 @@ class _MapScreenState extends State<MapScreen> {
       context: context,
       builder: (BuildContext context) {
         return CupertinoAlertDialog(
-          title: Text('Delete Device'.tr),
-          content: Text('Are you sure you want to delete the device "${device.name}"?'.tr),
+          title: Text('deviceDeleteConfirmTitle'.tr),
+          content: Text('deviceDeleteConfirmMessage'.trParams({'name': device.name ?? 'deviceUnknown'.tr})),
           actions: <Widget>[
             CupertinoDialogAction(
-              child: Text('Cancel'.tr),
+              child: Text('sharedCancel'.tr),
               onPressed: () {
                 Navigator.of(context).pop(false);
               },
             ),
             CupertinoDialogAction(
               textStyle: const TextStyle(color: CupertinoColors.systemRed),
-              child: Text('Delete'.tr),
+              child: Text('sharedDelete'.tr),
               onPressed: () {
                 Navigator.of(context).pop(true);
               },
@@ -784,9 +784,9 @@ class _MapScreenState extends State<MapScreen> {
 
     if (success) {
       _bottomSheetController?.close();
-      Get.snackbar('Success'.tr, 'Device deleted successfully.'.tr, snackPosition: SnackPosition.BOTTOM, backgroundColor: Colors.green.shade100);
+      Get.snackbar('sharedSuccess'.tr, 'deviceDeleteSuccess'.tr, snackPosition: SnackPosition.BOTTOM, backgroundColor: Colors.green.shade100);
     } else {
-      Get.snackbar('Error'.tr, 'Failed to delete device.'.tr, snackPosition: SnackPosition.BOTTOM, backgroundColor: Colors.red.shade100);
+      Get.snackbar('sharedError'.tr, 'deviceDeleteFailed'.tr, snackPosition: SnackPosition.BOTTOM, backgroundColor: Colors.red.shade100);
     }
   }
 
@@ -898,7 +898,7 @@ class _MapScreenState extends State<MapScreen> {
                   Padding(
                     padding: const EdgeInsets.only(bottom: 8),
                     child: Text(
-                      device.name ?? 'More Options'.tr,
+                      device.name ?? 'mapMoreOptions'.tr,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
@@ -1132,7 +1132,7 @@ class _MapScreenState extends State<MapScreen> {
                       decoration: InputDecoration(
                         hintText: 'sharedSearchDevices'.tr,
                         prefixIcon: const Icon(CupertinoIcons.search),
-                        suffixIcon: _drawerSearchQuery.isEmpty ? null : IconButton(icon: const Icon(Icons.close_rounded), tooltip: 'Cancel'.tr, onPressed: () => _drawerSearchController.clear()),
+                        suffixIcon: _drawerSearchQuery.isEmpty ? null : IconButton(icon: const Icon(Icons.close_rounded), tooltip: 'sharedCancel'.tr, onPressed: () => _drawerSearchController.clear()),
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide.none),
                         filled: true,
                         fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
@@ -1174,7 +1174,7 @@ class _MapScreenState extends State<MapScreen> {
                           children: [
                             Expanded(
                               child: Text(
-                                device.name ?? 'Unknown Device'.tr,
+                                device.name ?? 'deviceUnknown'.tr,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(fontWeight: FontWeight.w500, color: _getStatusColor(device.status)),
@@ -1217,7 +1217,7 @@ class _MapScreenState extends State<MapScreen> {
                 children: [
                   const CircularProgressIndicator(),
                   const SizedBox(height: _kControlGap),
-                  Text('Initializing Map Assets...'.tr, style: Theme.of(context).textTheme.bodySmall),
+                  Text('mapInitializingAssets'.tr, style: Theme.of(context).textTheme.bodySmall),
                 ],
               ),
             ),
@@ -1570,7 +1570,7 @@ class _DeviceSwitcherBarState extends State<_DeviceSwitcherBar> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
-                          widget.deviceName ?? 'Unknown Device'.tr,
+                          widget.deviceName ?? 'deviceUnknown'.tr,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           textAlign: TextAlign.center,

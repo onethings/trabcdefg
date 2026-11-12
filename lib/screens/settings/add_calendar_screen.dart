@@ -87,7 +87,7 @@ class _AddCalendarScreenState extends State<AddCalendarScreen> {
                   decoration: InputDecoration(labelText: '${'sharedName'.tr} (${'sharedRequired'.tr})'),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
-                      return 'Please enter a name.'.tr;
+                      return 'sharedPleaseEnterName'.tr;
                     }
                     return null;
                   },

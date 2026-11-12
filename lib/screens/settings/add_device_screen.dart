@@ -162,47 +162,6 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
     });
   }
 
-  // void _saveDevice() async {
-  //   if (_formKey.currentState!.validate()) {
-  //     _formKey.currentState!.save();
-  //     final newDevice = api.Device(
-  //       id: widget.device?.id,
-  //       name: _name,
-  //       uniqueId: _uniqueId,
-  //     );
-
-  //     try {
-  //       if (widget.device == null) {
-  //         final traccarProvider = Provider.of<TraccarProvider>(
-  //           context,
-  //           listen: false,
-  //         );
-  //         final devicesApi = api.DevicesApi(traccarProvider.apiClient);
-  //         // Add new device
-  //         await devicesApi.devicesPost(newDevice);
-  //         Navigator.of(context).pop(true);
-  //       } else {
-  //         final traccarProvider = Provider.of<TraccarProvider>(
-  //           context,
-  //           listen: false,
-  //         );
-  //         final devicesApi = api.DevicesApi(traccarProvider.apiClient);
-  //         // Update existing device
-  //         await devicesApi.devicesIdPut(newDevice.id!, newDevice);
-  //         Navigator.of(context).pop(true);
-  //       }
-  //     } catch (e) {
-  //       if (mounted) {
-  //         ScaffoldMessenger.of(context).showSnackBar(
-  //           SnackBar(
-  //             content: Text('deviceSaveFailed'.trParams({'error': e.toString()})),
-  //           ),
-  //         );
-  //       }
-  //     }
-  //   }
-  // }
-  // Conceptual code for AddDeviceScreen.dart
 
   void _saveDevice() async {
     if (!_formKey.currentState!.validate()) return;

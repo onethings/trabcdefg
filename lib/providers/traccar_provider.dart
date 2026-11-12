@@ -100,7 +100,7 @@ class TraccarProvider with ChangeNotifier, WidgetsBindingObserver {
         _serverFailCount++;
         debugPrint('Server unreachable (health check $_serverFailCount): $e');
         if (_serverFailCount == 2) {
-          Get.snackbar('Error'.tr, 'Connection to server lost. Please check your network.'.tr, snackPosition: SnackPosition.BOTTOM);
+          Get.snackbar('sharedError'.tr, 'connectionLost'.tr, snackPosition: SnackPosition.BOTTOM);
         }
         return;
       }
@@ -109,7 +109,7 @@ class TraccarProvider with ChangeNotifier, WidgetsBindingObserver {
       if (AuthSessionStore.instance.sessionId != null) return;
       _serverHealthTimer?.cancel();
       if (Get.currentRoute != '/login') {
-        Get.snackbar('Error'.tr, 'Your session has expired. Please log in again.'.tr, snackPosition: SnackPosition.BOTTOM);
+        Get.snackbar('sharedError'.tr, 'sessionExpired'.tr, snackPosition: SnackPosition.BOTTOM);
         Get.offAllNamed('/login');
       }
     }

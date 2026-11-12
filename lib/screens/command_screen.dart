@@ -46,8 +46,8 @@ class _CommandScreenState extends State<CommandScreen> {
     _selectedDeviceName = prefs.getString('selectedDeviceName');
     if (_deviceId == null) {
       Get.snackbar(
-        'Error'.tr,
-        'Device ID not found.'.tr,
+        'sharedError'.tr,
+        'commandDeviceNotFound'.tr,
         snackPosition: SnackPosition.BOTTOM,
       );
     }
@@ -67,8 +67,8 @@ class _CommandScreenState extends State<CommandScreen> {
   Future<void> _fetchAndShowCommandTypes(api.CommandsApi commandsApi) async {
     if (_deviceId == null) {
       Get.snackbar(
-        'Error'.tr,
-        'Cannot fetch types, device ID is missing.'.tr,
+        'sharedError'.tr,
+        'commandMissingDevice'.tr,
         snackPosition: SnackPosition.BOTTOM,
       );
       return;
@@ -79,8 +79,8 @@ class _CommandScreenState extends State<CommandScreen> {
 
       if (types == null || types.isEmpty) {
         Get.snackbar(
-          'Info'.tr,
-          'No commands available for this device.'.tr,
+          'sharedInfo'.tr,
+          'commandNoCommands'.tr,
           snackPosition: SnackPosition.BOTTOM,
         );
         return;
@@ -92,14 +92,14 @@ class _CommandScreenState extends State<CommandScreen> {
       _showCommandTypePicker();
     } on api.ApiException catch (e) {
       Get.snackbar(
-        'Error'.tr,
-        'Failed to load command types: ${e.message}'.tr,
+        'sharedError'.tr,
+        'commandTypesLoadFailed'.trParams({'error': e.message ?? ''}),
         snackPosition: SnackPosition.BOTTOM,
       );
     } catch (e) {
       Get.snackbar(
-        'Error'.tr,
-        'An unknown error occurred.'.tr,
+        'sharedError'.tr,
+        'commandUnknownError'.tr,
         snackPosition: SnackPosition.BOTTOM,
       );
     }
@@ -112,8 +112,8 @@ class _CommandScreenState extends State<CommandScreen> {
         _deviceId == null ||
         _selectedCommandType == null) {
       Get.snackbar(
-        'Error'.tr,
-        'Please select a command type and fill required fields.'.tr,
+        'sharedError'.tr,
+        'commandSelectTypeAndFill'.tr,
         snackPosition: SnackPosition.BOTTOM,
       );
       return;
@@ -163,25 +163,25 @@ class _CommandScreenState extends State<CommandScreen> {
       if (!mounted) return;
 
       Get.snackbar(
-        'Success'.tr,
+        'sharedSuccess'.tr,
         isSetConnection
             ? 'commandSetConnectionSent'.tr
-            : 'Command sent successfully.'.tr,
+            : 'commandSent'.tr,
         snackPosition: SnackPosition.BOTTOM,
         backgroundColor: Colors.green.shade100,
       );
       Navigator.of(context).pop();
     } on api.ApiException catch (e) {
       Get.snackbar(
-        'Error'.tr,
-        'Failed to send command: ${e.message}'.tr,
+        'sharedError'.tr,
+        'commandSendFailed'.trParams({'error': e.message ?? ''}),
         snackPosition: SnackPosition.BOTTOM,
         backgroundColor: Colors.red.shade100,
       );
     } catch (e) {
       Get.snackbar(
-        'Error'.tr,
-        'An unknown error occurred during command dispatch.'.tr,
+        'sharedError'.tr,
+        'commandUnknownErrorDispatch'.tr,
         snackPosition: SnackPosition.BOTTOM,
         backgroundColor: Colors.red.shade100,
       );
@@ -254,13 +254,13 @@ class _CommandScreenState extends State<CommandScreen> {
                   // FIX: Left operand can't be null layout fixed here
                   child: Text(
                     _selectedCommandType == null
-                        ? 'Select Command Type'.tr
+                        ? 'commandSelectType'.tr
                         : _getCommandTranslationKey(_selectedCommandType!.type)
                               .tr,
                     style: TextStyle(
                       color: _selectedCommandType == null
-                          ? Colors.grey
-                          : Colors.black,
+                          ? Theme.of(context).colorScheme.onSurfaceVariant
+                          : Theme.of(context).colorScheme.onSurface,
                     ),
                   ),
                 ),

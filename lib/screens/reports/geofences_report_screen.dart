@@ -102,7 +102,7 @@ class _GeofencesReportScreenState extends State<GeofencesReportScreen> {
     } catch (e) {
       debugPrint('Error fetching geofences report: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to load geofences report.'.tr)));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('reportGeofencesLoadFailed'.tr)));
       }
     } finally {
       setState(() => _isLoading = false);

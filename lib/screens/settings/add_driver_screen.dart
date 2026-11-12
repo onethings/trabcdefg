@@ -132,7 +132,7 @@ class _AddDriverScreenState extends State<AddDriverScreen> {
                   decoration: InputDecoration(labelText: '${'sharedName'.tr} (${'sharedRequired'.tr})'),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
-                      return 'Please enter a name.'.tr;
+                      return 'sharedPleaseEnterName'.tr;
                     }
                     return null;
                   },
@@ -145,7 +145,7 @@ class _AddDriverScreenState extends State<AddDriverScreen> {
                   decoration: InputDecoration(labelText: '${'positionDriverUniqueId'.tr} (${'sharedRequired'.tr})'),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
-                      return 'Please enter an identifier.'.tr;
+                      return 'sharedPleaseEnterIdentifier'.tr;
                     }
                     return null;
                   },

@@ -13,7 +13,6 @@ import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:maplibre_gl/maplibre_gl.dart' as maplibre;
 import 'package:path_provider/path_provider.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:trabcdefg/providers/map_style_provider.dart';
@@ -179,13 +178,13 @@ class _RouteReportScreenState extends State<RouteReportScreen> {
         } else {
           debugPrint('Warning: Expected JSON, but received content type: $contentType');
           if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to load route report. The server returned a file instead of JSON.'.tr)));
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('routeReportNotJson'.tr)));
         }
       }
     } catch (e) {
       debugPrint('Error fetching route report: $e');
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to load route report.'.tr)));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('reportRouteLoadFailed'.tr)));
     } finally {
       if (mounted) {
         setState(() {
@@ -289,16 +288,9 @@ class _RouteReportScreenState extends State<RouteReportScreen> {
   }
 
   Future<void> _exportToCsv() async {
-    final status = await Permission.storage.request();
-    if (!status.isGranted) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Storage permission is required to save the file.'.tr)));
-      return;
-    }
-
     if (_routeReport.isEmpty) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('No data to export.'.tr)));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('sharedNoDataToExport'.tr)));
       return;
     }
 
@@ -311,18 +303,18 @@ class _RouteReportScreenState extends State<RouteReportScreen> {
         .join('\n');
 
     final csvContent = csvHeader + csvRows;
-    final directory = await getExternalStorageDirectory();
+    final directory = (await getExternalStorageDirectory()) ?? (await getApplicationDocumentsDirectory());
     final fileName = 'route_report_${_deviceName ?? 'vehicle'}_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.csv';
-    final file = File('${directory!.path}/$fileName');
+    final file = File('${directory.path}/$fileName');
 
     try {
       await file.writeAsString(csvContent);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${'Report exported to'.tr} ${file.path}')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('sharedExportedTo'.trParams({'path': file.path}))));
     } catch (e) {
       debugPrint('Error exporting CSV: $e');
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to export report.'.tr)));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('sharedExportFailed'.tr)));
     }
   }
 

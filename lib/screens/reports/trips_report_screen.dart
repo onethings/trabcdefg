@@ -211,12 +211,12 @@ class _TripsReportScreenState extends State<TripsReportScreen> {
             }
           }
         } else {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to load trips report. The server returned a file instead of JSON. Please check the Traccar server settings for reports.'.tr)));
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('tripsReportNotJson'.tr)));
         }
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to load trips report.'.tr)));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('reportTripsLoadFailed'.tr)));
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);

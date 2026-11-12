@@ -52,11 +52,31 @@ class _DevicesScreenState extends State<DevicesScreen> {
 
   void _filterDevices(String query) {
     setState(() {
-      _filteredDevices = _allDevices.where((device) => device.name!.toLowerCase().contains(query.toLowerCase()) || device.uniqueId!.toLowerCase().contains(query.toLowerCase())).toList();
+      _filteredDevices = _allDevices.where((device) => (device.name ?? '').toLowerCase().contains(query.toLowerCase()) || (device.uniqueId ?? '').toLowerCase().contains(query.toLowerCase())).toList();
     });
   }
 
-  void _deleteDevice(int deviceId) async {
+  Future<void> _confirmDeleteDevice(api.Device device) async {
+    final confirmed = await showCupertinoDialog<bool>(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: Text('deviceDeleteConfirmTitle'.tr),
+        content: Text('deviceDeleteConfirmMessage'.trParams({'name': device.name ?? 'deviceUnknown'.tr})),
+        actions: [
+          CupertinoDialogAction(onPressed: () => Navigator.pop(ctx, false), child: Text('sharedCancel'.tr)),
+          CupertinoDialogAction(
+            textStyle: const TextStyle(color: CupertinoColors.systemRed),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text('sharedDelete'.tr),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    await _deleteDevice(device.id!);
+  }
+
+  Future<void> _deleteDevice(int deviceId) async {
     try {
       final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
       final apiClient = traccarProvider.apiClient;
@@ -74,13 +94,13 @@ class _DevicesScreenState extends State<DevicesScreen> {
         // FIX: Replaced print() with production-safe developer.log()
         developer.log('Server responded with status code: ${response.statusCode}', name: 'DevicesScreen');
         developer.log('Server response body: ${response.body}', name: 'DevicesScreen');
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('deviceDeleteFailed'.trParams({'error': 'Server responded with status code: ${response.statusCode}'}))));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('deviceDeleteFailedDetail'.trParams({'error': 'Server responded with status code: ${response.statusCode}'}))));
       }
     } catch (e) {
       // FIX: Replaced print() with developer.log()
       developer.log('Caught an exception: $e', name: 'DevicesScreen', error: e);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('deviceDeleteFailed'.trParams({'error': e.toString()}))));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('deviceDeleteFailedDetail'.trParams({'error': e.toString()}))));
     }
   }
 
@@ -159,7 +179,7 @@ class _DevicesScreenState extends State<DevicesScreen> {
     if (!mounted) return;
 
     if (bytes == null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('errorGeneral'.trParams({'error': 'Failed to encode Excel file'}))));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('deviceExcelEncodeFailed'.tr)));
       return;
     }
 
@@ -347,7 +367,7 @@ class _DevicesScreenState extends State<DevicesScreen> {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           } else if (snapshot.hasError) {
-            return Center(child: Text('errorGeneral'.trParams({'error': snapshot.error.toString()})));
+            return Center(child: Text('errorUnexpected'.trParams({'error': snapshot.error.toString()})));
           } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
             return Center(child: Text('sharedNoData'.tr));
           } else {
@@ -357,12 +377,12 @@ class _DevicesScreenState extends State<DevicesScreen> {
                 final device = _filteredDevices[index];
                 return ListTile(
                   title: Text(device.name ?? 'unnamedDevice'.tr),
-                  subtitle: Text(device.uniqueId ?? 'noUniqueId'.tr),
+                  subtitle: Text(device.uniqueId ?? 'deviceNoUniqueId'.tr),
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       IconButton(icon: const Icon(CupertinoIcons.pencil), onPressed: () => _editDevice(device)),
-                      IconButton(icon: const Icon(CupertinoIcons.trash), onPressed: () => _deleteDevice(device.id!)),
+                      IconButton(icon: const Icon(CupertinoIcons.trash), onPressed: () => _confirmDeleteDevice(device)),
                       IconButton(
                         icon: const Icon(Icons.link),
                         onPressed: () {

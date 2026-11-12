@@ -208,7 +208,7 @@ class _PositionsReportScreenState extends State<PositionsReportScreen> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('Failed to load positions.'.tr)));
+        ).showSnackBar(SnackBar(content: Text('reportPositionsLoadFailed'.tr)));
       }
     } finally {
       setState(() => _isLoading = false);

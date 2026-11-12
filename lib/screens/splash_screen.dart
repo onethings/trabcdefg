@@ -48,8 +48,8 @@ class _SplashScreenState extends State<SplashScreen> {
 
       if (AuthSessionStore.instance.sessionId == null) {
         Get.snackbar(
-          'Error'.tr,
-          'Your session has expired. Please log in again.'.tr,
+          'sharedError'.tr,
+          'sessionExpired'.tr,
           snackPosition: SnackPosition.BOTTOM,
         );
         Navigator.of(context).pushReplacementNamed('/login');
@@ -57,7 +57,7 @@ class _SplashScreenState extends State<SplashScreen> {
       }
 
       setState(() {
-        _errorMessage = 'Could not connect to server. Please check your network and try again.';
+        _errorMessage = 'sessionConnectFailed';
       });
     }
   }

@@ -121,7 +121,7 @@ class _ShareDeviceScreenState extends State<ShareDeviceScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: CupertinoNavigationBar(middle: Text('Share $_deviceName'.tr)),
+      appBar: CupertinoNavigationBar(middle: Text('deviceShareName'.trParams({'name': _deviceName ?? ''}))),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
