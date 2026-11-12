@@ -25,9 +25,6 @@ class MarkerIconService {
 
       await mapController.addImage(iconKey, list);
       loadedIcons.add(iconKey);
-
-      // Small delay to ensure the engine registers the new sprite
-      await Future.delayed(const Duration(milliseconds: 50));
     } catch (e) {
       debugPrint("❌ Failed to load icon '$iconKey': $e");
       if (iconKey != 'marker_default_unknown') {
