@@ -159,6 +159,12 @@ class TraccarProvider with ChangeNotifier, WidgetsBindingObserver {
   final Map<int, double> _mileageMap = {};
   Map<int, double> get mileageMap => _mileageMap;
 
+  // 今日里程：與 _mileageMap 分開存放，因為 device_list_screen 會用其他天數覆寫後者
+  final Map<int, double> _todayMileageKm = {};
+  Map<int, double> get todayMileageKm => _todayMileageKm;
+  bool _isLoadingTodayMileage = false;
+  bool get isLoadingTodayMileage => _isLoadingTodayMileage;
+
   bool _isLoadingMileage = false;
   bool get isLoadingMileage => _isLoadingMileage;
 
@@ -203,6 +209,38 @@ class TraccarProvider with ChangeNotifier, WidgetsBindingObserver {
   void clearMileageMap() {
     _mileageMap.clear();
     notifyListeners();
+  }
+
+  /// Sums the summary report over the local calendar day, per device.
+  /// `positions[].attributes.totalDistance` is a lifetime odometer, so it must
+  /// not be shown as today's distance.
+  Future<void> fetchTodayMileage() async {
+    if (_devices.isEmpty || _sessionId == null || _isLoadingTodayMileage) return;
+
+    _isLoadingTodayMileage = true;
+    notifyListeners();
+
+    try {
+      final deviceIds = _devices.map((d) => d.id).whereType<int>().toList();
+      final now = DateTime.now();
+      final from = DateTime(now.year, now.month, now.day).toUtc();
+      final to = DateTime(now.year, now.month, now.day, 23, 59, 59).toUtc();
+      final summaries = await api.ReportsApi(apiClient).getReportsSummary(from, to, deviceId: deviceIds);
+
+      _todayMileageKm.clear();
+      for (final summary in summaries ?? <api.ReportSummary>[]) {
+        final id = summary.deviceId;
+        final distance = summary.distance;
+        if (id != null && distance != null) {
+          _todayMileageKm[id] = distance / 1000.0; // meters -> km
+        }
+      }
+    } catch (e) {
+      debugPrint('Failed to fetch today mileage: $e');
+    } finally {
+      _isLoadingTodayMileage = false;
+      notifyListeners();
+    }
   }
 
   // 2. 刪除裝置邏輯
@@ -501,6 +539,7 @@ class TraccarProvider with ChangeNotifier, WidgetsBindingObserver {
     _events = [];
     _eventIds.clear();
     _latestDeviceEvent.clear();
+    _todayMileageKm.clear();
     _geofences = [];
     _serverNotifications = [];
     _prefetchedHistory.clear();
@@ -592,6 +631,7 @@ class TraccarProvider with ChangeNotifier, WidgetsBindingObserver {
       }
       _positionsRevision++;
       _devicesRevision++;
+      unawaited(fetchTodayMileage());
     } finally {
       _webSocketPositionsDuringFetch = null;
       _webSocketDevicesDuringFetch = null;

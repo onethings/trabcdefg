@@ -24,13 +24,9 @@ class DashboardScreen extends StatelessWidget {
     final offlineCount = provider.devices.where((d) => d.status == 'offline').length;
     final totalCount = provider.devices.length;
 
-    // Calculate total distance for today (ideally from reports, but using current totalDistance for display)
-    double totalDistanceMeters = 0;
-    for (var pos in provider.positions) {
-      final attr = pos.attributes as Map<String, dynamic>?;
-      totalDistanceMeters += (attr?['totalDistance'] ?? 0.0);
-    }
-    double totalKm = totalDistanceMeters / 1000;
+    // 今日里程來自 /reports/summary；positions 的 totalDistance 是累計里程，不能拿來當今日
+    final double totalKm = provider.todayMileageKm.values.fold(0, (sum, km) => sum + km);
+    final String distanceLabel = provider.isLoadingTodayMileage && provider.todayMileageKm.isEmpty ? '—' : '${totalKm.toStringAsFixed(1)} ${'sharedKm'.tr}';
 
     return Scaffold(
       extendBodyBehindAppBar: true,
@@ -53,7 +49,10 @@ class DashboardScreen extends StatelessWidget {
           _buildBackground(theme),
           SafeArea(
             child: RefreshIndicator(
-              onRefresh: () => provider.fetchInitialData(),
+              onRefresh: () async {
+                await provider.fetchInitialData();
+                await provider.fetchTodayMileage();
+              },
               child: SingleChildScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
@@ -64,7 +63,7 @@ class DashboardScreen extends StatelessWidget {
                     const SizedBox(height: 24),
                     _buildStatusSection(context, onlineCount, movingCount, offlineCount, totalCount),
                     const SizedBox(height: 24),
-                    _buildSummaryCard(context, 'dashboardTodayDistance'.tr, '${totalKm.toStringAsFixed(1)} ${'sharedKm'.tr}', Icons.auto_graph_rounded, theme.colorScheme.primary),
+                    _buildSummaryCard(context, 'dashboardTodayDistance'.tr, distanceLabel, Icons.auto_graph_rounded, theme.colorScheme.primary),
                     const SizedBox(height: 24),
                     Text('sharedAlarms'.tr, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 12),
