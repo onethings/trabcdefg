@@ -16,16 +16,12 @@ class TileCacheService {
     _tileBox = await Hive.openBox<Uint8List>(boxName);
   }
 
-  String _generateKey(String url) {
-    return url.hashCode.toString();
-  }
-
   Future<Uint8List?> getTile(String url) async {
-    return _tileBox.get(_generateKey(url));
+    return _tileBox.get(url);
   }
 
   Future<void> saveTile(String url, Uint8List tileData) async {
-    await _tileBox.put(_generateKey(url), tileData);
+    await _tileBox.put(url, tileData);
   }
 }
 
