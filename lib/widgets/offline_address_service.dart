@@ -120,6 +120,16 @@ class OfflineAddressService {
     return (await getAddressDetailed(lat, lon)).address;
   }
 
+  static final Map<String, Future<String>> _addressFutures = {};
+
+  /// Like [getAddress], but a repeated coordinate reuses the same Future, so a
+  /// list rebuild cannot queue another lookup for a point already in flight.
+  static Future<String> getAddressCached(double lat, double lon, {String? address}) {
+    if (address != null && address.isNotEmpty) return Future.value(address);
+    final String key = '${lat.toStringAsFixed(5)},${lon.toStringAsFixed(5)}';
+    return _addressFutures.putIfAbsent(key, () => getAddress(lat, lon));
+  }
+
   static String _cacheKey(double lat, double lon) {
     final String fullHash = GeoHasher().encode(lon, lat, precision: 9);
     return "${_currentLang}_${_addressCacheVersion}_${fullHash.substring(0, 7)}";

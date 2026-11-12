@@ -391,7 +391,7 @@ class _RouteReportScreenState extends State<RouteReportScreen> {
                             trailing: ConstrainedBox(
                               constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.55),
                               child: FutureBuilder<String>(
-                                future: position.address != null && position.address!.isNotEmpty ? Future.value(position.address) : OfflineAddressService.getAddress(position.latitude, position.longitude),
+                                future: OfflineAddressService.getAddressCached(position.latitude, position.longitude, address: position.address),
                                 builder: (context, snapshot) {
                                   return Text(
                                     snapshot.data ?? '...',

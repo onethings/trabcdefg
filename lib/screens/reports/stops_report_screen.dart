@@ -580,7 +580,7 @@ class _StopTimelineTile extends StatelessWidget {
                             const SizedBox(width: 4),
                             Expanded(
                               child: FutureBuilder<String>(
-                                future: stop.address != null && stop.address!.isNotEmpty ? Future.value(stop.address) : OfflineAddressService.getAddress(stop.latitude, stop.longitude),
+                                future: OfflineAddressService.getAddressCached(stop.latitude, stop.longitude, address: stop.address),
                                 builder: (context, snapshot) {
                                   return Text(
                                     snapshot.data ?? 'sharedAddressNotAvailable'.tr,

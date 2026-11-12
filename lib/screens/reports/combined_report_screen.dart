@@ -326,7 +326,7 @@ class _CombinedReportScreenState extends State<CombinedReportScreen> {
                       ),
                       subtitle: Text('${'reportTimeType'.tr}: ${DateFormat('yyyy-MM-dd HH:mm').format(pos.deviceTime?.toLocal() ?? DateTime.now())}', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
                       trailing: FutureBuilder<String>(
-                        future: pos.address != null && pos.address!.isNotEmpty ? Future.value(pos.address) : OfflineAddressService.getAddress(pos.latitude!.toDouble(), pos.longitude!.toDouble()),
+                        future: OfflineAddressService.getAddressCached(pos.latitude!.toDouble(), pos.longitude!.toDouble(), address: pos.address),
                         builder: (context, snapshot) {
                           return SizedBox(
                             width: 120,

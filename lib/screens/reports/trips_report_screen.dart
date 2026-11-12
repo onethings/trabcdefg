@@ -625,7 +625,7 @@ class _TripsReportScreenState extends State<TripsReportScreen> {
         const SizedBox(width: 8),
         Expanded(
           child: FutureBuilder<String>(
-            future: (providedAddress != null && providedAddress.isNotEmpty) ? Future.value(providedAddress) : OfflineAddressService.getAddress(lat, lon),
+            future: OfflineAddressService.getAddressCached(lat, lon, address: providedAddress),
             builder: (context, snapshot) {
               return Text(
                 snapshot.data ?? '...',
