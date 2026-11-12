@@ -52,7 +52,7 @@ class OfflineAddressService {
   static DateTime? _lastNominatimRequest;
   static const int _minNominatimIntervalMs = 1500;
 
-  static bool _isProcessingQueue = false;
+  static Future<void>? _nominatimQueue;
 
   static Future<void> _initCache() async {
     if (_cacheBox == null || !_cacheBox!.isOpen) {
@@ -300,23 +300,15 @@ class OfflineAddressService {
     return parts.join(", ");
   }
 
-  /// Nominatim 佇列處理：確保 1.5s 請求限制
-  static Future<String?> _getRemoteAddressQueued(double lat, double lon) async {
-    final completer = Completer<String?>();
-
-    // 將請求邏輯放入佇列
-    _processNominatimRequest(lat, lon, completer);
-
-    return completer.future;
+  /// Nominatim 佇列處理：以 Future 鏈序列化請求，確保 1.5s 限流不被並發請求衝破
+  static Future<String?> _getRemoteAddressQueued(double lat, double lon) {
+    final previous = _nominatimQueue ?? Future<void>.value();
+    final request = previous.then((_) => _processNominatimRequest(lat, lon));
+    _nominatimQueue = request.then((_) {}, onError: (_) {});
+    return request;
   }
 
-  static void _processNominatimRequest(double lat, double lon, Completer<String?> completer) async {
-    // 簡單的順序排隊邏輯
-    while (_isProcessingQueue) {
-      await Future.delayed(const Duration(milliseconds: 300));
-    }
-    _isProcessingQueue = true;
-
+  static Future<String?> _processNominatimRequest(double lat, double lon) async {
     try {
       final now = DateTime.now();
       if (_lastNominatimRequest != null) {
@@ -325,14 +317,11 @@ class OfflineAddressService {
           await Future.delayed(Duration(milliseconds: _minNominatimIntervalMs - elapsed));
         }
       }
-
-      final result = await _fetchNominatimStructured(lat, lon);
-      _lastNominatimRequest = DateTime.now();
-      completer.complete(result);
+      return await _fetchNominatimStructured(lat, lon);
     } catch (e) {
-      completer.complete(null);
+      return null;
     } finally {
-      _isProcessingQueue = false;
+      _lastNominatimRequest = DateTime.now();
     }
   }
 
