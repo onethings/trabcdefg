@@ -777,7 +777,7 @@
     },
     {
       "name": "shared_preferences_android",
-      "rootUri": "file:///Users/kevinyang/.pub-cache/hosted/pub.dev/shared_preferences_android-2.5.4",
+      "rootUri": "file:///Users/kevinyang/.pub-cache/hosted/pub.dev/shared_preferences_android-2.5.5",
       "packageUri": "lib/",
       "languageVersion": "3.12"
     },
