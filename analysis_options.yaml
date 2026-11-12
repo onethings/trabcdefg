@@ -7,4 +7,5 @@ analyzer:
     - windows/**
     - macos/**
     - linux/**
+    - lib/src/generated_api/**
 include: package:flutter_lints/flutter.yaml
