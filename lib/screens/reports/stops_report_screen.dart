@@ -57,23 +57,24 @@ class StopReport {
   });
 
   factory StopReport.fromJson(Map<String, dynamic> json) {
+    final epoch = DateTime.fromMillisecondsSinceEpoch(0);
     return StopReport(
-      deviceId: json['deviceId'] as int,
-      deviceName: json['deviceName'] as String,
-      distance: (json['distance'] as num).toDouble(),
-      averageSpeed: (json['averageSpeed'] as num).toDouble(),
-      maxSpeed: (json['maxSpeed'] as num).toDouble(),
-      spentFuel: (json['spentFuel'] as num).toDouble(),
-      startOdometer: (json['startOdometer'] as num).toDouble(),
-      endOdometer: (json['endOdometer'] as num).toDouble(),
-      startTime: DateTime.parse(json['startTime'] as String),
-      endTime: DateTime.parse(json['endTime'] as String),
-      positionId: json['positionId'] as int,
-      latitude: (json['latitude'] as num).toDouble(),
-      longitude: (json['longitude'] as num).toDouble(),
+      deviceId: (json['deviceId'] as num?)?.toInt() ?? 0,
+      deviceName: json['deviceName'] as String? ?? '',
+      distance: (json['distance'] as num?)?.toDouble() ?? 0,
+      averageSpeed: (json['averageSpeed'] as num?)?.toDouble() ?? 0,
+      maxSpeed: (json['maxSpeed'] as num?)?.toDouble() ?? 0,
+      spentFuel: (json['spentFuel'] as num?)?.toDouble() ?? 0,
+      startOdometer: (json['startOdometer'] as num?)?.toDouble() ?? 0,
+      endOdometer: (json['endOdometer'] as num?)?.toDouble() ?? 0,
+      startTime: DateTime.tryParse(json['startTime'] as String? ?? '') ?? epoch,
+      endTime: DateTime.tryParse(json['endTime'] as String? ?? '') ?? epoch,
+      positionId: (json['positionId'] as num?)?.toInt() ?? 0,
+      latitude: (json['latitude'] as num?)?.toDouble() ?? 0,
+      longitude: (json['longitude'] as num?)?.toDouble() ?? 0,
       address: json['address'] as String?,
-      duration: json['duration'] as int,
-      engineHours: json['engineHours'] as int?,
+      duration: (json['duration'] as num?)?.toInt() ?? 0,
+      engineHours: (json['engineHours'] as num?)?.toInt(),
     );
   }
 

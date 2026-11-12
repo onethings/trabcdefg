@@ -8,7 +8,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
-import 'package:hive_flutter/hive_flutter.dart'; // 確保引入 Hive
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:maplibre_gl/maplibre_gl.dart' as maplibre;
@@ -71,26 +70,27 @@ class TripReport {
   });
 
   factory TripReport.fromJson(Map<String, dynamic> json) {
+    final epoch = DateTime.fromMillisecondsSinceEpoch(0);
     return TripReport(
-      deviceId: json['deviceId'] as int,
-      deviceName: json['deviceName'] as String,
-      distance: (json['distance'] as num).toDouble(),
-      averageSpeed: (json['averageSpeed'] as num).toDouble() * _knotsToKmh,
-      maxSpeed: (json['maxSpeed'] as num).toDouble() * _knotsToKmh,
-      spentFuel: (json['spentFuel'] as num).toDouble(),
-      startOdometer: (json['startOdometer'] as num).toDouble(),
-      endOdometer: (json['endOdometer'] as num).toDouble(),
-      startTime: DateTime.parse(json['startTime'] as String),
-      endTime: DateTime.parse(json['endTime'] as String),
-      startPositionId: json['startPositionId'] as int,
-      endPositionId: json['endPositionId'] as int,
-      startLat: (json['startLat'] as num).toDouble(),
-      startLon: (json['startLon'] as num).toDouble(),
-      endLat: (json['endLat'] as num).toDouble(),
-      endLon: (json['endLon'] as num).toDouble(),
+      deviceId: (json['deviceId'] as num?)?.toInt() ?? 0,
+      deviceName: json['deviceName'] as String? ?? '',
+      distance: (json['distance'] as num?)?.toDouble() ?? 0,
+      averageSpeed: ((json['averageSpeed'] as num?)?.toDouble() ?? 0) * _knotsToKmh,
+      maxSpeed: ((json['maxSpeed'] as num?)?.toDouble() ?? 0) * _knotsToKmh,
+      spentFuel: (json['spentFuel'] as num?)?.toDouble() ?? 0,
+      startOdometer: (json['startOdometer'] as num?)?.toDouble() ?? 0,
+      endOdometer: (json['endOdometer'] as num?)?.toDouble() ?? 0,
+      startTime: DateTime.tryParse(json['startTime'] as String? ?? '') ?? epoch,
+      endTime: DateTime.tryParse(json['endTime'] as String? ?? '') ?? epoch,
+      startPositionId: (json['startPositionId'] as num?)?.toInt() ?? 0,
+      endPositionId: (json['endPositionId'] as num?)?.toInt() ?? 0,
+      startLat: (json['startLat'] as num?)?.toDouble() ?? 0,
+      startLon: (json['startLon'] as num?)?.toDouble() ?? 0,
+      endLat: (json['endLat'] as num?)?.toDouble() ?? 0,
+      endLon: (json['endLon'] as num?)?.toDouble() ?? 0,
       startAddress: json['startAddress'] as String?,
       endAddress: json['endAddress'] as String?,
-      duration: json['duration'] as int,
+      duration: (json['duration'] as num?)?.toInt() ?? 0,
       driverUniqueId: json['driverUniqueId'] as String?,
       driverName: json['driverName'] as String?,
     );
@@ -194,16 +194,6 @@ class _TripsReportScreenState extends State<TripsReportScreen> {
 
           if (decodedData is List && decodedData.isNotEmpty) {
             _tripsReport = decodedData.map((e) => TripReport.fromJson(e as Map<String, dynamic>)).toList();
-
-            // 【將 Trips Report 請求結果快取至 Hive】
-            try {
-              final tripsBox = Hive.isBoxOpen('trips_reports_cache') ? Hive.box('trips_reports_cache') : await Hive.openBox('trips_reports_cache');
-
-              final cacheKey = '${deviceId}_${fromDateString.substring(0, 10)}';
-              await tripsBox.put(cacheKey, response.body);
-            } catch (cacheErr) {
-              debugPrint('Failed to save trips report to Hive: $cacheErr');
-            }
 
             if (_tripsReport.isNotEmpty) {
               _deviceName = _tripsReport.first.deviceName;
