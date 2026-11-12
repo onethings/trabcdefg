@@ -93,7 +93,7 @@ class CachedNetworkImageProvider
       if (response.statusCode == 200) {
         final Uint8List bytes = response.bodyBytes;
         await cacheService.saveTile(url, bytes);
-        return decode(await ui.ImmutableBuffer.fromUint8List(bytes));
+        return await decode(await ui.ImmutableBuffer.fromUint8List(bytes));
       } else {
         throw Exception(
           'Failed to load tile from network: ${response.statusCode}',

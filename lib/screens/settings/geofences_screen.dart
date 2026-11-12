@@ -80,7 +80,7 @@ class CachedNetworkImageProvider extends ImageProvider<CachedNetworkImageProvide
 
         await cacheService.saveTile(url, bytes);
 
-        return decode(await ui.ImmutableBuffer.fromUint8List(bytes));
+        return await decode(await ui.ImmutableBuffer.fromUint8List(bytes));
       } else {
         throw Exception('Failed to load tile from network: ${response.statusCode}');
       }
