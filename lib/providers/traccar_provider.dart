@@ -10,9 +10,6 @@ import 'package:trabcdefg/src/generated_api/api.dart' as api;
 import 'package:trabcdefg/storage/user_database_helper.dart';
 
 class TraccarProvider with ChangeNotifier, WidgetsBindingObserver {
-  static TraccarProvider? _instance;
-  static TraccarProvider? get instance => _instance;
-
   api.ApiClient apiClient;
   final WebSocketService webSocketService;
   final AuthService authService;
@@ -28,6 +25,7 @@ class TraccarProvider with ChangeNotifier, WidgetsBindingObserver {
   StreamSubscription<Map<String, dynamic>>? _webSocketSubscription;
   Future<void>? _initialDataFuture;
   Map<int, api.Position>? _webSocketPositionsDuringFetch;
+  Map<int, api.Device>? _webSocketDevicesDuringFetch;
 
   int _positionsRevision = 0;
   int get positionsRevision => _positionsRevision;
@@ -38,6 +36,7 @@ class TraccarProvider with ChangeNotifier, WidgetsBindingObserver {
   int get devicesRevision => _devicesRevision;
 
   List<api.Event> _events = [];
+  final Set<int> _eventIds = {};
   final Map<int, api.Event> _latestDeviceEvent = {};
   List<api.Geofence> _geofences = [];
   List<api.Notification> _serverNotifications = [];
@@ -55,7 +54,6 @@ class TraccarProvider with ChangeNotifier, WidgetsBindingObserver {
   int _serverFailCount = 0;
 
   TraccarProvider({required this.apiClient, required this.webSocketService, required this.authService}) {
-    _instance = this;
     WidgetsBinding.instance.addObserver(this); // 註冊 App 生命週期觀察者
     _listenToWebSocket();
     _loadFavorites();
@@ -216,7 +214,9 @@ class TraccarProvider with ChangeNotifier, WidgetsBindingObserver {
       // 本地快取同步更新
       _devices.removeWhere((d) => d.id == deviceId);
       _positionMap.remove(deviceId);
-      _favoriteDeviceIds.remove(deviceId);
+      if (_favoriteDeviceIds.remove(deviceId)) {
+        await UserDatabaseHelper.removeFavorite(deviceId);
+      }
 
       _devicesRevision++;
       _positionsRevision++;
@@ -346,6 +346,7 @@ class TraccarProvider with ChangeNotifier, WidgetsBindingObserver {
 
         for (var newDevice in deviceList) {
           if (newDevice.id != null) {
+            _webSocketDevicesDuringFetch?[newDevice.id!] = newDevice;
             final existingIndex = _devices.indexWhere((dev) => dev.id == newDevice.id);
             if (existingIndex != -1) {
               _devices[existingIndex] = newDevice;
@@ -382,6 +383,9 @@ class TraccarProvider with ChangeNotifier, WidgetsBindingObserver {
         final eventList = (data['events'] as Iterable).map((model) => api.Event.fromJson(model)).whereType<api.Event>().toList();
 
         for (var newEvent in eventList) {
+          if (newEvent.id != null && !_eventIds.add(newEvent.id!)) {
+            continue;
+          }
           if (newEvent.deviceId != null) {
             _latestDeviceEvent[newEvent.deviceId!] = newEvent;
             _events.add(newEvent);
@@ -390,6 +394,9 @@ class TraccarProvider with ChangeNotifier, WidgetsBindingObserver {
 
         if (_events.length > 1000) {
           _events.removeRange(0, _events.length - 1000);
+          _eventIds
+            ..clear()
+            ..addAll(_events.map((e) => e.id).whereType<int>());
         }
 
         notifyListeners();
@@ -406,7 +413,6 @@ class TraccarProvider with ChangeNotifier, WidgetsBindingObserver {
     final sessionStore = AuthSessionStore.instance;
     sessionStore.onSessionUpdated = null;
     sessionStore.onSessionCleared = null;
-    if (identical(_instance, this)) _instance = null;
     super.dispose();
   }
 
@@ -493,6 +499,7 @@ class TraccarProvider with ChangeNotifier, WidgetsBindingObserver {
     _positionsRevision++;
     _devicesRevision++;
     _events = [];
+    _eventIds.clear();
     _latestDeviceEvent.clear();
     _geofences = [];
     _serverNotifications = [];
@@ -529,11 +536,9 @@ class TraccarProvider with ChangeNotifier, WidgetsBindingObserver {
     _isLoading = true;
     notifyListeners();
 
-    apiClient.addDefaultHeader('Cookie', 'JSESSIONID=$_sessionId');
-    apiClient.addDefaultHeader('Accept', 'application/json');
-
     final websocketPositions = <int, api.Position>{};
     _webSocketPositionsDuringFetch = websocketPositions;
+    _webSocketDevicesDuringFetch = <int, api.Device>{};
 
     try {
       final sessionApi = api.SessionApi(apiClient);
@@ -548,10 +553,17 @@ class TraccarProvider with ChangeNotifier, WidgetsBindingObserver {
       final fetchedGeofencesFuture = geofencesApi.getGeofences();
       final fetchedNotificationsFuture = notificationsApi.getNotifications();
 
-      await Future.wait<Object?>([fetchedUserFuture, fetchedDevicesFuture, fetchedPositionsFuture, fetchedGeofencesFuture, fetchedNotificationsFuture]);
+      await Future.wait<Object?>([fetchedUserFuture, fetchedDevicesFuture, fetchedPositionsFuture, fetchedGeofencesFuture, fetchedNotificationsFuture])
+          .timeout(const Duration(seconds: 15));
 
       _currentUser = await fetchedUserFuture;
-      _devices = ((await fetchedDevicesFuture) ?? []).whereType<api.Device>().toList();
+      final fetchedDeviceList = ((await fetchedDevicesFuture) ?? []).whereType<api.Device>().toList();
+      final mergedDevices = <int, api.Device>{};
+      for (final device in fetchedDeviceList) {
+        if (device.id != null) mergedDevices[device.id!] = device;
+      }
+      _webSocketDevicesDuringFetch?.forEach((id, device) => mergedDevices[id] = device);
+      _devices = mergedDevices.values.toList();
       _positions = (await fetchedPositionsFuture) ?? [];
 
       final positionIndexes = <int, int>{
@@ -582,6 +594,7 @@ class TraccarProvider with ChangeNotifier, WidgetsBindingObserver {
       _devicesRevision++;
     } finally {
       _webSocketPositionsDuringFetch = null;
+      _webSocketDevicesDuringFetch = null;
       _isLoading = false;
       notifyListeners();
     }
