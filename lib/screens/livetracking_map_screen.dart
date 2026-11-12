@@ -35,6 +35,7 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
   bool _isCameraLocked = true;
   bool _isStyleLoaded = false;
   double _currentZoom = 14.0;
+  Timer? _zoomSaveTimer;
   final double _mapCenterOffset = 0.007;
   final double _mapCenterOnset = 0.008;
 
@@ -61,6 +62,12 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
         _currentZoom = lastZoom;
       });
     }
+  }
+
+  @override
+  void dispose() {
+    _zoomSaveTimer?.cancel();
+    super.dispose();
   }
 
   bool _checkIsStale(Device device, Position? position) {
@@ -223,8 +230,11 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
                 styleString: Provider.of<MapStyleProvider>(context).getStyle(Theme.of(context).brightness),
                 onCameraMove: (position) {
                   _currentZoom = position.zoom;
-                  SharedPreferences.getInstance().then((prefs) {
-                    prefs.setDouble('live_tracking_zoom_level', position.zoom);
+                  _zoomSaveTimer?.cancel();
+                  _zoomSaveTimer = Timer(const Duration(milliseconds: 300), () {
+                    SharedPreferences.getInstance().then((prefs) {
+                      prefs.setDouble('live_tracking_zoom_level', _currentZoom);
+                    });
                   });
                 },
                 onMapCreated: _onMapCreated,
