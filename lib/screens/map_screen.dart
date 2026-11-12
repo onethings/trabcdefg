@@ -17,14 +17,12 @@ import 'package:trabcdefg/providers/map_style_provider.dart';
 import 'package:trabcdefg/providers/settings_provider.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
 import 'package:trabcdefg/screens/settings/geofences_screen.dart' hide AppMapType, TileCacheService;
-import 'package:trabcdefg/services/auth_session_store.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
 import 'package:trabcdefg/src/utils/position_coordinates.dart';
 import 'package:trabcdefg/widgets/offline_address_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../services/marker_icon_service.dart';
-import '../services/tile_cache_service.dart';
 import '../widgets/device_detail_panel.dart';
 import 'share_device_screen.dart';
 
@@ -39,7 +37,6 @@ const double _kMarkerSelectionRadius = 64.0;
 const Duration _kSymbolTapGuard = Duration(milliseconds: 300);
 const Duration _kCameraEventGrace = Duration(milliseconds: 250);
 const int _kMaxTrailPoints = 1000; //3000
-const double _kMinTrailDistanceMeters = 5.0; // 新增：GPS 最小距離閥值（公尺），過濾飄移
 const double _kAddressRefreshMeters = 50;
 
 class MapScreen extends StatefulWidget {
@@ -62,7 +59,6 @@ class _MapScreenState extends State<MapScreen> {
   final Map<int, _MarkerRenderState> _markerRenderStates = {};
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   api.Device? _currentDevice;
-  final TileCacheService _cacheService = TileCacheService();
   late MarkerIconService _iconService;
   final http.Client _httpClient = http.Client();
 
@@ -87,7 +83,6 @@ class _MapScreenState extends State<MapScreen> {
   final ValueNotifier<String> _selectedAddressNotifier = ValueNotifier("");
   int _deviceSelectionGeneration = 0;
 
-  bool _isCacheInitialized = false;
   Timer? _zoomDebounce;
 
   final TextEditingController _drawerSearchController = TextEditingController();
@@ -109,15 +104,7 @@ class _MapScreenState extends State<MapScreen> {
     _loadDrawerSortMode();
 
     _iconService = MarkerIconService(loadedIcons: _loadedIcons);
-    _cacheService.init().then((_) {
-      OfflineAddressService.initDatabase();
-
-      if (mounted) {
-        _safeSetState(() {
-          _isCacheInitialized = true;
-        });
-      }
-    });
+    OfflineAddressService.initDatabase();
 
     _currentDevice = widget.selectedDevice;
 
@@ -1207,21 +1194,6 @@ class _MapScreenState extends State<MapScreen> {
       builder: (context, traccarProvider, mapStyleProvider, child) {
         if (traccarProvider.isLoading && traccarProvider.devices.isEmpty) {
           return const Scaffold(body: Center(child: CircularProgressIndicator()));
-        }
-
-        if (!_isCacheInitialized) {
-          return Scaffold(
-            body: Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const CircularProgressIndicator(),
-                  const SizedBox(height: _kControlGap),
-                  Text('mapInitializingAssets'.tr, style: Theme.of(context).textTheme.bodySmall),
-                ],
-              ),
-            ),
-          );
         }
 
         double initialLat = 0, initialLng = 0, initialZoom = 2.0;
