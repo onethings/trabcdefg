@@ -189,9 +189,9 @@
     },
     {
       "name": "cupertino_icons",
-      "rootUri": "file:///Users/kevinyang/.pub-cache/hosted/pub.dev/cupertino_icons-1.0.9",
+      "rootUri": "file:///Users/kevinyang/.pub-cache/hosted/pub.dev/cupertino_icons-2.0.0",
       "packageUri": "lib/",
-      "languageVersion": "3.9"
+      "languageVersion": "3.12"
     },
     {
       "name": "dart_earcut",
@@ -327,15 +327,15 @@
     },
     {
       "name": "flutter_secure_storage",
-      "rootUri": "file:///Users/kevinyang/.pub-cache/hosted/pub.dev/flutter_secure_storage-10.3.4",
+      "rootUri": "file:///Users/kevinyang/.pub-cache/hosted/pub.dev/flutter_secure_storage-11.2.0",
       "packageUri": "lib/",
-      "languageVersion": "3.3"
+      "languageVersion": "3.8"
     },
     {
       "name": "flutter_secure_storage_darwin",
-      "rootUri": "file:///Users/kevinyang/.pub-cache/hosted/pub.dev/flutter_secure_storage_darwin-0.3.2",
+      "rootUri": "file:///Users/kevinyang/.pub-cache/hosted/pub.dev/flutter_secure_storage_darwin-0.4.3",
       "packageUri": "lib/",
-      "languageVersion": "3.3"
+      "languageVersion": "3.5"
     },
     {
       "name": "flutter_secure_storage_linux",

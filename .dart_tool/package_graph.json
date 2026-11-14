@@ -411,7 +411,7 @@
     },
     {
       "name": "flutter_secure_storage",
-      "version": "10.3.4",
+      "version": "11.2.0",
       "dependencies": [
         "flutter",
         "flutter_secure_storage_darwin",
@@ -510,7 +510,7 @@
     },
     {
       "name": "cupertino_icons",
-      "version": "1.0.9",
+      "version": "2.0.0",
       "dependencies": []
     },
     {
@@ -1439,7 +1439,7 @@
     },
     {
       "name": "flutter_secure_storage_darwin",
-      "version": "0.3.2",
+      "version": "0.4.3",
       "dependencies": [
         "flutter",
         "plugin_platform_interface"
