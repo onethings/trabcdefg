@@ -132,13 +132,12 @@ class _DevicesScreenState extends State<DevicesScreen> {
       rows.add([device.id, device.name, device.uniqueId]);
     }
 
-    // csv 6.0.0: use ListToCsvConverter (Csv() only exists in csv >= 7.0.0)
-    final csv = const ListToCsvConverter().convert(rows);
+    final csvText = Csv().encode(rows);
 
     final directory = await getTemporaryDirectory();
     final path = '${directory.path}/devices.csv';
     final file = File(path);
-    await file.writeAsString(csv);
+    await file.writeAsString(csvText);
 
     final xFile = XFile(path, mimeType: 'text/csv');
 
@@ -193,19 +192,16 @@ class _DevicesScreenState extends State<DevicesScreen> {
 
   Future<void> _importDevicesFromCsv() async {
     try {
-      final result = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['csv'], withData: true);
-      if (result == null) return;
+      final picked = await FilePicker.pickFile(type: FileType.custom, allowedExtensions: ['csv']);
+      if (picked == null) return;
 
-      final bytes = result.files.single.bytes;
-      if (bytes == null) {
-        throw const FormatException('Unable to read the selected CSV file');
-      }
+      final bytes = await picked.readAsBytes();
 
       var csvContent = utf8.decode(bytes);
       if (csvContent.startsWith('\uFEFF')) {
         csvContent = csvContent.substring(1);
       }
-      final rows = const CsvToListConverter(shouldParseNumbers: false).convert(csvContent);
+      final rows = Csv().decode(csvContent);
       if (rows.isEmpty || rows.first.length < 3 || rows.first.first.toString().trim().toLowerCase() != 'id') {
         throw const FormatException('CSV must use the exported ID, name, identifier column order');
       }

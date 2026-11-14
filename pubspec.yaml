@@ -60,21 +60,21 @@ dependencies:
   dart_geohash: ^2.1.0
 
   # --- Utilities & Services ---
-  csv: ^6.0.0
-  file_picker: ^8.1.7
+  csv: ^8.0.0
+  file_picker: ^13.3.3
   permission_handler: ^12.0.1
   mobile_scanner: ^7.0.1
-  package_info_plus: ^8.2.1
+  package_info_plus: ^10.2.2
   url_launcher: ^6.3.2
   # excel 4.0.6 pins archive ^3.6.1, which cannot resolve next to maplibre_gl_web
   # (image 4.8+ needs archive 4). excel_plus is the maintained drop-in that
   # tracks archive 4.
   excel_plus: ^2.29.3
-  share_plus: ^12.0.1
+  share_plus: ^13.3.1
   path: ^1.9.1
   fl_chart: ^1.2.0
   pdf: ^3.11.1
-  printing: ^5.13.2
+  printing: ^5.15.1
 
 dev_dependencies:
   flutter_test:

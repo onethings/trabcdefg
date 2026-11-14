@@ -377,7 +377,7 @@ class _SummaryReportScreenState extends State<SummaryReportScreen> {
       await file.writeAsString(csvRows.join('\n'));
 
       final xFile = XFile(file.path);
-      await Share.shareXFiles([xFile], text: '${'reportSummary'.tr} CSV');
+      await SharePlus.instance.share(ShareParams(files: [xFile], text: '${'reportSummary'.tr} CSV'));
     } catch (e) {
       debugPrint('Export/Share CSV failed: $e');
     }
