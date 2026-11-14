@@ -433,6 +433,8 @@ const Map<String, String> zhTw = {
   "mapFitAll": "顯示全部裝置",
   "mapZoomIn": "放大",
   "mapZoomOut": "縮小",
+  "mapLocationDenied": "定位權限遭拒",
+  "mapLocationUnavailable": "正在等待定位",
   "devicePrevious": "上一個裝置",
   "deviceNext": "下一個裝置",
   "stateTitle": "狀態",

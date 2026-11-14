@@ -683,6 +683,8 @@ const Map<String, String> th = {
   "mapFitAll": "แสดงอุปกรณ์ทั้งหมด",
   "mapZoomIn": "ซูมเข้า",
   "mapZoomOut": "ซูมออก",
+  "mapLocationDenied": "ไม่ได้รับอนุญาตให้เข้าถึงตำแหน่ง",
+  "mapLocationUnavailable": "กำลังรอตำแหน่งของคุณ",
   "devicePrevious": "อุปกรณ์ก่อนหน้า",
   "deviceNext": "อุปกรณ์ถัดไป",
   "commandVideoStart": "เริ่มวิดีโอ",

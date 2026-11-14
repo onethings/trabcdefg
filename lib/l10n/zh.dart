@@ -426,6 +426,8 @@ const Map<String, String> zhCN = {
   "mapFitAll": "显示全部设备",
   "mapZoomIn": "放大",
   "mapZoomOut": "缩小",
+  "mapLocationDenied": "定位權限已遭拒",
+  "mapLocationUnavailable": "正在等待定位",
   "devicePrevious": "上一个设备",
   "deviceNext": "下一个设备",
   "stateTitle": "状态",

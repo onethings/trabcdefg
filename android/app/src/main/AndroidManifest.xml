@@ -1,4 +1,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- The map draws the user's own position; without these the puck stays off.
+         maplibre_gl's SDK manifest also declares them, but the app requests them
+         at runtime so it should own the declaration. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+
     <application
         android:label="trabcdefg"
         android:name="${applicationName}"

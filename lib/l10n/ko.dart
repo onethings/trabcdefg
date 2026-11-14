@@ -683,6 +683,8 @@ const Map<String, String> ko = {
   "mapFitAll": "모든 기기 표시",
   "mapZoomIn": "확대",
   "mapZoomOut": "축소",
+  "mapLocationDenied": "위치 권한이 거부되었습니다",
+  "mapLocationUnavailable": "위치를 기다리는 중입니다",
   "devicePrevious": "이전 기기",
   "deviceNext": "다음 기기",
   "commandVideoStart": "동영상 시작",

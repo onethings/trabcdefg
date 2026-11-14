@@ -683,6 +683,8 @@ const Map<String, String> ja = {
   "mapFitAll": "すべてのデバイスを表示",
   "mapZoomIn": "拡大",
   "mapZoomOut": "縮小",
+  "mapLocationDenied": "位置情報の許可が拒否されました",
+  "mapLocationUnavailable": "現在地を取得しています",
   "devicePrevious": "前のデバイス",
   "deviceNext": "次のデバイス",
   "commandVideoStart": "ビデオを開始",

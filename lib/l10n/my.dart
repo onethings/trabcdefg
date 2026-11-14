@@ -704,6 +704,8 @@ const Map<String, String> my = {
   "mapFitAll": "စက်ပစ္စည်းအားလုံးကို ပြရန်",
   "mapZoomIn": "ချဲ့ကြည့်ရန်",
   "mapZoomOut": "ချုံ့ကြည့်ရန်",
+  "mapLocationDenied": "တည်နေရာခွင့်ပြုချက် ငြင်းပယ်ခံရသည်",
+  "mapLocationUnavailable": "သင့်တည်နေရာကို စောင့်နေသည်",
   "devicePrevious": "ယခင် စက်ပစ္စည်း",
   "deviceNext": "နောက် စက်ပစ္စည်း",
   "statisticsTitle": "စာရင်းအင်းများ",

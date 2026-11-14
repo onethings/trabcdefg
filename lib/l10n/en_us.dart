@@ -435,6 +435,8 @@ const Map<String, String> enUs = {
   "mapFitAll": "Fit All Devices",
   "mapZoomIn": "Zoom In",
   "mapZoomOut": "Zoom Out",
+  "mapLocationDenied": "Location permission denied",
+  "mapLocationUnavailable": "Waiting for your location",
   "devicePrevious": "Previous Device",
   "deviceNext": "Next Device",
   "stateTitle": "State",
