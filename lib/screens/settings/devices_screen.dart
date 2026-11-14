@@ -6,7 +6,7 @@ import 'dart:io';
 
 import 'package:csv/csv.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:excel/excel.dart' as excel_lib; // FIX: camelCase to lower_case_with_underscores
+import 'package:excel_plus/excel_plus.dart' as excel_lib;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';

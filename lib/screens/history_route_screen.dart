@@ -247,6 +247,10 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
 
   // 地圖資源常量與標示
   static const String _playbackIconId = "playback_arrow";
+  // 回放箭頭在畫面上的直徑（dp），等於原本 64px PNG × iconSize 1.8
+  static const double _playbackIconDisplayPx = 64 * 1.8;
+  // 回放箭頭貼圖的實際邊長（px）。貼圖越大越清楚，iconSize 會自動等比縮小。
+  int _playbackIconPixels = 64;
   static const String _startIconId = "start_pin";
   static const String _endIconId = "end_pin";
   static const int _maxStopIconCount = 50; // 對應 assets/images/pg_1..50.png
@@ -404,7 +408,21 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
       _ensureMapIcon(_startIconId, 'assets/images/start.png'),
       _ensureMapIcon(_endIconId, 'assets/images/destination.png'),
     ]);
+    await _refreshPlaybackIconPixels('assets/images/arrow.png');
     // 停靠點編號圖示改由 _ensureStopIcons 依實際停靠數載入
+  }
+
+  /// 讀貼圖實際邊長。換成高解析度圖之後畫面大小不變，只有邊緣變清楚。
+  Future<void> _refreshPlaybackIconPixels(String assetPath) async {
+    final Uint8List? bytes = _iconAssetCache[assetPath];
+    if (bytes == null) return;
+    try {
+      final image = await decodeImageFromList(bytes);
+      _playbackIconPixels = max(image.width, image.height);
+      image.dispose();
+    } catch (e) {
+      developer.log('Failed to measure playback icon "$assetPath": $e', name: 'HistoryRouteScreen');
+    }
   }
 
   /// 註冊單一圖示。資產缺失或 id 重複只記錄 log，不可中斷後續圖層繪製。
@@ -673,6 +691,8 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     }
 
     await _cleanMapLayers();
+    // 圖層已清空，重建完成前不要對已移除的 symbol 送位置更新
+    _playbackSymbol = null;
 
     final List<LatLng> points = _positions.map((p) => LatLng(p.latitude!.toDouble(), p.longitude!.toDouble())).toList();
 
@@ -714,7 +734,8 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     }
 
     try {
-      _playbackSymbol = await controller.addSymbol(SymbolOptions(geometry: LatLng(_positions.first.latitude!.toDouble(), _positions.first.longitude!.toDouble()), iconImage: _playbackIconId, iconSize: 1.8, zIndex: 10));
+      // iconSize 依貼圖邊長換算，換多大的圖都維持同樣的畫面尺寸
+      _playbackSymbol = await controller.addSymbol(SymbolOptions(geometry: LatLng(_positions.first.latitude!.toDouble(), _positions.first.longitude!.toDouble()), iconImage: _playbackIconId, iconSize: _playbackIconDisplayPx / _playbackIconPixels, zIndex: 10));
     } catch (e) {
       _playbackSymbol = null;
       developer.log('Failed to add playback marker: $e', name: 'HistoryRouteScreen');

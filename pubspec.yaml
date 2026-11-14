@@ -56,7 +56,7 @@ dependencies:
   # --- Maps & Locations ---
   flutter_map: ^8.2.1
   latlong2: ^0.9.1
-  maplibre_gl: 0.25.0
+  maplibre_gl: ^0.28.0
   dart_geohash: ^2.1.0
 
   # --- Utilities & Services ---
@@ -66,7 +66,10 @@ dependencies:
   mobile_scanner: ^7.0.1
   package_info_plus: ^8.2.1
   url_launcher: ^6.3.2
-  excel: ^4.0.6
+  # excel 4.0.6 pins archive ^3.6.1, which cannot resolve next to maplibre_gl_web
+  # (image 4.8+ needs archive 4). excel_plus is the maintained drop-in that
+  # tracks archive 4.
+  excel_plus: ^2.29.3
   share_plus: ^12.0.1
   path: ^1.9.1
   fl_chart: ^1.2.0
@@ -82,6 +85,8 @@ dev_dependencies:
   openapi_generator_annotations: any
   hive_generator: ^2.0.0
   flutter_native_splash: ^2.4.4
+  # Reads back the xlsx that excel_plus writes, independently of excel_plus.
+  archive: ^4.7.1
   # analyzer: ^14.0.0
 
 flutter_native_splash:
