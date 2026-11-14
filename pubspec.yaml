@@ -57,7 +57,6 @@ dependencies:
   flutter_map: ^8.2.1
   latlong2: ^0.9.1
   maplibre_gl: ^0.28.0
-  dart_geohash: ^2.1.0
 
   # --- Utilities & Services ---
   csv: ^8.0.0

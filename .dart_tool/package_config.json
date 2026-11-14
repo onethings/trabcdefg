@@ -200,12 +200,6 @@
       "languageVersion": "3.0"
     },
     {
-      "name": "dart_geohash",
-      "rootUri": "file:///Users/kevinyang/.pub-cache/hosted/pub.dev/dart_geohash-2.1.0",
-      "packageUri": "lib/",
-      "languageVersion": "2.15"
-    },
-    {
       "name": "dart_polylabel2",
       "rootUri": "file:///Users/kevinyang/.pub-cache/hosted/pub.dev/dart_polylabel2-1.0.0",
       "packageUri": "lib/",

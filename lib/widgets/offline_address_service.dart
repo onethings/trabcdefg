@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
-import 'package:dart_geohash/dart_geohash.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
@@ -12,6 +11,7 @@ import 'package:http/http.dart' as http;
 import 'package:maplibre_gl/maplibre_gl.dart';
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
+import 'package:trabcdefg/src/utils/geohash.dart';
 
 class AddressResult {
   final String address;
@@ -362,25 +362,9 @@ class OfflineAddressService {
   /// 獲取 Geohash 的邊界頂點 (用於在地圖上畫框)
   static List<LatLng> getGeohashBounds(String geohash) {
     try {
-      final decoded = GeoHasher().decode(geohash); // returns [lon, lat]
-      // 由於 geohash_plus 可能沒直接提供 bounds，我們利用精度計算誤差範圍
-      // 或者如果 decoded 有 bounds 屬性則直接使用
-      // 假設 decode 返回的是中心點，且我們知道各精度的長寬
-
-      // 這裡採用一種更穩健的方法：如果庫沒提供 bounds，我們可以自己算，
-      // 但通常 geohash 庫會提供。如果沒有，我們預設返回中心點周圍的一個小範圍。
-      // 實際上 Geohash 精度表：
-      // 7: 152.9m x 152.4m
-      // 8: 38.2m x 19m
-      // 9: 4.8m x 4.8m
-
-      // 理想情況是從 decoded 中獲取。
-      // 先嘗試動態檢查是否有 bounds 屬性 (在 Dart 中較難，我們先按常用庫邏輯寫)
-
-      // 注意：geohash_plus 的 decode 回傳的是一個包含 center 的物件。
-      // 如果它沒有 bounds，我們需要手動計算。
-
-      // 暫時使用中心點配合偏移量來模擬邊界 (精度對應的約略值)
+      final decoded = GeoHasher().decode(geohash); // 回傳 [lon, lat]
+      // 這個框只用來在地圖上畫範圍，用精度對應的半寬近似就夠。
+      // 參考網格大小：7 約 153m、8 約 38m x 19m、9 約 4.8m。
       double lat = decoded[1];
       double lon = decoded[0];
 

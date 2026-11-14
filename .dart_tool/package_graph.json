@@ -10,7 +10,6 @@
         "collection",
         "csv",
         "cupertino_icons",
-        "dart_geohash",
         "excel_plus",
         "file_picker",
         "fl_chart",
@@ -324,11 +323,6 @@
     {
       "name": "csv",
       "version": "8.0.0",
-      "dependencies": []
-    },
-    {
-      "name": "dart_geohash",
-      "version": "2.1.0",
       "dependencies": []
     },
     {
