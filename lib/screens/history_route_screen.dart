@@ -7,9 +7,11 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:trabcdefg/src/utils/camera_follow.dart';
 import 'package:trabcdefg/src/utils/direction.dart';
 import 'package:trabcdefg/src/utils/playback_pacing.dart';
 import 'package:trabcdefg/src/utils/played_prefix.dart';
+import 'package:trabcdefg/src/utils/publish_budget.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
@@ -208,10 +210,11 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
   int _lastTickAtMs = 0;
 
   // 已播放軌跡：每次推送整包換掉 GeoJSON，頂點留樣本上限，推送壓到約 10Hz 且同一時間只跑一個
-  static const int _playedPushIntervalMs = 100;
   final PlayedPrefix _playedPrefix = PlayedPrefix();
-  int _lastPlayedPushAtMs = 0;
+  final PublishBudget _playedBudget = PublishBudget(100);
   bool _playedPushInFlight = false;
+  // 換軌跡或換 style 時 +1，讓舊軌跡的在飛推送與相機檢查回來時認得自己已經過期
+  int _playbackGeneration = 0;
 
   Timer? _zoomSaveTimer;
   double _frameRate = 60.0; // 實測播放 tick 頻率（fps）
@@ -223,7 +226,6 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
   // 狀態變數
   List<api.Position> _positions = [];
   final RxDouble _playbackPositionRx = 0.0.obs;
-  int _lastPlaybackSymbolMs = 0;
 
   bool _isPlaying = false;
   bool _isLoading = false;
@@ -281,14 +283,12 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
   AreaUnit _areaUnit = AreaUnit.acre;
 
   Symbol? _playbackSymbol;
-  int _lastFollowPanMs = 0;
+  // 標記位置的推送：每一格都打一次平台通道太貴，30Hz 足夠順
+  final PublishBudget _markerBudget = PublishBudget(30);
+  // 邊緣判斷每次都要跟可見範圍借一次平台通道，200ms 一次足以在高倍速下接住標記
+  final PublishBudget _cameraBudget = PublishBudget(200);
 
   static const double _followZoomLevel = 15.0; //16.0
-  // 跟隨鏡頭：標記跑進畫面外圈才把它推回中央，不是每一格都置中。
-  // 外圈留 35%，剛好避開底部播放面板蓋住的那一段。
-  static const double _followPanEdgeFraction = 0.35;
-  // 邊緣判斷要跟可見範圍借一次平台通道，200ms 一次足以在高倍速下接住標記
-  static const int _followPanIntervalMs = 200;
   static const int _followPanAnimMs = 250;
   static const int _focusCameraAnimMs = 800;
 
@@ -650,6 +650,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
           _positions = playbackPositions;
           _playedPrefix.clear();
           _playedPushInFlight = false;
+          _playbackGeneration++;
           _isLoading = false;
           _resetAddressSchedule();
         });
@@ -734,6 +735,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     await controller.addLineLayer(_playedSourceId, _playedLayerId, LineLayerProperties(lineColor: '#0F53FE', lineWidth: 5.5, lineOpacity: 1.0, lineJoin: 'round', lineCap: 'round'));
     _playedPrefix.clear();
     _playedPushInFlight = false;
+    _playbackGeneration++;
 
     // 3. 繪製起終點標籤與停靠點（圖示失敗不可影響軌跡顯示）
     try {
@@ -1357,11 +1359,11 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     final pos = _positions[idx];
     final point = LatLng(pos.latitude!.toDouble(), pos.longitude!.toDouble());
     final double currentZoom = controller.cameraPosition?.zoom ?? _currentZoom;
-    final double targetZoom = _userOwnsZoom ? currentZoom : max(currentZoom, _followZoomLevel);
+    final double targetZoom = playbackStartZoom(current: currentZoom, userOwnsZoom: _userOwnsZoom, followZoom: _followZoomLevel);
     final int now = DateTime.now().millisecondsSinceEpoch;
 
     _suppressFollowCameraUntilMs = now + _focusCameraAnimMs + 100;
-    _lastFollowPanMs = 0;
+    _cameraBudget.reset();
     controller.animateCamera(CameraUpdate.newLatLngZoom(point, targetZoom), duration: const Duration(milliseconds: _focusCameraAnimMs));
   }
 
@@ -1488,11 +1490,10 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     _playedPrefix.advanceTo(idx, (i) => [_positions[i].longitude!.toDouble(), _positions[i].latitude!.toDouble()]);
 
     final now = DateTime.now().millisecondsSinceEpoch;
-    if (_playedPushInFlight || now - _lastPlayedPushAtMs < _playedPushIntervalMs) {
+    if (_playedPushInFlight || !_playedBudget.due(now)) {
       return;
     }
     _playedPushInFlight = true;
-    _lastPlayedPushAtMs = now;
 
     final coordinates = [..._playedPrefix.vertices, [smoothLng, smoothLat]];
     final geoJson = <String, dynamic>{
@@ -1504,11 +1505,15 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
         },
       ],
     };
+    final int generation = _playbackGeneration;
     unawaited(
       controller
           .setGeoJsonSource(_playedSourceId, geoJson)
           .catchError((Object error) => developer.log('Failed to push played line: $error', name: 'HistoryRouteScreen'))
-          .whenComplete(() => _playedPushInFlight = false),
+          // 換軌跡後回來的舊推送不能把新的閂解掉，否則兩筆寫入會交錯
+          .whenComplete(() {
+            if (generation == _playbackGeneration) _playedPushInFlight = false;
+          }),
     );
   }
 
@@ -1566,10 +1571,9 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     }
 
     // 更新行進中的小車標記
-    // 播放中每一幀都打一次平台通道太貴，限制在約 30Hz；暫停與拖曳時立即更新。
+    // 播放中每一幀都打一次平台通道太貴，用量由 _markerBudget 顧；暫停與拖曳時立即更新。
     final int nowMs = DateTime.now().millisecondsSinceEpoch;
-    if (!_isPlaying || nowMs - _lastPlaybackSymbolMs >= 30) {
-      _lastPlaybackSymbolMs = nowMs;
+    if (!_isPlaying || _markerBudget.due(nowMs)) {
       _mapController!.updateSymbol(_playbackSymbol!, SymbolOptions(geometry: currentLatLng, iconRotate: bearing));
     }
 
@@ -1578,16 +1582,12 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
 
     // 相機跟隨：標記還留在畫面裡時鏡頭不動，跑進外圈才把它推回中央
     final controller = _mapController;
-    if (_followUser && _isPlaying && controller != null && nowMs >= _suppressFollowCameraUntilMs && nowMs - _lastFollowPanMs >= _followPanIntervalMs) {
-      _lastFollowPanMs = nowMs;
+    if (_followUser && _isPlaying && controller != null && nowMs >= _suppressFollowCameraUntilMs && _cameraBudget.due(nowMs)) {
+      final int generation = _playbackGeneration;
       final LatLngBounds visibleRegion = await controller.getVisibleRegion();
-      final double latSpan = visibleRegion.northeast.latitude - visibleRegion.southwest.latitude;
-      final double lngSpan = visibleRegion.northeast.longitude - visibleRegion.southwest.longitude;
-      final bool nearEdge =
-          currentLatLng.latitude > visibleRegion.northeast.latitude - latSpan * _followPanEdgeFraction ||
-          currentLatLng.latitude < visibleRegion.southwest.latitude + latSpan * _followPanEdgeFraction ||
-          currentLatLng.longitude > visibleRegion.northeast.longitude - lngSpan * _followPanEdgeFraction ||
-          currentLatLng.longitude < visibleRegion.southwest.longitude + lngSpan * _followPanEdgeFraction;
+      // 這一趟回來時使用者可能已經暫停、放開跟隨或換了軌跡，就不該再動鏡頭
+      if (!mounted || generation != _playbackGeneration || !_isPlaying || !_followUser) return;
+      final bool nearEdge = isInEdgeZone(latitude: currentLatLng.latitude, longitude: currentLatLng.longitude, south: visibleRegion.southwest.latitude, west: visibleRegion.southwest.longitude, north: visibleRegion.northeast.latitude, east: visibleRegion.northeast.longitude);
       if (nearEdge) {
         controller.animateCamera(CameraUpdate.newLatLng(currentLatLng), duration: const Duration(milliseconds: _followPanAnimMs));
       }
