@@ -22,6 +22,7 @@ import 'package:trabcdefg/services/feedback.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
 import 'package:trabcdefg/src/utils/motion.dart';
 import 'package:trabcdefg/src/utils/position_coordinates.dart';
+import 'package:trabcdefg/src/utils/status_utils.dart';
 import 'package:trabcdefg/widgets/offline_address_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -552,6 +553,65 @@ class _MapScreenState extends State<MapScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  /// Readable vehicle list for screen readers: the map markers themselves are
+  /// native symbols with no semantics, so this sheet is the accessible path.
+  void _showDeviceAccessSheet(TraccarProvider provider) {
+    final List<api.Device> devices = _navigableDevices(provider);
+    if (devices.isEmpty) {
+      FeedbackService.info('mapNoPositions'.tr, context: context);
+      return;
+    }
+    final DateTime now = DateTime.now().toUtc();
+    showCupertinoModalPopup<void>(
+      context: context,
+      builder: (popupContext) => Material(
+        color: Theme.of(popupContext).colorScheme.surface,
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(padding: const EdgeInsets.all(16), child: Text('deviceTitle'.tr, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600))),
+              Flexible(
+                child: ListView(
+                  children: [
+                    for (final device in devices)
+                      Builder(
+                        builder: (_) {
+                          final api.Position? position = provider.getPosition(device.id!);
+                          final String status = resolveDeviceStatus(device, position, now);
+                          final double speedKmh = (position?.speed ?? 0.0) * 1.852;
+                          final String statusLabel = switch (status) {
+                            'online' => 'deviceStatusOnline'.tr,
+                            'offline' => 'deviceStatusOffline'.tr,
+                            _ => 'deviceStatusUnknown'.tr,
+                          };
+                          final String name = device.name ?? 'deviceUnknown'.tr;
+                          return Semantics(
+                            button: true,
+                            label: '$name, $statusLabel, ${speedKmh.toStringAsFixed(0)} ${'sharedKmh'.tr}',
+                            child: ListTile(
+                              leading: Icon(CupertinoIcons.car_fill, color: _getStatusColor(status)),
+                              title: Text(name),
+                              subtitle: Text('$statusLabel · ${speedKmh.toStringAsFixed(0)} ${'sharedKmh'.tr}'),
+                              onTap: () {
+                                Navigator.of(popupContext).pop();
+                                _onDeviceSelected(device, forceShowPanel: true, zoomToMax: true);
+                              },
+                            ),
+                          );
+                        },
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -1518,6 +1578,8 @@ class _MapScreenState extends State<MapScreen> {
                       _GlassIconButton(icon: _isFollowingDevice ? Icons.my_location_rounded : Icons.location_searching_rounded, label: 'mapFollowDevice'.tr, isActive: _isFollowingDevice, haptic: true, onTap: _toggleFollowCurrentDevice),
                       const _GlassDivider(),
                       _GlassIconButton(icon: Icons.zoom_out_map_rounded, label: 'mapFitAll'.tr, onTap: () => _zoomToFitAll(context.read<TraccarProvider>())),
+                      _GlassDivider(),
+                      _GlassIconButton(icon: CupertinoIcons.list_bullet, label: 'deviceTitle'.tr, onTap: () => _showDeviceAccessSheet(context.read<TraccarProvider>())),
                     ],
                   ),
                 ),

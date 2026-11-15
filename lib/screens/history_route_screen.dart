@@ -221,6 +221,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
   // 狀態變數
   List<api.Position> _positions = [];
   final RxDouble _playbackPositionRx = 0.0.obs;
+  int _lastPlaybackSymbolMs = 0;
 
   bool _isPlaying = false;
   bool _isLoading = false;
@@ -1558,7 +1559,12 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     }
 
     // 更新行進中的小車標記
-    _mapController!.updateSymbol(_playbackSymbol!, SymbolOptions(geometry: currentLatLng, iconRotate: bearing));
+    // 播放中每一幀都打一次平台通道太貴，限制在約 30Hz；暫停與拖曳時立即更新。
+    final int nowMs = DateTime.now().millisecondsSinceEpoch;
+    if (!_isPlaying || nowMs - _lastPlaybackSymbolMs >= 30) {
+      _lastPlaybackSymbolMs = nowMs;
+      _mapController!.updateSymbol(_playbackSymbol!, SymbolOptions(geometry: currentLatLng, iconRotate: bearing));
+    }
 
     // 已播放軌跡：只補新增點，並把平台通道更新壓到約 10Hz
     _pushPlayedGeometry(idx, smoothLng, smoothLat);
