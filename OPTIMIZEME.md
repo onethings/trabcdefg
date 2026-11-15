@@ -163,6 +163,8 @@ WebSocket 每包 (data['positions'])
 
 ### P1-1 通知頁整頁訂閱 provider，且每筆事件配一個新 `Set`
 
+**狀態：第三批部分實作。** 每筆事件的 `Set` 已消除，整頁訂閱的拆解還沒做。
+
 - **位置** `lib/screens/notifications_screen.dart:166` `Provider.of<TraccarProvider>(context)`（預設 listen）、`:171-173` `.where((e) => _isEventVisible(e, provider))`、`:64` 在 `_isEventVisible` 內 `provider.getServerEventTypes()`，而後者（`lib/providers/traccar_provider.dart:525`）每次 `where().map().toSet()`。
 - **為什麼貴。** 每一包位置都重建整頁（含 `BackdropFilter` 與漸層），並重跑最多 1000 筆事件的過濾；`getServerEventTypes()` 在逐筆判斷裡，於是每筆事件都重建同一個 Set。
 - **成本估計。** 推論。封包 1 到 5 Hz，即每秒 1 到 5 次「全頁 + 1000 筆過濾 + 1000 次 Set 配置」。
@@ -170,6 +172,8 @@ WebSocket 每包 (data['positions'])
 - **最小修法。** 把 `final serverTypes = provider.getServerEventTypes();` 提到 `.where` 外，`_isEventVisible` 收這個 Set。再用 `Selector` 或只包住 `ListView` 的 `Consumer`，讓 AppBar 與漸層不再重建。
 
 ### P1-2 地圖頁底部控制項每包重算並重建玻璃容器
+
+**狀態：第三批已實作。**
 
 - **位置** `lib/screens/map_screen.dart:1621-1622` 的 `Consumer<TraccarProvider>` → `_buildBottomControls(provider, _currentDevice)`，其中 `:524` 每次 `_navigableDevices(...)`，`:519`、`:513` 各一次 `indexWhere`。
 - **為什麼貴。** 這塊顯示的東西（裝置名、序號/總數、跟隨狀態）只在裝置清單或選中裝置變動時才變，卻跟著位置封包重建；裡面是 `GlassContainer(platformViewBackdrop: true)`（`:1675-1682`），重建等於重做一次玻璃合成。
@@ -179,11 +183,14 @@ WebSocket 每包 (data['positions'])
 
 ### P1-3 軌跡回放面板跟著 60 Hz 動畫每秒重建 60 次
 
+**狀態：第三批已實作**（只做索引節流，formatter 快取被推翻，見下）。
+
 - **位置** `lib/screens/history_route_screen.dart:1517-1541` 每格寫 `_playbackPositionRx.value`；`:1895-1905` 的 `Obx` 每次呼叫都 `DateFormat('HH:mm:ss')`；`:2017-2021` 另一個 `Obx` 用 `DateFormat('MM/dd HH:mm:ss')`。
 - **為什麼貴。** 顯示的時間與速度是「索引」的函數，索引一秒只跳幾格，widget 卻每秒重建 60 次，每次重新編譯 `DateFormat`。
 - **成本估計。** 實測（§2.2，本機 JIT）。每次新建 `DateFormat` 比重用多約 70 µs，60 Hz 等於每秒 4.2 ms 純格式化垃圾，10 分鐘回放約 2.5 秒純 CPU；再加每格兩個 `Row`/`Column` 重建與文字排版。AOT 絕對值不同，比例一致。
 - **風險。** 渲染字串只依賴 index，用「index 變了才通知」可做到像素相同。
-- **最小修法。** 加 `_shownIndexRx`，index 真的變時才更新，兩個 stats `Obx` 改讀它（`Slider` 保持讀 `_playbackPositionRx`）；兩個 `DateFormat` 提成 `static final`。
+- **最小修法。** 加 `_shownIndexRx`，index 真的變時才更新，兩個 stats `Obx` 改讀它（`Slider` 保持讀 `_playbackPositionRx`）。
+- **formatter 快取被推翻。** 原本建議把兩個 `DateFormat` 提成 `static final`。但 `DateFormat` 在建構時綁定當下 locale，而這支 App 允許在執行期切換語言（`LocalizationService.saveLocale`），靜態快取的 formatter 會繼續用舊語系的月份與星期名稱。`HH:mm:ss` 這種純數字格式看不出差異，但 `yMMMd`、`EEEE` 之類會錯。索引節流已經把建構次數從每秒 60 次降到約每秒 3 次，省下的不值得換一個潛在的語系 bug。
 
 ### P1-4 裝置卡每張一個 1 秒計時器，加上每次定位都新開位址 Future 再 `setState` 整頁
 
@@ -215,13 +222,18 @@ WebSocket 每包 (data['positions'])
 
 ### P1-7 相機事件每次配一個 `Timer`，且 release 仍在寫 log
 
+**狀態：第三批只做了一半。** 全域 log 靜音已做；debounce 的 Timer 配置維持原樣，因為原來的修法被推翻（見下）。
+
 - **位置** `lib/screens/map_screen.dart:1508-1515` `onCameraMove` 內 `cancel()` 後立刻新建 `Timer`；`:1530` `debugPrint('Map zoom: ...')`；同樣的 debounce 樣式在 `lib/screens/history_route_screen.dart:1667-1672`。
 - **為什麼貴。** `onCameraMove` 在平移與跟隨動畫期間逐幀回呼，等於每秒約 60 次 Timer 配置與取消。`debugPrint` **不會在 release 被編譯掉**（`packages/flutter/lib/src/foundation/print.dart:50` 顯示它只是被指派成 `debugPrintThrottled`），全 repo 共 103 處呼叫點，其中 `traccar_provider.dart` 有 14 處，包含 20 秒體檢與 websocket 錯誤路徑會走到的分支。
 - **成本估計。** 推論。每秒約 60 次小物件配置（僅相機移動時）；log 成本小但持續，表現在 logcat 抖動。
 - **風險。** 若只在 `_zoomDebounce == null` 時建立，存檔時機會從「停止後 300 ms」變成「手勢中每 300 ms 一次」，**最終存入值相同**。
-- **最小修法。** `if (_zoomDebounce == null) { _zoomDebounce = Timer(...); }`，callback 內設回 null；刪掉 `:1530` 的 `debugPrint`；若要全域關掉 log，在 `main()` 用 `kReleaseMode` 守衛把 `debugPrint` 換成空函式。
+- **最小修法。** 在 `main()` 用 `kReleaseMode` 守衛把 `debugPrint` 換成空函式，一行覆蓋全 repo 的 103 處呼叫點。
+- **「只在 timer 為 null 時建立」被推翻。** 我在上面的風險欄寫「最終存入值相同」，這是錯的。原本每一幀 `cancel()` 再新建，timer 在**最後一次**相機移動之後 300 ms 才觸發，寫入的是手勢結束的位置。若改成「null 才建立」，timer 在手勢**第一幀**就建好，300 ms 後寫入的是手勢起點的位置，之後整個平移期間都不會再寫。結果是存到錯的縮放值。正確做法是把寫入搬到 `onCameraIdle`，但那樣要確認每個程式化移動都會觸發 idle，風險不對等於收益（每秒 60 個小物件的配置）。所以維持原樣，只留下 log 那一項。
 
 ### P1-8 軌跡頁為兩個座標點建了整條 `List<LatLng>`
+
+**狀態：第三批已實作。**
 
 - **位置** `lib/screens/history_route_screen.dart:711`，而結果只在 `:743-744` 用到 `first` 與 `last`。
 - **為什麼貴。** 每點一個 `LatLng`，兩萬點的一天約 700 KB 垃圾，而換顏色模式（`:984`）、換樣式（`:400`）、換日期都會重跑。
@@ -342,7 +354,7 @@ lib/arm64-v8a 原生庫全部 Stored（mmap，不解壓）
 | --- | --- | --- | --- | --- |
 | 第一批（已完成） | P0-1、P0-2、P0-5 | 常駐記憶體明顯下降，長尾成長消失 | 低（純 lazy 化與 dispose） | 地圖頁與裝置清單各開 30 分鐘，DevTools Memory 曲線應從「單調上升」變「持平」 |
 | 第二批（已完成） | P0-3、P0-4、P1-9 | 尖峰記憶體與首頁卡頓 | 低到中 | 選 30 台裝置後看 RSS；首次緬甸語地址查詢的記憶體尖峰 |
-| 第三批 | P1-1 到 P1-8、P1-10、P1-11 | 待機 CPU 與耗電 | 中（每頁需比對畫面） | 每頁改完立刻截圖對照，加上 Performance 錄 10 秒看 rebuild 次數 |
+| 第三批（進行中，已完成 P1-1 部分、P1-2、P1-3、P1-7 部分、P1-8） | P1-1 到 P1-8、P1-10、P1-11 | 待機 CPU 與耗電 | 中（每頁需比對畫面） | 每頁改完立刻截圖對照，加上 Performance 錄 10 秒看 rebuild 次數 |
 | 待你決定 | P1-5 第 4 步（地址文字會變）、P1-12（要先定「今天」的日界線）、P2-2、P2-4 | 最大宗無線電流量 | 高（改功能或改流程） | 需要你點頭才動 |
 
 ### 量測步驟（腳本已備好，實測跑通）
@@ -447,4 +459,20 @@ scripts/measure_memory.sh after 5 com.example.trabcdefg 600
 
 **這一輪沒有新增單元測試，講清楚為什麼。** 改到的四條路徑都需要裝置或網路才會走到（真實的 Nominatim 查詢、20 MB 資產複製、地圖首幀、軌跡頁載入），單元測試只能測到被我搬動的私有函式，測了等於測 `PositionCleaner` 自己。第一輪能加測試是因為圖磚淘汰是純本機邏輯。這兩項的驗收要靠 §8 的裝置量測。
 
-**下一批建議。** 照 §8 量 `before`（現在裝置上仍是改動前的 1.0.38）與 `after`，確認第一批與第二批合起來的效果，再開第三批（P1-1 到 P1-8、P1-10、P1-11）。
+### 第三批第一段（已完成，本輪）
+
+| 項目 | 做了什麼 | 檔案 |
+| --- | --- | --- |
+| P1-1（部分） | `getServerEventTypes()` 從每筆事件的判斷式裡提到每次 build 一次，消除最多 1000 次 Set 配置 | `lib/screens/notifications_screen.dart` |
+| P1-2 | 底部控制項的 `Consumer` 改成 `Selector`，key 取「可導覽裝置 id 與名稱」加目前裝置 id，位置封包不再重建玻璃容器 | `lib/screens/map_screen.dart` |
+| P1-3 | 新增 `_shownIndexRx`，由 `_updatePlaybackUI` 這個唯一入口發布，兩個顯示時間與速度的 `Obx` 改讀它，重建頻率從 60 Hz 降到索引變化率（約 3 Hz） | `lib/screens/history_route_screen.dart` |
+| P1-7（部分） | `main()` 在 `kReleaseMode` 下把 `debugPrint` 換成空函式，一次覆蓋全 repo 103 處呼叫點 | `lib/main.dart` |
+| P1-8 | 起終點標記不再為整條軌跡建 `List<LatLng>`，只算兩端兩個點 | `lib/screens/history_route_screen.dart` |
+
+**驗證結果。** `flutter test` 69 passed，`dart analyze lib test` 0 error 0 warning、50 個 info 與改動前相同。
+
+**兩條被推翻的路。** formatter 靜態快取會踩到執行期切換語系。debounce timer 的「null 才建立」會存到錯誤的縮放值（我原本在風險欄寫的「最終值相同」是錯的）。兩條都寫進對應章節。
+
+**第三批剩下的。** P1-1 的整頁訂閱拆解、P1-4（裝置清單的位址 widget 與計時器）、P1-6（儀表板拆訂閱）、P1-10（報表 DataTable 與骨架動畫）、P1-11（20 秒體檢）。這幾項都會動到畫面結構，建議每項一次 commit 並截圖比對。
+
+**再下一批建議。** 照 §8 量 `before`（現在裝置上仍是改動前的 1.0.38）與 `after` 之後，再開 P1-4 之後的項目，因為它們的收益比前八項小。
