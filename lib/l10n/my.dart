@@ -944,4 +944,6 @@ const Map<String, String> my = {
   "sharedMore": "နောက်ထပ်",
   "playbackPlay": "ဖွင့်ရန်",
   "playbackPause": "ခဏရပ်ရန်",
+  "diagnosticInfo": "ရောဂါစစ်ဆေးမှုအချက်အလက်",
+  "sharedShow": "ပြရန်",
 };

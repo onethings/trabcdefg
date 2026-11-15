@@ -942,4 +942,6 @@ const Map<String, String> ko = {
   "sharedMore": "더 보기",
   "playbackPlay": "재생",
   "playbackPause": "일시정지",
+  "diagnosticInfo": "진단 정보",
+  "sharedShow": "표시",
 };

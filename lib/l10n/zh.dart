@@ -945,4 +945,6 @@ const Map<String, String> zhCN = {
   "sharedMore": "更多",
   "playbackPlay": "播放",
   "playbackPause": "暂停",
+  "diagnosticInfo": "诊断信息",
+  "sharedShow": "显示",
 };

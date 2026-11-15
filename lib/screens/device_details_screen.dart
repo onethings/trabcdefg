@@ -30,6 +30,8 @@ class DeviceDetailsScreen extends StatefulWidget {
 }
 
 class _DeviceDetailsScreenState extends State<DeviceDetailsScreen> {
+  bool _showDiagnostics = false;
+
   api.Device? _updatedDevice;
 
   // 2. Define a function to fetch all required data
@@ -349,6 +351,9 @@ class _DeviceDetailsScreenState extends State<DeviceDetailsScreen> {
   /// Traccar stores these attributes in meters.
   static const Set<String> _meterAttributes = {'distance', 'totalDistance', 'odometer', 'obdOdometer', 'odometerTrip'};
 
+  /// Request-level fields that matter to technicians, not drivers.
+  static const Set<String> _diagnosticKeys = {'id', 'deviceId', 'protocol', 'deviceTime', 'serverTime', 'valid', 'accuracy', 'network', 'geofenceIds'};
+
   Map<String, dynamic> _asAttributeMap(Object? attributes) {
     if (attributes is Map<String, dynamic>) return attributes;
     if (attributes is Map) {
@@ -362,7 +367,41 @@ class _DeviceDetailsScreenState extends State<DeviceDetailsScreen> {
     final keys = values.keys.toSet();
     final orderedKeys = <String>[..._positionFieldOrder.where(keys.contains), ...keys.where((key) => !_positionFieldOrder.contains(key)).toList()..sort()];
 
-    return orderedKeys.where((key) => _hasAttributeValue(values[key])).map((key) => _buildAttributeRow(_positionFieldLabel(key), _formatPositionValue(key, values[key]))).toList();
+    final mainRows = <Widget>[];
+    final diagnosticRows = <Widget>[];
+    for (final key in orderedKeys) {
+      if (!_hasAttributeValue(values[key])) continue;
+      final row = _buildAttributeRow(_positionFieldLabel(key), _formatPositionValue(key, values[key]));
+      if (_diagnosticKeys.contains(key)) {
+        diagnosticRows.add(row);
+      } else {
+        mainRows.add(row);
+      }
+    }
+
+    if (diagnosticRows.isNotEmpty) {
+      final colorScheme = Theme.of(context).colorScheme;
+      mainRows.add(
+        InkWell(
+          onTap: () => setState(() => _showDiagnostics = !_showDiagnostics),
+          borderRadius: BorderRadius.circular(8),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Row(
+              children: [
+                Text('diagnosticInfo'.tr, style: TextStyle(fontWeight: FontWeight.bold, color: colorScheme.primary)),
+                const SizedBox(width: 6),
+                Text('(${diagnosticRows.length})', style: TextStyle(color: colorScheme.onSurfaceVariant)),
+                const Spacer(),
+                Icon(_showDiagnostics ? CupertinoIcons.chevron_up : CupertinoIcons.chevron_down, size: 16, color: colorScheme.onSurfaceVariant),
+              ],
+            ),
+          ),
+        ),
+      );
+      if (_showDiagnostics) mainRows.addAll(diagnosticRows);
+    }
+    return mainRows;
   }
 
   String _positionFieldLabel(String key) {

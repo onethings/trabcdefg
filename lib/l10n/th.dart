@@ -943,4 +943,6 @@ const Map<String, String> th = {
   "sharedMore": "เพิ่มเติม",
   "playbackPlay": "เล่น",
   "playbackPause": "หยุดชั่วคราว",
+  "diagnosticInfo": "ข้อมูลวินิจฉัย",
+  "sharedShow": "แสดง",
 };

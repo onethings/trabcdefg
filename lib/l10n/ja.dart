@@ -942,4 +942,6 @@ const Map<String, String> ja = {
   "sharedMore": "その他",
   "playbackPlay": "再生",
   "playbackPause": "一時停止",
+  "diagnosticInfo": "診断情報",
+  "sharedShow": "表示",
 };

@@ -945,4 +945,6 @@ const Map<String, String> enUs = {
   "sharedMore": "More",
   "playbackPlay": "Play",
   "playbackPause": "Pause",
+  "diagnosticInfo": "Diagnostic info",
+  "sharedShow": "Show",
 };

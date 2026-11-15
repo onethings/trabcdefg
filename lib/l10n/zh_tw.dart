@@ -945,4 +945,6 @@ const Map<String, String> zhTw = {
   "sharedMore": "更多",
   "playbackPlay": "播放",
   "playbackPause": "暫停",
+  "diagnosticInfo": "診斷資訊",
+  "sharedShow": "顯示",
 };
