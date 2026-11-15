@@ -3,6 +3,7 @@ import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:get/get.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
@@ -243,13 +244,14 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
     final DateTime? lastUpdate = position?.fixTime?.toUtc() ?? device.lastUpdate?.toUtc();
     final isStale = status == 'offline';
 
-    final card = Card(
+    return Card(
       margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
       color: theme.colorScheme.surface,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
         onTap: () => context.read<MapNavigation>().focusDevice(device.id!),
+        onLongPress: () => _showCardActions(device, position),
         child: Padding(
           padding: const EdgeInsets.all(14),
           child: Column(
@@ -333,28 +335,49 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
         ),
       ),
     );
-
-    return CupertinoContextMenu(
-      actions: [
-        _contextMenuAction(CupertinoIcons.map, 'actionNavigate'.tr, () => _navigateToPosition(position)),
-        _contextMenuAction(CupertinoIcons.share, 'sharedShare'.tr, () => _sharePosition(device, position)),
-        _contextMenuAction(CupertinoIcons.paperplane, 'commandTitle'.tr, () => _openCommandScreen(device)),
-      ],
-      child: card,
-    );
   }
 
-  Widget _contextMenuAction(IconData icon, String label, VoidCallback onPressed) {
-    return CupertinoContextMenuAction(
-      onPressed: onPressed,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 20, color: Theme.of(context).colorScheme.onSurface),
-          const SizedBox(width: 10),
-          Text(label),
-        ],
+  /// The card's secondary actions, on long press.
+  ///
+  /// A [CupertinoContextMenu] would be the nearer-to-iOS shape, but its press
+  /// preview is inserted into the root overlay and only removed once its
+  /// animation reaches dismissed. Focusing a device switches tabs in the same
+  /// frame, which mutes this tab's tickers, so the preview froze and stayed
+  /// painted over the map.
+  Future<void> _showCardActions(api.Device device, api.Position? position) async {
+    HapticFeedback.mediumImpact();
+    final _CardAction? action = await showModalBottomSheet<_CardAction>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _cardAction(sheetContext, CupertinoIcons.map, 'actionNavigate'.tr, _CardAction.navigate),
+            _cardAction(sheetContext, CupertinoIcons.share, 'sharedShare'.tr, _CardAction.share),
+            _cardAction(sheetContext, CupertinoIcons.paperplane, 'commandTitle'.tr, _CardAction.command),
+          ],
+        ),
       ),
+    );
+
+    switch (action) {
+      case _CardAction.navigate:
+        await _navigateToPosition(position);
+      case _CardAction.share:
+        await _sharePosition(device, position);
+      case _CardAction.command:
+        await _openCommandScreen(device);
+      case null:
+        break;
+    }
+  }
+
+  Widget _cardAction(BuildContext sheetContext, IconData icon, String label, _CardAction action) {
+    return ListTile(
+      leading: Icon(icon, size: 20, color: Theme.of(context).colorScheme.onSurface),
+      title: Text(label),
+      onTap: () => Navigator.of(sheetContext).pop(action),
     );
   }
 
@@ -555,6 +578,8 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
 
   String? _getStatusText(int index) => [null, 'online', 'offline', 'unknown', 'favorite'][index];
 }
+
+enum _CardAction { navigate, share, command }
 
 class _DeviceTimeAgoText extends StatefulWidget {
   final DateTime? lastUpdate;
