@@ -1,14 +1,35 @@
 // lib/screens/command_screen.dart
 // CommandScreen for sending commands to selected device
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart'; // For .tr
+import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart'; // Import Provider
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
+import 'package:trabcdefg/services/command_outbox.dart';
 import 'package:trabcdefg/services/feedback.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
 import 'package:trabcdefg/widgets/command_attributes_form.dart';
+
+/// True when a send failed because the server could not be reached, rather
+/// than because it answered with an error.
+///
+/// [api.ApiClient] wraps every transport error as `ApiException.withInner(400,
+/// ...)`, so the failure only shows up in its `innerException`.
+bool _isConnectionFailure(Object error) {
+  if (error is IOException || error is TimeoutException || error is http.ClientException) {
+    return true;
+  }
+  if (error is api.ApiException) {
+    final inner = error.innerException;
+    return inner is IOException || inner is TimeoutException || inner is http.ClientException;
+  }
+  return false;
+}
 
 class CommandScreen extends StatefulWidget {
   const CommandScreen({super.key});
@@ -147,12 +168,36 @@ class _CommandScreenState extends State<CommandScreen> {
       );
       Navigator.of(context).pop();
     } on api.ApiException catch (e) {
-      if (mounted) FeedbackService.error('commandSendFailed'.trParams({'error': e.message ?? ''}), context: context);
+      if (_isConnectionFailure(e)) {
+        await _queueCommand(commandBody);
+      } else {
+        if (!mounted) return;
+        FeedbackService.error('commandSendFailed'.trParams({'error': e.message ?? ''}), context: context);
+      }
     } catch (e) {
-      if (mounted) FeedbackService.error('commandUnknownErrorDispatch'.tr, context: context);
+      if (_isConnectionFailure(e)) {
+        await _queueCommand(commandBody);
+      } else {
+        if (!mounted) return;
+        FeedbackService.error('commandUnknownErrorDispatch'.tr, context: context);
+      }
     } finally {
       if (mounted) setState(() => _isSending = false);
     }
+  }
+
+  /// Keeps the command instead of losing it, and leaves the screen open so the
+  /// user still sees what they typed.
+  Future<void> _queueCommand(api.Command command) async {
+    try {
+      await CommandOutbox.enqueue(command);
+    } catch (e) {
+      if (!mounted) return;
+      FeedbackService.error('commandSendFailed'.trParams({'error': '$e'}), context: context);
+      return;
+    }
+    if (!mounted) return;
+    FeedbackService.info('commandQueued'.tr, context: context);
   }
 
   void _showCommandTypePicker() {

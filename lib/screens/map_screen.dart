@@ -70,6 +70,10 @@ class _MapScreenState extends State<MapScreen> {
   bool get _isPanelOpen => _panelOpenNotifier.value;
   bool _isFollowingDevice = false;
 
+  /// Shown after a manual pan drops follow mode, so the user can get it back.
+  bool _showReturnToFollow = false;
+  Timer? _returnToFollowTimer;
+
   maplibre.Line? _trailLine;
   String? _trailColorHex;
   final List<maplibre.LatLng> _trailPoints = [];
@@ -242,6 +246,7 @@ class _MapScreenState extends State<MapScreen> {
     _mapNavigation?.removeListener(_onMapFocusRequested);
     _zoomDebounce?.cancel();
     _cameraAnimationGraceTimer?.cancel();
+    _returnToFollowTimer?.cancel();
 
     _httpClient.close();
     _drawerSearchController.dispose();
@@ -375,6 +380,20 @@ class _MapScreenState extends State<MapScreen> {
     mapStyleProvider.toggleMapType();
   }
 
+  void _showReturnToFollowBadge() {
+    _safeSetState(() => _showReturnToFollow = true);
+    _returnToFollowTimer?.cancel();
+    _returnToFollowTimer = Timer(const Duration(seconds: 8), () {
+      _safeSetState(() => _showReturnToFollow = false);
+    });
+  }
+
+  void _clearReturnToFollowBadge() {
+    _returnToFollowTimer?.cancel();
+    _returnToFollowTimer = null;
+    if (_showReturnToFollow) _safeSetState(() => _showReturnToFollow = false);
+  }
+
   void _toggleFollowCurrentDevice() {
     final device = _currentDevice;
     if (device == null) return;
@@ -392,6 +411,7 @@ class _MapScreenState extends State<MapScreen> {
       return;
     }
     _onDeviceSelected(device, forceShowPanel: true);
+    _clearReturnToFollowBadge();
   }
 
   List<api.Device> _navigableDevices(TraccarProvider provider) {
@@ -1389,6 +1409,7 @@ class _MapScreenState extends State<MapScreen> {
                         _safeSetState(() {
                           _isFollowingDevice = false;
                         });
+                        _showReturnToFollowBadge();
                       }
                     },
                     onCameraIdle: () {
@@ -1477,6 +1498,29 @@ class _MapScreenState extends State<MapScreen> {
                       },
                     ),
                   if (!_isPanelOpen) Positioned(left: _kEdgeInset, right: _kEdgeInset, bottom: MediaQuery.of(context).padding.bottom + _kControlGap, child: _buildBottomControls(traccarProvider, _currentDevice)),
+                  if (_showReturnToFollow && _currentDevice != null)
+                    Positioned(
+                      left: _kEdgeInset,
+                      bottom: MediaQuery.of(context).padding.bottom + 72,
+                      child: GestureDetector(
+                        onTap: () {
+                          _clearReturnToFollowBadge();
+                          _toggleFollowCurrentDevice();
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                          decoration: BoxDecoration(color: Theme.of(context).colorScheme.primary, borderRadius: BorderRadius.circular(20)),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.my_location_rounded, size: 16, color: Theme.of(context).colorScheme.onPrimary),
+                              const SizedBox(width: 6),
+                              Text('followReturn'.tr, style: TextStyle(color: Theme.of(context).colorScheme.onPrimary, fontWeight: FontWeight.w600, fontSize: 12)),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),

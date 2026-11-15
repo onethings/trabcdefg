@@ -1301,8 +1301,19 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     );
   }
 
+  /// 前後步進一個軌跡點（播放面板的跳點按鈕共用）
+  void _stepPlayback(int delta) {
+    if (_positions.isEmpty) return;
+    HapticFeedback.selectionClick();
+    final double maxLimit = max(0, _positions.length - 1).toDouble();
+    _playbackPositionRx.value = (_playbackPositionRx.value + delta).clamp(0.0, maxLimit).toDouble();
+    _updatePlaybackUI();
+  }
+
   void _togglePlayback() {
     if (_positions.isEmpty) return;
+
+    HapticFeedback.selectionClick();
 
     if (_isPlaying) {
       _playbackAnimationController?.stop();
@@ -1899,8 +1910,21 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
                 onPressed: _togglePlayback,
                 icon: Icon(_isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded, color: Theme.of(context).colorScheme.onPrimary, size: 30),
               ),
-              const Spacer(),
-              _buildSpeedSelector(),
+              const SizedBox(width: 4),
+              IconButton(
+                style: IconButton.styleFrom(minimumSize: const Size(44, 44)),
+                onPressed: () => _stepPlayback(-1),
+                icon: const Icon(Icons.skip_previous_rounded, size: 24),
+              ),
+              IconButton(
+                style: IconButton.styleFrom(minimumSize: const Size(44, 44)),
+                onPressed: () => _stepPlayback(1),
+                icon: const Icon(Icons.skip_next_rounded, size: 24),
+              ),
+              // 倍速選擇器：空間足夠時外觀不變，窄螢幕自動縮放，避免 Row 溢出
+              Expanded(
+                child: Align(alignment: Alignment.centerRight, child: FittedBox(fit: BoxFit.scaleDown, child: _buildSpeedSelector())),
+              ),
               const SizedBox(width: 12),
               IconButton.outlined(onPressed: _exportToGPX, icon: const Icon(Icons.download_rounded, size: 20), tooltip: 'exportGpx'.tr),
             ],
@@ -1949,6 +1973,16 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
           }),
           Row(
             children: [
+              IconButton(
+                style: IconButton.styleFrom(minimumSize: const Size(44, 44)),
+                onPressed: () => _stepPlayback(-1),
+                icon: const Icon(Icons.skip_previous_rounded, size: 22),
+              ),
+              IconButton(
+                style: IconButton.styleFrom(minimumSize: const Size(44, 44)),
+                onPressed: () => _stepPlayback(1),
+                icon: const Icon(Icons.skip_next_rounded, size: 22),
+              ),
               SizedBox(
                 width: 40,
                 height: 40,

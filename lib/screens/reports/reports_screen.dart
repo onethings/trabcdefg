@@ -32,7 +32,42 @@ class _ReportsScreenState extends State<ReportsScreen> {
   void initState() {
     super.initState();
     _loadLastDevice();
-    _applyPreset(DateRangePreset.today); // 預設進來選今天
+    _loadSavedRange(); // 有上次選擇的區間就沿用，否則預設今天
+  }
+
+  Future<void> _loadSavedRange() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedFrom = DateTime.tryParse(prefs.getString('reportFromDate') ?? '');
+    final savedTo = DateTime.tryParse(prefs.getString('reportToDate') ?? '');
+    if (!mounted) return;
+
+    if (savedFrom == null || savedTo == null) {
+      _applyPreset(DateRangePreset.today);
+      return;
+    }
+
+    DateRangePreset preset = DateRangePreset.custom;
+    final presetName = prefs.getString('reportRangePreset');
+    if (presetName != null) {
+      try {
+        preset = DateRangePreset.values.byName(presetName);
+      } catch (_) {
+        preset = DateRangePreset.custom;
+      }
+    }
+
+    setState(() {
+      _fromDate = savedFrom;
+      _toDate = savedTo;
+      _selectedPreset = preset;
+    });
+  }
+
+  Future<void> _saveRange() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('reportFromDate', _fromDate.toIso8601String());
+    await prefs.setString('reportToDate', _toDate.toIso8601String());
+    await prefs.setString('reportRangePreset', _selectedPreset.name);
   }
 
   void _applyPreset(DateRangePreset preset) {
@@ -68,6 +103,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
         print('【強制修正】上個月區間 -> From: $_fromDate, To: $_toDate');
       }
     });
+    _saveRange();
   }
 
   bool _isReportAvailable(TraccarProvider provider, String type) {
@@ -114,6 +150,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
         // 手動調整日期後，將預設切換為自訂日期 (custom)
         _selectedPreset = DateRangePreset.custom;
       });
+      _saveRange();
     }
   }
 

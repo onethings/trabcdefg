@@ -28,6 +28,7 @@ import 'package:trabcdefg/screens/reports/reports_screen.dart';
 import 'package:trabcdefg/services/auth_session_store.dart';
 import 'package:trabcdefg/services/feedback.dart';
 import 'package:trabcdefg/services/localization_service.dart';
+import 'package:trabcdefg/widgets/state_views.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -40,12 +41,15 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   late final Future<PackageInfo> _packageInfo = PackageInfo.fromPlatform();
   late final Future<String?> _serverVersion;
+  String _settingsSearch = '';
 
   @override
   void initState() {
     super.initState();
     _serverVersion = context.read<TraccarProvider>().fetchServerVersion();
   }
+
+  bool _matches(String title) => _settingsSearch.isEmpty || title.toLowerCase().contains(_settingsSearch);
 
   void _showUpdateMessage(String message) {
     FeedbackService.info(message, context: context);
@@ -533,6 +537,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final traccarProvider = context.read<TraccarProvider>();
     final colorScheme = Theme.of(context).colorScheme;
 
+    // 每個區塊只要有任一標題符合搜尋字串就整區保留。
+    final reportMatch = _matches('reportTitle'.tr);
+    final langMatch = _matches('loginLanguage'.tr) || _matches('settingsTheme'.tr) || _matches('settingsFontSize'.tr) || _matches('settingsMarkerSize'.tr);
+    final userMatch = _matches('settingsUser'.tr) || _matches('sharedNotifications'.tr);
+    final deviceMatch =
+        _matches('deviceTitle'.tr) ||
+        _matches('sharedGeofence'.tr) ||
+        _matches('settingsGroups'.tr) ||
+        _matches('sharedDrivers'.tr) ||
+        _matches('sharedCalendars'.tr) ||
+        _matches('sharedComputedAttributes'.tr) ||
+        _matches('sharedMaintenance'.tr) ||
+        _matches('sharedSavedCommands'.tr) ||
+        _matches('sharedInfoTitle'.tr) ||
+        _matches('sharedEmulator'.tr);
+    final anyMatch = reportMatch || langMatch || userMatch || deviceMatch;
+
     return Scaffold(
       body: SafeArea(
         child: ListView(
@@ -588,95 +609,111 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ],
               ),
             ),
-            _settingsSection(
-              title: 'reportTitle'.tr,
-              children: [
-                _settingsTile(
-                  icon: CupertinoIcons.doc_text,
-                  title: 'reportTitle'.tr,
-                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const ReportsScreen())),
-                ),
-              ],
+            Padding(
+              padding: const EdgeInsets.only(top: 16),
+              child: CupertinoSearchTextField(
+                placeholder: 'settingsSearchHint'.tr,
+                onChanged: (v) => setState(() => _settingsSearch = v.trim().toLowerCase()),
+              ),
             ),
-            _settingsSection(
-              title: 'loginLanguage'.tr,
-              children: [
-                _settingsTile(icon: CupertinoIcons.globe, title: 'loginLanguage'.tr, onTap: _showLanguageSelectionDialog),
-                _settingsTile(icon: CupertinoIcons.sun_max, title: 'settingsTheme'.tr, onTap: _showThemeSelectionDialog),
-                _settingsTile(icon: Icons.text_fields, title: 'settingsFontSize'.tr, onTap: _showFontSizeDialog),
-                _settingsTile(icon: CupertinoIcons.location_solid, title: 'settingsMarkerSize'.tr, onTap: _showMarkerSizeDialog),
-              ],
-            ),
-            _settingsSection(
-              title: 'settingsUser'.tr,
-              children: [
-                _settingsTile(
-                  icon: CupertinoIcons.bell,
-                  title: 'sharedNotifications'.tr,
-                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const NotificationPage())),
-                ),
-                _settingsTile(
-                  icon: CupertinoIcons.person_crop_circle,
-                  title: 'settingsUser'.tr,
-                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const EditUserScreen())),
-                ),
-              ],
-            ),
-            _settingsSection(
-              title: 'deviceTitle'.tr,
-              children: [
-                _settingsTile(
-                  icon: Icons.devices,
-                  title: 'deviceTitle'.tr,
-                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const DevicesScreen())),
-                ),
-                _settingsTile(
-                  icon: CupertinoIcons.location_solid,
-                  title: 'sharedGeofence'.tr,
-                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const GeofencesScreen())),
-                ),
-                _settingsTile(
-                  icon: CupertinoIcons.person_2,
-                  title: 'settingsGroups'.tr,
-                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const GroupsScreen())),
-                ),
-                _settingsTile(
-                  icon: CupertinoIcons.person,
-                  title: 'sharedDrivers'.tr,
-                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const DriversScreen())),
-                ),
-                _settingsTile(
-                  icon: CupertinoIcons.calendar_today,
-                  title: 'sharedCalendars'.tr,
-                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const CalendarsScreen())),
-                ),
-                _settingsTile(
-                  icon: Icons.calculate,
-                  title: 'sharedComputedAttributes'.tr,
-                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const ComputedAttributesScreen())),
-                ),
-                _settingsTile(
-                  icon: CupertinoIcons.wrench,
-                  title: 'sharedMaintenance'.tr,
-                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const MaintenanceScreen())),
-                ),
-                _settingsTile(
-                  icon: Icons.save,
-                  title: 'sharedSavedCommands'.tr,
-                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const SavedCommandsScreen())),
-                ),
-                _settingsTile(
-                  icon: CupertinoIcons.info_circle,
-                  title: 'sharedInfoTitle'.tr,
-                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const ServerInfoScreen())),
-                ),
-                _settingsTile(
-                  icon: Icons.developer_mode,
-                  title: 'sharedEmulator'.tr,
-                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const EmulatorScreen())),
-                ),
-              ],
-            ),
+            if (reportMatch)
+              _settingsSection(
+                title: 'reportTitle'.tr,
+                children: [
+                  _settingsTile(
+                    icon: CupertinoIcons.doc_text,
+                    title: 'reportTitle'.tr,
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const ReportsScreen())),
+                  ),
+                ],
+              ),
+            if (langMatch)
+              _settingsSection(
+                title: 'loginLanguage'.tr,
+                children: [
+                  _settingsTile(icon: CupertinoIcons.globe, title: 'loginLanguage'.tr, onTap: _showLanguageSelectionDialog),
+                  _settingsTile(icon: CupertinoIcons.sun_max, title: 'settingsTheme'.tr, onTap: _showThemeSelectionDialog),
+                  _settingsTile(icon: Icons.text_fields, title: 'settingsFontSize'.tr, onTap: _showFontSizeDialog),
+                  _settingsTile(icon: CupertinoIcons.location_solid, title: 'settingsMarkerSize'.tr, onTap: _showMarkerSizeDialog),
+                ],
+              ),
+            if (userMatch)
+              _settingsSection(
+                title: 'settingsUser'.tr,
+                children: [
+                  _settingsTile(
+                    icon: CupertinoIcons.bell,
+                    title: 'sharedNotifications'.tr,
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const NotificationPage())),
+                  ),
+                  _settingsTile(
+                    icon: CupertinoIcons.person_crop_circle,
+                    title: 'settingsUser'.tr,
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const EditUserScreen())),
+                  ),
+                ],
+              ),
+            if (deviceMatch)
+              _settingsSection(
+                title: 'deviceTitle'.tr,
+                children: [
+                  _settingsTile(
+                    icon: Icons.devices,
+                    title: 'deviceTitle'.tr,
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const DevicesScreen())),
+                  ),
+                  _settingsTile(
+                    icon: CupertinoIcons.location_solid,
+                    title: 'sharedGeofence'.tr,
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const GeofencesScreen())),
+                  ),
+                  _settingsTile(
+                    icon: CupertinoIcons.person_2,
+                    title: 'settingsGroups'.tr,
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const GroupsScreen())),
+                  ),
+                  _settingsTile(
+                    icon: CupertinoIcons.person,
+                    title: 'sharedDrivers'.tr,
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const DriversScreen())),
+                  ),
+                  _settingsTile(
+                    icon: CupertinoIcons.calendar_today,
+                    title: 'sharedCalendars'.tr,
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const CalendarsScreen())),
+                  ),
+                  _settingsTile(
+                    icon: Icons.calculate,
+                    title: 'sharedComputedAttributes'.tr,
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const ComputedAttributesScreen())),
+                  ),
+                  _settingsTile(
+                    icon: CupertinoIcons.wrench,
+                    title: 'sharedMaintenance'.tr,
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const MaintenanceScreen())),
+                  ),
+                  _settingsTile(
+                    icon: Icons.save,
+                    title: 'sharedSavedCommands'.tr,
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const SavedCommandsScreen())),
+                  ),
+                  _settingsTile(
+                    icon: CupertinoIcons.info_circle,
+                    title: 'sharedInfoTitle'.tr,
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const ServerInfoScreen())),
+                  ),
+                  _settingsTile(
+                    icon: Icons.developer_mode,
+                    title: 'sharedEmulator'.tr,
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const EmulatorScreen())),
+                  ),
+                ],
+              ),
+            if (_settingsSearch.isNotEmpty && !anyMatch)
+              Padding(
+                padding: const EdgeInsets.only(top: 48),
+                child: EmptyState(icon: CupertinoIcons.search, title: 'sharedNoData'.tr, hint: 'settingsSearchHint'.tr),
+              ),
             Padding(
               padding: const EdgeInsets.only(top: 28),
               child: OutlinedButton.icon(

@@ -5,17 +5,20 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timeago/timeago.dart' as timeago;
 import 'package:trabcdefg/providers/traccar_provider.dart';
+import 'package:trabcdefg/screens/command_screen.dart';
 import 'package:trabcdefg/screens/notifications_screen.dart';
 import 'package:trabcdefg/screens/settings/add_device_screen.dart';
+import 'package:trabcdefg/services/feedback.dart';
 import 'package:trabcdefg/services/map_navigation.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
 import 'package:trabcdefg/src/utils/status_utils.dart';
-import 'package:trabcdefg/widgets/offline_address_service.dart';
 import 'package:trabcdefg/widgets/skeleton.dart';
 import 'package:trabcdefg/widgets/state_views.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class DeviceListScreen extends StatefulWidget {
   const DeviceListScreen({super.key});
@@ -32,9 +35,6 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
   int _mileageDays = 1; // 1 = today, 3 = last 3 days
   final Map<int, double> _mileageMap = {}; // deviceId -> distance in km
   final bool _isLoadingMileage = false;
-
-  // 演算法優化：快取地址減少重複計算
-  final Map<String, String> _addressCache = {};
 
   @override
   void initState() {
@@ -118,34 +118,6 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
     _searchController.dispose();
     super.dispose();
   }
-
-  Widget _buildAddressWidget(num? lat, num? lon) {
-    if (lat == null || lon == null) {
-      return _addressText('sharedNoData'.tr);
-    }
-    final cacheKey = "${lat.toStringAsFixed(5)}_${lon.toStringAsFixed(5)}";
-    if (_addressCache.containsKey(cacheKey)) {
-      return _addressText(_addressCache[cacheKey]!);
-    }
-    return FutureBuilder<String>(future: _getAddressAsync(lat, lon, cacheKey), builder: (context, snapshot) => _addressText(snapshot.data ?? '...'));
-  }
-
-  Future<String> _getAddressAsync(num lat, num lon, String cacheKey) async {
-    final address = await OfflineAddressService.getAddress(lat.toDouble(), lon.toDouble());
-    if (mounted) {
-      setState(() {
-        _addressCache[cacheKey] = address;
-      });
-    }
-    return address;
-  }
-
-  Widget _addressText(String text) => Text(
-    text,
-    style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12),
-    maxLines: 1,
-    overflow: TextOverflow.ellipsis,
-  );
 
   @override
   Widget build(BuildContext context) {
@@ -269,7 +241,7 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
     final DateTime? lastUpdate = position?.fixTime?.toUtc() ?? device.lastUpdate?.toUtc();
     final isStale = status == 'offline';
 
-    return Card(
+    final card = Card(
       margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
       color: theme.colorScheme.surface,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -336,14 +308,6 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
                   _AccTimerBadge(speed: speedKmH, isStale: isStale, isOn: isIgnitionOn, lastUpdate: lastUpdate, baseColor: statusColor),
                 ],
               ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Icon(CupertinoIcons.location_solid, size: 14, color: theme.colorScheme.outline),
-                  const SizedBox(width: 7),
-                  Expanded(child: _buildAddressWidget(position?.latitude, position?.longitude)),
-                ],
-              ),
               const SizedBox(height: 8),
               Row(
                 children: [
@@ -358,6 +322,66 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
         ),
       ),
     );
+
+    return CupertinoContextMenu(
+      actions: [
+        _contextMenuAction(CupertinoIcons.map, 'actionNavigate'.tr, () => _navigateToPosition(position)),
+        _contextMenuAction(CupertinoIcons.share, 'sharedShare'.tr, () => _sharePosition(device, position)),
+        _contextMenuAction(CupertinoIcons.paperplane, 'commandTitle'.tr, () => _openCommandScreen(device)),
+      ],
+      child: card,
+    );
+  }
+
+  Widget _contextMenuAction(IconData icon, String label, VoidCallback onPressed) {
+    return CupertinoContextMenuAction(
+      onPressed: onPressed,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 20, color: Theme.of(context).colorScheme.onSurface),
+          const SizedBox(width: 10),
+          Text(label),
+        ],
+      ),
+    );
+  }
+
+  String? _googleMapsLink(api.Position? position) {
+    final lat = position?.latitude?.toDouble();
+    final lng = position?.longitude?.toDouble();
+    if (lat == null || lng == null || (lat == 0.0 && lng == 0.0)) return null;
+    return 'https://maps.google.com/?q=${lat.toStringAsFixed(6)},${lng.toStringAsFixed(6)}';
+  }
+
+  Future<void> _navigateToPosition(api.Position? position) async {
+    final link = _googleMapsLink(position);
+    if (link == null) {
+      FeedbackService.info('mapNoPositions'.tr, context: context);
+      return;
+    }
+    final launched = await launchUrl(Uri.parse(link), mode: LaunchMode.externalApplication);
+    if (!launched && mounted) FeedbackService.info('deviceOpenMapsFailed'.tr, context: context);
+  }
+
+  Future<void> _sharePosition(api.Device device, api.Position? position) async {
+    final link = _googleMapsLink(position);
+    if (link == null) {
+      FeedbackService.info('mapNoPositions'.tr, context: context);
+      return;
+    }
+    final deviceName = device.name ?? 'sharedDevice'.tr;
+    await SharePlus.instance.share(ShareParams(text: '$deviceName — $link'));
+  }
+
+  Future<void> _openCommandScreen(api.Device device) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('selectedDeviceId', device.id!);
+    if (device.name != null) {
+      await prefs.setString('selectedDeviceName', device.name!);
+    }
+    if (!mounted) return;
+    Get.to(() => const CommandScreen());
   }
 
   Widget _buildMileageWidget(int deviceId) {

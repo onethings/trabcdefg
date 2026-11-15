@@ -31,22 +31,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   };
   List<String> _cardFieldsOrder = [];
   List<String> _visibleFields = [];
-  Timer? _tickTimer;
 
   @override
   void initState() {
     super.initState();
     _loadSettings();
-    // Tick every second to update countdowns
-    _tickTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted) setState(() {});
-    });
-  }
-
-  @override
-  void dispose() {
-    _tickTimer?.cancel();
-    super.dispose();
   }
 
   Future<void> _loadSettings() async {
@@ -75,28 +64,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     final serverTypes = provider.getServerEventTypes();
     if (serverTypes.isEmpty) return true; // no server config = show all
     return serverTypes.contains(event.type);
-  }
-
-  /// Compute remaining seconds from event.eventTime + timer duration.
-  int _computeRemainingSecs(DateTime? eventTime) {
-    if (eventTime == null) return 0;
-    final deadline = eventTime.add(Duration(seconds: _timerDurationSec));
-    final remaining = deadline.difference(DateTime.now());
-    return remaining.inSeconds;
-  }
-
-  /// Get the color for a given remaining seconds.
-  int _getTimerColor(int remainingSecs) {
-    if (remainingSecs <= 0) return 0xFF9E9E9E; // grey when expired
-    final remainingMinutes = (remainingSecs / 60).ceil();
-    final sorted = _colorThresholds.keys.toList()
-      ..sort((a, b) => b.compareTo(a));
-    for (final min in sorted) {
-      if (remainingMinutes >= min) {
-        return _colorThresholds[min]!;
-      }
-    }
-    return _colorThresholds.values.last;
   }
 
   void _showHelpDialog(BuildContext context) {
@@ -257,47 +224,55 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             ),
           ),
           SafeArea(
-            child: displayedEvents.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
+            child: RefreshIndicator(
+              onRefresh: () async {
+                await context.read<TraccarProvider>().fetchInitialData();
+              },
+              child: displayedEvents.isEmpty
+                  ? ListView(
+                      physics: const AlwaysScrollableScrollPhysics(),
                       children: [
-                        Icon(
-                          Icons.notifications_none_rounded,
-                          size: 64,
-                          color: Colors.grey.withValues(alpha: 0.5),
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'dashboardNoEvents'.tr,
-                          style: const TextStyle(color: Colors.grey),
+                        const SizedBox(height: 120),
+                        Column(
+                          mainAxisSize: MainAxisSize.min,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.notifications_none_rounded,
+                              size: 64,
+                              color: Colors.grey.withValues(alpha: 0.5),
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              'dashboardNoEvents'.tr,
+                              style: const TextStyle(color: Colors.grey),
+                            ),
+                          ],
                         ),
                       ],
+                    )
+                  : ListView.builder(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 12,
+                      ),
+                      itemCount: displayedEvents.length,
+                      itemBuilder: (context, index) {
+                        // Show latest events first
+                        final event = displayedEvents[
+                            displayedEvents.length - 1 - index];
+                        return _EventCard(
+                          event: event,
+                          provider: provider,
+                          timerDurationSec: _timerDurationSec,
+                          colorThresholds: _colorThresholds,
+                          cardFieldsOrder: _cardFieldsOrder,
+                          visibleFields: _visibleFields,
+                        );
+                      },
                     ),
-                  )
-                : ListView.builder(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 12,
-                    ),
-                    itemCount: displayedEvents.length,
-                    itemBuilder: (context, index) {
-                      // Show latest events first
-                      final event =
-                          displayedEvents[displayedEvents.length - 1 - index];
-                      return _EventCard(
-                        event: event,
-                        provider: provider,
-                        remainingSecs: _computeRemainingSecs(event.eventTime),
-                        timerColor: _getTimerColor(
-                          _computeRemainingSecs(event.eventTime),
-                        ),
-                        timerDurationSec: _timerDurationSec,
-                        cardFieldsOrder: _cardFieldsOrder,
-                        visibleFields: _visibleFields,
-                      );
-                    },
-                  ),
+            ),
           ),
         ],
       ),
@@ -308,29 +283,87 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 // ---------------------------------------------------------------------------
 // Event card widget
 // ---------------------------------------------------------------------------
-class _EventCard extends StatelessWidget {
+class _EventCard extends StatefulWidget {
   final api.Event event;
   final TraccarProvider provider;
-  final int remainingSecs;
-  final int timerColor;
   final int timerDurationSec;
+  final Map<int, int> colorThresholds;
   final List<String> cardFieldsOrder;
   final List<String> visibleFields;
 
   const _EventCard({
     required this.event,
     required this.provider,
-    required this.remainingSecs,
-    required this.timerColor,
     required this.timerDurationSec,
+    required this.colorThresholds,
     required this.cardFieldsOrder,
     required this.visibleFields,
   });
 
   @override
+  State<_EventCard> createState() => _EventCardState();
+}
+
+class _EventCardState extends State<_EventCard> {
+  int _remainingSecs = 0;
+  Timer? _tickTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _remainingSecs = _computeRemainingSecs();
+    _syncTimer();
+  }
+
+  @override
+  void didUpdateWidget(covariant _EventCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.timerDurationSec != widget.timerDurationSec ||
+        oldWidget.event.eventTime != widget.event.eventTime) {
+      _remainingSecs = _computeRemainingSecs();
+      _syncTimer();
+    }
+  }
+
+  @override
+  void dispose() {
+    _tickTimer?.cancel();
+    super.dispose();
+  }
+
+  /// Remaining seconds from event.eventTime + the configured timer duration.
+  int _computeRemainingSecs() {
+    final eventTime = widget.event.eventTime;
+    if (eventTime == null) return 0;
+    final deadline = eventTime.add(Duration(seconds: widget.timerDurationSec));
+    return deadline.difference(DateTime.now()).inSeconds;
+  }
+
+  /// Countdown ticks this card only. No timer when the event has no time
+  /// or the countdown already expired.
+  void _syncTimer() {
+    _tickTimer?.cancel();
+    _tickTimer = null;
+    if (widget.event.eventTime == null || _remainingSecs <= 0) return;
+    _tickTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      final remaining = _computeRemainingSecs();
+      setState(() => _remainingSecs = remaining);
+      if (remaining <= 0) {
+        _tickTimer?.cancel();
+        _tickTimer = null;
+      }
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final event = widget.event;
+    final provider = widget.provider;
+    final remainingSecs = _remainingSecs;
+    final timerColor = _timerColorFor(remainingSecs, widget.colorThresholds);
 
     // Fetch data once
     String? deviceName;
@@ -351,10 +384,10 @@ class _EventCard extends StatelessWidget {
     final isExpired = remainingSecs <= 0;
 
     // Compute visible fields: respect both order and visibility toggle
-    final shownFields = cardFieldsOrder
+    final shownFields = widget.cardFieldsOrder
         .where(
           (f) =>
-              this.visibleFields.contains(f) &&
+              widget.visibleFields.contains(f) &&
               _fieldAvailable(f, deviceName, geofenceName),
         )
         .toList();
@@ -525,10 +558,10 @@ class _EventCard extends StatelessWidget {
   }
 
   Widget _buildTimerBadge(BuildContext context) {
-    final color = Color(timerColor);
-    final isExpired = remainingSecs <= 0;
+    final color = Color(_timerColorFor(_remainingSecs, widget.colorThresholds));
+    final isExpired = _remainingSecs <= 0;
     final timeStr = NotificationSettingsService.formatDuration(
-      Duration(seconds: remainingSecs < 0 ? 0 : remainingSecs),
+      Duration(seconds: _remainingSecs < 0 ? 0 : _remainingSecs),
     );
 
     return Container(
@@ -582,4 +615,18 @@ class _EventCard extends StatelessWidget {
         return Icons.event_note_rounded;
     }
   }
+}
+
+/// Color for a given remaining seconds, based on the configured thresholds.
+int _timerColorFor(int remainingSecs, Map<int, int> thresholds) {
+  if (remainingSecs <= 0) return 0xFF9E9E9E; // grey when expired
+  if (thresholds.isEmpty) return 0xFF9E9E9E;
+  final remainingMinutes = (remainingSecs / 60).ceil();
+  final sorted = thresholds.keys.toList()..sort((a, b) => b.compareTo(a));
+  for (final min in sorted) {
+    if (remainingMinutes >= min) {
+      return thresholds[min]!;
+    }
+  }
+  return thresholds.values.last;
 }

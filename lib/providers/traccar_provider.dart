@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:trabcdefg/services/auth_service.dart';
 import 'package:trabcdefg/services/auth_session_store.dart';
+import 'package:trabcdefg/services/command_outbox.dart';
 import 'package:trabcdefg/services/feedback.dart';
 import 'package:trabcdefg/services/websocket_service.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
@@ -44,6 +45,8 @@ class TraccarProvider with ChangeNotifier, WidgetsBindingObserver {
   bool _isLoading = false;
   String? _loadError;
   String? _serverVersion;
+
+  DateTime? _lastOutboxReplay;
 
   Set<int> _favoriteDeviceIds = {};
   Set<int> get favoriteDeviceIds => _favoriteDeviceIds;
@@ -381,6 +384,10 @@ class TraccarProvider with ChangeNotifier, WidgetsBindingObserver {
 
   void _listenToWebSocket() {
     _webSocketSubscription = webSocketService.stream.listen((data) {
+      if (data['devices'] != null || data['positions'] != null || data['events'] != null) {
+        unawaited(_replayOutbox());
+      }
+
       if (data['devices'] != null) {
         final deviceList = (data['devices'] as Iterable).map((model) => api.Device.fromJson(model)).whereType<api.Device>().toList();
 
@@ -442,6 +449,22 @@ class TraccarProvider with ChangeNotifier, WidgetsBindingObserver {
         notifyListeners();
       }
     });
+  }
+
+  /// Drains queued commands while the socket is alive, at most every 30 s.
+  Future<void> _replayOutbox() async {
+    if (_sessionId == null) return;
+    final now = DateTime.now();
+    final lastReplay = _lastOutboxReplay;
+    if (lastReplay != null && now.difference(lastReplay) < const Duration(seconds: 30)) {
+      return;
+    }
+    _lastOutboxReplay = now;
+    try {
+      await CommandOutbox.replay(api.CommandsApi(apiClient));
+    } catch (e) {
+      debugPrint('CommandOutbox replay failed: $e');
+    }
   }
 
   @override
