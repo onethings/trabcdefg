@@ -24,13 +24,14 @@ class _ComputedAttributesScreenState extends State<ComputedAttributesScreen> {
     _fetchComputedAttributes();
   }
 
-  void _fetchComputedAttributes() {
+  Future<void> _fetchComputedAttributes() {
     final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
     // Correct way to instantiate AttributesApi with the authenticated client
     final attributesApi = api.AttributesApi(traccarProvider.apiClient);
     setState(() {
       _computedAttributesFuture = attributesApi.getAttributesComputed();
     });
+    return _computedAttributesFuture.then((_) {}).catchError((_) {});
   }
 
   @override
@@ -45,17 +46,27 @@ class _ComputedAttributesScreenState extends State<ComputedAttributesScreen> {
           } else if (snapshot.hasError) {
             return Center(child: Text('${'errorGeneral'.tr}: ${snapshot.error}'));
           } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
-            return Center(child: Text('sharedNoData'.tr));
+            return RefreshIndicator(
+              onRefresh: _fetchComputedAttributes,
+              child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                children: [const SizedBox(height: 160), Center(child: Text('sharedNoData'.tr))],
+              ),
+            );
           } else {
-            return ListView.builder(
-              itemCount: snapshot.data!.length,
-              itemBuilder: (context, index) {
-                final attribute = snapshot.data![index];
-                return ListTile(
-                  title: Text(attribute.description ?? 'sharedNoDescription'.tr),
-                  subtitle: Text('${'sharedAttribute'.tr}: ${attribute.attribute} | ${'sharedExpression'.tr}: ${attribute.expression} | ${'sharedType'.tr}: ${attribute.type}'),
-                );
-              },
+            return RefreshIndicator(
+              onRefresh: _fetchComputedAttributes,
+              child: ListView.builder(
+                physics: const AlwaysScrollableScrollPhysics(),
+                itemCount: snapshot.data!.length,
+                itemBuilder: (context, index) {
+                  final attribute = snapshot.data![index];
+                  return ListTile(
+                    title: Text(attribute.description ?? 'sharedNoDescription'.tr),
+                    subtitle: Text('${'sharedAttribute'.tr}: ${attribute.attribute} | ${'sharedExpression'.tr}: ${attribute.expression} | ${'sharedType'.tr}: ${attribute.type}'),
+                  );
+                },
+              ),
             );
           }
         },

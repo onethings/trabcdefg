@@ -24,13 +24,14 @@ class _CalendarsScreenState extends State<CalendarsScreen> {
     _fetchCalendars();
   }
 
-  void _fetchCalendars() {
+  Future<void> _fetchCalendars() {
     final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
     // Correct way to instantiate CalendarsApi with the authenticated client
     final calendarsApi = api.CalendarsApi(traccarProvider.apiClient);
     setState(() {
       _calendarsFuture = calendarsApi.getCalendars();
     });
+    return _calendarsFuture.then((_) {}).catchError((_) {});
   }
 
   @override
@@ -45,14 +46,24 @@ class _CalendarsScreenState extends State<CalendarsScreen> {
           } else if (snapshot.hasError) {
             return Center(child: Text('${'errorGeneral'.tr}: ${snapshot.error}'));
           } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
-            return Center(child: Text('sharedNoData'.tr));
+            return RefreshIndicator(
+              onRefresh: _fetchCalendars,
+              child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                children: [const SizedBox(height: 160), Center(child: Text('sharedNoData'.tr))],
+              ),
+            );
           } else {
-            return ListView.builder(
-              itemCount: snapshot.data!.length,
-              itemBuilder: (context, index) {
-                final calendar = snapshot.data![index];
-                return ListTile(title: Text(calendar.name ?? 'sharedNoData'.tr));
-              },
+            return RefreshIndicator(
+              onRefresh: _fetchCalendars,
+              child: ListView.builder(
+                physics: const AlwaysScrollableScrollPhysics(),
+                itemCount: snapshot.data!.length,
+                itemBuilder: (context, index) {
+                  final calendar = snapshot.data![index];
+                  return ListTile(title: Text(calendar.name ?? 'sharedNoData'.tr));
+                },
+              ),
             );
           }
         },

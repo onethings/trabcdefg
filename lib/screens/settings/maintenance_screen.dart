@@ -24,13 +24,14 @@ class _MaintenanceScreenState extends State<MaintenanceScreen> {
     _fetchMaintenance();
   }
 
-  void _fetchMaintenance() {
+  Future<void> _fetchMaintenance() {
     final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
     // Correct way to instantiate MaintenanceApi with the authenticated client
     final maintenanceApi = api.MaintenanceApi(traccarProvider.apiClient);
     setState(() {
       _maintenanceFuture = maintenanceApi.getMaintenance();
     });
+    return _maintenanceFuture.then((_) {}).catchError((_) {});
   }
 
   @override
@@ -46,17 +47,27 @@ class _MaintenanceScreenState extends State<MaintenanceScreen> {
             // FIXED: Used clean string interpolation instead of '+' operator
             return Center(child: Text('${'errorGeneral'.tr}: ${snapshot.error}'));
           } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
-            return Center(child: Text('sharedNoData'.tr));
+            return RefreshIndicator(
+              onRefresh: _fetchMaintenance,
+              child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                children: [const SizedBox(height: 160), Center(child: Text('sharedNoData'.tr))],
+              ),
+            );
           } else {
-            return ListView.builder(
-              itemCount: snapshot.data!.length,
-              itemBuilder: (context, index) {
-                final maintenance = snapshot.data![index];
-                return ListTile(
-                  title: Text(maintenance.name ?? 'sharedName'.tr),
-                  subtitle: Text('${'sharedType'.tr}: ${maintenance.type ?? 'N/A'} | ${'maintenanceStart'.tr}: ${maintenance.start ?? 'N/A'} | ${'maintenancePeriod'.tr}: ${maintenance.period ?? 'N/A'}'),
-                );
-              },
+            return RefreshIndicator(
+              onRefresh: _fetchMaintenance,
+              child: ListView.builder(
+                physics: const AlwaysScrollableScrollPhysics(),
+                itemCount: snapshot.data!.length,
+                itemBuilder: (context, index) {
+                  final maintenance = snapshot.data![index];
+                  return ListTile(
+                    title: Text(maintenance.name ?? 'sharedName'.tr),
+                    subtitle: Text('${'sharedType'.tr}: ${maintenance.type ?? 'N/A'} | ${'maintenanceStart'.tr}: ${maintenance.start ?? 'N/A'} | ${'maintenancePeriod'.tr}: ${maintenance.period ?? 'N/A'}'),
+                  );
+                },
+              ),
             );
           }
         },

@@ -25,13 +25,14 @@ class _DriversScreenState extends State<DriversScreen> {
     _fetchDrivers();
   }
 
-  void _fetchDrivers() {
+  Future<void> _fetchDrivers() {
     final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
     // Correct way to instantiate DriversApi with the authenticated client
     final driversApi = api.DriversApi(traccarProvider.apiClient);
     setState(() {
       _driversFuture = driversApi.getDrivers();
     });
+    return _driversFuture.then((_) {}).catchError((_) {});
   }
 
   @override
@@ -46,70 +47,80 @@ class _DriversScreenState extends State<DriversScreen> {
           } else if (snapshot.hasError) {
             return Center(child: Text('${'errorGeneral'.tr}: ${snapshot.error}'));
           } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
-            return Center(child: Text('sharedNoData'.tr));
+            return RefreshIndicator(
+              onRefresh: _fetchDrivers,
+              child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                children: [const SizedBox(height: 160), Center(child: Text('sharedNoData'.tr))],
+              ),
+            );
           } else {
-            return ListView.builder(
-              itemCount: snapshot.data!.length,
-              itemBuilder: (context, index) {
-                final driver = snapshot.data![index];
-                return ListTile(
-                  title: Text(driver.name ?? 'sharedNoData'.tr),
-                  subtitle: Text(driver.uniqueId ?? 'sharedNoData'.tr),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        icon: const Icon(CupertinoIcons.pencil),
-                        onPressed: () async {
-                          final updatedDriver = await Navigator.push(context, MaterialPageRoute(builder: (context) => AddDriverScreen(driver: driver)));
+            return RefreshIndicator(
+              onRefresh: _fetchDrivers,
+              child: ListView.builder(
+                physics: const AlwaysScrollableScrollPhysics(),
+                itemCount: snapshot.data!.length,
+                itemBuilder: (context, index) {
+                  final driver = snapshot.data![index];
+                  return ListTile(
+                    title: Text(driver.name ?? 'sharedNoData'.tr),
+                    subtitle: Text(driver.uniqueId ?? 'sharedNoData'.tr),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(CupertinoIcons.pencil),
+                          onPressed: () async {
+                            final updatedDriver = await Navigator.push(context, MaterialPageRoute(builder: (context) => AddDriverScreen(driver: driver)));
 
-                          if (updatedDriver != null && mounted) {
-                            _fetchDrivers();
-                          }
-                        },
-                      ), // Added missing comma divider here
-                      IconButton(
-                        icon: const Icon(CupertinoIcons.trash),
-                        onPressed: () async {
-                          // FIX: Capture dependencies from BuildContext BEFORE the async gaps
-                          final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
-
-                          final bool? confirm = await Get.dialog<bool>(
-                            CupertinoAlertDialog(
-                              title: Text('driverDeleteTitle'.tr),
-                              content: Text('driverDeleteConfirm'.trParams({'name': driver.name ?? ''})),
-                              actions: [
-                                CupertinoDialogAction(onPressed: () => Get.back(result: false), child: Text('sharedCancel'.tr)),
-                                CupertinoDialogAction(
-                                  textStyle: const TextStyle(color: CupertinoColors.systemRed),
-                                  onPressed: () => Get.back(result: true),
-                                  child: Text('sharedDelete'.tr),
-                                ),
-                              ],
-                            ),
-                          );
-
-                          if (confirm == true && driver.id != null) {
-                            try {
-                              // Uses the safely predefined variable instead of 'context' across the gap
-                              final driversApi = api.DriversApi(traccarProvider.apiClient);
-                              await driversApi.deleteDriversId(driver.id!);
-
-                              // FIX: Ensure the widget is still in the tree before setting state/refreshing
-                              if (!mounted) return;
+                            if (updatedDriver != null && mounted) {
                               _fetchDrivers();
-
-                              FeedbackService.success('driverDeleteSuccess'.tr, context: context);
-                            } catch (e) {
-                              if (mounted) FeedbackService.error('driverDeleteFailed'.trParams({'error': e.toString()}), context: context);
                             }
-                          }
-                        },
-                      ),
-                    ],
-                  ),
-                );
-              },
+                          },
+                        ), // Added missing comma divider here
+                        IconButton(
+                          icon: const Icon(CupertinoIcons.trash),
+                          onPressed: () async {
+                            // FIX: Capture dependencies from BuildContext BEFORE the async gaps
+                            final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
+
+                            final bool? confirm = await Get.dialog<bool>(
+                              CupertinoAlertDialog(
+                                title: Text('driverDeleteTitle'.tr),
+                                content: Text('driverDeleteConfirm'.trParams({'name': driver.name ?? ''})),
+                                actions: [
+                                  CupertinoDialogAction(onPressed: () => Get.back(result: false), child: Text('sharedCancel'.tr)),
+                                  CupertinoDialogAction(
+                                    textStyle: const TextStyle(color: CupertinoColors.systemRed),
+                                    onPressed: () => Get.back(result: true),
+                                    child: Text('sharedDelete'.tr),
+                                  ),
+                                ],
+                              ),
+                            );
+
+                            if (confirm == true && driver.id != null) {
+                              try {
+                                // Uses the safely predefined variable instead of 'context' across the gap
+                                final driversApi = api.DriversApi(traccarProvider.apiClient);
+                                await driversApi.deleteDriversId(driver.id!);
+
+                                // FIX: Ensure the widget is still in the tree before setting state/refreshing
+                                if (!mounted) return;
+                                _fetchDrivers();
+
+                                FeedbackService.success('driverDeleteSuccess'.tr, context: context);
+                              } catch (e) {
+                                if (mounted) FeedbackService.error('driverDeleteFailed'.trParams({'error': e.toString()}), context: context);
+                              }
+                            }
+                          },
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
             );
           }
         },

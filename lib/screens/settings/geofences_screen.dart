@@ -120,14 +120,21 @@ class GeofencesScreenState extends State<GeofencesScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _geofencesFuture = _fetchGeofences();
+    _geofencesFuture = _loadGeofences();
   }
 
-  Future<List<api.Geofence>> _fetchGeofences() async {
+  Future<List<api.Geofence>> _loadGeofences() async {
     final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
     final geofencesApi = api.GeofencesApi(traccarProvider.apiClient);
     final geofences = await geofencesApi.getGeofences();
     return geofences ?? [];
+  }
+
+  Future<void> _fetchGeofences() {
+    setState(() {
+      _geofencesFuture = _loadGeofences();
+    });
+    return _geofencesFuture.then((_) {}).catchError((_) {});
   }
 
   void _deleteGeofence(int geofenceId) async {
@@ -158,9 +165,7 @@ class GeofencesScreenState extends State<GeofencesScreen> {
       }
 
       if (!mounted) return;
-      setState(() {
-        _geofencesFuture = _fetchGeofences();
-      });
+      _fetchGeofences();
       FeedbackService.success('geofenceDeleteSuccess'.tr, context: context);
     } catch (e) {
       debugPrint('Delete geofence error: $e');
@@ -184,9 +189,7 @@ class GeofencesScreenState extends State<GeofencesScreen> {
         if (!mounted) {
           return;
         }
-        setState(() {
-          _geofencesFuture = _fetchGeofences();
-        });
+        _fetchGeofences();
         FeedbackService.success('sharedSaved'.tr, context: context);
       } catch (e) {
         if (!mounted) {
@@ -232,26 +235,36 @@ class GeofencesScreenState extends State<GeofencesScreen> {
           } else if (snapshot.hasError) {
             return Center(child: Text('${'errorGeneral'.tr}: ${snapshot.error}'));
           } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
-            return Center(child: Text('sharedNoData'.tr));
+            return RefreshIndicator(
+              onRefresh: _fetchGeofences,
+              child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                children: [const SizedBox(height: 160), Center(child: Text('sharedNoData'.tr))],
+              ),
+            );
           } else {
             final geofences = snapshot.data!;
-            return ListView.builder(
-              itemCount: geofences.length,
-              itemBuilder: (context, index) {
-                final geofence = geofences[index];
-                final details = _getGeofenceDetails(geofence);
-                return ListTile(
-                  title: Text(geofence.name ?? 'sharedNoData'.tr),
-                  subtitle: Text(details),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(icon: const Icon(CupertinoIcons.pencil), onPressed: () => _editGeofence(geofence)),
-                      IconButton(icon: const Icon(CupertinoIcons.trash), onPressed: () => _deleteGeofence(geofence.id!)),
-                    ],
-                  ),
-                );
-              },
+            return RefreshIndicator(
+              onRefresh: _fetchGeofences,
+              child: ListView.builder(
+                physics: const AlwaysScrollableScrollPhysics(),
+                itemCount: geofences.length,
+                itemBuilder: (context, index) {
+                  final geofence = geofences[index];
+                  final details = _getGeofenceDetails(geofence);
+                  return ListTile(
+                    title: Text(geofence.name ?? 'sharedNoData'.tr),
+                    subtitle: Text(details),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(icon: const Icon(CupertinoIcons.pencil), onPressed: () => _editGeofence(geofence)),
+                        IconButton(icon: const Icon(CupertinoIcons.trash), onPressed: () => _deleteGeofence(geofence.id!)),
+                      ],
+                    ),
+                  );
+                },
+              ),
             );
           }
         },
@@ -279,9 +292,7 @@ class GeofencesScreenState extends State<GeofencesScreen> {
                 await geofencesApi.postGeofences(newGeofence);
 
                 if (!mounted) return;
-                setState(() {
-                  _geofencesFuture = _fetchGeofences();
-                });
+                _fetchGeofences();
 
                 FeedbackService.success('sharedSaved'.tr, context: context);
               } catch (e) {

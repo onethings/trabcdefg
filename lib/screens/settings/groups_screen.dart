@@ -24,13 +24,14 @@ class _GroupsScreenState extends State<GroupsScreen> {
     _fetchGroups();
   }
 
-  void _fetchGroups() {
+  Future<void> _fetchGroups() {
     final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
     // Correct way to instantiate GroupsApi with the authenticated client
     final groupsApi = api.GroupsApi(traccarProvider.apiClient);
     setState(() {
       _groupsFuture = groupsApi.getGroups();
     });
+    return _groupsFuture.then((_) {}).catchError((_) {});
   }
 
   @override
@@ -45,17 +46,27 @@ class _GroupsScreenState extends State<GroupsScreen> {
           } else if (snapshot.hasError) {
             return Center(child: Text('${'errorGeneral'.tr}: ${snapshot.error}'));
           } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
-            return Center(child: Text('sharedNoData'.tr));
+            return RefreshIndicator(
+              onRefresh: _fetchGroups,
+              child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                children: [const SizedBox(height: 160), Center(child: Text('sharedNoData'.tr))],
+              ),
+            );
           } else {
-            return ListView.builder(
-              itemCount: snapshot.data!.length,
-              itemBuilder: (context, index) {
-                final group = snapshot.data![index];
-                return ListTile(
-                  title: Text(group.name!),
-                  // Add more details or actions here if needed
-                );
-              },
+            return RefreshIndicator(
+              onRefresh: _fetchGroups,
+              child: ListView.builder(
+                physics: const AlwaysScrollableScrollPhysics(),
+                itemCount: snapshot.data!.length,
+                itemBuilder: (context, index) {
+                  final group = snapshot.data![index];
+                  return ListTile(
+                    title: Text(group.name!),
+                    // Add more details or actions here if needed
+                  );
+                },
+              ),
             );
           }
         },

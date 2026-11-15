@@ -508,7 +508,7 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
               onPressed: _toggleMileage,
               tooltip: 'dashboardTodayDistance'.tr,
               visualDensity: VisualDensity.compact,
-              constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+              constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
               icon: _isLoadingMileage ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : Icon(_showMileage ? Icons.route : Icons.route_outlined, color: _showMileage ? theme.colorScheme.primary : null),
             ),
             if (_showMileage)

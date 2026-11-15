@@ -24,13 +24,14 @@ class _SavedCommandsScreenState extends State<SavedCommandsScreen> {
     _fetchCommands();
   }
 
-  void _fetchCommands() {
+  Future<void> _fetchCommands() {
     final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
     // Correct way to instantiate CommandsApi with the authenticated client
     final commandsApi = api.CommandsApi(traccarProvider.apiClient);
     setState(() {
       _commandsFuture = commandsApi.getCommands();
     });
+    return _commandsFuture.then((_) {}).catchError((_) {});
   }
 
   @override
@@ -45,19 +46,29 @@ class _SavedCommandsScreenState extends State<SavedCommandsScreen> {
           } else if (snapshot.hasError) {
             return Center(child: Text('${'errorGeneral'.tr}: ${snapshot.error}'));
           } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
-            return Center(child: Text('sharedNoData'.tr));
+            return RefreshIndicator(
+              onRefresh: _fetchCommands,
+              child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                children: [const SizedBox(height: 160), Center(child: Text('sharedNoData'.tr))],
+              ),
+            );
           } else {
-            return ListView.builder(
-              itemCount: snapshot.data!.length,
-              itemBuilder: (context, index) {
-                final command = snapshot.data![index];
-                final attributes = command.attributes;
-                bool isSms = false;
-                if (attributes != null && attributes is Map) {
-                  isSms = attributes['sendSms'] == true;
-                }
-                return ListTile(title: Text(command.description ?? 'sharedNoDescription'.tr), subtitle: Text('${'sharedType'.tr}: ${command.type ?? 'N/A'} | ${'sharedSendSms'.tr}: ${isSms ? 'sharedYes'.tr : 'sharedNo'.tr}'));
-              },
+            return RefreshIndicator(
+              onRefresh: _fetchCommands,
+              child: ListView.builder(
+                physics: const AlwaysScrollableScrollPhysics(),
+                itemCount: snapshot.data!.length,
+                itemBuilder: (context, index) {
+                  final command = snapshot.data![index];
+                  final attributes = command.attributes;
+                  bool isSms = false;
+                  if (attributes != null && attributes is Map) {
+                    isSms = attributes['sendSms'] == true;
+                  }
+                  return ListTile(title: Text(command.description ?? 'sharedNoDescription'.tr), subtitle: Text('${'sharedType'.tr}: ${command.type ?? 'N/A'} | ${'sharedSendSms'.tr}: ${isSms ? 'sharedYes'.tr : 'sharedNo'.tr}'));
+                },
+              ),
             );
           }
         },

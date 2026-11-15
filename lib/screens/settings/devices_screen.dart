@@ -39,7 +39,7 @@ class _DevicesScreenState extends State<DevicesScreen> {
     _fetchDevices();
   }
 
-  void _fetchDevices() {
+  Future<void> _fetchDevices() {
     final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
     final devicesApi = api.DevicesApi(traccarProvider.apiClient);
     setState(() {
@@ -49,6 +49,7 @@ class _DevicesScreenState extends State<DevicesScreen> {
         return _filteredDevices;
       });
     });
+    return _devicesFuture.then((_) {}).catchError((_) {});
   }
 
   void _filterDevices(String query) {
@@ -366,30 +367,40 @@ class _DevicesScreenState extends State<DevicesScreen> {
           } else if (snapshot.hasError) {
             return Center(child: Text('errorUnexpected'.trParams({'error': snapshot.error.toString()})));
           } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
-            return Center(child: Text('sharedNoData'.tr));
+            return RefreshIndicator(
+              onRefresh: _fetchDevices,
+              child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                children: [const SizedBox(height: 160), Center(child: Text('sharedNoData'.tr))],
+              ),
+            );
           } else {
-            return ListView.builder(
-              itemCount: _filteredDevices.length,
-              itemBuilder: (context, index) {
-                final device = _filteredDevices[index];
-                return ListTile(
-                  title: Text(device.name ?? 'unnamedDevice'.tr),
-                  subtitle: Text(device.uniqueId ?? 'deviceNoUniqueId'.tr),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(icon: const Icon(CupertinoIcons.pencil), onPressed: () => _editDevice(device)),
-                      IconButton(icon: const Icon(CupertinoIcons.trash), onPressed: () => _confirmDeleteDevice(device)),
-                      IconButton(
-                        icon: const Icon(Icons.link),
-                        onPressed: () {
-                          Navigator.push(context, MaterialPageRoute(builder: (context) => ConnectionsScreen(deviceId: device.id!)));
-                        },
-                      ),
-                    ],
-                  ),
-                );
-              },
+            return RefreshIndicator(
+              onRefresh: _fetchDevices,
+              child: ListView.builder(
+                physics: const AlwaysScrollableScrollPhysics(),
+                itemCount: _filteredDevices.length,
+                itemBuilder: (context, index) {
+                  final device = _filteredDevices[index];
+                  return ListTile(
+                    title: Text(device.name ?? 'unnamedDevice'.tr),
+                    subtitle: Text(device.uniqueId ?? 'deviceNoUniqueId'.tr),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(icon: const Icon(CupertinoIcons.pencil), onPressed: () => _editDevice(device)),
+                        IconButton(icon: const Icon(CupertinoIcons.trash), onPressed: () => _confirmDeleteDevice(device)),
+                        IconButton(
+                          icon: const Icon(Icons.link),
+                          onPressed: () {
+                            Navigator.push(context, MaterialPageRoute(builder: (context) => ConnectionsScreen(deviceId: device.id!)));
+                          },
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
             );
           }
         },
