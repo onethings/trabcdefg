@@ -10,6 +10,7 @@ import 'package:timeago/timeago.dart' as timeago;
 import 'package:trabcdefg/providers/traccar_provider.dart';
 import 'package:trabcdefg/services/map_navigation.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
+import 'package:trabcdefg/src/utils/status_utils.dart';
 import 'package:trabcdefg/widgets/offline_address_service.dart';
 
 class DeviceListScreen extends StatefulWidget {
@@ -157,7 +158,7 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
     final filteredDevices = provider.devices.where((device) {
       final matchesQuery = (device.name ?? '').toLowerCase().contains(_searchQuery.toLowerCase());
       final position = provider.getPosition(device.id!);
-      final effectiveStatus = _deviceStatus(device, position, now);
+      final effectiveStatus = resolveDeviceStatus(device, position, now);
 
       final String? filterStatus = _getStatusText(_selectedStatus);
       final bool matchesFilter = (_selectedStatus == 0) || (_selectedStatus == 4 && provider.isFavorite(device.id!)) || (filterStatus == effectiveStatus);
@@ -213,17 +214,10 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
     );
   }
 
-  String _deviceStatus(api.Device device, api.Position? position, DateTime now) {
-    final lastUpdate = position?.fixTime?.toUtc() ?? device.lastUpdate?.toUtc();
-    if (lastUpdate == null || now.difference(lastUpdate).inMinutes >= 10) return 'offline';
-    final status = device.status;
-    return status == 'online' || status == 'offline' ? status! : 'unknown';
-  }
-
   Widget _buildDeviceCard(api.Device device, api.Position? position, TraccarProvider provider, DateTime now) {
     final isFavorite = provider.isFavorite(device.id!);
     final theme = Theme.of(context);
-    final status = _deviceStatus(device, position, now);
+    final status = resolveDeviceStatus(device, position, now);
     final statusLabel = switch (status) {
       'online' => 'deviceStatusOnline'.tr,
       'offline' => 'deviceStatusOffline'.tr,
@@ -355,7 +349,7 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
     final counts = List<int>.filled(5, 0);
     for (final device in provider.devices) {
       counts[0]++;
-      final status = _deviceStatus(device, provider.getPosition(device.id!), now);
+      final status = resolveDeviceStatus(device, provider.getPosition(device.id!), now);
       switch (status) {
         case 'online':
           counts[1]++;

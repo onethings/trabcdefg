@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
+import 'package:trabcdefg/src/utils/status_utils.dart';
 
 import '../notifications_screen.dart';
 
@@ -19,9 +20,21 @@ class DashboardScreen extends StatelessWidget {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    final onlineCount = provider.devices.where((d) => d.status == 'online').length;
+    final DateTime now = DateTime.now().toUtc();
+    var onlineCount = 0;
+    var offlineCount = 0;
+    for (final api.Device device in provider.devices) {
+      final api.Position? position = device.id == null ? null : provider.getPosition(device.id!);
+      switch (resolveDeviceStatus(device, position, now)) {
+        case 'online':
+          onlineCount++;
+        case 'offline':
+          offlineCount++;
+        default:
+          break;
+      }
+    }
     final movingCount = provider.positions.where((p) => (p.speed ?? 0.0) > 1.0).length;
-    final offlineCount = provider.devices.where((d) => d.status == 'offline').length;
     final totalCount = provider.devices.length;
 
     // 今日里程來自 /reports/summary；positions 的 totalDistance 是累計里程，不能拿來當今日

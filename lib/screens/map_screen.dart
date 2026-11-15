@@ -18,7 +18,6 @@ import 'package:trabcdefg/providers/map_style_provider.dart';
 import 'package:trabcdefg/providers/settings_provider.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
 import 'package:trabcdefg/screens/settings/geofences_screen.dart' hide AppMapType, TileCacheService;
-import 'package:trabcdefg/services/auth_session_store.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
 import 'package:trabcdefg/src/utils/position_coordinates.dart';
 import 'package:trabcdefg/widgets/offline_address_service.dart';
@@ -41,13 +40,10 @@ const double _kMarkerSelectionRadius = 64.0;
 const Duration _kSymbolTapGuard = Duration(milliseconds: 300);
 const Duration _kCameraEventGrace = Duration(milliseconds: 250);
 const int _kMaxTrailPoints = 1000; //3000
-const double _kMinTrailDistanceMeters = 5.0; // 新增：GPS 最小距離閥值（公尺），過濾飄移
 const double _kAddressRefreshMeters = 50;
 
 class MapScreen extends StatefulWidget {
-  final api.Device? selectedDevice;
-
-  const MapScreen({super.key, this.selectedDevice});
+  const MapScreen({super.key});
 
   @override
   State<MapScreen> createState() => _MapScreenState();
@@ -132,11 +128,7 @@ class _MapScreenState extends State<MapScreen> {
       _resolveLocationPermission();
     });
 
-    _currentDevice = widget.selectedDevice;
-
-    if (_currentDevice == null) {
-      _loadLastSelectedDevice();
-    }
+    _loadLastSelectedDevice();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -286,7 +278,7 @@ class _MapScreenState extends State<MapScreen> {
     await _scheduleMarkerUpdate(traccarProvider);
     _maybeConsumePendingFocus();
 
-    if (widget.selectedDevice == null && !_hasInitialZoomed) {
+    if (!_hasInitialZoomed) {
       final prefs = await SharedPreferences.getInstance();
       final lastDeviceId = prefs.getInt('selectedDeviceId');
 
