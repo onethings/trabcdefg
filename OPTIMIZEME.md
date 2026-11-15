@@ -118,13 +118,18 @@ WebSocket 每包 (data['positions'])
 
 ### P0-3 兩個無界 Map
 
+**狀態：第二批已實作。** `_prefetchedHistory` 直接刪除（它是寫入後無人讀取），`_addressFutures` 改成完成即移除。
+
 - **位置** `lib/providers/traccar_provider.dart:54` `_prefetchedHistory`、`lib/widgets/offline_address_service.dart:123` `static final Map<String, Future<String>> _addressFutures`。
 - **為什麼貴。** `_prefetchedHistory` 只在 `clearLocalSession()`（`:571`）清空，登出才回收，所以「選過幾台裝置的 1 小時軌跡」留到 App 死。`_addressFutures` 只 `putIfAbsent` 從不刪，每個 entry 釘住一個 closure 與結果字串。
 - **成本估計。** 推論。`_prefetchedHistory` 每台裝置 1 小時約 360 個 `api.Position`（10 秒一筆，含 attributes），數十 KB 起，30 台數 MB；`_addressFutures` 成長慢但無上界。
 - **風險。** `_prefetchedHistory` 夾帶過期語意（`:675` 的 `containsKey` 擋掉重抓，資料可能是舊的），加時間戳淘汰會改變「是否重抓」的時機。保守做法是只在超過 N 台時淘汰最久未用，命中語意不動。
-- **最小修法。** `_addressFutures` 用 `whenComplete` 移除已完成項（持久快取在 `address_cache` box，移除不會重算）。`_prefetchedHistory` 包成「id → (資料, 抓取時間)」，在讀取處清掉過期項。
+- **最小修法。** `_addressFutures` 用 `whenComplete` 移除已完成項（持久快取在 `address_cache` box，移除不會重算）。
+- **實際做法比原本的建議更省。** 我原本建議把 `_prefetchedHistory` 包成「id → (資料, 抓取時間)」再加淘汰。實際上 `prefetchedHistory` 這個 getter 在整個 repo 沒有任何讀者（只有 `traccar_provider.dart:685` 寫入、`:571` 清空、`map_screen.dart:1069` 觸發），也就是每次選裝置都會多打一次 `GET /positions` 把 1 小時軌跡存進一個沒人看的 Map。所以正確的做法是刪掉，不是加時間戳。這也順手少掉一次由 prefetch 完成觸發的 `notifyListeners()` 重建。
 
 ### P0-4 20 MB 離線地址資料庫在開地圖頁時全量載入並複製
+
+**狀態：第二批已實作。**
 
 - **位置** `lib/widgets/offline_address_service.dart:92-98`，觸發點 `lib/screens/map_screen.dart:128` 與 `lib/screens/history_route_screen.dart:320`（後者是 `initState` 直接呼叫，不 await）。
   ```dart
@@ -226,11 +231,15 @@ WebSocket 每包 (data['positions'])
 
 ### P1-9 軌跡清理與 Hive JSON 編碼在 UI isolate
 
+**狀態：第二批已實作。**
+
 - **位置** `lib/screens/history_route_screen.dart:635` `PositionCleaner.clean(...)`、`:640` `RoutePositionsHive.toJsonList(...)` 後 `put`。
 - **為什麼貴。** `clean` 對每點配 `_TimedPosition`、排序、去離群值時做三角函式；`toJsonList` 每點產一個約 15 key 的 `Map`。一萬點就是數十 MB 暫時物件，全在產生第一幀之前。
 - **成本估計。** 推論。每個未命中的日期一次，20 到 80 ms 卡頓加上 GC 尖峰。
 - **風險。** 需確認 `api.Position` 可跨 isolate（純資料類別，可以），清理結果要逐位元相同。
 - **最小修法。** 用 `compute`/`Isolate.run` 移到背景。這頁已經對 GeoJSON 用過 `compute`（`:715-719`），照同一模式。
+- **誠實的界線。** isolate 訊息會深拷貝整份 `List<api.Position>`，所以這個改動把卡頓移出影格，總 CPU **未必**變少。真正要減工作量的方向是「快取命中時不要再清一次」，但那一條我查完之後判定不成立，理由見下。
+- **另一條被推翻的路。** 快取裡存的已經是清理過的軌跡，所以「命中快取時不要再 `clean()` 一次」看起來是免費的。但 `PositionCleaner.clean` **不是幂等的**，第 5 步移除離群點之後，原本隔著一個壞點的兩個鄰居會變成新的相鄰對，再跑一次可能再被判成不可能速度。也就是說現行的二次清理會讓軌跡比只清一次更短。跳過它會改變畫面，所以維持原樣。
 
 ### P1-10 報表頁的 `DataTable` 與骨架動畫
 
@@ -331,8 +340,8 @@ lib/arm64-v8a 原生庫全部 Stored（mmap，不解壓）
 
 | 批次 | 內容 | 預期收益 | 風險 | 驗證方式 |
 | --- | --- | --- | --- | --- |
-| 第一批 | P0-1、P0-2、P0-5 | 常駐記憶體明顯下降，長尾成長消失 | 低（純 lazy 化與 dispose） | 地圖頁與裝置清單各開 30 分鐘，DevTools Memory 曲線應從「單調上升」變「持平」 |
-| 第二批 | P0-3、P0-4、P1-9 | 尖峰記憶體與首頁卡頓 | 低到中 | 選 30 台裝置後看 RSS；首次緬甸語地址查詢的記憶體尖峰 |
+| 第一批（已完成） | P0-1、P0-2、P0-5 | 常駐記憶體明顯下降，長尾成長消失 | 低（純 lazy 化與 dispose） | 地圖頁與裝置清單各開 30 分鐘，DevTools Memory 曲線應從「單調上升」變「持平」 |
+| 第二批（已完成） | P0-3、P0-4、P1-9 | 尖峰記憶體與首頁卡頓 | 低到中 | 選 30 台裝置後看 RSS；首次緬甸語地址查詢的記憶體尖峰 |
 | 第三批 | P1-1 到 P1-8、P1-10、P1-11 | 待機 CPU 與耗電 | 中（每頁需比對畫面） | 每頁改完立刻截圖對照，加上 Performance 錄 10 秒看 rebuild 次數 |
 | 待你決定 | P1-5 第 4 步（地址文字會變）、P1-12（要先定「今天」的日界線）、P2-2、P2-4 | 最大宗無線電流量 | 高（改功能或改流程） | 需要你點頭才動 |
 
@@ -421,4 +430,21 @@ scripts/measure_memory.sh after 5 com.example.trabcdefg 600
 
 **新發現（未做，留給下一批）。** `lib/screens/reports/summary_report_screen.dart:189` 的 `summary_reports` box 也是 eager open（`Hive.box<ReportSummaryHive>` / `Hive.openBox<ReportSummaryHive>`），性質與 P0-2 相同。它不在原本的清單裡，下一批可以順手處理，但要先確認沒有其他同步讀取點。
 
-**下一批建議。** 第二批（P0-3、P0-4、P1-9）開始前，先照 §8 量一次基準 RSS 曲線，這樣第一批的效果與第二批才有對照。
+### 第二批（已完成，本輪）
+
+| 項目 | 做了什麼 | 檔案 |
+| --- | --- | --- |
+| P0-3 | 刪掉 `_prefetchedHistory` 與 `prefetchDeviceHistory` 整個死路徑（每次選裝置都打一次 `GET /positions`，結果無人讀取） | `lib/providers/traccar_provider.dart`、`lib/screens/map_screen.dart` |
+| P0-3 | `_addressFutures` 改成 `whenComplete` 移除已完成項，只共享進行中的查詢 | `lib/widgets/offline_address_service.dart` |
+| P0-4 | 20 MB 資料庫改成先寫 `$path.part` 再 rename，中斷的複製不會被下次啟動誤判為完整檔 | `lib/widgets/offline_address_service.dart` |
+| P0-4 | 地圖頁不再等資料庫初始化，`_isCacheInitialized` 這個閘門與它的 spinner 分支一併移除（它唯一的等待對象已經在第一批拆掉） | `lib/screens/map_screen.dart` |
+| P1-9 | 軌跡清理與 JSON 編碼移到背景 isolate，門檻 1000 點（與同檔既有的 GeoJSON 路徑一致），並依照是否需要寫快取決定要不要編碼 | `lib/screens/history_route_screen.dart` |
+
+**驗證結果。**
+
+- `flutter test`：69 passed。
+- `dart analyze lib test`：0 error、0 warning，50 個 info 與改動前相同。
+
+**這一輪沒有新增單元測試，講清楚為什麼。** 改到的四條路徑都需要裝置或網路才會走到（真實的 Nominatim 查詢、20 MB 資產複製、地圖首幀、軌跡頁載入），單元測試只能測到被我搬動的私有函式，測了等於測 `PositionCleaner` 自己。第一輪能加測試是因為圖磚淘汰是純本機邏輯。這兩項的驗收要靠 §8 的裝置量測。
+
+**下一批建議。** 照 §8 量 `before`（現在裝置上仍是改動前的 1.0.38）與 `after`，確認第一批與第二批合起來的效果，再開第三批（P1-1 到 P1-8、P1-10、P1-11）。
