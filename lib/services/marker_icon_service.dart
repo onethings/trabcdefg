@@ -134,14 +134,20 @@ class MarkerIconService {
 
     // 4. 轉換為圖片格式
     final picture = recorder.endRecording();
-    // 我們在畫布周圍預留一點空間給陰影
-    final img = await picture.toImage(
-      (boxWidth + 8).toInt(),
-      (boxHeight + 8).toInt(),
-    );
-    final pngBytes = await img.toByteData(format: ui.ImageByteFormat.png);
-
-    return pngBytes?.buffer.asUint8List();
+    ui.Image? img;
+    try {
+      // 我們在畫布周圍預留一點空間給陰影
+      img = await picture.toImage(
+        (boxWidth + 8).toInt(),
+        (boxHeight + 8).toInt(),
+      );
+      final pngBytes = await img.toByteData(format: ui.ImageByteFormat.png);
+      return pngBytes?.buffer.asUint8List();
+    } finally {
+      // toByteData 已拷貝出 PNG 位元組，native 的 Image 與 Picture 留著只會等 finalizer
+      img?.dispose();
+      picture.dispose();
+    }
   }
 
   // 保留舊的方法以防其他地方引用，但標註為不建議使用

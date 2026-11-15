@@ -33,8 +33,8 @@ class RouteHistoryCache {
     if (!Hive.isBoxOpen(boxName) && !await Hive.boxExists(boxName)) {
       return null;
     }
-    final box = await Hive.openBox<RoutePositionsHive>(boxName);
-    final entry = box.get(keyFor(deviceId: deviceId, day: day));
+    final box = await Hive.openLazyBox<RoutePositionsHive>(boxName);
+    final entry = await box.get(keyFor(deviceId: deviceId, day: day));
     if (entry == null || entry.positionsJson.isEmpty) {
       return null;
     }

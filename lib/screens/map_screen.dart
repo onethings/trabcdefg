@@ -18,7 +18,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:trabcdefg/providers/map_style_provider.dart';
 import 'package:trabcdefg/providers/settings_provider.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
-import 'package:trabcdefg/screens/settings/geofences_screen.dart' hide AppMapType, TileCacheService;
+import 'package:trabcdefg/screens/settings/geofences_screen.dart' hide AppMapType;
 import 'package:trabcdefg/services/feedback.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
 import 'package:trabcdefg/src/utils/motion.dart';
@@ -30,7 +30,6 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../services/map_navigation.dart';
 import '../services/marker_icon_service.dart';
-import '../services/tile_cache_service.dart';
 import '../widgets/device_detail_panel.dart';
 import '../widgets/state_views.dart';
 import 'share_device_screen.dart';
@@ -65,7 +64,6 @@ class _MapScreenState extends State<MapScreen> {
   final Map<int, _MarkerRenderState> _markerRenderStates = {};
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   api.Device? _currentDevice;
-  final TileCacheService _cacheService = TileCacheService();
   late MarkerIconService _iconService;
   final http.Client _httpClient = http.Client();
 
@@ -124,19 +122,19 @@ class _MapScreenState extends State<MapScreen> {
     _loadDrawerSortMode();
 
     _iconService = MarkerIconService(loadedIcons: _loadedIcons);
-    _cacheService.init().then((_) {
-      OfflineAddressService.initDatabase();
-
+    // The tile cache opens lazily on the screen that draws tiles, so the map
+    // no longer waits for the whole cache file to load before it can paint.
+    OfflineAddressService.initDatabase().then((_) {
       if (mounted) {
         _safeSetState(() {
           _isCacheInitialized = true;
         });
       }
-
-      // Not awaited: the map shows up first, and the puck fades in once the user
-      // answers the permission dialog.
-      _resolveLocationPermission();
     });
+
+    // Not awaited: the map shows up first, and the puck fades in once the user
+    // answers the permission dialog.
+    _resolveLocationPermission();
 
     _loadLastSelectedDevice();
 

@@ -532,14 +532,14 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
   }
 
   Future<void> cleanExpiredRouteHistory() async {
-    final routeBox = await Hive.openBox<RoutePositionsHive>('route_positions');
+    final routeBox = await Hive.openLazyBox<RoutePositionsHive>('route_positions');
     const cacheDuration = Duration(days: 60);
     final DateTime expiryThreshold = DateTime.now().subtract(cacheDuration);
 
     final List<dynamic> expiredKeys = [];
 
     for (final key in routeBox.keys) {
-      final entry = routeBox.get(key);
+      final entry = await routeBox.get(key);
       if (entry != null && entry.cachedAt.isBefore(expiryThreshold)) {
         expiredKeys.add(key);
       }
@@ -606,8 +606,8 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     final hiveKey = '$_deviceId-${DateFormat('yyyy-MM-dd').format(_historyFrom!)}';
 
     try {
-      final routeBox = await Hive.openBox<RoutePositionsHive>('route_positions');
-      final cachedRoute = routeBox.get(hiveKey);
+      final routeBox = await Hive.openLazyBox<RoutePositionsHive>('route_positions');
+      final cachedRoute = await routeBox.get(hiveKey);
 
       bool isCacheValid = false;
       if (cachedRoute != null) {
@@ -2176,7 +2176,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     }
     final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
     final reportsApi = api.ReportsApi(traccarProvider.apiClient);
-    final dailyBox = await Hive.openBox<ReportSummaryHive>('daily_summaries');
+    final dailyBox = await Hive.openLazyBox<ReportSummaryHive>('daily_summaries');
     final serverVersion = await traccarProvider.fetchServerVersion();
     final today = DateTime.now();
 
@@ -2189,7 +2189,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     for (var date = firstDayOfMonth; date.isBefore(lastDayOfMonth.add(const Duration(days: 1))); date = date.add(const Duration(days: 1))) {
       final dayUtc = DateTime.utc(date.year, date.month, date.day);
       final String hiveKey = '${_deviceId}_${DateFormat('yyyy-MM-dd').format(dayUtc)}';
-      final cachedSummary = dailyBox.get(hiveKey);
+      final cachedSummary = await dailyBox.get(hiveKey);
 
       if (cachedSummary != null) {
         final distance = cachedSummary.distance ?? 0;

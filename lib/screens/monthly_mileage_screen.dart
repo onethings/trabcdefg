@@ -79,7 +79,7 @@ class _MonthlyMileageScreenState extends State<MonthlyMileageScreen> {
     });
 
     final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
-    final dailyBox = await Hive.openBox<ReportSummaryHive>('daily_summaries');
+    final dailyBox = await Hive.openLazyBox<ReportSummaryHive>('daily_summaries');
     final serverVersion = traccarProvider.serverVersion ?? await traccarProvider.fetchServerVersion();
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
@@ -97,7 +97,7 @@ class _MonthlyMileageScreenState extends State<MonthlyMileageScreen> {
     for (var date = firstDayOfMonth; !date.isAfter(effectiveLastDay); date = date.add(const Duration(days: 1))) {
       final dayUtc = DateTime.utc(date.year, date.month, date.day);
       final String hiveKey = '${_selectedDeviceId}_${DateFormat('yyyy-MM-dd').format(dayUtc)}';
-      final cachedSummary = dailyBox.get(hiveKey);
+      final cachedSummary = await dailyBox.get(hiveKey);
 
       if (cachedSummary != null) {
         final distance = cachedSummary.distance ?? 0;
@@ -270,7 +270,7 @@ class _MonthlyMileageScreenState extends State<MonthlyMileageScreen> {
   }
 
   Future<void> _deleteOldMileageData() async {
-    final dailyBox = await Hive.openBox<ReportSummaryHive>('daily_summaries');
+    final dailyBox = await Hive.openLazyBox<ReportSummaryHive>('daily_summaries');
     final sixMonthsAgo = DateTime.now().subtract(const Duration(days: 180));
 
     final keysToDelete = <String>[];
