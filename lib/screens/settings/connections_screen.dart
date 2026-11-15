@@ -30,7 +30,7 @@ class ConnectionsScreenState extends State<ConnectionsScreen> {
     _fetchLinkedItems();
   }
 
-  void _fetchLinkedItems() async {
+  Future<void> _fetchLinkedItems() async {
     final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
     final geofencesApi = api.GeofencesApi(traccarProvider.apiClient);
     final notificationsApi = api.NotificationsApi(traccarProvider.apiClient);
@@ -107,6 +107,19 @@ class ConnectionsScreenState extends State<ConnectionsScreen> {
     return await maintenanceApi.getMaintenance();
   }
 
+  Future<void> _refreshAll() async {
+    _itemFutures
+      ..clear()
+      ..['geofences'] = _fetchGeofences()
+      ..['notifications'] = _fetchNotifications()
+      ..['drivers'] = _fetchDrivers()
+      ..['computedAttributes'] = _fetchComputedAttributes()
+      ..['savedCommands'] = _fetchSavedCommands()
+      ..['maintenance'] = _fetchMaintenance();
+    await _fetchLinkedItems();
+    if (mounted) setState(() {});
+  }
+
   void _updatePermission(String category, int itemId, bool isSelected) async {
     final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
     final apiClient = traccarProvider.apiClient;
@@ -152,9 +165,12 @@ class ConnectionsScreenState extends State<ConnectionsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: CupertinoNavigationBar(middle: Text('sharedConnections'.tr)),
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
+      body: RefreshIndicator(
+        onRefresh: _refreshAll,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: Column(
+            children: [
             _buildExpansionTile('sharedGeofences'.tr, 'geofences', _fetchGeofences),
             _buildExpansionTile('sharedNotifications'.tr, 'notifications', _fetchNotifications),
             _buildExpansionTile('sharedDrivers'.tr, 'drivers', _fetchDrivers),
@@ -162,6 +178,7 @@ class ConnectionsScreenState extends State<ConnectionsScreen> {
             _buildExpansionTile('sharedSavedCommands'.tr, 'savedCommands', _fetchSavedCommands),
             _buildExpansionTile('sharedMaintenance'.tr, 'maintenance', _fetchMaintenance),
           ],
+        ),
         ),
       ),
     );
