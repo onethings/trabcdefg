@@ -7,6 +7,7 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:trabcdefg/src/utils/direction.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
@@ -2576,8 +2577,8 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
                           formatButtonVisible: false,
                           titleCentered: true,
                           titleTextStyle: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontSize: 17, fontWeight: FontWeight.bold),
-                          leftChevronIcon: Icon(Icons.chevron_left, color: Theme.of(context).colorScheme.primary),
-                          rightChevronIcon: Icon(CupertinoIcons.chevron_right, color: Theme.of(context).colorScheme.primary),
+                          leftChevronIcon: Icon(isRtlOf(context) ? Icons.chevron_right : Icons.chevron_left, color: Theme.of(context).colorScheme.primary),
+                          rightChevronIcon: Icon(isRtlOf(context) ? CupertinoIcons.chevron_left : CupertinoIcons.chevron_right, color: Theme.of(context).colorScheme.primary),
                         ),
                         daysOfWeekStyle: DaysOfWeekStyle(
                           weekdayStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12),

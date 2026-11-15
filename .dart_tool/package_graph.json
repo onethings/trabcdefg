@@ -22,6 +22,7 @@
         "http",
         "intl",
         "latlong2",
+        "liquid_glass_widgets",
         "maplibre_gl",
         "meta",
         "mobile_scanner",
@@ -175,6 +176,13 @@
         "stream_channel",
         "test_api",
         "vector_math"
+      ]
+    },
+    {
+      "name": "liquid_glass_widgets",
+      "version": "1.17.3",
+      "dependencies": [
+        "flutter"
       ]
     },
     {

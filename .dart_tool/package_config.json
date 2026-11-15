@@ -518,6 +518,12 @@
       "languageVersion": "3.8"
     },
     {
+      "name": "liquid_glass_widgets",
+      "rootUri": "file:///Users/kevinyang/.pub-cache/hosted/pub.dev/liquid_glass_widgets-1.17.3",
+      "packageUri": "lib/",
+      "languageVersion": "3.5"
+    },
+    {
       "name": "lists",
       "rootUri": "file:///Users/kevinyang/.pub-cache/hosted/pub.dev/lists-1.0.1",
       "packageUri": "lib/",

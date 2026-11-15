@@ -1,15 +1,16 @@
 // lib/screens/map_screen.dart
 import 'dart:async';
 import 'dart:math' as math;
-import 'dart:ui' as ui;
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:trabcdefg/src/utils/direction.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
+import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import 'package:maplibre_gl/maplibre_gl.dart' as maplibre;
 import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
@@ -38,7 +39,6 @@ const double _kControlRadius = 12;
 const double _kPillRadius = 22;
 const double _kEdgeInset = 16;
 const double _kControlGap = 12;
-const double _kGlassBlurSigma = 10;
 const double _kMaxMapZoom = 19.0;
 const double _kMarkerSelectionRadius = 64.0;
 const Duration _kSymbolTapGuard = Duration(milliseconds: 300);
@@ -1592,14 +1592,12 @@ class _MapScreenState extends State<MapScreen> {
                       left: 24,
                       right: 72,
                       child: IgnorePointer(
-                        child: Material(
-                          color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.94),
-                          borderRadius: BorderRadius.circular(16),
-                          elevation: 2,
-                          child: Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: EmptyState(icon: Icons.location_off_outlined, title: 'mapNoPositions'.tr, hint: 'mapNoPositionsHint'.tr),
-                          ),
+                        child: GlassContainer(
+                          shape: const LiquidRoundedSuperellipse(borderRadius: 16),
+                          quality: GlassQuality.standard,
+                          platformViewBackdrop: true,
+                          padding: const EdgeInsets.all(16),
+                          child: EmptyState(icon: Icons.location_off_outlined, title: 'mapNoPositions'.tr, hint: 'mapNoPositionsHint'.tr),
                         ),
                       ),
                     );
@@ -1663,68 +1661,21 @@ class _MarkerRenderState {
   const _MarkerRenderState({required this.latitude, required this.longitude, required this.course, required this.iconSize, required this.iconImage, required this.labelImage});
 }
 
-class _GlassPalette {
-  final Color fill;
-  final Color border;
-  final List<BoxShadow> shadows;
-
-  const _GlassPalette({required this.fill, required this.border, required this.shadows});
-
-  factory _GlassPalette.of(BuildContext context) {
-    final ColorScheme colorScheme = Theme.of(context).colorScheme;
-    final bool isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return _GlassPalette(
-      fill: (isDark ? colorScheme.surfaceContainerHighest : colorScheme.surface).withValues(alpha: 0.94),
-      border: colorScheme.outlineVariant.withValues(alpha: 0.5),
-      shadows: [
-        BoxShadow(
-          color: Colors.black.withValues(alpha: isDark ? 0.6 : 0.32),
-          blurRadius: 16,
-          offset: const Offset(0, 6),
-        ),
-        BoxShadow(
-          color: Colors.black.withValues(alpha: isDark ? 0.42 : 0.2),
-          blurRadius: 4,
-          offset: const Offset(0, 2),
-        ),
-      ],
-    );
-  }
-}
-
 class _GlassSurface extends StatelessWidget {
   final Widget child;
   final double borderRadius;
   final EdgeInsetsGeometry? padding;
 
-  /// Drop shadows read as a stray band when the surface sits on the detail
-  /// panel instead of the map, so the switcher bar opts out.
-  final bool withShadow;
-
-  const _GlassSurface({required this.child, this.borderRadius = _kControlRadius, this.padding, this.withShadow = true});
+  const _GlassSurface({required this.child, this.borderRadius = _kControlRadius, this.padding});
 
   @override
   Widget build(BuildContext context) {
-    final _GlassPalette palette = _GlassPalette.of(context);
-
-    return Container(
-      decoration: BoxDecoration(borderRadius: BorderRadius.circular(borderRadius), boxShadow: withShadow ? palette.shadows : null),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(borderRadius),
-        child: BackdropFilter(
-          filter: ui.ImageFilter.blur(sigmaX: _kGlassBlurSigma, sigmaY: _kGlassBlurSigma),
-          child: Container(
-            padding: padding,
-            decoration: BoxDecoration(
-              color: palette.fill,
-              borderRadius: BorderRadius.circular(borderRadius),
-              border: Border.all(color: palette.border, width: 0.5),
-            ),
-            child: Material(type: MaterialType.transparency, child: child),
-          ),
-        ),
-      ),
+    return GlassContainer(
+      padding: padding,
+      shape: LiquidRoundedSuperellipse(borderRadius: borderRadius),
+      quality: GlassQuality.standard,
+      platformViewBackdrop: true,
+      child: Material(type: MaterialType.transparency, child: child),
     );
   }
 }
@@ -1836,11 +1787,10 @@ class _DeviceSwitcherBarState extends State<_DeviceSwitcherBar> {
     return _GlassSurface(
       borderRadius: _kPillRadius,
       padding: const EdgeInsets.symmetric(horizontal: 4),
-      withShadow: false,
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _GlassIconButton(icon: Icons.chevron_left_rounded, label: 'devicePrevious'.tr, haptic: true, onTap: widget.onPrevious),
+          _GlassIconButton(icon: isRtlOf(context) ? Icons.chevron_right_rounded : Icons.chevron_left_rounded, label: 'devicePrevious'.tr, haptic: true, onTap: widget.onPrevious),
           Semantics(
             button: true,
             child: InkWell(
@@ -1882,7 +1832,7 @@ class _DeviceSwitcherBarState extends State<_DeviceSwitcherBar> {
               ),
             ),
           ),
-          _GlassIconButton(icon: Icons.chevron_right_rounded, label: 'deviceNext'.tr, haptic: true, onTap: widget.onNext),
+          _GlassIconButton(icon: isRtlOf(context) ? Icons.chevron_left_rounded : Icons.chevron_right_rounded, label: 'deviceNext'.tr, haptic: true, onTap: widget.onNext),
         ],
       ),
     );

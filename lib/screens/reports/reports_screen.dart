@@ -1,6 +1,7 @@
 // lib/screens/reports/reports_screen.dart
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:trabcdefg/src/utils/direction.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -333,7 +334,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
       return ListTile(
         leading: Icon(d.icon, color: Theme.of(context).colorScheme.primary),
         title: Text(d.title),
-        trailing: const Icon(CupertinoIcons.chevron_right),
+        trailing: Icon(isRtlOf(context) ? CupertinoIcons.chevron_left : CupertinoIcons.chevron_right),
         onTap: () => _navigateToReport(d.type),
       );
     }).toList();

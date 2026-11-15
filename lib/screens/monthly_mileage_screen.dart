@@ -5,6 +5,7 @@ import 'dart:developer' as developer;
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:trabcdefg/src/utils/direction.dart';
 import 'package:get/get.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:intl/date_symbol_data_local.dart'; // Import for locale data
@@ -403,10 +404,10 @@ class _MonthlyMileageScreenState extends State<MonthlyMileageScreen> {
                           focusedDay: _focusedDay,
                           daysOfWeekHeight: 0,
                           rowHeight: 55,
-                          headerStyle: const HeaderStyle(
+                          headerStyle: HeaderStyle(
                             titleCentered: true,
-                            leftChevronIcon: Icon(CupertinoIcons.chevron_left, size: 18),
-                            rightChevronIcon: Icon(CupertinoIcons.chevron_right, size: 18),
+                            leftChevronIcon: Icon(isRtlOf(context) ? CupertinoIcons.chevron_right : CupertinoIcons.chevron_left, size: 18),
+                            rightChevronIcon: Icon(isRtlOf(context) ? CupertinoIcons.chevron_left : CupertinoIcons.chevron_right, size: 18),
                             titleTextStyle: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
                             formatButtonTextStyle: TextStyle(fontSize: 13, color: CupertinoColors.systemBlue),
                           ),

@@ -1,10 +1,10 @@
-import 'dart:ui';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart' show defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -117,18 +117,12 @@ class _DeviceDetailPanelState extends State<DeviceDetailPanel> {
 
     return Padding(
       padding: const EdgeInsetsDirectional.fromSTEB(12, 0, 12, 12),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(24),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-          child: Container(
-            decoration: BoxDecoration(
-              color: (isDark ? Colors.black : Colors.white).withValues(alpha: 0.7),
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: (isDark ? Colors.white : Colors.black).withValues(alpha: 0.1), width: 0.5),
-            ),
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            child: Column(
+      child: GlassContainer(
+        shape: const LiquidRoundedSuperellipse(borderRadius: 24),
+        quality: GlassQuality.standard,
+        platformViewBackdrop: true,
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 // Handle bar
@@ -199,8 +193,6 @@ class _DeviceDetailPanelState extends State<DeviceDetailPanel> {
                 if (_isExpanded) ...[const SizedBox(height: 16), _buildAppleActionButtons(context)],
               ],
             ),
-          ),
-        ),
       ),
     );
   }

@@ -4,6 +4,7 @@ import 'dart:convert';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:trabcdefg/src/utils/direction.dart';
 import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
@@ -527,7 +528,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         child: Icon(icon, size: 19, color: colorScheme.onPrimaryContainer),
       ),
       title: Text(title),
-      trailing: Icon(CupertinoIcons.chevron_right, size: 16, color: colorScheme.onSurface.withValues(alpha: 0.35)),
+      trailing: Icon(isRtlOf(context) ? CupertinoIcons.chevron_left : CupertinoIcons.chevron_right, size: 16, color: colorScheme.onSurface.withValues(alpha: 0.35)),
       onTap: onTap,
     );
   }

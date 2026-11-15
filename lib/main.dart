@@ -3,6 +3,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -43,6 +44,8 @@ import 'package:trabcdefg/src/generated_api/api.dart' as api;
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  await LiquidGlassWidgets.initialize();
+
   // 於全域初始化階段執行一次 Timeago 語系註冊，避免重複開銷
   _setupTimeagoLocales();
 
@@ -62,7 +65,12 @@ void main() async {
   final savedUrl = prefs.getString('traccarServerUrl');
   final savedLanguageCode = prefs.getString('saved_language_code');
 
-  runApp(TraccarApp(initialUrl: savedUrl, initialLanguageCode: savedLanguageCode));
+  runApp(
+    LiquidGlassWidgets.wrap(
+      child: TraccarApp(initialUrl: savedUrl, initialLanguageCode: savedLanguageCode),
+      brightnessResolver: Theme.maybeBrightnessOf,
+    ),
+  );
 }
 
 /// 全域 TimeAgo 語系註冊函式
