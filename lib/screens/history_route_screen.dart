@@ -93,6 +93,31 @@ String _getTurboSpeedColor(double speedKmh, double minSpeed, double maxSpeed) {
 }
 
 // --- Isolate Background Compute Helper ---
+/// Below this many points the isolate hop costs more than the work it moves.
+const int _trackCleanupIsolateThreshold = 1000;
+
+class _TrackCleanupParams {
+  final List<api.Position> positions;
+
+  /// The route cache needs the JSON form of the cleaned track, the display path
+  /// does not. Encoding it eagerly on a cache-hit load would be wasted work.
+  final bool encode;
+
+  _TrackCleanupParams(this.positions, {required this.encode});
+}
+
+class _CleanedTrack {
+  final List<api.Position> positions;
+  final List<Map<String, dynamic>> positionsJson;
+
+  _CleanedTrack(this.positions, this.positionsJson);
+}
+
+_CleanedTrack _cleanTrackIsolate(_TrackCleanupParams params) {
+  final cleaned = PositionCleaner.clean(params.positions);
+  return _CleanedTrack(cleaned, params.encode ? RoutePositionsHive.toJsonList(cleaned) : const []);
+}
+
 class _GeoJsonParams {
   final List<api.Position> positions;
   final RouteColorMode routeColorMode;
@@ -632,12 +657,19 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
         fetchedPositions = await api.PositionsApi(traccarProvider.apiClient).getPositions(deviceId: _deviceId, from: _historyFrom!.toUtc(), to: _historyTo!.toUtc()) ?? [];
       }
 
-      final cleanedPositions = PositionCleaner.clean(fetchedPositions);
+      // Cleaning a dense day is a sort plus a trig pass per point, and encoding
+      // it builds one map per point. Both are pointless on the frame that is
+      // about to paint, so a dense track goes to a background isolate the same
+      // way the GeoJSON layer does.
+      final cleanupParams = _TrackCleanupParams(fetchedPositions, encode: fetchedFromNetwork);
+      final cleanedTrack = fetchedPositions.length > _trackCleanupIsolateThreshold ? await compute(_cleanTrackIsolate, cleanupParams) : _cleanTrackIsolate(cleanupParams);
+      final cleanedPositions = cleanedTrack.positions;
+
       if (cleanedPositions.length != fetchedPositions.length) {
         developer.log('Cleaned track: ${fetchedPositions.length} -> ${cleanedPositions.length} points', name: 'HistoryRouteScreen');
       }
       if (fetchedFromNetwork && cleanedPositions.isNotEmpty) {
-        await routeBox.put(hiveKey, RoutePositionsHive(dateKey: hiveKey, positionsJson: RoutePositionsHive.toJsonList(cleanedPositions), cachedAt: DateTime.now()));
+        await routeBox.put(hiveKey, RoutePositionsHive(dateKey: hiveKey, positionsJson: cleanedTrack.positionsJson, cachedAt: DateTime.now()));
       }
 
       _calculateStops(cleanedPositions);

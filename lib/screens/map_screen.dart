@@ -96,7 +96,6 @@ class _MapScreenState extends State<MapScreen> {
   MapNavigation? _mapNavigation;
   int? _pendingFocusDeviceId;
 
-  bool _isCacheInitialized = false;
   Timer? _zoomDebounce;
 
   bool _myLocationEnabled = false;
@@ -122,15 +121,9 @@ class _MapScreenState extends State<MapScreen> {
     _loadDrawerSortMode();
 
     _iconService = MarkerIconService(loadedIcons: _loadedIcons);
-    // The tile cache opens lazily on the screen that draws tiles, so the map
-    // no longer waits for the whole cache file to load before it can paint.
-    OfflineAddressService.initDatabase().then((_) {
-      if (mounted) {
-        _safeSetState(() {
-          _isCacheInitialized = true;
-        });
-      }
-    });
+    // Not awaited: the map paints first, and the 20 MB address database copies
+    // on its own time. Nothing on the first frame reads it.
+    unawaited(OfflineAddressService.initDatabase());
 
     // Not awaited: the map shows up first, and the puck fades in once the user
     // answers the permission dialog.
@@ -1066,8 +1059,6 @@ class _MapScreenState extends State<MapScreen> {
       _showDeviceDetailPanel(device, position);
     }
 
-    traccarProvider.prefetchDeviceHistory(deviceId);
-
     final prefs = await SharedPreferences.getInstance();
     if (!mounted || selectionGeneration != _deviceSelectionGeneration) return;
     await prefs.setInt('selectedDeviceId', deviceId);
@@ -1430,21 +1421,6 @@ class _MapScreenState extends State<MapScreen> {
 
     if (traccarProvider.isLoading && traccarProvider.devices.isEmpty) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    }
-
-    if (!_isCacheInitialized) {
-      return Scaffold(
-        body: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const CircularProgressIndicator(),
-              const SizedBox(height: _kControlGap),
-              Text('mapInitializingAssets'.tr, style: Theme.of(context).textTheme.bodySmall),
-            ],
-          ),
-        ),
-      );
     }
 
     double initialLat = 0, initialLng = 0, initialZoom = 2.0;

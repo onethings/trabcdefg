@@ -51,9 +51,6 @@ class TraccarProvider with ChangeNotifier, WidgetsBindingObserver {
   Set<int> _favoriteDeviceIds = {};
   Set<int> get favoriteDeviceIds => _favoriteDeviceIds;
 
-  final Map<int, List<api.Position>> _prefetchedHistory = {};
-  Map<int, List<api.Position>> get prefetchedHistory => _prefetchedHistory;
-
   // --- 健康檢查與 Session 狀態管理相關變數 ---
   Timer? _serverHealthTimer;
   int _serverFailCount = 0;
@@ -568,7 +565,6 @@ class TraccarProvider with ChangeNotifier, WidgetsBindingObserver {
     _todayMileageKm.clear();
     _geofences = [];
     _serverNotifications = [];
-    _prefetchedHistory.clear();
 
     try {
       webSocketService.disconnect();
@@ -668,24 +664,6 @@ class TraccarProvider with ChangeNotifier, WidgetsBindingObserver {
       _webSocketDevicesDuringFetch = null;
       _isLoading = false;
       notifyListeners();
-    }
-  }
-
-  Future<void> prefetchDeviceHistory(int deviceId) async {
-    if (_sessionId == null || _prefetchedHistory.containsKey(deviceId)) return;
-
-    final to = DateTime.now();
-    final from = to.subtract(const Duration(hours: 1));
-
-    try {
-      debugPrint('Pre-fetching 1h history for device: $deviceId');
-      final positionsApi = api.PositionsApi(apiClient);
-      final history = await positionsApi.getPositions(deviceId: deviceId, from: from.toUtc(), to: to.toUtc()) ?? [];
-
-      _prefetchedHistory[deviceId] = history;
-      notifyListeners();
-    } catch (e) {
-      debugPrint("Pre-fetch failed for device $deviceId: $e");
     }
   }
 }

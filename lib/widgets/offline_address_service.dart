@@ -92,7 +92,11 @@ class OfflineAddressService {
       if (!(await databaseExists(path))) {
         ByteData data = await rootBundle.load("assets/sqldb/$dbName");
         List<int> bytes = data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
-        await File(path).writeAsBytes(bytes, flush: true);
+        // Copy beside the target and rename, so a copy interrupted by the OS
+        // can never be mistaken for a complete database on the next launch.
+        final File partial = File('$path.part');
+        await partial.writeAsBytes(bytes, flush: true);
+        await partial.rename(path);
       }
 
       _db = await openDatabase(path, readOnly: true);
@@ -127,7 +131,14 @@ class OfflineAddressService {
   static Future<String> getAddressCached(double lat, double lon, {String? address}) {
     if (address != null && address.isNotEmpty) return Future.value(address);
     final String key = '${lat.toStringAsFixed(5)},${lon.toStringAsFixed(5)}';
-    return _addressFutures.putIfAbsent(key, () => getAddress(lat, lon));
+    // Only in-flight lookups are shared. Dropping the entry once it settles
+    // keeps this map from growing for the whole session; the resolved string
+    // lives in the Hive address cache, so a later caller does not re-hit the
+    // network.
+    return _addressFutures.putIfAbsent(
+      key,
+      () => getAddress(lat, lon).whenComplete(() => _addressFutures.remove(key)),
+    );
   }
 
   static String _cacheKey(double lat, double lon) {
