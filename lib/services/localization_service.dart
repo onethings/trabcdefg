@@ -70,6 +70,11 @@ import 'package:trabcdefg/l10n/zh_tw.dart';
 
 class LocalizationService extends Translations {
   static const fallbackLocale = Locale('en', 'US');
+  /// Languages written right-to-left; layout direction follows these.
+  static const Set<String> rtlLanguages = {'ar', 'he', 'fa', 'ps', 'ur', 'ckb', 'dv'};
+
+  static bool isRtl(Locale locale) => rtlLanguages.contains(locale.languageCode);
+
   static const _languageKey = 'saved_language_code';
 
   static final langs = [

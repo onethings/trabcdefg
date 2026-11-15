@@ -143,11 +143,16 @@ class TraccarApp extends StatelessWidget {
               // OS accessibility size times the in-app slider; the clamp keeps 4x combinations from breaking layouts.
               final double combinedScale = (systemScale * settingsProvider.fontSizeScale).clamp(0.6, 3.0);
               final brightness = Theme.of(context).brightness;
+              final Locale activeLocale = Get.locale ?? LocalizationService.fallbackLocale;
+              final TextDirection textDirection = LocalizationService.isRtl(activeLocale) ? TextDirection.rtl : TextDirection.ltr;
               return MediaQuery(
                 data: data.copyWith(textScaler: TextScaler.linear(combinedScale)),
-                child: CupertinoTheme(
-                  data: CupertinoThemeData(brightness: brightness),
-                  child: child!,
+                child: Directionality(
+                  textDirection: textDirection,
+                  child: CupertinoTheme(
+                    data: CupertinoThemeData(brightness: brightness),
+                    child: child!,
+                  ),
                 ),
               );
             },
