@@ -11,6 +11,7 @@ import 'package:maplibre_gl/maplibre_gl.dart';
 import 'package:provider/provider.dart';
 import 'package:trabcdefg/providers/map_style_provider.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
+import 'package:trabcdefg/services/feedback.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
 
 class EmulatorScreen extends StatefulWidget {
@@ -71,7 +72,7 @@ class _EmulatorScreenState extends State<EmulatorScreen> {
 
   Future<void> _sendPosition(LatLng point) async {
     if (_selectedDeviceId == null) {
-      Get.snackbar('sharedEmulator'.tr, 'Please select a device first.', snackPosition: SnackPosition.BOTTOM);
+      FeedbackService.error('Please select a device first.', context: context);
       return;
     }
 

@@ -759,6 +759,7 @@ const Map<String, String> zhCN = {
   "sharedDelete": "删除",
   "sharedDate": "日期",
   "sharedRetry": "重试",
+  "logoutConfirm": "要清除本機登入狀態並登出嗎？",
   "sharedClearFilters": "清除筛选",
   "deviceEmptyHint": "下拉刷新或添加设备。",
   "deviceFilteredEmptyHint": "当前筛选没有匹配的设备。",

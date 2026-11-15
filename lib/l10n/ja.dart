@@ -756,6 +756,7 @@ const Map<String, String> ja = {
   "sharedDelete": "削除",
   "sharedDate": "日付",
   "sharedRetry": "再試行",
+  "logoutConfirm": "ローカルのログイン状態を消去してサインアウトしますか。",
   "sharedClearFilters": "フィルターをクリア",
   "deviceEmptyHint": "下に引いて更新するか、デバイスを追加してください。",
   "deviceFilteredEmptyHint": "現在のフィルターに一致するデバイスはありません。",

@@ -12,6 +12,7 @@ import 'package:trabcdefg/providers/traccar_provider.dart';
 import 'package:trabcdefg/screens/qr_scanner_screen.dart';
 import 'package:trabcdefg/services/api_client_factory.dart';
 import 'package:trabcdefg/services/auth_service.dart';
+import 'package:trabcdefg/services/feedback.dart';
 import 'package:trabcdefg/services/localization_service.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
 
@@ -136,7 +137,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       if (!mounted) return;
       // 401 — wrong email/password or expired account
       if (e.statusCode == 401) {
-        Get.snackbar('sharedError'.tr, 'loginFailed'.tr, snackPosition: SnackPosition.BOTTOM);
+        FeedbackService.error('loginFailed'.tr, context: context);
         return;
       }
       // 400 — surface the server message, e.g. "Account has expired"
@@ -152,16 +153,16 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
         return;
       }
       // Other 4xx / 5xx — show the server-provided message
-      Get.snackbar('sharedError'.tr, e.message, snackPosition: SnackPosition.BOTTOM);
+      FeedbackService.error(e.message, context: context);
     } on api.ApiException catch (_) {
       // Network-level failure (DNS / TLS / connection refused / timeout).
       // No URL talk here — the user never sets the server address.
       if (mounted) {
-        Get.snackbar('sharedError'.tr, 'serverUnreachable'.tr, snackPosition: SnackPosition.BOTTOM);
+        FeedbackService.error('serverUnreachable'.tr, context: context);
       }
     } catch (e) {
       if (mounted) {
-        Get.snackbar('sharedError'.tr, e.toString(), snackPosition: SnackPosition.BOTTOM);
+        FeedbackService.error(e.toString(), context: context);
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -418,16 +419,22 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     final isSelected = provider.activePreset == preset;
     return GestureDetector(
       onTap: () => provider.setPreset(preset),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 300),
-        margin: const EdgeInsets.symmetric(horizontal: 6),
-        width: isSelected ? 22 : 18,
-        height: isSelected ? 22 : 18,
-        decoration: BoxDecoration(
-          color: color,
-          shape: BoxShape.circle,
-          border: Border.all(color: isSelected ? Colors.white : Colors.transparent, width: 2),
-          boxShadow: isSelected ? [BoxShadow(color: color.withValues(alpha: 0.5), blurRadius: 10, spreadRadius: 1)] : [],
+      child: SizedBox(
+        width: 44,
+        height: 44,
+        child: Center(
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 300),
+            margin: const EdgeInsets.symmetric(horizontal: 6),
+            width: isSelected ? 22 : 18,
+            height: isSelected ? 22 : 18,
+            decoration: BoxDecoration(
+              color: color,
+              shape: BoxShape.circle,
+              border: Border.all(color: isSelected ? Colors.white : Colors.transparent, width: 2),
+              boxShadow: isSelected ? [BoxShadow(color: color.withValues(alpha: 0.5), blurRadius: 10, spreadRadius: 1)] : [],
+            ),
+          ),
         ),
       ),
     );

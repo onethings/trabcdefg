@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:trabcdefg/services/auth_service.dart';
 import 'package:trabcdefg/services/auth_session_store.dart';
+import 'package:trabcdefg/services/feedback.dart';
 import 'package:trabcdefg/services/websocket_service.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
 import 'package:trabcdefg/storage/user_database_helper.dart';
@@ -99,7 +100,7 @@ class TraccarProvider with ChangeNotifier, WidgetsBindingObserver {
         _serverFailCount++;
         debugPrint('Server unreachable (health check $_serverFailCount): $e');
         if (_serverFailCount == 2) {
-          Get.snackbar('sharedError'.tr, 'connectionLost'.tr, snackPosition: SnackPosition.BOTTOM);
+          FeedbackService.error('connectionLost'.tr);
         }
         return;
       }
@@ -108,7 +109,7 @@ class TraccarProvider with ChangeNotifier, WidgetsBindingObserver {
       if (AuthSessionStore.instance.sessionId != null) return;
       _serverHealthTimer?.cancel();
       if (Get.currentRoute != '/login') {
-        Get.snackbar('sharedError'.tr, 'sessionExpired'.tr, snackPosition: SnackPosition.BOTTOM);
+        FeedbackService.error('sessionExpired'.tr);
         Get.offAllNamed('/login');
       }
     }

@@ -26,6 +26,7 @@ import 'package:trabcdefg/providers/traccar_provider.dart';
 import 'package:trabcdefg/screens/reports/chart_report_screen.dart';
 import 'package:trabcdefg/screens/reports/stops_report_screen.dart';
 import 'package:trabcdefg/screens/reports/trips_report_screen.dart';
+import 'package:trabcdefg/services/feedback.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
 import 'package:trabcdefg/src/utils/position_cleaner.dart';
 import 'package:trabcdefg/widgets/offline_address_service.dart';
@@ -652,7 +653,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
       debugPrint('獲取軌跡失敗: $e');
       if (mounted) {
         _safeSetState(() => _isLoading = false);
-        Get.snackbar("Error", "Failed to fetch route data");
+        FeedbackService.error("Failed to fetch route data", context: context);
       }
     }
   }
@@ -773,14 +774,14 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
         _geofences = await api.GeofencesApi(traccarProvider.apiClient).getGeofences(deviceId: _deviceId) ?? [];
       }
       if (_geofences.isEmpty) {
-        if (mounted) Get.snackbar('sharedGeofences'.tr, 'sharedNoData'.tr);
+        if (mounted) FeedbackService.info('sharedNoData'.tr, context: context);
         return;
       }
       _safeSetState(() => _showGeofences = true);
       await _drawGeofences();
     } catch (e) {
       developer.log('Failed to load geofences: $e', name: 'HistoryRouteScreen');
-      if (mounted) Get.snackbar("Error", 'sharedNoData'.tr);
+      if (mounted) FeedbackService.error('sharedNoData'.tr, context: context);
     } finally {
       _safeSetState(() => _isGeofenceLoading = false);
     }
@@ -1052,7 +1053,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
       _measurePoints.clear();
     });
     _clearMeasureLayers();
-    Get.snackbar('historyMeasureTooltip'.tr, 'historyMeasureHint'.tr, snackPosition: SnackPosition.TOP, margin: const EdgeInsets.all(16), duration: const Duration(seconds: 2));
+    FeedbackService.info('historyMeasureHint'.tr, context: context);
   }
 
   Future<void> _exitMeasureMode() async {
@@ -2000,7 +2001,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
 
   void _exportToGPX() async {
     if (_positions.isEmpty) {
-      Get.snackbar("Error", "No track data to export");
+      FeedbackService.error("No track data to export", context: context);
       return;
     }
 
@@ -2035,7 +2036,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
 
       await SharePlus.instance.share(ShareParams(files: [XFile(file.path)], text: 'GPX Export for $deviceName'));
     } catch (e) {
-      Get.snackbar("Export Failed", e.toString());
+      FeedbackService.error(e.toString(), context: context);
     }
   }
 

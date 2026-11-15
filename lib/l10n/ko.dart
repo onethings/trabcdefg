@@ -756,6 +756,7 @@ const Map<String, String> ko = {
   "sharedDelete": "삭제",
   "sharedDate": "날짜",
   "sharedRetry": "재시도",
+  "logoutConfirm": "로컬 로그인 상태를 지우고 로그아웃할까요?",
   "sharedClearFilters": "필터 지우기",
   "deviceEmptyHint": "아래로 당겨 새로 고치거나 기기를 추가하세요.",
   "deviceFilteredEmptyHint": "현재 필터와 일치하는 기기가 없습니다.",

@@ -2,10 +2,11 @@
 // CommandScreen for sending commands to selected device
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:get/get.dart'; // For .tr and Get.snackbar
+import 'package:get/get.dart'; // For .tr
 import 'package:provider/provider.dart'; // Import Provider
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
+import 'package:trabcdefg/services/feedback.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
 import 'package:trabcdefg/widgets/command_attributes_form.dart';
 
@@ -45,11 +46,7 @@ class _CommandScreenState extends State<CommandScreen> {
     _deviceId = prefs.getInt('selectedDeviceId');
     _selectedDeviceName = prefs.getString('selectedDeviceName');
     if (_deviceId == null) {
-      Get.snackbar(
-        'sharedError'.tr,
-        'commandDeviceNotFound'.tr,
-        snackPosition: SnackPosition.BOTTOM,
-      );
+      FeedbackService.error('commandDeviceNotFound'.tr);
     }
     setState(() {});
   }
@@ -66,11 +63,7 @@ class _CommandScreenState extends State<CommandScreen> {
 
   Future<void> _fetchAndShowCommandTypes(api.CommandsApi commandsApi) async {
     if (_deviceId == null) {
-      Get.snackbar(
-        'sharedError'.tr,
-        'commandMissingDevice'.tr,
-        snackPosition: SnackPosition.BOTTOM,
-      );
+      FeedbackService.error('commandMissingDevice'.tr, context: context);
       return;
     }
 
@@ -78,11 +71,7 @@ class _CommandScreenState extends State<CommandScreen> {
       final types = await commandsApi.getCommandsTypes(deviceId: _deviceId);
 
       if (types == null || types.isEmpty) {
-        Get.snackbar(
-          'sharedInfo'.tr,
-          'commandNoCommands'.tr,
-          snackPosition: SnackPosition.BOTTOM,
-        );
+        FeedbackService.info('commandNoCommands'.tr, context: context);
         return;
       }
 
@@ -91,17 +80,9 @@ class _CommandScreenState extends State<CommandScreen> {
       if (!mounted) return;
       _showCommandTypePicker();
     } on api.ApiException catch (e) {
-      Get.snackbar(
-        'sharedError'.tr,
-        'commandTypesLoadFailed'.trParams({'error': e.message ?? ''}),
-        snackPosition: SnackPosition.BOTTOM,
-      );
+      FeedbackService.error('commandTypesLoadFailed'.trParams({'error': e.message ?? ''}));
     } catch (e) {
-      Get.snackbar(
-        'sharedError'.tr,
-        'commandUnknownError'.tr,
-        snackPosition: SnackPosition.BOTTOM,
-      );
+      FeedbackService.error('commandUnknownError'.tr);
     }
   }
 
@@ -111,11 +92,7 @@ class _CommandScreenState extends State<CommandScreen> {
     if (!_formKey.currentState!.validate() ||
         _deviceId == null ||
         _selectedCommandType == null) {
-      Get.snackbar(
-        'sharedError'.tr,
-        'commandSelectTypeAndFill'.tr,
-        snackPosition: SnackPosition.BOTTOM,
-      );
+      FeedbackService.error('commandSelectTypeAndFill'.tr, context: context);
       return;
     }
 
@@ -162,29 +139,17 @@ class _CommandScreenState extends State<CommandScreen> {
       // FIX: Guard use of BuildContext across async gaps
       if (!mounted) return;
 
-      Get.snackbar(
-        'sharedSuccess'.tr,
+      FeedbackService.success(
         isSetConnection
             ? 'commandSetConnectionSent'.tr
             : 'commandSent'.tr,
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.green.shade100,
+        context: context,
       );
       Navigator.of(context).pop();
     } on api.ApiException catch (e) {
-      Get.snackbar(
-        'sharedError'.tr,
-        'commandSendFailed'.trParams({'error': e.message ?? ''}),
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.red.shade100,
-      );
+      FeedbackService.error('commandSendFailed'.trParams({'error': e.message ?? ''}));
     } catch (e) {
-      Get.snackbar(
-        'sharedError'.tr,
-        'commandUnknownErrorDispatch'.tr,
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.red.shade100,
-      );
+      FeedbackService.error('commandUnknownErrorDispatch'.tr);
     } finally {
       if (mounted) setState(() => _isSending = false);
     }

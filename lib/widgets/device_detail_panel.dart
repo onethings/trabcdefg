@@ -350,12 +350,20 @@ class _DeviceDetailPanelState extends State<DeviceDetailPanel> {
 
   Widget _buildCircleIcon(BuildContext context, IconData icon, VoidCallback onTap, {Color? color}) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(color: (isDark ? Colors.white : Colors.black).withValues(alpha: 0.08), shape: BoxShape.circle),
-        child: Icon(icon, size: 18, color: color ?? Theme.of(context).colorScheme.onSurface),
+    // The 44x44 box is the touch target; the visible circle stays 34pt.
+    return SizedBox(
+      width: 44,
+      height: 44,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: Center(
+          child: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(color: (isDark ? Colors.white : Colors.black).withValues(alpha: 0.08), shape: BoxShape.circle),
+            child: Icon(icon, size: 18, color: color ?? Theme.of(context).colorScheme.onSurface),
+          ),
+        ),
       ),
     );
   }

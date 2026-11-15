@@ -6,6 +6,7 @@ import 'package:get/get.dart';
 import 'package:provider/provider.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
 import 'package:trabcdefg/screens/settings/add_driver_screen.dart';
+import 'package:trabcdefg/services/feedback.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
 
 class DriversScreen extends StatefulWidget {
@@ -98,9 +99,9 @@ class _DriversScreenState extends State<DriversScreen> {
                               if (!mounted) return;
                               _fetchDrivers();
 
-                              Get.snackbar('Success', 'Driver deleted successfully');
+                              FeedbackService.success('Driver deleted successfully', context: context);
                             } catch (e) {
-                              Get.snackbar('Error', 'Failed to delete driver: $e');
+                              FeedbackService.error('Failed to delete driver: $e');
                             }
                           }
                         },

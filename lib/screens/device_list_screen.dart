@@ -308,7 +308,7 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
                             IconButton(
                               visualDensity: VisualDensity.compact,
                               padding: const EdgeInsets.only(left: 8),
-                              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                              constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
                               icon: Icon(isFavorite ? CupertinoIcons.heart_fill : CupertinoIcons.heart, color: isFavorite ? theme.colorScheme.error : theme.colorScheme.outline, size: 20),
                               onPressed: () => provider.toggleFavorite(device.id!),
                             ),

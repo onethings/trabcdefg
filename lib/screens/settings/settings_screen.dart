@@ -26,6 +26,7 @@ import 'package:trabcdefg/screens/settings/server_info_screen.dart';
 import 'package:trabcdefg/screens/settings/emulator_screen.dart';
 import 'package:trabcdefg/screens/reports/reports_screen.dart';
 import 'package:trabcdefg/services/auth_session_store.dart';
+import 'package:trabcdefg/services/feedback.dart';
 import 'package:trabcdefg/services/localization_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -46,10 +47,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _serverVersion = context.read<TraccarProvider>().fetchServerVersion();
   }
 
-  // 顯示於導航欄上方，避免 SnackBar 被 CupertinoTabBar 蓋住
   void _showUpdateMessage(String message) {
-    final bottomInset = MediaQuery.paddingOf(context).bottom;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message), behavior: SnackBarBehavior.floating, margin: EdgeInsets.fromLTRB(16, 0, 16, bottomInset + 8)));
+    FeedbackService.info(message, context: context);
+  }
+
+  // 登出會清掉本機 session，使用者無法復原，因此先確認再執行。
+  Future<void> _confirmLogout(BuildContext context, TraccarProvider traccarProvider) async {
+    final confirmed = await showCupertinoDialog<bool>(
+      context: context,
+      builder: (dialogContext) => CupertinoAlertDialog(
+        title: Text('loginLogout'.tr),
+        content: Text('logoutConfirm'.tr),
+        actions: [
+          CupertinoDialogAction(onPressed: () => Navigator.of(dialogContext).pop(false), child: Text('sharedCancel'.tr)),
+          CupertinoDialogAction(
+            isDestructiveAction: true,
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text('loginLogout'.tr),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+    traccarProvider.clearSessionAndData();
+    if (context.mounted) Navigator.of(context, rootNavigator: true).pushNamedAndRemoveUntil('/login', (route) => false);
   }
 
   // 檢查 GitHub Releases 更新的方法 (透過 SHA-256 digest 比對)
@@ -658,10 +680,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             Padding(
               padding: const EdgeInsets.only(top: 28),
               child: OutlinedButton.icon(
-                onPressed: () {
-                  traccarProvider.clearSessionAndData();
-                  Navigator.of(context, rootNavigator: true).pushNamedAndRemoveUntil('/login', (route) => false);
-                },
+                onPressed: () => _confirmLogout(context, traccarProvider),
                 icon: const Icon(Icons.logout),
                 label: Text('loginLogout'.tr),
                 style: OutlinedButton.styleFrom(

@@ -34,6 +34,7 @@ import 'package:trabcdefg/screens/splash_screen.dart';
 import 'package:trabcdefg/services/api_client_factory.dart';
 import 'package:trabcdefg/services/auth_service.dart';
 import 'package:trabcdefg/services/auth_session_store.dart';
+import 'package:trabcdefg/services/feedback.dart';
 import 'package:trabcdefg/services/localization_service.dart';
 import 'package:trabcdefg/services/map_navigation.dart';
 import 'package:trabcdefg/services/websocket_service.dart';
@@ -132,6 +133,7 @@ class TraccarApp extends StatelessWidget {
           return GetMaterialApp(
             debugShowCheckedModeBanner: false,
             title: 'Trabcdefg',
+            scaffoldMessengerKey: FeedbackService.messengerKey,
             theme: themeProvider.getTheme(Brightness.light),
             darkTheme: themeProvider.getTheme(Brightness.dark),
             themeMode: themeProvider.themeMode,

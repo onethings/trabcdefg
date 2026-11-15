@@ -757,6 +757,7 @@ const Map<String, String> th = {
   "sharedDelete": "ลบ",
   "sharedDate": "วันที่",
   "sharedRetry": "ลองใหม่",
+  "logoutConfirm": "จะล้างสถานะลงชื่อเข้าใช้ในเครื่องและออกจากระบบหรือไม่",
   "sharedClearFilters": "ล้างตัวกรอง",
   "deviceEmptyHint": "ดึงลงเพื่อรีเฟรช หรือเพิ่มอุปกรณ์",
   "deviceFilteredEmptyHint": "ไม่มีอุปกรณ์ที่ตรงกับตัวกรองปัจจุบัน",

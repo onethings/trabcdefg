@@ -758,6 +758,7 @@ const Map<String, String> my = {
   "sharedDelete": "ဖျက်မည်",
   "sharedDate": "ရက်စွဲ",
   "sharedRetry": "ထပ်မံကြိုးစားမည်",
+  "logoutConfirm": "ဒေသတွင်း အကောင့်ဝင်မှုကို ရှင်းလင်းပြီး ထွက်မည်လား။",
   "sharedClearFilters": "စစ်ထုတ်မှုကို ရှင်းလင်းရန်",
   "deviceEmptyHint": "ဆွဲချပြီး ပြန်လည်ဆန်းသစ်ပါ သို့မဟုတ် စက်ပစ္စည်းထည့်ပါ။",
   "deviceFilteredEmptyHint": "လက်ရှိစစ်ထုတ်မှုနှင့် ကိုက်ညီသော စက်မရှိပါ။",

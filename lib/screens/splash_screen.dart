@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 import 'package:provider/provider.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
 import 'package:trabcdefg/services/auth_session_store.dart';
+import 'package:trabcdefg/services/feedback.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -47,11 +48,7 @@ class _SplashScreenState extends State<SplashScreen> {
       if (!mounted) return;
 
       if (AuthSessionStore.instance.sessionId == null) {
-        Get.snackbar(
-          'sharedError'.tr,
-          'sessionExpired'.tr,
-          snackPosition: SnackPosition.BOTTOM,
-        );
+        FeedbackService.error('sessionExpired'.tr, context: context);
         Navigator.of(context).pushReplacementNamed('/login');
         return;
       }

@@ -759,6 +759,7 @@ const Map<String, String> zhTw = {
   "sharedDelete": "刪除",
   "sharedDate": "日期",
   "sharedRetry": "重試",
+  "logoutConfirm": "將清除本機登入狀態並登出，確定嗎？",
   "sharedClearFilters": "清除篩選",
   "deviceEmptyHint": "下拉重新整理，或新增裝置。",
   "deviceFilteredEmptyHint": "目前篩選沒有符合的裝置。",

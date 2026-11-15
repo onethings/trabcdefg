@@ -13,6 +13,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:trabcdefg/src/utils/cupertino_pickers.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
 import 'package:trabcdefg/services/api_config.dart';
+import 'package:trabcdefg/services/feedback.dart';
 
 class ShareDeviceScreen extends StatefulWidget {
   const ShareDeviceScreen({super.key});
@@ -71,7 +72,7 @@ class _ShareDeviceScreenState extends State<ShareDeviceScreen> {
 
   Future<void> _shareDevice() async {
     if (_selectedDate == null || _selectedTime == null || _deviceId == null) {
-      Get.snackbar('Error', 'Please select a date and time.');
+      FeedbackService.error('Please select a date and time.', context: context);
       return;
     }
 
@@ -98,12 +99,12 @@ class _ShareDeviceScreenState extends State<ShareDeviceScreen> {
           _shareLink = link;
           _linkController.text = _shareLink!;
         });
-        Get.snackbar('Success', 'Device shared successfully!');
+        FeedbackService.success('Device shared successfully!', context: context);
       } else {
-        Get.snackbar('Error', 'Failed to share device. Status: ${response.statusCode}');
+        if (mounted) FeedbackService.error('Failed to share device. Status: ${response.statusCode}', context: context);
       }
     } catch (e) {
-      Get.snackbar('Error', 'An error occurred: $e');
+      if (mounted) FeedbackService.error('An error occurred: $e', context: context);
     } finally {
       setState(() {
         _isLoading = false;
@@ -114,7 +115,7 @@ class _ShareDeviceScreenState extends State<ShareDeviceScreen> {
   void _copyToClipboard() {
     if (_shareLink != null) {
       Clipboard.setData(ClipboardData(text: _shareLink!));
-      Get.snackbar('Copied', 'Link copied to clipboard!');
+      FeedbackService.info('Link copied to clipboard!', context: context);
     }
   }
 

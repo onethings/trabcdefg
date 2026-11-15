@@ -759,6 +759,7 @@ const Map<String, String> enUs = {
   "sharedDelete": "Delete",
   "sharedDate": "Date",
   "sharedRetry": "Retry",
+  "logoutConfirm": "Will you clear the local session and sign out?",
   "sharedClearFilters": "Clear filters",
   "deviceEmptyHint": "Pull to refresh, or add a device.",
   "deviceFilteredEmptyHint": "No devices match the current filters.",

@@ -18,6 +18,7 @@ import 'package:trabcdefg/providers/map_style_provider.dart';
 import 'package:trabcdefg/providers/settings_provider.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
 import 'package:trabcdefg/screens/settings/geofences_screen.dart' hide AppMapType, TileCacheService;
+import 'package:trabcdefg/services/feedback.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
 import 'package:trabcdefg/src/utils/position_coordinates.dart';
 import 'package:trabcdefg/widgets/offline_address_service.dart';
@@ -877,9 +878,11 @@ class _MapScreenState extends State<MapScreen> {
 
     if (success) {
       _bottomSheetController?.close();
-      Get.snackbar('sharedSuccess'.tr, 'deviceDeleteSuccess'.tr, snackPosition: SnackPosition.BOTTOM, backgroundColor: Colors.green.shade100);
+      if (!mounted) return;
+      FeedbackService.success('deviceDeleteSuccess'.tr, context: context);
     } else {
-      Get.snackbar('sharedError'.tr, 'deviceDeleteFailed'.tr, snackPosition: SnackPosition.BOTTOM, backgroundColor: Colors.red.shade100);
+      if (!mounted) return;
+      FeedbackService.error('deviceDeleteFailed'.tr, context: context);
     }
   }
 
