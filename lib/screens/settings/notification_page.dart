@@ -10,6 +10,7 @@ import 'package:provider/provider.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
 import 'package:trabcdefg/services/api_config.dart';
 import 'package:trabcdefg/services/auth_session_store.dart';
+import 'package:trabcdefg/services/feedback.dart';
 
 class NotificationPage extends StatefulWidget {
   final int? notificationId;
@@ -70,6 +71,10 @@ class _NotificationPageState extends State<NotificationPage> {
     'textMessage': 'eventTextMessage',
     'driverChanged': 'eventDriverChanged',
     'media': 'eventMedia',
+    'geofenceCrossed': 'eventGeofenceCrossed',
+    'proximityEnter': 'eventProximityEnter',
+    'proximityExit': 'eventProximityExit',
+    'unaccompaniedMotion': 'eventUnaccompaniedMotion',
   };
 
   @override
@@ -231,17 +236,13 @@ class _NotificationPageState extends State<NotificationPage> {
       if (!mounted) return;
 
       if (response.statusCode == 204) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('testNotificationSuccess'.tr)));
+        FeedbackService.success('testNotificationSuccess'.tr, context: context);
       } else {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('testNotificationFailed'.tr)));
+        FeedbackService.error('testNotificationFailed'.tr, context: context);
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('testNotificatorsError'.tr)));
+      FeedbackService.error('testNotificatorsError'.tr, context: context);
     }
   }
 

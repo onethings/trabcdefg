@@ -15,7 +15,9 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:trabcdefg/providers/map_style_provider.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
+import 'package:trabcdefg/services/feedback.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
+import 'package:trabcdefg/src/utils/event_labels.dart';
 import 'package:trabcdefg/widgets/offline_address_service.dart';
 
 // Caching logic moved to provider/centralized
@@ -162,7 +164,7 @@ class _CombinedReportScreenState extends State<CombinedReportScreen> {
     } catch (e) {
       debugPrint('Error fetching combined report: $e');
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${'errorGeneral'.tr}: ${e.toString()}')));
+      FeedbackService.error('${'errorGeneral'.tr}: ${e.toString()}', context: context);
     } finally {
       setState(() {
         _isLoading = false;
@@ -350,15 +352,10 @@ class _CombinedReportScreenState extends State<CombinedReportScreen> {
                 } else {
                   final eventIndex = index - report.positions.length;
                   final event = report.events[eventIndex];
-                  String translatedEventKey;
-                  if (event.type != null && event.type!.isNotEmpty) {
-                    translatedEventKey = 'event${event.type![0].toUpperCase()}${event.type!.substring(1)}';
-                  } else {
-                    translatedEventKey = 'eventUnknown';
-                  }
+                  final String translatedEventLabel = eventTypeLabel(event.type);
                   return Card(
                     child: ListTile(
-                      title: Text('${'reportEventTypes'.tr}: ${translatedEventKey.tr}', style: TextStyle(color: Theme.of(context).colorScheme.onSurface)),
+                      title: Text('${'reportEventTypes'.tr}: $translatedEventLabel', style: TextStyle(color: Theme.of(context).colorScheme.onSurface)),
                       subtitle: Text('${'reportTimeType'.tr}: ${DateFormat('yyyy-MM-dd HH:mm').format(event.eventTime?.toLocal() ?? DateTime.now())}', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
                       onTap: () async {
                         if (event.positionId != null && _positionsMap.containsKey(event.positionId)) {

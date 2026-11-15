@@ -76,14 +76,14 @@ class _DriversScreenState extends State<DriversScreen> {
 
                           final bool? confirm = await Get.dialog<bool>(
                             CupertinoAlertDialog(
-                              title: const Text('Delete Driver?'),
-                              content: Text('Are you sure you want to delete ${driver.name}?'),
+                              title: Text('driverDeleteTitle'.tr),
+                              content: Text('driverDeleteConfirm'.trParams({'name': driver.name ?? ''})),
                               actions: [
                                 CupertinoDialogAction(onPressed: () => Get.back(result: false), child: Text('sharedCancel'.tr)),
                                 CupertinoDialogAction(
                                   textStyle: const TextStyle(color: CupertinoColors.systemRed),
                                   onPressed: () => Get.back(result: true),
-                                  child: const Text('Delete'),
+                                  child: Text('sharedDelete'.tr),
                                 ),
                               ],
                             ),
@@ -99,9 +99,9 @@ class _DriversScreenState extends State<DriversScreen> {
                               if (!mounted) return;
                               _fetchDrivers();
 
-                              FeedbackService.success('Driver deleted successfully', context: context);
+                              FeedbackService.success('driverDeleteSuccess'.tr, context: context);
                             } catch (e) {
-                              if (mounted) FeedbackService.error('Failed to delete driver: $e', context: context);
+                              if (mounted) FeedbackService.error('driverDeleteFailed'.trParams({'error': e.toString()}), context: context);
                             }
                           }
                         },

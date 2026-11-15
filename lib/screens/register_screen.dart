@@ -2,8 +2,10 @@
 // A screen that allows users to register a new account.
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import 'package:provider/provider.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
+import 'package:trabcdefg/services/feedback.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
 
 class RegisterScreen extends StatefulWidget {
@@ -40,17 +42,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
       await usersApi.postUsers(newUser);
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Account created successfully! You can now log in.')));
+        FeedbackService.success('registerSuccess'.tr, context: context);
         Navigator.of(context).pop();
       }
     } on api.ApiException catch (e) {
       if (mounted) {
         String errorMessage = 'API error: Status Code ${e.code}, Details: ${e.toString()}';
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(errorMessage)));
+        FeedbackService.error(errorMessage, context: context);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('An unexpected error occurred: $e')));
+        FeedbackService.error('errorUnexpected'.trParams({'error': e.toString()}), context: context);
       }
     } finally {
       if (mounted) {
@@ -64,26 +66,26 @@ class _RegisterScreenState extends State<RegisterScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: CupertinoNavigationBar(middle: const Text('Register')),
+      appBar: CupertinoNavigationBar(middle: Text('loginRegister'.tr)),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           children: [
             TextField(
               controller: _nameController,
-              decoration: const InputDecoration(labelText: 'Name'),
+              decoration: InputDecoration(labelText: 'sharedName'.tr),
             ),
             TextField(
               controller: _emailController,
-              decoration: const InputDecoration(labelText: 'Email'),
+              decoration: InputDecoration(labelText: 'userEmail'.tr),
             ),
             TextField(
               controller: _passwordController,
-              decoration: const InputDecoration(labelText: 'Password'),
+              decoration: InputDecoration(labelText: 'userPassword'.tr),
               obscureText: true,
             ),
             const SizedBox(height: 20),
-            _isLoading ? const CircularProgressIndicator() : ElevatedButton(onPressed: _register, child: const Text('Register')),
+            _isLoading ? const CircularProgressIndicator() : ElevatedButton(onPressed: _register, child: Text('loginRegister'.tr)),
           ],
         ),
       ),

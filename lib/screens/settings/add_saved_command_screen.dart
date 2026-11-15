@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:provider/provider.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
+import 'package:trabcdefg/services/feedback.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
 import 'package:trabcdefg/widgets/command_attributes_form.dart';
 
@@ -75,17 +76,12 @@ class AddSavedCommandScreenState extends State<AddSavedCommandScreen> {
         if (!mounted) return;
 
         Navigator.of(context).pop(true);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('${'sharedSavedCommand'.tr} ${'sharedSaved'.tr}'),
-          ),
-        );
+        FeedbackService.success('${'sharedSavedCommand'.tr} ${'sharedSaved'.tr}', context: context);
       } catch (e) {
         // Guard against using BuildContext across async gaps
         if (!mounted) return;
 
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('${'errorGeneral'.tr}: $e')));
+        FeedbackService.error('${'errorGeneral'.tr}: $e', context: context);
       }
     }
   }

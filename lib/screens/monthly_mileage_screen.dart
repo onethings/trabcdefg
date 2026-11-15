@@ -382,13 +382,13 @@ class _MonthlyMileageScreenState extends State<MonthlyMileageScreen> {
         child: Scaffold(
           backgroundColor: groupedBackground,
           appBar: CupertinoNavigationBar(
-            middle: Text(_selectedDeviceName ?? 'Monthly Mileage', style: const TextStyle(fontWeight: FontWeight.w600)),
+            middle: Text(_selectedDeviceName ?? 'monthlyMileageTitle'.tr, style: const TextStyle(fontWeight: FontWeight.w600)),
           ),
           body: _isLoading
               ? const Center(child: CupertinoActivityIndicator())
               : _selectedDeviceId == null
               ? Center(
-                  child: Text('Please select a device on the map screen first.', style: TextStyle(color: secondaryLabel)),
+                  child: Text('monthlyNoDevice'.tr, style: TextStyle(color: secondaryLabel)),
                 )
               : Column(
                   children: [

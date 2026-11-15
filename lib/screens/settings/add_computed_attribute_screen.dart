@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:provider/provider.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
+import 'package:trabcdefg/services/feedback.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
 
 class AddComputedAttributeScreen extends StatefulWidget {
@@ -38,11 +39,11 @@ class _AddComputedAttributeScreenState extends State<AddComputedAttributeScreen>
         if (!mounted) return;
 
         Navigator.of(context).pop(true);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${'sharedComputedAttribute'.tr} ${'sharedSaved'.tr}')));
+        FeedbackService.success('${'sharedComputedAttribute'.tr} ${'sharedSaved'.tr}', context: context);
       } catch (e) {
         if (!mounted) return;
 
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${'errorGeneral'.tr}: $e')));
+        FeedbackService.error('${'errorGeneral'.tr}: $e', context: context);
       }
     }
   }

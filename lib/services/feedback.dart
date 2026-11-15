@@ -17,13 +17,16 @@ class FeedbackService {
     return EdgeInsets.fromLTRB(16, 0, 16, safe + (insideTabs ? _kCupertinoTabBarHeight : 0) + 8);
   }
 
-  static void success(String message, {BuildContext? context}) => _show(context, message, Icons.check_circle_rounded, const Color(0xFF34C759));
+  static void success(String message, {BuildContext? context, Duration duration = const Duration(seconds: 3)}) =>
+      _show(context, message, Icons.check_circle_rounded, const Color(0xFF34C759), duration);
 
-  static void error(String message, {BuildContext? context}) => _show(context, message, Icons.error_outline_rounded, const Color(0xFFFF3B30));
+  static void error(String message, {BuildContext? context, Duration duration = const Duration(seconds: 3)}) =>
+      _show(context, message, Icons.error_outline_rounded, const Color(0xFFFF3B30), duration);
 
-  static void info(String message, {BuildContext? context}) => _show(context, message, Icons.info_outline_rounded, Colors.white70);
+  static void info(String message, {BuildContext? context, Duration duration = const Duration(seconds: 3)}) =>
+      _show(context, message, Icons.info_outline_rounded, Colors.white70, duration);
 
-  static void _show(BuildContext? context, String message, IconData icon, Color accent) {
+  static void _show(BuildContext? context, String message, IconData icon, Color accent, Duration duration) {
     final state = (context != null ? ScaffoldMessenger.maybeOf(context) : null) ?? messengerKey.currentState;
     if (state == null) return;
 
@@ -31,7 +34,7 @@ class FeedbackService {
     state.showSnackBar(
       SnackBar(
         behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 3),
+        duration: duration,
         margin: _marginFor(context),
         content: Row(
           mainAxisSize: MainAxisSize.min,

@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:provider/provider.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
+import 'package:trabcdefg/services/feedback.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
 
 class ConnectionsScreen extends StatefulWidget {
@@ -113,7 +114,7 @@ class ConnectionsScreenState extends State<ConnectionsScreen> {
 
     if (sessionId == null) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Authentication session not found')));
+      FeedbackService.error('sessionNotFound'.tr, context: context);
       return;
     }
 
@@ -125,25 +126,25 @@ class ConnectionsScreenState extends State<ConnectionsScreen> {
 
         if (!mounted) return;
         if (response.statusCode == 204 || response.statusCode == 200) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Permission added successfully')));
+          FeedbackService.success('permissionAdded'.tr, context: context);
         } else {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to add permission: ${response.statusCode}')));
+          FeedbackService.error('permissionAddFailed'.trParams({'status': response.statusCode.toString()}), context: context);
         }
       } else {
         final response = await apiClient.invokeAPI('/permissions', 'DELETE', [], jsonEncode(payload), <String, String>{}, <String, String>{}, 'application/json');
 
         if (!mounted) return;
         if (response.statusCode == 204 || response.statusCode == 200) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Permission deleted successfully')));
+          FeedbackService.success('permissionDeleted'.tr, context: context);
         } else {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to delete permission: ${response.statusCode}')));
+          FeedbackService.error('permissionDeleteFailed'.trParams({'status': response.statusCode.toString()}), context: context);
         }
       }
 
       _fetchLinkedItems();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to update permission: ${e.toString()}')));
+      FeedbackService.error('permissionUpdateFailed'.trParams({'error': e.toString()}), context: context);
     }
   }
 
@@ -154,12 +155,12 @@ class ConnectionsScreenState extends State<ConnectionsScreen> {
       body: SingleChildScrollView(
         child: Column(
           children: [
-            _buildExpansionTile('Geofences', 'geofences', _fetchGeofences),
-            _buildExpansionTile('Notifications', 'notifications', _fetchNotifications),
-            _buildExpansionTile('Drivers', 'drivers', _fetchDrivers),
-            _buildExpansionTile('Computed Attributes', 'computedAttributes', _fetchComputedAttributes),
-            _buildExpansionTile('Saved Commands', 'savedCommands', _fetchSavedCommands),
-            _buildExpansionTile('Maintenance', 'maintenance', _fetchMaintenance),
+            _buildExpansionTile('sharedGeofences'.tr, 'geofences', _fetchGeofences),
+            _buildExpansionTile('sharedNotifications'.tr, 'notifications', _fetchNotifications),
+            _buildExpansionTile('sharedDrivers'.tr, 'drivers', _fetchDrivers),
+            _buildExpansionTile('sharedComputedAttributes'.tr, 'computedAttributes', _fetchComputedAttributes),
+            _buildExpansionTile('sharedSavedCommands'.tr, 'savedCommands', _fetchSavedCommands),
+            _buildExpansionTile('sharedMaintenance'.tr, 'maintenance', _fetchMaintenance),
           ],
         ),
       ),
@@ -176,14 +177,14 @@ class ConnectionsScreenState extends State<ConnectionsScreen> {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const Center(child: CircularProgressIndicator());
             } else if (snapshot.hasError) {
-              return Center(child: Text('Error: ${snapshot.error}'));
+              return Center(child: Text('errorUnexpected'.trParams({'error': snapshot.error.toString()})));
             } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
-              return const Center(child: Text('No items found.'));
+              return Center(child: Text('sharedNoItems'.tr));
             } else {
               return Column(
                 children: snapshot.data!.map((item) {
                   final itemId = item.id as int;
-                  final itemName = item.name as String? ?? 'Unnamed';
+                  final itemName = item.name as String? ?? 'sharedUnnamed'.tr;
                   final isSelected = _selectedItems[category]?.contains(itemId) ?? false;
 
                   return CheckboxListTile(

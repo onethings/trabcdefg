@@ -6,6 +6,7 @@ import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
+import 'package:trabcdefg/services/feedback.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
 
 class EditUserScreen extends StatefulWidget {
@@ -58,7 +59,7 @@ class _EditUserScreenState extends State<EditUserScreen> {
           setState(() {
             _isLoading = false;
           });
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('userLoadInfoFailed'.tr)));
+          FeedbackService.error('userLoadInfoFailed'.tr, context: context);
         }
       }
     } on http.ClientException catch (e) {
@@ -66,7 +67,7 @@ class _EditUserScreenState extends State<EditUserScreen> {
         setState(() {
           _isLoading = false;
         });
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('errorNetwork'.trParams({'error': e.message}))));
+        FeedbackService.error('errorNetwork'.trParams({'error': e.message}), context: context);
       }
     } on api.ApiException catch (e) {
       if (mounted) {
@@ -74,14 +75,14 @@ class _EditUserScreenState extends State<EditUserScreen> {
           _isLoading = false;
         });
         String errorMessage = 'errorApi'.trParams({'statusCode': e.code.toString(), 'details': e.toString()});
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(errorMessage)));
+        FeedbackService.error(errorMessage, context: context);
       }
     } catch (e) {
       if (mounted) {
         setState(() {
           _isLoading = false;
         });
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('errorUnexpected'.trParams({'error': e.toString()}))));
+        FeedbackService.error('errorUnexpected'.trParams({'error': e.toString()}), context: context);
       }
     }
   }
@@ -140,7 +141,7 @@ class _EditUserScreenState extends State<EditUserScreen> {
           final emailChanged = _emailController.text != _currentUser!.email;
           final passwordChanged = _passwordController.text.isNotEmpty;
 
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('userUpdateSuccess'.tr)));
+          FeedbackService.success('userUpdateSuccess'.tr, context: context);
 
           if (emailChanged || passwordChanged) {
             _logout();
@@ -151,15 +152,15 @@ class _EditUserScreenState extends State<EditUserScreen> {
       } on api.ApiException catch (e) {
         if (mounted) {
           String errorMessage = 'errorApi'.trParams({'statusCode': e.code.toString(), 'details': e.toString()});
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(errorMessage)));
+          FeedbackService.error(errorMessage, context: context);
         }
       } on http.ClientException catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('errorNetwork'.trParams({'error': e.message}))));
+          FeedbackService.error('errorNetwork'.trParams({'error': e.message}), context: context);
         }
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('userUpdateFailed'.trParams({'error': e.toString()}))));
+          FeedbackService.error('userUpdateFailed'.trParams({'error': e.toString()}), context: context);
         }
       } finally {
         if (mounted) {
@@ -186,25 +187,25 @@ class _EditUserScreenState extends State<EditUserScreen> {
       if (mounted) {
         if (userResponse.statusCode == 204) {
           // No Content
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('userDeleteSuccess'.tr)));
+          FeedbackService.success('userDeleteSuccess'.tr, context: context);
           _logout(); // Log out and navigate to login screen
         } else {
           String errorMessage = 'userDeleteFailed'.trParams({'statusCode': userResponse.statusCode.toString()});
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(errorMessage)));
+          FeedbackService.error(errorMessage, context: context);
         }
       }
     } on api.ApiException catch (e) {
       if (mounted) {
         String errorMessage = 'errorApi'.trParams({'statusCode': e.code.toString(), 'details': e.toString()});
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(errorMessage)));
+        FeedbackService.error(errorMessage, context: context);
       }
     } on http.ClientException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('errorNetwork'.trParams({'error': e.message}))));
+        FeedbackService.error('errorNetwork'.trParams({'error': e.message}), context: context);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('userDeleteFailedUnexpected'.trParams({'error': e.toString()}))));
+        FeedbackService.error('userDeleteFailedUnexpected'.trParams({'error': e.toString()}), context: context);
       }
     } finally {
       if (mounted) {
@@ -250,7 +251,7 @@ class _EditUserScreenState extends State<EditUserScreen> {
                   Navigator.of(context).pop();
                   _deleteUser();
                 } else {
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('userEmailMismatch'.tr)));
+                  FeedbackService.error('userEmailMismatch'.tr, context: context);
                 }
               },
             ),

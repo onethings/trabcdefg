@@ -4,6 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:provider/provider.dart';
+import 'package:trabcdefg/services/feedback.dart';
 import 'package:trabcdefg/src/utils/cupertino_pickers.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
@@ -64,10 +65,10 @@ class _AddCalendarScreenState extends State<AddCalendarScreen> {
         if (!mounted) return;
 
         Navigator.of(context).pop(true);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('sharedSaved'.tr)));
+        FeedbackService.success('sharedSaved'.tr, context: context);
       } catch (e) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to add calendar: $e')));
+        FeedbackService.error('calendarAddFailed'.trParams({'error': e.toString()}), context: context);
       }
     }
   }

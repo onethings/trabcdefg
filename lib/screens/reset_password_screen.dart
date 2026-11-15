@@ -2,10 +2,12 @@
 // A screen that allows users to reset their password by entering their email address.
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
 import 'package:trabcdefg/services/api_config.dart';
+import 'package:trabcdefg/services/feedback.dart';
 
 class ResetPasswordScreen extends StatefulWidget {
   const ResetPasswordScreen({super.key});
@@ -30,16 +32,14 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
     );
     final Uri url = apiConfig.uri('/password/reset');
 
-    // 1. 先把需要的 Messenger 和 Navigator 狀態提取出來
-    final scaffoldMessenger = ScaffoldMessenger.of(context);
     final navigator = Navigator.of(context);
 
     try {
       final response = await http.post(url, headers: <String, String>{'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8'}, body: 'email=${Uri.encodeComponent(email)}');
 
       if (response.statusCode == 200) {
-        // 使用先前存好的變數，不依賴 async gap 後的 context
-        scaffoldMessenger.showSnackBar(const SnackBar(content: Text('Password reset link sent successfully!')));
+        if (!mounted) return;
+        FeedbackService.success('resetLinkSent'.tr, context: context);
 
         Future.delayed(const Duration(seconds: 2), () {
           // 這裡直接呼叫先前存好的 navigator，且此時畫面尚未 pop，安全度大幅提升
@@ -53,29 +53,29 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
         if (response.statusCode == 404) {
           errorMessage = 'Email not found. Please check your email address.';
         }
-        scaffoldMessenger.showSnackBar(SnackBar(content: Text(errorMessage)));
+        if (!mounted) return;
+        FeedbackService.error(errorMessage, context: context);
       }
     } catch (e) {
-      if (context.mounted) {
-        scaffoldMessenger.showSnackBar(const SnackBar(content: Text('An error occurred. Please check your connection.')));
-      }
+      if (!mounted) return;
+      FeedbackService.error('errorCheckConnection'.tr, context: context);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: CupertinoNavigationBar(middle: const Text('Reset Password')),
+      appBar: CupertinoNavigationBar(middle: Text('loginReset'.tr)),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           children: [
             TextField(
               controller: _emailController,
-              decoration: const InputDecoration(labelText: 'Email'),
+              decoration: InputDecoration(labelText: 'userEmail'.tr),
             ),
             const SizedBox(height: 20),
-            ElevatedButton(onPressed: _resetPassword, child: const Text('Send Reset Link')),
+            ElevatedButton(onPressed: _resetPassword, child: Text('resetSendLink'.tr)),
           ],
         ),
       ),

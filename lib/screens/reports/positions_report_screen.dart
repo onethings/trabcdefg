@@ -13,6 +13,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:trabcdefg/providers/map_style_provider.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
+import 'package:trabcdefg/services/feedback.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
 
 class PosItem {
@@ -206,9 +207,7 @@ class _PositionsReportScreenState extends State<PositionsReportScreen> {
     } catch (e) {
       debugPrint('Positions error: $e');
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('reportPositionsLoadFailed'.tr)));
+        FeedbackService.error('reportPositionsLoadFailed'.tr, context: context);
       }
     } finally {
       setState(() => _isLoading = false);
@@ -465,7 +464,7 @@ class _PositionsReportScreenState extends State<PositionsReportScreen> {
               icon: Icon(
                 _showMap ? CupertinoIcons.list_bullet : CupertinoIcons.map,
               ),
-              tooltip: _showMap ? 'Show List' : 'Show Map',
+              tooltip: _showMap ? 'reportShowList'.tr : 'reportShowMap'.tr,
               onPressed: () => setState(() => _showMap = !_showMap),
             ),
           ],

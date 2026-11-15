@@ -11,6 +11,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
 import 'package:trabcdefg/screens/settings/add_device_screen.dart';
+import 'package:trabcdefg/services/feedback.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
 
 // 1. Create a container class for all necessary future data
@@ -86,8 +87,8 @@ class _DeviceDetailsScreenState extends State<DeviceDetailsScreen> {
           return const Scaffold(body: Center(child: CircularProgressIndicator()));
         } else if (snapshot.hasError) {
           return Scaffold(
-            appBar: CupertinoNavigationBar(middle: const Text('Error')),
-            body: Center(child: Text('Error: ${snapshot.error}')),
+            appBar: CupertinoNavigationBar(middle: Text('sharedError'.tr)),
+            body: Center(child: Text('errorUnexpected'.trParams({'error': snapshot.error.toString()}))),
           );
         } else if (snapshot.hasData) {
           final prefs = snapshot.data!;
@@ -96,8 +97,8 @@ class _DeviceDetailsScreenState extends State<DeviceDetailsScreen> {
 
           if (deviceId == null || deviceName == null) {
             return Scaffold(
-              appBar: CupertinoNavigationBar(middle: const Text('Device Details')),
-              body: const Center(child: Text('Device not selected.')),
+              appBar: CupertinoNavigationBar(middle: Text('deviceDetailsTitle'.tr)),
+              body: Center(child: Text('deviceNotSelected'.tr)),
             );
           }
 
@@ -122,7 +123,7 @@ class _DeviceDetailsScreenState extends State<DeviceDetailsScreen> {
                 if (dataSnapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
                 } else if (dataSnapshot.hasError) {
-                  return Center(child: Text('Error: ${dataSnapshot.error}'));
+                  return Center(child: Text('errorUnexpected'.trParams({'error': dataSnapshot.error.toString()})));
                 } else if (dataSnapshot.hasData) {
                   final device = _updatedDevice ?? dataSnapshot.data!.device;
                   final positions = dataSnapshot.data!.positions;
@@ -149,7 +150,7 @@ class _DeviceDetailsScreenState extends State<DeviceDetailsScreen> {
             ),
           );
         }
-        return const Center(child: Text('Unknown state.'));
+        return Center(child: Text('detailUnknownState'.tr));
       },
     );
   }
@@ -242,7 +243,7 @@ class _DeviceDetailsScreenState extends State<DeviceDetailsScreen> {
           onPressed: () async {
             await Clipboard.setData(ClipboardData(text: value));
             if (!context.mounted) return;
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$label: ${'sharedCopy'.tr}'), duration: const Duration(seconds: 1)));
+            FeedbackService.success('$label: ${'sharedCopy'.tr}', context: context, duration: const Duration(seconds: 1));
           },
           icon: Icon(CupertinoIcons.doc_on_doc, size: 19, color: colors.onSurfaceVariant),
         ),
@@ -365,8 +366,8 @@ class _DeviceDetailsScreenState extends State<DeviceDetailsScreen> {
   }
 
   String _positionFieldLabel(String key) {
-    if (key == 'id') return 'Position ID';
-    if (key == 'deviceId') return 'Device ID';
+    if (key == 'id') return 'positionIdLabel'.tr;
+    if (key == 'deviceId') return 'deviceIdLabel'.tr;
     final translationKey = _positionFieldTranslationKeys[key];
     if (translationKey != null) return translationKey.tr;
     return _humanizeKey(key);

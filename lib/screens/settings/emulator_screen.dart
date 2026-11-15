@@ -72,7 +72,7 @@ class _EmulatorScreenState extends State<EmulatorScreen> {
 
   Future<void> _sendPosition(LatLng point) async {
     if (_selectedDeviceId == null) {
-      FeedbackService.error('Please select a device first.', context: context);
+      FeedbackService.error('selectDeviceFirst'.tr, context: context);
       return;
     }
 
@@ -466,7 +466,7 @@ class _EmulatorScreenState extends State<EmulatorScreen> {
                     items: devices.map((device) {
                       return DropdownMenuItem<int>(
                         value: device.id,
-                        child: Text('${device.name ?? 'N/A'} (${device.uniqueId ?? ''})', overflow: TextOverflow.ellipsis),
+                        child: Text('${device.name ?? 'sharedNotApplicable'.tr} (${device.uniqueId ?? ''})', overflow: TextOverflow.ellipsis),
                       );
                     }).toList(),
                     onChanged: (value) {

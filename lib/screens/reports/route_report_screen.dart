@@ -17,6 +17,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:trabcdefg/providers/map_style_provider.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
+import 'package:trabcdefg/services/feedback.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
 import 'package:trabcdefg/widgets/offline_address_service.dart';
 
@@ -178,13 +179,13 @@ class _RouteReportScreenState extends State<RouteReportScreen> {
         } else {
           debugPrint('Warning: Expected JSON, but received content type: $contentType');
           if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('routeReportNotJson'.tr)));
+          FeedbackService.error('routeReportNotJson'.tr, context: context);
         }
       }
     } catch (e) {
       debugPrint('Error fetching route report: $e');
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('reportRouteLoadFailed'.tr)));
+      FeedbackService.error('reportRouteLoadFailed'.tr, context: context);
     } finally {
       if (mounted) {
         setState(() {
@@ -290,7 +291,7 @@ class _RouteReportScreenState extends State<RouteReportScreen> {
   Future<void> _exportToCsv() async {
     if (_routeReport.isEmpty) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('sharedNoDataToExport'.tr)));
+      FeedbackService.info('sharedNoDataToExport'.tr, context: context);
       return;
     }
 
@@ -310,11 +311,11 @@ class _RouteReportScreenState extends State<RouteReportScreen> {
     try {
       await file.writeAsString(csvContent);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('sharedExportedTo'.trParams({'path': file.path}))));
+      FeedbackService.success('sharedExportedTo'.trParams({'path': file.path}), context: context);
     } catch (e) {
       debugPrint('Error exporting CSV: $e');
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('sharedExportFailed'.tr)));
+      FeedbackService.error('sharedExportFailed'.tr, context: context);
     }
   }
 

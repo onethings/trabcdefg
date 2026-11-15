@@ -11,7 +11,9 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
+import 'package:trabcdefg/services/feedback.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
+import 'package:trabcdefg/src/utils/event_labels.dart';
 
 class EventReport {
   final int id;
@@ -153,13 +155,13 @@ class _EventsReportScreenState extends State<EventsReportScreen> {
         } else {
           debugPrint('Warning: Expected JSON, but received content type: $contentType');
           if (!mounted) return; // Added mounted check guard
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('eventsReportNotJson'.tr)));
+          FeedbackService.error('eventsReportNotJson'.tr, context: context);
         }
       }
     } catch (e) {
       debugPrint('Error fetching events report: $e');
       if (!mounted) return; // Added mounted check guard
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('reportEventsLoadFailed'.tr)));
+      FeedbackService.error('reportEventsLoadFailed'.tr, context: context);
     } finally {
       setState(() {
         _isLoading = false;
@@ -199,8 +201,7 @@ class _EventsReportScreenState extends State<EventsReportScreen> {
                           itemCount: _eventsReport.length,
                           itemBuilder: (context, index) {
                             final event = _eventsReport[index];
-                            // Swapped string concatenation for standard string interpolation
-                            final translatedEventKey = 'event${event.type[0].toUpperCase()}${event.type.substring(1)}';
+                            final String translatedEventLabel = eventTypeLabel(event.type);
                             return Card(
                               elevation: 4,
                               margin: const EdgeInsets.only(bottom: 16.0),
@@ -210,7 +211,7 @@ class _EventsReportScreenState extends State<EventsReportScreen> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      '${'positionEvent'.tr}: ${translatedEventKey.tr}',
+                                      '${'positionEvent'.tr}: $translatedEventLabel',
                                       style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface),
                                     ),
                                     const Divider(),

@@ -17,6 +17,7 @@ import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart'; // <-- FIXED: Removed 'as latlong;' alias
 import 'package:provider/provider.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
+import 'package:trabcdefg/services/feedback.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
 
 // --- Tile Caching Implementation using Hive (Copied from map_screen.dart) ---
@@ -160,11 +161,11 @@ class GeofencesScreenState extends State<GeofencesScreen> {
       setState(() {
         _geofencesFuture = _fetchGeofences();
       });
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('geofenceDeleteSuccess'.tr)));
+      FeedbackService.success('geofenceDeleteSuccess'.tr, context: context);
     } catch (e) {
       debugPrint('Delete geofence error: $e');
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to delete geofence: $e')));
+      FeedbackService.error('geofenceDeleteFailed'.trParams({'error': e.toString()}), context: context);
     }
   }
 
@@ -186,12 +187,12 @@ class GeofencesScreenState extends State<GeofencesScreen> {
         setState(() {
           _geofencesFuture = _fetchGeofences();
         });
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('sharedSaved'.tr)));
+        FeedbackService.success('sharedSaved'.tr, context: context);
       } catch (e) {
         if (!mounted) {
           return;
         }
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to update geofence: $e')));
+        FeedbackService.error('geofenceUpdateFailed'.trParams({'error': e.toString()}), context: context);
       }
     }
   }
@@ -263,7 +264,6 @@ class GeofencesScreenState extends State<GeofencesScreen> {
             // 【核心修正】在任何 await 發生之前（完全同步的當下），把所有需要 context 的東西通通準備好！
             final navigator = Navigator.of(context);
             final traccarProvider = Provider.of<TraccarProvider>(context, listen: false);
-            final messenger = ScaffoldMessenger.of(context);
 
             // 1. 進入第一個非同步：等待頁面回傳結果
             final newGeofence = await navigator.push(MaterialPageRoute(builder: (context) => const AddGeofenceScreen()));
@@ -283,13 +283,11 @@ class GeofencesScreenState extends State<GeofencesScreen> {
                   _geofencesFuture = _fetchGeofences();
                 });
 
-                // 4. 這裡直接使用最前面存好的 messenger，它完全不需要再存取 context 了
-                messenger.showSnackBar(SnackBar(content: Text('sharedSaved'.tr)));
+                FeedbackService.success('sharedSaved'.tr, context: context);
               } catch (e) {
                 if (!mounted) return;
 
-                // 5. 失敗時同理
-                messenger.showSnackBar(SnackBar(content: Text('Failed to add geofence: $e')));
+                FeedbackService.error('geofenceAddFailed'.trParams({'error': e.toString()}), context: context);
               }
             }
           },
@@ -711,7 +709,7 @@ class AddGeofenceScreenState extends State<AddGeofenceScreen> {
                 Navigator.pop(context, geofence);
               } else {
                 if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_geofenceType == 'CIRCLE' ? 'geofenceNeedPoint'.tr : 'geofenceNeedPolygon'.tr)));
+                FeedbackService.info(_geofenceType == 'CIRCLE' ? 'geofenceNeedPoint'.tr : 'geofenceNeedPolygon'.tr, context: context);
               }
             },
           ),
@@ -833,7 +831,7 @@ class AddGeofenceScreenState extends State<AddGeofenceScreen> {
                         const SizedBox(height: 8),
                         Row(
                           children: [
-                            Expanded(child: Text('Simplify: ${_polygonPoints.length} → ${_simplifiedPoints.length} nodes')),
+                            Expanded(child: Text('geofenceSimplifyInfo'.trParams({'from': _polygonPoints.length.toString(), 'to': _simplifiedPoints.length.toString()}))),
                             CupertinoSwitch(
                               value: _showSimplified,
                               onChanged: (v) {

@@ -147,7 +147,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
           builder: (context) => CupertinoAlertDialog(
             title: Text('sharedError'.tr),
             content: Text('loginFailed'.tr),
-            actions: [CupertinoDialogAction(onPressed: () => Navigator.of(context).pop(), child: const Text('OK'))],
+            actions: [CupertinoDialogAction(onPressed: () => Navigator.of(context).pop(), child: Text('sharedOk'.tr))],
           ),
         );
         return;

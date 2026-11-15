@@ -19,6 +19,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:trabcdefg/models/report_summary_hive.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
 import 'package:trabcdefg/screens/reports/trips_report_screen.dart';
+import 'package:trabcdefg/services/feedback.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
 
 /// Filter 可選欄位枚舉
@@ -269,7 +270,7 @@ class _SummaryReportScreenState extends State<SummaryReportScreen> {
     } catch (e) {
       debugPrint('Error fetching summary report: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('errorGeneral'.tr)));
+        FeedbackService.error('errorGeneral'.tr, context: context);
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);

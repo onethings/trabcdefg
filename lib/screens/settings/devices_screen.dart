@@ -16,6 +16,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
 import 'package:trabcdefg/screens/settings/add_device_screen.dart';
 import 'package:trabcdefg/screens/settings/connections_screen.dart';
+import 'package:trabcdefg/services/feedback.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
 
 class DevicesScreen extends StatefulWidget {
@@ -89,18 +90,18 @@ class _DevicesScreenState extends State<DevicesScreen> {
 
       if (response.statusCode == 204) {
         _fetchDevices();
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('deviceDeleteSuccess'.tr)));
+        FeedbackService.success('deviceDeleteSuccess'.tr, context: context);
       } else {
         // FIX: Replaced print() with production-safe developer.log()
         developer.log('Server responded with status code: ${response.statusCode}', name: 'DevicesScreen');
         developer.log('Server response body: ${response.body}', name: 'DevicesScreen');
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('deviceDeleteFailedDetail'.trParams({'error': 'Server responded with status code: ${response.statusCode}'}))));
+        FeedbackService.error('deviceDeleteFailedDetail'.trParams({'error': 'Server responded with status code: ${response.statusCode}'}), context: context);
       }
     } catch (e) {
       // FIX: Replaced print() with developer.log()
       developer.log('Caught an exception: $e', name: 'DevicesScreen', error: e);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('deviceDeleteFailedDetail'.trParams({'error': e.toString()}))));
+      FeedbackService.error('deviceDeleteFailedDetail'.trParams({'error': e.toString()}), context: context);
     }
   }
 
@@ -113,7 +114,7 @@ class _DevicesScreenState extends State<DevicesScreen> {
 
     if (updatedDevice != null) {
       _fetchDevices();
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('deviceUpdateSuccess'.tr)));
+      FeedbackService.success('deviceUpdateSuccess'.tr, context: context);
     }
   }
 
@@ -121,7 +122,7 @@ class _DevicesScreenState extends State<DevicesScreen> {
 
   void _exportDevicesToCsv() async {
     if (_allDevices.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('sharedNoData'.tr)));
+      FeedbackService.info('sharedNoData'.tr, context: context);
       return;
     }
 
@@ -147,7 +148,7 @@ class _DevicesScreenState extends State<DevicesScreen> {
 
   void _exportDevicesToXlsx() async {
     if (_allDevices.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('sharedNoData'.tr)));
+      FeedbackService.info('sharedNoData'.tr, context: context);
       return;
     }
 
@@ -178,7 +179,7 @@ class _DevicesScreenState extends State<DevicesScreen> {
     if (!mounted) return;
 
     if (bytes == null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('deviceExcelEncodeFailed'.tr)));
+      FeedbackService.error('deviceExcelEncodeFailed'.tr, context: context);
       return;
     }
 
@@ -229,7 +230,7 @@ class _DevicesScreenState extends State<DevicesScreen> {
 
       if (!mounted) return;
       if (devicesToImport.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(skippedRows == 0 ? 'deviceImportNoDevices'.tr : 'deviceImportNoNewDevices'.trParams({'count': skippedRows.toString()}))));
+        FeedbackService.info(skippedRows == 0 ? 'deviceImportNoDevices'.tr : 'deviceImportNoNewDevices'.trParams({'count': skippedRows.toString()}), context: context);
         return;
       }
 
@@ -259,18 +260,18 @@ class _DevicesScreenState extends State<DevicesScreen> {
         if (!mounted) return;
         setState(() => _isImporting = false);
         if (importedCount > 0) _fetchDevices();
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('deviceImportPartialFailure'.trParams({'imported': importedCount.toString(), 'total': devicesToImport.length.toString(), 'error': error.toString()}))));
+        FeedbackService.error('deviceImportPartialFailure'.trParams({'imported': importedCount.toString(), 'total': devicesToImport.length.toString(), 'error': error.toString()}), context: context);
         return;
       }
 
       if (!mounted) return;
       setState(() => _isImporting = false);
       _fetchDevices();
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('deviceImportSuccess'.trParams({'count': importedCount.toString(), 'skipped': skippedRows.toString()}))));
+      FeedbackService.success('deviceImportSuccess'.trParams({'count': importedCount.toString(), 'skipped': skippedRows.toString()}), context: context);
     } catch (error, stackTrace) {
       developer.log('Failed to import devices from CSV', name: 'DevicesScreen', error: error, stackTrace: stackTrace);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('deviceImportFailed'.trParams({'error': error.toString()}))));
+      FeedbackService.error('deviceImportFailed'.trParams({'error': error.toString()}), context: context);
     } finally {
       if (mounted && _isImporting) {
         setState(() => _isImporting = false);
@@ -306,7 +307,7 @@ class _DevicesScreenState extends State<DevicesScreen> {
                 ),
                 ListTile(
                   leading: const Icon(Icons.description),
-                  title: const Text('CSV (.csv) - Share/Save'),
+                  title: Text('deviceImportCsvShare'.tr),
                   onTap: () {
                     Navigator.pop(context);
                     _exportDevicesToCsv();
@@ -314,7 +315,7 @@ class _DevicesScreenState extends State<DevicesScreen> {
                 ),
                 ListTile(
                   leading: const Icon(Icons.table_chart),
-                  title: const Text('Excel (.xlsx) - Share/Save'),
+                  title: Text('deviceImportExcelShare'.tr),
                   onTap: () {
                     Navigator.pop(context);
                     _exportDevicesToXlsx();

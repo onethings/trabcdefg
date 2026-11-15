@@ -3,6 +3,7 @@
 // 以底部彈出（CupertinoModalPopup）呈現滾輪，取代 Material 的 showDatePicker / showTimePicker。
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 
 /// iOS 風格日期滾輪選擇器，回傳選取的日期（取消回傳 null）。
 Future<DateTime?> showCupertinoDatePickerSheet(
@@ -25,7 +26,7 @@ Future<DateTime?> showCupertinoDatePickerSheet(
               alignment: Alignment.centerRight,
               child: CupertinoButton(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: const Text('Done'),
+                child: Text('sharedDone'.tr),
                 onPressed: () => Navigator.of(context).pop(selected),
               ),
             ),
@@ -64,7 +65,7 @@ Future<TimeOfDay?> showCupertinoTimePickerSheet(
               alignment: Alignment.centerRight,
               child: CupertinoButton(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: const Text('Done'),
+                child: Text('sharedDone'.tr),
                 onPressed: () => Navigator.of(context).pop(selected),
               ),
             ),

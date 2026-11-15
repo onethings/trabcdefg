@@ -14,6 +14,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:trabcdefg/providers/map_style_provider.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
+import 'package:trabcdefg/services/feedback.dart';
 import 'package:trabcdefg/services/route_history_cache.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
 import 'package:trabcdefg/src/utils/route_history_analyzer.dart';
@@ -184,12 +185,12 @@ class _StopsReportScreenState extends State<StopsReportScreen> {
           }
         } else {
           if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('stopsReportNotJson'.tr)));
+          FeedbackService.error('stopsReportNotJson'.tr, context: context);
         }
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('reportStopsLoadFailed'.tr)));
+      FeedbackService.error('reportStopsLoadFailed'.tr, context: context);
     } finally {
       setState(() => _isLoading = false);
     }

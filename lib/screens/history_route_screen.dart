@@ -653,7 +653,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
       debugPrint('獲取軌跡失敗: $e');
       if (mounted) {
         _safeSetState(() => _isLoading = false);
-        FeedbackService.error("Failed to fetch route data", context: context);
+        FeedbackService.error('reportRouteLoadFailed'.tr, context: context);
       }
     }
   }
@@ -1902,7 +1902,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
               const Spacer(),
               _buildSpeedSelector(),
               const SizedBox(width: 12),
-              IconButton.outlined(onPressed: _exportToGPX, icon: const Icon(Icons.download_rounded, size: 20), tooltip: "Export GPX"),
+              IconButton.outlined(onPressed: _exportToGPX, icon: const Icon(Icons.download_rounded, size: 20), tooltip: 'exportGpx'.tr),
             ],
           ),
         ],
@@ -2001,11 +2001,11 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
 
   void _exportToGPX() async {
     if (_positions.isEmpty) {
-      FeedbackService.error("No track data to export", context: context);
+      FeedbackService.error('exportNoTrackData'.tr, context: context);
       return;
     }
 
-    final deviceName = _selectedDeviceName ?? "Device";
+    final deviceName = _selectedDeviceName ?? 'sharedDevice'.tr;
     final date = DateFormat('yyyy-MM-dd').format(_historyFrom ?? DateTime.now());
 
     StringBuffer gpx = StringBuffer();
@@ -2034,7 +2034,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
       final file = File('${directory.path}/${deviceName}_$date.gpx');
       await file.writeAsString(gpx.toString());
 
-      await SharePlus.instance.share(ShareParams(files: [XFile(file.path)], text: 'GPX Export for $deviceName'));
+      await SharePlus.instance.share(ShareParams(files: [XFile(file.path)], text: 'exportGpxShareText'.trParams({'name': deviceName})));
     } catch (e) {
       FeedbackService.error(e.toString(), context: context);
     }
@@ -2432,7 +2432,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
 
   void _showCalendarDialog() async {
     if (_deviceId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('pleaseSelectDevice'.tr)));
+      FeedbackService.info('pleaseSelectDevice'.tr, context: context);
       return;
     }
 

@@ -120,7 +120,7 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
             child: Container(color: (isDark ? Colors.black : Colors.white).withValues(alpha: 0.1)),
           ),
         ),
-        actions: [IconButton(icon: const Icon(Icons.restore_rounded), tooltip: 'Reset to defaults', onPressed: _resetToDefaults)],
+        actions: [IconButton(icon: const Icon(Icons.restore_rounded), tooltip: 'notificationsResetDefaults'.tr, onPressed: _resetToDefaults)],
       ),
       body: Stack(
         children: [
@@ -160,18 +160,18 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
             children: [
               Icon(Icons.timer_outlined, color: theme.colorScheme.primary),
               const SizedBox(width: 10),
-              Text('Timer Duration', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+              Text('notificationsTimerDuration'.tr, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
             ],
           ),
           const SizedBox(height: 16),
           Row(
             children: [
               Text(
-                '$displayMinutes min',
+                'sharedMinutesShort'.trParams({'minutes': displayMinutes.toString()}),
                 style: TextStyle(fontSize: 32, fontWeight: FontWeight.w900, color: theme.colorScheme.primary),
               ),
               const SizedBox(width: 8),
-              Text('(${_timerSeconds}s)', style: TextStyle(fontSize: 14, color: theme.colorScheme.onSurfaceVariant)),
+              Text('($_timerSeconds${'sharedSecondAbbreviation'.tr})', style: TextStyle(fontSize: 14, color: theme.colorScheme.onSurfaceVariant)),
             ],
           ),
           const SizedBox(height: 8),
@@ -180,7 +180,7 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
             min: 1,
             max: 30,
             divisions: 29,
-            label: '$displayMinutes min',
+            label: 'sharedMinutesShort'.trParams({'minutes': displayMinutes.toString()}),
             activeColor: theme.colorScheme.primary,
             onChanged: (val) {
               final newMinutes = val.round();
@@ -192,8 +192,8 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('1 min', style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurfaceVariant)),
-              Text('30 min', style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurfaceVariant)),
+              Text('sharedMinutesShort'.trParams({'minutes': '1'}), style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurfaceVariant)),
+              Text('sharedMinutesShort'.trParams({'minutes': '30'}), style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurfaceVariant)),
             ],
           ),
         ],
@@ -216,18 +216,18 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
             children: [
               Icon(Icons.palette_outlined, color: theme.colorScheme.primary),
               const SizedBox(width: 10),
-              Text('Timer Colors', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+              Text('notificationsTimerColors'.tr, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
             ],
           ),
           const SizedBox(height: 4),
-          Text('Tap a color to change it', style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant)),
+          Text('notificationsTapColorHint'.tr, style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant)),
           const SizedBox(height: 16),
           ...sortedMinutes.map(
             (minutes) => Padding(
               padding: const EdgeInsets.only(bottom: 12),
               child: Row(
                 children: [
-                  Text('≥ $minutes min', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                  Text('notificationsAtLeastMinutes'.trParams({'minutes': minutes.toString()}), style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
                   const Spacer(),
                   GestureDetector(
                     onTap: () => _showColorPicker(minutes),
@@ -267,11 +267,11 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
             children: [
               Icon(Icons.view_agenda_outlined, color: theme.colorScheme.primary),
               const SizedBox(width: 10),
-              Text('Card Layout', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+              Text('notificationsCardLayout'.tr, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
             ],
           ),
           const SizedBox(height: 4),
-          Text('Toggle visibility & drag to reorder. Fewer fields = larger text.', style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant)),
+          Text('notificationsCardLayoutHint'.tr, style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant)),
           const SizedBox(height: 16),
           ReorderableListView.builder(
             shrinkWrap: true,
@@ -331,13 +331,13 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
   String _fieldLabel(String field) {
     switch (field) {
       case 'type':
-        return 'Event Type';
+        return 'notificationFieldType'.tr;
       case 'deviceName':
-        return 'License Plate';
+        return 'notificationFieldDevice'.tr;
       case 'geofenceName':
-        return 'Geofence';
+        return 'sharedGeofence'.tr;
       case 'time':
-        return 'Time';
+        return 'notificationFieldTime'.tr;
       default:
         return field;
     }
@@ -381,7 +381,7 @@ class _ColorPickerSheet extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
-          Text('Choose Color — $title', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+          Text('notificationsChooseColor'.trParams({'title': title}), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
           const SizedBox(height: 8),
           // Current color preview
           Row(
@@ -396,7 +396,7 @@ class _ColorPickerSheet extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 10),
-              Text('Current', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+              Text('sharedCurrent'.tr, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
             ],
           ),
           const SizedBox(height: 20),

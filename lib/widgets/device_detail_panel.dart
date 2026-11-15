@@ -13,6 +13,7 @@ import 'package:trabcdefg/screens/command_screen.dart';
 import 'package:trabcdefg/screens/device_details_screen.dart';
 import 'package:trabcdefg/screens/monthly_mileage_screen.dart';
 import 'package:trabcdefg/screens/settings/add_device_screen.dart';
+import 'package:trabcdefg/services/feedback.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
 
 class DeviceDetailPanel extends StatefulWidget {
@@ -462,9 +463,7 @@ class _DeviceDetailPanelState extends State<DeviceDetailPanel> {
 
   void _showMapMessage(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
+    FeedbackService.info(message, context: context);
   }
 
   dynamic _getAttribute(api.Position pos, String key) {

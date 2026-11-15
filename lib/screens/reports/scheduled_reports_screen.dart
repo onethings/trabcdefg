@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:provider/provider.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
+import 'package:trabcdefg/services/feedback.dart';
 
 class ScheduledReport {
   final int id;
@@ -51,7 +52,7 @@ class _ScheduledReportsScreenState extends State<ScheduledReportsScreen> {
     } catch (e) {
       debugPrint('Scheduled reports error: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('reportScheduledLoadFailed'.tr)));
+        FeedbackService.error('reportScheduledLoadFailed'.tr, context: context);
       }
     } finally {
       setState(() => _isLoading = false);

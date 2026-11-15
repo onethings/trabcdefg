@@ -168,7 +168,7 @@ class _MapScreenState extends State<MapScreen> {
       final status = await Permission.locationWhenInUse.request();
       if (!mounted) return;
       if (!status.isGranted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('mapLocationDenied'.tr)));
+        FeedbackService.error('mapLocationDenied'.tr, context: context);
         return;
       }
       _centerOnUserWhenLocated = true;
@@ -181,7 +181,7 @@ class _MapScreenState extends State<MapScreen> {
       // Permission is granted but the first fix has not arrived yet; centring is
       // deferred to the location callback instead of asking for a second tap.
       _centerOnUserWhenLocated = true;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('mapLocationUnavailable'.tr)));
+      FeedbackService.info('mapLocationUnavailable'.tr, context: context);
       return;
     }
 
@@ -388,7 +388,7 @@ class _MapScreenState extends State<MapScreen> {
 
     final traccarProvider = context.read<TraccarProvider>();
     if (device.id == null || traccarProvider.getPosition(device.id!) == null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('mapNoPositions'.tr)));
+      FeedbackService.info('mapNoPositions'.tr, context: context);
       return;
     }
     _onDeviceSelected(device, forceShowPanel: true);
@@ -529,7 +529,7 @@ class _MapScreenState extends State<MapScreen> {
 
   void _zoomToFitAll(TraccarProvider provider, {bool showFeedback = true}) {
     if (provider.positions.isEmpty) {
-      if (showFeedback && mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('mapNoPositions'.tr)));
+      if (showFeedback && mounted) FeedbackService.info('mapNoPositions'.tr, context: context);
       return;
     }
     if (_mapController == null) return;
@@ -1276,7 +1276,7 @@ class _MapScreenState extends State<MapScreen> {
                                 style: TextStyle(fontWeight: FontWeight.w500, color: _getStatusColor(device.status)),
                               ),
                             ),
-                            if (double.parse(speed) > 0.0) ...[const SizedBox(width: 8), Text('$speed km/h', style: Theme.of(context).textTheme.bodySmall)],
+                            if (double.parse(speed) > 0.0) ...[const SizedBox(width: 8), Text('$speed ${'sharedKmh'.tr}', style: Theme.of(context).textTheme.bodySmall)],
                             const SizedBox(width: 8),
                             Icon(Icons.key, color: isIgnitionOn ? Colors.green : Colors.red, size: 16),
                           ],

@@ -15,6 +15,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:trabcdefg/providers/map_style_provider.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
+import 'package:trabcdefg/services/feedback.dart';
 import 'package:trabcdefg/services/route_history_cache.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
 import 'package:trabcdefg/src/utils/route_history_analyzer.dart';
@@ -201,12 +202,12 @@ class _TripsReportScreenState extends State<TripsReportScreen> {
             }
           }
         } else {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('tripsReportNotJson'.tr)));
+          FeedbackService.error('tripsReportNotJson'.tr, context: context);
         }
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('reportTripsLoadFailed'.tr)));
+        FeedbackService.error('reportTripsLoadFailed'.tr, context: context);
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);

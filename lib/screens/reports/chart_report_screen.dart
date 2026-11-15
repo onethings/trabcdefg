@@ -10,6 +10,7 @@ import 'package:get/get.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
+import 'package:trabcdefg/services/feedback.dart';
 import 'package:trabcdefg/services/route_history_cache.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
 
@@ -121,7 +122,7 @@ class _ChartReportScreenState extends State<ChartReportScreen> {
     } catch (e) {
       debugPrint('Chart fetch error: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('reportChartLoadFailed'.tr)));
+        FeedbackService.error('reportChartLoadFailed'.tr, context: context);
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -212,7 +213,7 @@ class _ChartReportScreenState extends State<ChartReportScreen> {
           ],
         ),
         elevation: 0,
-        actions: [IconButton(icon: const Icon(Icons.refresh), onPressed: _fetchData, tooltip: 'Refresh')],
+        actions: [IconButton(icon: const Icon(Icons.refresh), onPressed: _fetchData, tooltip: 'sharedRefresh'.tr)],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -387,7 +388,7 @@ class _ChartReportScreenState extends State<ChartReportScreen> {
                           setState(() => _selectedKeys.clear());
                           setSheetState(() {});
                         },
-                        child: const Text('Clear All'),
+                        child: Text('sharedClearAll'.tr),
                       ),
                     ],
                   ),

@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timeago/timeago.dart' as timeago;
 import 'package:trabcdefg/providers/traccar_provider.dart';
+import 'package:trabcdefg/screens/notifications_screen.dart';
 import 'package:trabcdefg/screens/settings/add_device_screen.dart';
 import 'package:trabcdefg/services/map_navigation.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
@@ -481,6 +482,13 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
                   ),
                 ],
               ),
+            IconButton(
+              onPressed: () => Get.to(() => const NotificationsScreen()),
+              tooltip: 'sharedNotifications'.tr,
+              visualDensity: VisualDensity.compact,
+              constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+              icon: const Icon(CupertinoIcons.bell, size: 22),
+            ),
           ],
         ),
       ),

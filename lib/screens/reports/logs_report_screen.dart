@@ -9,6 +9,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
+import 'package:trabcdefg/services/feedback.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
 
 class AuditEntry {
@@ -85,7 +86,7 @@ class _LogsReportScreenState extends State<LogsReportScreen> {
     } catch (e) {
       debugPrint('Audit error: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('reportAuditLogsLoadFailed'.tr)));
+        FeedbackService.error('reportAuditLogsLoadFailed'.tr, context: context);
       }
     } finally {
       setState(() => _isLoading = false);

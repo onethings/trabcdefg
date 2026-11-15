@@ -6,6 +6,7 @@ import 'package:get/get.dart';
 import 'package:provider/provider.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
 import 'package:trabcdefg/screens/qr_scanner_screen.dart';
+import 'package:trabcdefg/services/feedback.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
 
 class AddDeviceScreen extends StatefulWidget {
@@ -216,9 +217,7 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to save device: ${e.toString()}')),
-        );
+        FeedbackService.error('deviceSaveFailed'.trParams({'error': e.toString()}), context: context);
       }
     }
   }

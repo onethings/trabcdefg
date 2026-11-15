@@ -9,6 +9,7 @@ import 'package:provider/provider.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
 import 'package:trabcdefg/services/notification_settings_service.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
+import 'package:trabcdefg/src/utils/event_labels.dart';
 
 import 'notification_settings_screen.dart';
 
@@ -121,8 +122,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       color: Theme.of(context).colorScheme.primary,
                     ),
                     const SizedBox(width: 10),
-                    const Text(
-                      'How to Use Notifications',
+                    Text(
+                      'notificationsHowToTitle'.tr,
                       style: TextStyle(
                         fontWeight: FontWeight.w800,
                         fontSize: 18,
@@ -138,38 +139,28 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       _helpSection(
-                        'Countdown Timer',
-                        'Each notification has a countdown timer on the right side. '
-                            'The timer starts from the moment the event is received and runs for the configured duration. '
-                            'You can set the duration and colors in Settings (⚙️).',
+                        'notificationsHelpCountdownTitle'.tr,
+                        'notificationsHelpCountdownBody'.tr,
                       ),
                       const SizedBox(height: 16),
                       _helpSection(
-                        'Timer Colors',
-                        'The timer changes color as time runs down:\n'
-                            '• More time remaining → warmer colors (red/orange)\n'
-                            '• Less time remaining → cooler colors (blue/green)\n'
-                            'All colors are customizable in Settings.',
+                        'notificationsTimerColors'.tr,
+                        'notificationsHelpColorsBody'.tr,
                       ),
                       const SizedBox(height: 16),
                       _helpSection(
-                        'Event Type Filter',
-                        'Use Settings to select which event types to show. '
-                            'For example, you can choose to see only geofence entries/exits and alarms.',
+                        'notificationsHelpFilterTitle'.tr,
+                        'notificationsHelpFilterBody'.tr,
                       ),
                       const SizedBox(height: 16),
                       _helpSection(
-                        'Card Layout',
-                        'You can customize what information appears on each notification card: '
-                            'Event Type, License Plate, Geofence Name, and Time. '
-                            'Toggle fields on/off and reorder them by dragging in Settings. '
-                            'When fewer fields are shown, the text becomes larger for better readability.',
+                        'notificationsCardLayout'.tr,
+                        'notificationsHelpCardBody'.tr,
                       ),
                       const SizedBox(height: 16),
                       _helpSection(
-                        'Geofence Alerts',
-                        'When a vehicle enters or exits a geofence, a notification is created. '
-                            'The geofence name is displayed on the card if available.',
+                        'notificationsHelpGeofenceTitle'.tr,
+                        'notificationsHelpGeofenceBody'.tr,
                       ),
                     ],
                   ),
@@ -240,12 +231,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         actions: [
           IconButton(
             icon: const Icon(CupertinoIcons.info_circle),
-            tooltip: 'How to use Notifications',
+            tooltip: 'notificationsHowToTitle'.tr,
             onPressed: () => _showHelpDialog(context),
           ),
           IconButton(
             icon: const Icon(Icons.tune_rounded),
-            tooltip: 'Notification Settings',
+            tooltip: 'notificationsSettingsTitle'.tr,
             onPressed: _openSettings,
           ),
         ],
@@ -351,7 +342,7 @@ class _EventCard extends StatelessWidget {
       deviceName = device?.name;
     }
     final geofenceName = provider.getGeofenceName(event.geofenceId);
-    final eventType = (event.type ?? 'unknownEvent').tr;
+    final eventType = eventTypeLabel(event.type);
     final timeStr = DateFormat.yMMMd().add_jm().format(
       event.eventTime?.toLocal() ?? DateTime.now(),
     );

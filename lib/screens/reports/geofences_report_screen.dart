@@ -9,6 +9,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
+import 'package:trabcdefg/services/feedback.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
 
 class GeofenceItem {
@@ -103,7 +104,7 @@ class _GeofencesReportScreenState extends State<GeofencesReportScreen> {
     } catch (e) {
       debugPrint('Error fetching geofences report: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('reportGeofencesLoadFailed'.tr)));
+        FeedbackService.error('reportGeofencesLoadFailed'.tr, context: context);
       }
     } finally {
       setState(() => _isLoading = false);
@@ -153,7 +154,7 @@ class _GeofencesReportScreenState extends State<GeofencesReportScreen> {
                     DropdownMenuItem(value: null, child: Text('eventAll'.tr)),
                     ..._allGeofences.map((gf) {
                       final id = gf.id;
-                      return DropdownMenuItem(value: id, child: Text(gf.name ?? 'Geofence #$id'));
+                      return DropdownMenuItem(value: id, child: Text(gf.name ?? 'reportGeofenceNamed'.trParams({'id': id.toString()})));
                     }),
                   ],
                   onChanged: (val) {
@@ -173,7 +174,7 @@ class _GeofencesReportScreenState extends State<GeofencesReportScreen> {
                     itemCount: _items.length,
                     itemBuilder: (_, i) {
                       final item = _items[i];
-                      final name = _geofenceNames[item.geofenceId] ?? 'Geofence #${item.geofenceId}';
+                      final name = _geofenceNames[item.geofenceId] ?? 'reportGeofenceNamed'.trParams({'id': item.geofenceId.toString()});
                       return Card(
                         elevation: 2,
                         margin: const EdgeInsets.only(bottom: 8),

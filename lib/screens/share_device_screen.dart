@@ -10,6 +10,7 @@ import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:trabcdefg/src/utils/cupertino_pickers.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
 import 'package:trabcdefg/services/api_config.dart';
@@ -72,7 +73,7 @@ class _ShareDeviceScreenState extends State<ShareDeviceScreen> {
 
   Future<void> _shareDevice() async {
     if (_selectedDate == null || _selectedTime == null || _deviceId == null) {
-      FeedbackService.error('Please select a date and time.', context: context);
+      FeedbackService.error('shareSelectDateTime'.tr, context: context);
       return;
     }
 
@@ -91,31 +92,68 @@ class _ShareDeviceScreenState extends State<ShareDeviceScreen> {
     try {
       final response = await http.post(url, headers: headers, body: requestBody);
 
-      if (response.statusCode == 200) {
-        // Use the raw response body as the token string directly
-        final String token = response.body;
-        final String link = '${apiConfig.serverUrl}?token=$token';
-        setState(() {
-          _shareLink = link;
-          _linkController.text = _shareLink!;
-        });
-        FeedbackService.success('Device shared successfully!', context: context);
-      } else {
-        if (mounted) FeedbackService.error('Failed to share device. Status: ${response.statusCode}', context: context);
+      // Servers without POST /devices/share answer 405 (the path matches
+      // /devices/{id}); share the current position locally instead of failing.
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        await _shareDeviceLocally();
+        return;
       }
+
+      // Use the raw response body as the token string directly
+      final String token = response.body.trim();
+      if (token.isEmpty) {
+        await _shareDeviceLocally();
+        return;
+      }
+      final String link = '${apiConfig.serverUrl}?token=$token';
+      if (!mounted) return;
+      setState(() {
+        _shareLink = link;
+        _linkController.text = _shareLink!;
+      });
+      FeedbackService.success('shareSuccess'.tr, context: context);
     } catch (e) {
-      if (mounted) FeedbackService.error('An error occurred: $e', context: context);
+      debugPrint('share link request failed: $e');
+      await _shareDeviceLocally();
     } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  /// Fallback when the server cannot mint a share token: share the device's
+  /// latest known position as a Google Maps link through the system sheet.
+  Future<void> _shareDeviceLocally() async {
+    if (mounted) {
       setState(() {
         _isLoading = false;
       });
     }
+
+    final int? deviceId = _deviceId;
+    if (deviceId == null) return;
+
+    final position = context.read<TraccarProvider>().getPosition(deviceId);
+    final num? latitude = position?.latitude;
+    final num? longitude = position?.longitude;
+    if (latitude == null || longitude == null) {
+      if (mounted) FeedbackService.error('sharedNoData'.tr, context: context);
+      return;
+    }
+
+    final String mapLink = 'https://maps.google.com/?q=$latitude,$longitude';
+    final String text = 'shareLocalShareText'.trParams({'name': _deviceName ?? '', 'link': mapLink, 'time': DateFormat('yyyy-MM-dd HH:mm').format(DateTime.now())});
+    await SharePlus.instance.share(ShareParams(text: text));
+    if (mounted) FeedbackService.info('shareLocalInfo'.tr, context: context);
   }
 
   void _copyToClipboard() {
     if (_shareLink != null) {
       Clipboard.setData(ClipboardData(text: _shareLink!));
-      FeedbackService.info('Link copied to clipboard!', context: context);
+      FeedbackService.info('shareLinkCopied'.tr, context: context);
     }
   }
 
@@ -127,20 +165,20 @@ class _ShareDeviceScreenState extends State<ShareDeviceScreen> {
         padding: const EdgeInsets.all(16.0),
         child: Column(
           children: [
-            ListTile(title: Text('Select Expiration Date: ${_selectedDate != null ? DateFormat('yyyy-MM-dd').format(_selectedDate!) : 'N/A'}'), trailing: const Icon(CupertinoIcons.calendar_today), onTap: () => _selectDate(context)),
-            ListTile(title: Text('Select Expiration Time: ${_selectedTime != null ? _selectedTime!.format(context) : 'N/A'}'), trailing: const Icon(CupertinoIcons.clock), onTap: () => _selectTime(context)),
+            ListTile(title: Text('shareSelectDate'.trParams({'date': _selectedDate != null ? DateFormat('yyyy-MM-dd').format(_selectedDate!) : 'sharedNotApplicable'.tr})), trailing: const Icon(CupertinoIcons.calendar_today), onTap: () => _selectDate(context)),
+            ListTile(title: Text('shareSelectTime'.trParams({'time': _selectedTime != null ? _selectedTime!.format(context) : 'sharedNotApplicable'.tr})), trailing: const Icon(CupertinoIcons.clock), onTap: () => _selectTime(context)),
             const SizedBox(height: 20),
             if (_shareLink != null)
               TextField(
                 controller: _linkController,
                 readOnly: true,
                 decoration: InputDecoration(
-                  labelText: 'Shareable Link',
+                  labelText: 'shareLinkTitle'.tr,
                   suffixIcon: IconButton(icon: const Icon(Icons.copy), onPressed: _copyToClipboard),
                 ),
               )
             else
-              _isLoading ? const CircularProgressIndicator() : ElevatedButton(onPressed: _shareDevice, child: const Text('Share')),
+              _isLoading ? const CircularProgressIndicator() : ElevatedButton(onPressed: _shareDevice, child: Text('sharedShare'.tr)),
           ],
         ),
       ),

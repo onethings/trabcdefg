@@ -206,7 +206,7 @@ class CommandAttributeFields extends StatelessWidget {
             controller: controllers.data,
             decoration: _decoration(
               'commandData',
-              hintText: 'Enter custom command data',
+              hintText: 'commandCustomDataHint'.tr,
             ),
             validator: _requiredText,
           ),
