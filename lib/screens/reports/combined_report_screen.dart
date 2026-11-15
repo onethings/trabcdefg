@@ -19,6 +19,7 @@ import 'package:trabcdefg/services/feedback.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
 import 'package:trabcdefg/src/utils/event_labels.dart';
 import 'package:trabcdefg/widgets/offline_address_service.dart';
+import 'package:trabcdefg/widgets/skeleton.dart';
 
 // Caching logic moved to provider/centralized
 
@@ -262,9 +263,7 @@ class _CombinedReportScreenState extends State<CombinedReportScreen> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return Scaffold(
-        body: Center(child: CircularProgressIndicator(color: Theme.of(context).colorScheme.primary)),
-      );
+      return const Scaffold(body: ReportSkeleton());
     }
 
     if (_combinedReport.isEmpty || (_combinedReport.first.positions.isEmpty && (_combinedReport.first.route == null || _combinedReport.first.route!.isEmpty))) {

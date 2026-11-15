@@ -13,6 +13,7 @@ import 'package:trabcdefg/providers/traccar_provider.dart';
 import 'package:trabcdefg/services/feedback.dart';
 import 'package:trabcdefg/services/route_history_cache.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
+import 'package:trabcdefg/widgets/skeleton.dart';
 
 class ChartReportScreen extends StatefulWidget {
   const ChartReportScreen({super.key});
@@ -216,7 +217,7 @@ class _ChartReportScreenState extends State<ChartReportScreen> {
         actions: [IconButton(icon: const Icon(Icons.refresh), onPressed: _fetchData, tooltip: 'sharedRefresh'.tr)],
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const ReportSkeleton()
           : _rawItems.isEmpty
           ? _buildEmptyState()
           : SafeArea(

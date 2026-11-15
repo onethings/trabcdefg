@@ -15,6 +15,7 @@ import 'package:trabcdefg/providers/map_style_provider.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
 import 'package:trabcdefg/services/feedback.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
+import 'package:trabcdefg/widgets/skeleton.dart';
 
 class PosItem {
   final int id;
@@ -471,7 +472,7 @@ class _PositionsReportScreenState extends State<PositionsReportScreen> {
         ),
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const ReportSkeleton()
           : _items.isEmpty
           ? Center(child: Text('sharedNoData'.tr))
           : Column(

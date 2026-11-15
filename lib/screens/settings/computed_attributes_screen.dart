@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
 import 'package:trabcdefg/screens/settings/add_computed_attribute_screen.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
+import 'package:trabcdefg/widgets/state_views.dart';
 
 class ComputedAttributesScreen extends StatefulWidget {
   const ComputedAttributesScreen({super.key});
@@ -44,13 +45,25 @@ class _ComputedAttributesScreenState extends State<ComputedAttributesScreen> {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return Center(child: Text('sharedLoading'.tr));
           } else if (snapshot.hasError) {
-            return Center(child: Text('${'errorGeneral'.tr}: ${snapshot.error}'));
+            return RefreshIndicator(
+              onRefresh: _fetchComputedAttributes,
+              child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                children: [
+                  const SizedBox(height: 160),
+                  ErrorState(message: 'errorUnexpected'.trParams({'error': snapshot.error.toString()}), retryLabel: 'sharedRetry'.tr, onRetry: _fetchComputedAttributes),
+                ],
+              ),
+            );
           } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
             return RefreshIndicator(
               onRefresh: _fetchComputedAttributes,
               child: ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
-                children: [const SizedBox(height: 160), Center(child: Text('sharedNoData'.tr))],
+                children: [
+                  const SizedBox(height: 160),
+                  EmptyState(icon: CupertinoIcons.slider_horizontal_3, title: 'sharedNoData'.tr, hint: 'sharedRefresh'.tr),
+                ],
               ),
             );
           } else {

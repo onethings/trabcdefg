@@ -11,6 +11,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
 import 'package:trabcdefg/services/feedback.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
+import 'package:trabcdefg/widgets/skeleton.dart';
 
 class AuditEntry {
   final int id;
@@ -118,7 +119,7 @@ class _LogsReportScreenState extends State<LogsReportScreen> {
         ),
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const ReportSkeleton()
           : _items.isEmpty
           ? Center(child: Text('sharedNoData'.tr))
           : ListView.builder(

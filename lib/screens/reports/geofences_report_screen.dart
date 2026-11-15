@@ -11,6 +11,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
 import 'package:trabcdefg/services/feedback.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
+import 'package:trabcdefg/widgets/skeleton.dart';
 
 class GeofenceItem {
   final int deviceId;
@@ -166,7 +167,7 @@ class _GeofencesReportScreenState extends State<GeofencesReportScreen> {
             ),
           Expanded(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
+                ? const ReportSkeleton()
                 : _items.isEmpty
                 ? Center(child: Text('sharedNoData'.tr))
                 : ListView.builder(

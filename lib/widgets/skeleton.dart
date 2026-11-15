@@ -45,3 +45,35 @@ class _SkeletonBoxState extends State<SkeletonBox> with SingleTickerProviderStat
     return AnimatedBuilder(animation: _controller, builder: (context, _) => _box(0.35 + 0.45 * _controller.value));
   }
 }
+
+/// Placeholder layout shown while a report screen fetches its data.
+class ReportSkeleton extends StatelessWidget {
+  const ReportSkeleton({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        const SkeletonBox(height: 20, width: 160),
+        const SizedBox(height: 16),
+        for (var i = 0; i < 8; i++) ...[
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: const [
+                  SkeletonBox(height: 14, width: double.infinity),
+                  SizedBox(height: 10),
+                  SkeletonBox(height: 12, width: 220),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+        ],
+      ],
+    );
+  }
+}

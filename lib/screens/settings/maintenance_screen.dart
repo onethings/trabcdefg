@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
 import 'package:trabcdefg/screens/settings/add_maintenance_screen.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
+import 'package:trabcdefg/widgets/state_views.dart';
 
 class MaintenanceScreen extends StatefulWidget {
   const MaintenanceScreen({super.key});
@@ -44,14 +45,25 @@ class _MaintenanceScreenState extends State<MaintenanceScreen> {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           } else if (snapshot.hasError) {
-            // FIXED: Used clean string interpolation instead of '+' operator
-            return Center(child: Text('${'errorGeneral'.tr}: ${snapshot.error}'));
+            return RefreshIndicator(
+              onRefresh: _fetchMaintenance,
+              child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                children: [
+                  const SizedBox(height: 160),
+                  ErrorState(message: 'errorUnexpected'.trParams({'error': snapshot.error.toString()}), retryLabel: 'sharedRetry'.tr, onRetry: _fetchMaintenance),
+                ],
+              ),
+            );
           } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
             return RefreshIndicator(
               onRefresh: _fetchMaintenance,
               child: ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
-                children: [const SizedBox(height: 160), Center(child: Text('sharedNoData'.tr))],
+                children: [
+                  const SizedBox(height: 160),
+                  EmptyState(icon: CupertinoIcons.wrench, title: 'sharedNoData'.tr, hint: 'sharedRefresh'.tr),
+                ],
               ),
             );
           } else {

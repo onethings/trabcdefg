@@ -19,6 +19,7 @@ import 'package:trabcdefg/services/route_history_cache.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
 import 'package:trabcdefg/src/utils/route_history_analyzer.dart';
 import 'package:trabcdefg/widgets/offline_address_service.dart';
+import 'package:trabcdefg/widgets/skeleton.dart';
 
 class StopReport {
   final int deviceId;
@@ -315,9 +316,7 @@ class _StopsReportScreenState extends State<StopsReportScreen> {
     final colorScheme = theme.colorScheme;
 
     if (_isLoading) {
-      return Scaffold(
-        body: Center(child: CircularProgressIndicator(color: colorScheme.primary)),
-      );
+      return const Scaffold(body: ReportSkeleton());
     }
 
     if (_stopsReport.isEmpty) {

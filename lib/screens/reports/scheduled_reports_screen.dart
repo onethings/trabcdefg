@@ -8,6 +8,7 @@ import 'package:get/get.dart';
 import 'package:provider/provider.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
 import 'package:trabcdefg/services/feedback.dart';
+import 'package:trabcdefg/widgets/skeleton.dart';
 
 class ScheduledReport {
   final int id;
@@ -91,7 +92,7 @@ class _ScheduledReportsScreenState extends State<ScheduledReportsScreen> {
     return Scaffold(
       appBar: CupertinoNavigationBar(middle: Text('reportScheduled'.tr)),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const ReportSkeleton()
           : _items.isEmpty
           ? Center(
               child: Column(

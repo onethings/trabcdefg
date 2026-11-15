@@ -18,6 +18,7 @@ import 'package:trabcdefg/screens/settings/add_device_screen.dart';
 import 'package:trabcdefg/screens/settings/connections_screen.dart';
 import 'package:trabcdefg/services/feedback.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
+import 'package:trabcdefg/widgets/state_views.dart';
 
 class DevicesScreen extends StatefulWidget {
   const DevicesScreen({super.key});
@@ -365,13 +366,25 @@ class _DevicesScreenState extends State<DevicesScreen> {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           } else if (snapshot.hasError) {
-            return Center(child: Text('errorUnexpected'.trParams({'error': snapshot.error.toString()})));
+            return RefreshIndicator(
+              onRefresh: _fetchDevices,
+              child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                children: [
+                  const SizedBox(height: 160),
+                  ErrorState(message: 'errorUnexpected'.trParams({'error': snapshot.error.toString()}), retryLabel: 'sharedRetry'.tr, onRetry: _fetchDevices),
+                ],
+              ),
+            );
           } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
             return RefreshIndicator(
               onRefresh: _fetchDevices,
               child: ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
-                children: [const SizedBox(height: 160), Center(child: Text('sharedNoData'.tr))],
+                children: [
+                  const SizedBox(height: 160),
+                  EmptyState(icon: CupertinoIcons.device_phone_portrait, title: 'sharedNoData'.tr, hint: 'sharedRefresh'.tr),
+                ],
               ),
             );
           } else {

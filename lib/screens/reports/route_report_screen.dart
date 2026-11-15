@@ -20,6 +20,7 @@ import 'package:trabcdefg/providers/traccar_provider.dart';
 import 'package:trabcdefg/services/feedback.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
 import 'package:trabcdefg/widgets/offline_address_service.dart';
+import 'package:trabcdefg/widgets/skeleton.dart';
 
 class RouteReport {
   final int id;
@@ -322,7 +323,7 @@ class _RouteReportScreenState extends State<RouteReportScreen> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return Scaffold(body: Center(child: Text('sharedLoading'.tr)));
+      return const Scaffold(body: ReportSkeleton());
     }
 
     if (_routeReport.isEmpty) {

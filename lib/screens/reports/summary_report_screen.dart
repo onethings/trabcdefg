@@ -21,6 +21,7 @@ import 'package:trabcdefg/providers/traccar_provider.dart';
 import 'package:trabcdefg/screens/reports/trips_report_screen.dart';
 import 'package:trabcdefg/services/feedback.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
+import 'package:trabcdefg/widgets/skeleton.dart';
 
 /// Filter 可選欄位枚舉
 enum SummaryFieldOption { km, engineHours, averageSpeed, odometer }
@@ -575,7 +576,7 @@ class _SummaryReportScreenState extends State<SummaryReportScreen> {
         ),
       ),
       body: _isLoading
-          ? Center(child: CircularProgressIndicator(color: theme.colorScheme.primary))
+          ? const ReportSkeleton()
           : _matrixData.isEmpty
           ? Center(child: Text('sharedNoData'.tr))
           : SingleChildScrollView(

@@ -14,6 +14,7 @@ import 'package:trabcdefg/providers/traccar_provider.dart';
 import 'package:trabcdefg/services/feedback.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
 import 'package:trabcdefg/src/utils/event_labels.dart';
+import 'package:trabcdefg/widgets/skeleton.dart';
 
 class EventReport {
   final int id;
@@ -180,7 +181,7 @@ class _EventsReportScreenState extends State<EventsReportScreen> {
     return Scaffold(
       appBar: CupertinoNavigationBar(middle: Text('${'reportEvents'.tr}: ${_deviceName ?? ''}')),
       body: _isLoading
-          ? Center(child: CircularProgressIndicator(color: Theme.of(context).colorScheme.primary))
+          ? const ReportSkeleton()
           : Column(
               children: [
                 Container(

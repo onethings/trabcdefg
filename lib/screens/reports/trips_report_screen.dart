@@ -20,6 +20,7 @@ import 'package:trabcdefg/services/route_history_cache.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
 import 'package:trabcdefg/src/utils/route_history_analyzer.dart';
 import 'package:trabcdefg/widgets/offline_address_service.dart';
+import 'package:trabcdefg/widgets/skeleton.dart';
 
 const double _knotsToKmh = 1.852;
 
@@ -355,7 +356,7 @@ class _TripsReportScreenState extends State<TripsReportScreen> {
     if (_isLoading) {
       return Scaffold(
         appBar: AppBar(title: Text('reportTrips'.tr)),
-        body: const Center(child: CircularProgressIndicator()),
+        body: const ReportSkeleton(),
       );
     }
 
