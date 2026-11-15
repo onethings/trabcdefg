@@ -8,10 +8,13 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timeago/timeago.dart' as timeago;
 import 'package:trabcdefg/providers/traccar_provider.dart';
+import 'package:trabcdefg/screens/settings/add_device_screen.dart';
 import 'package:trabcdefg/services/map_navigation.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
 import 'package:trabcdefg/src/utils/status_utils.dart';
 import 'package:trabcdefg/widgets/offline_address_service.dart';
+import 'package:trabcdefg/widgets/skeleton.dart';
+import 'package:trabcdefg/widgets/state_views.dart';
 
 class DeviceListScreen extends StatefulWidget {
   const DeviceListScreen({super.key});
@@ -96,6 +99,19 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
     await traccarProvider.fetchMileageData(_mileageDays);
   }
 
+  // 下拉重新整理（provider.loadError 會反映載入失敗）
+  Future<void> _refresh() async {
+    try {
+      await context.read<TraccarProvider>().fetchInitialData();
+      if (_showMileage) {
+        _mileageMap.clear();
+        await _fetchMileageData();
+      }
+    } catch (_) {
+      // provider.loadError surfaces the state; nothing else to do here
+    }
+  }
+
   @override
   void dispose() {
     _searchController.dispose();
@@ -150,7 +166,7 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
 
   Widget _buildBody(TraccarProvider provider) {
     if (provider.isLoading && provider.devices.isEmpty) {
-      return const Center(child: CircularProgressIndicator());
+      return const _DeviceListSkeleton();
     }
 
     final now = DateTime.now().toUtc();
@@ -175,28 +191,46 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
     });
 
     return RefreshIndicator(
-      onRefresh: () async {
-        await provider.fetchInitialData();
-        if (_showMileage) {
-          _mileageMap.clear();
-          await _fetchMileageData();
-        }
-      },
-      child: filteredDevices.isEmpty
+      onRefresh: _refresh,
+      child: provider.devices.isEmpty
+          ? (provider.loadError != null
+                ? ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(12, 4, 12, 100),
+                    children: [
+                      const SizedBox(height: 80),
+                      ErrorState(message: 'sharedError'.tr, retryLabel: 'sharedRetry'.tr, onRetry: _refresh),
+                    ],
+                  )
+                : ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(12, 4, 12, 100),
+                    children: [
+                      const SizedBox(height: 80),
+                      EmptyState(
+                        icon: Icons.directions_car_outlined,
+                        title: 'dashboardNoDevices'.tr,
+                        hint: 'deviceEmptyHint'.tr,
+                        action: TextButton(onPressed: () => Get.to(() => const AddDeviceScreen()), child: Text('sharedAdd'.tr)),
+                      ),
+                    ],
+                  ))
+          : filteredDevices.isEmpty
           ? ListView(
               physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.fromLTRB(12, 4, 12, 100),
               children: [
-                Padding(
-                  padding: const EdgeInsets.only(top: 80),
-                  child: Center(
-                    child: Column(
-                      children: [
-                        Icon(Icons.search_off_rounded, size: 40, color: Theme.of(context).colorScheme.outline),
-                        const SizedBox(height: 12),
-                        Text('sharedNoData'.tr, style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.outline)),
-                      ],
-                    ),
+                const SizedBox(height: 80),
+                EmptyState(
+                  icon: Icons.search_off_rounded,
+                  title: 'sharedNoData'.tr,
+                  hint: 'deviceFilteredEmptyHint'.tr,
+                  action: TextButton(
+                    onPressed: () {
+                      _searchController.clear();
+                      setState(() => _selectedStatus = 0);
+                    },
+                    child: Text('sharedClearFilters'.tr),
                   ),
                 ),
               ],
@@ -554,6 +588,55 @@ class _AccTimerBadgeState extends State<_AccTimerBadge> {
       child: Text(
         isMoving ? "${widget.speed.toStringAsFixed(0)} ${'sharedKmh'.tr}" : (widget.isStale ? 'deviceStatusOfflineUpper'.tr : (widget.isOn ? "${'deviceStatusAccOn'.tr}$timerText" : 'alarmParking'.tr)),
         style: TextStyle(color: isMoving ? Colors.green : widget.baseColor, fontWeight: FontWeight.bold, fontSize: 11),
+      ),
+    );
+  }
+}
+
+class _DeviceListSkeleton extends StatelessWidget {
+  const _DeviceListSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(12, 4, 12, 100),
+      children: List.generate(5, (_) => _skeletonCard(context)),
+    );
+  }
+
+  Widget _skeletonCard(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+      color: Theme.of(context).colorScheme.surface,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(
+              children: [
+                SkeletonBox(width: 44, height: 44, radius: 14),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(children: [SkeletonBox(height: 16, width: 120), Spacer(), SkeletonBox(width: 20, height: 20, radius: 10)]),
+                      SizedBox(height: 8),
+                      SkeletonBox(height: 12, width: 90),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            const SkeletonBox(height: 12, width: 220),
+            const SizedBox(height: 8),
+            const SkeletonBox(height: 10, width: 140),
+          ],
+        ),
       ),
     );
   }

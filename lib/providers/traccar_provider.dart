@@ -41,6 +41,7 @@ class TraccarProvider with ChangeNotifier, WidgetsBindingObserver {
   List<api.Geofence> _geofences = [];
   List<api.Notification> _serverNotifications = [];
   bool _isLoading = false;
+  String? _loadError;
   String? _serverVersion;
 
   Set<int> _favoriteDeviceIds = {};
@@ -463,6 +464,7 @@ class TraccarProvider with ChangeNotifier, WidgetsBindingObserver {
   List<api.Geofence> get geofences => _geofences;
   List<api.Notification> get serverNotifications => _serverNotifications;
   bool get isLoading => _isLoading;
+  String? get loadError => _loadError;
 
   /// Applies a saved device to the in-memory list (adding it when it is new)
   /// and bumps [devicesRevision] so views such as the map redraw immediately.
@@ -579,6 +581,8 @@ class TraccarProvider with ChangeNotifier, WidgetsBindingObserver {
     _webSocketPositionsDuringFetch = websocketPositions;
     _webSocketDevicesDuringFetch = <int, api.Device>{};
 
+    _loadError = null;
+
     try {
       final sessionApi = api.SessionApi(apiClient);
       final devicesApi = api.DevicesApi(apiClient);
@@ -632,6 +636,9 @@ class TraccarProvider with ChangeNotifier, WidgetsBindingObserver {
       _positionsRevision++;
       _devicesRevision++;
       unawaited(fetchTodayMileage());
+    } catch (e) {
+      _loadError = e.toString();
+      rethrow;
     } finally {
       _webSocketPositionsDuringFetch = null;
       _webSocketDevicesDuringFetch = null;

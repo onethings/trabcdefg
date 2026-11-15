@@ -27,6 +27,7 @@ import '../services/map_navigation.dart';
 import '../services/marker_icon_service.dart';
 import '../services/tile_cache_service.dart';
 import '../widgets/device_detail_panel.dart';
+import '../widgets/state_views.dart';
 import 'share_device_screen.dart';
 
 const double _kControlSize = 44;
@@ -287,10 +288,10 @@ class _MapScreenState extends State<MapScreen> {
         if (device != null) {
           _onDeviceSelected(device, follow: false);
         } else {
-          _zoomToFitAll(traccarProvider);
+          _zoomToFitAll(traccarProvider, showFeedback: false);
         }
       } else {
-        _zoomToFitAll(traccarProvider);
+        _zoomToFitAll(traccarProvider, showFeedback: false);
       }
       _hasInitialZoomed = true;
     }
@@ -385,7 +386,10 @@ class _MapScreenState extends State<MapScreen> {
     }
 
     final traccarProvider = context.read<TraccarProvider>();
-    if (device.id == null || traccarProvider.getPosition(device.id!) == null) return;
+    if (device.id == null || traccarProvider.getPosition(device.id!) == null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('mapNoPositions'.tr)));
+      return;
+    }
     _onDeviceSelected(device, forceShowPanel: true);
   }
 
@@ -522,8 +526,12 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
-  void _zoomToFitAll(TraccarProvider provider) {
-    if (provider.positions.isEmpty || _mapController == null) return;
+  void _zoomToFitAll(TraccarProvider provider, {bool showFeedback = true}) {
+    if (provider.positions.isEmpty) {
+      if (showFeedback && mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('mapNoPositions'.tr)));
+      return;
+    }
+    if (_mapController == null) return;
 
     double? minLat, maxLat, minLng, maxLng;
 
@@ -1440,6 +1448,23 @@ class _MapScreenState extends State<MapScreen> {
                       ),
                     ),
                   ),
+                  if (traccarProvider.positions.isEmpty && !traccarProvider.isLoading)
+                    Positioned(
+                      top: 96,
+                      left: 24,
+                      right: 72,
+                      child: IgnorePointer(
+                        child: Material(
+                          color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.94),
+                          borderRadius: BorderRadius.circular(16),
+                          elevation: 2,
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: EmptyState(icon: Icons.location_off_outlined, title: 'mapNoPositions'.tr, hint: 'mapNoPositionsHint'.tr),
+                          ),
+                        ),
+                      ),
+                    ),
                   if (_isStyleLoaded)
                     _DataUpdateListener(
                       data: Object.hash(traccarProvider.positionsRevision, traccarProvider.devicesRevision),
