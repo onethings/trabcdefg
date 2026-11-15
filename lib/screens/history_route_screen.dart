@@ -8,6 +8,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:trabcdefg/src/utils/direction.dart';
+import 'package:trabcdefg/src/utils/playback_pacing.dart';
+import 'package:trabcdefg/src/utils/played_prefix.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
@@ -205,10 +207,9 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
   int _addressRequestedAtMs = 0; // 上次真正送出請求的時間（遠端限流）
   int _lastTickAtMs = 0;
 
-  // 已播放軌跡：只補新增點，平台通道更新壓到約 10Hz 且同一時間只跑一個
+  // 已播放軌跡：每次推送整包換掉 GeoJSON，頂點留樣本上限，推送壓到約 10Hz 且同一時間只跑一個
   static const int _playedPushIntervalMs = 100;
-  final List<List<double>> _playedCoords = [];
-  int _lastPlayedIdx = -1;
+  final PlayedPrefix _playedPrefix = PlayedPrefix();
   int _lastPlayedPushAtMs = 0;
   bool _playedPushInFlight = false;
 
@@ -242,6 +243,9 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
   bool _isDialogDevicePickerOpen = false;
   final TextEditingController _dialogDeviceSearchController = TextEditingController();
   double _currentZoom = 14.0;
+  // zoom 由使用者作主：一次手勢、一次縮放鈕，或一份存下來的 zoom 都算，
+  // 之後播放鍵與軌跡載入只移動中心點，不再改 zoom。
+  bool _userOwnsZoom = false;
 
   CameraPosition? _lastCameraPosition;
   bool _keepCameraOnStyleReload = false;
@@ -250,7 +254,8 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
 
   // 地圖資源常量與標示
   static const String _playbackIconId = "playback_arrow";
-  // 回放箭頭在畫面上的直徑（dp），等於原本 64px PNG × iconSize 1.8
+  // 回放箭頭貼圖在畫面上的邊長（實體像素，不是 dp；MapLibre 的 iconSize 以貼圖像素為單位）。
+  // 64px 貼圖 × 1.8 = 115 實體像素 ≈ 42dp，實測箭頭本體約 70 像素寬。
   static const double _playbackIconDisplayPx = 64 * 1.8;
   // 回放箭頭貼圖的實際邊長（px）。貼圖越大越清楚，iconSize 會自動等比縮小。
   int _playbackIconPixels = 64;
@@ -276,10 +281,15 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
   AreaUnit _areaUnit = AreaUnit.acre;
 
   Symbol? _playbackSymbol;
-  int _lastCameraAnimTime = 0;
+  int _lastFollowPanMs = 0;
 
   static const double _followZoomLevel = 15.0; //16.0
-  static const int _followCameraThrottleMs = 600;
+  // 跟隨鏡頭：標記跑進畫面外圈才把它推回中央，不是每一格都置中。
+  // 外圈留 35%，剛好避開底部播放面板蓋住的那一段。
+  static const double _followPanEdgeFraction = 0.35;
+  // 邊緣判斷要跟可見範圍借一次平台通道，200ms 一次足以在高倍速下接住標記
+  static const int _followPanIntervalMs = 200;
+  static const int _followPanAnimMs = 250;
   static const int _focusCameraAnimMs = 800;
 
   // 放大動畫進行中時暫停跟隨鏡頭，避免跟隨鏡頭取消放大動畫
@@ -495,6 +505,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     _safeSetState(() {
       if (lastZoom != null) {
         _currentZoom = lastZoom;
+        _userOwnsZoom = true;
       }
       _deviceId = deviceId;
       _focusedDay = defaultDate;
@@ -637,8 +648,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
       if (mounted) {
         _safeSetState(() {
           _positions = playbackPositions;
-          _playedCoords.clear();
-          _lastPlayedIdx = -1;
+          _playedPrefix.clear();
           _playedPushInFlight = false;
           _isLoading = false;
           _resetAddressSchedule();
@@ -722,8 +732,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     };
     await controller.addSource(_playedSourceId, GeojsonSourceProperties(data: emptyPlayedGeoJson));
     await controller.addLineLayer(_playedSourceId, _playedLayerId, LineLayerProperties(lineColor: '#0F53FE', lineWidth: 5.5, lineOpacity: 1.0, lineJoin: 'round', lineCap: 'round'));
-    _playedCoords.clear();
-    _lastPlayedIdx = -1;
+    _playedPrefix.clear();
     _playedPushInFlight = false;
 
     // 3. 繪製起終點標籤與停靠點（圖示失敗不可影響軌跡顯示）
@@ -1339,7 +1348,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     _playbackAnimationController?.repeat();
   }
 
-  // 開始播放時把鏡頭拉近到目前播放位置；已比跟隨等級更近時維持原縮放
+  // 開始播放時把鏡頭拉近到目前播放位置；使用者自己定過 zoom 就只置中，不動 zoom
   void _focusCameraOnPlayback() {
     final controller = _mapController;
     if (controller == null || _positions.isEmpty) return;
@@ -1348,11 +1357,11 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     final pos = _positions[idx];
     final point = LatLng(pos.latitude!.toDouble(), pos.longitude!.toDouble());
     final double currentZoom = controller.cameraPosition?.zoom ?? _currentZoom;
-    final double targetZoom = max(currentZoom, _followZoomLevel);
+    final double targetZoom = _userOwnsZoom ? currentZoom : max(currentZoom, _followZoomLevel);
     final int now = DateTime.now().millisecondsSinceEpoch;
 
     _suppressFollowCameraUntilMs = now + _focusCameraAnimMs + 100;
-    _lastCameraAnimTime = now;
+    _lastFollowPanMs = 0;
     controller.animateCamera(CameraUpdate.newLatLngZoom(point, targetZoom), duration: const Duration(milliseconds: _focusCameraAnimMs));
   }
 
@@ -1476,15 +1485,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     final controller = _mapController;
     if (controller == null) return;
 
-    // 往回拖曳時重建整條路徑
-    if (idx < _lastPlayedIdx) {
-      _playedCoords.clear();
-      _lastPlayedIdx = -1;
-    }
-    for (var i = _lastPlayedIdx + 1; i <= idx; i++) {
-      _playedCoords.add([_positions[i].longitude!.toDouble(), _positions[i].latitude!.toDouble()]);
-    }
-    _lastPlayedIdx = idx;
+    _playedPrefix.advanceTo(idx, (i) => [_positions[i].longitude!.toDouble(), _positions[i].latitude!.toDouble()]);
 
     final now = DateTime.now().millisecondsSinceEpoch;
     if (_playedPushInFlight || now - _lastPlayedPushAtMs < _playedPushIntervalMs) {
@@ -1493,7 +1494,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     _playedPushInFlight = true;
     _lastPlayedPushAtMs = now;
 
-    final coordinates = [..._playedCoords, [smoothLng, smoothLat]];
+    final coordinates = [..._playedPrefix.vertices, [smoothLng, smoothLat]];
     final geoJson = <String, dynamic>{
       "type": "FeatureCollection",
       "features": [
@@ -1503,18 +1504,23 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
         },
       ],
     };
-    controller.setGeoJsonSource(_playedSourceId, geoJson).whenComplete(() {
-      _playedPushInFlight = false;
-    });
+    unawaited(
+      controller
+          .setGeoJsonSource(_playedSourceId, geoJson)
+          .catchError((Object error) => developer.log('Failed to push played line: $error', name: 'HistoryRouteScreen'))
+          .whenComplete(() => _playedPushInFlight = false),
+    );
   }
 
   void _onAnimationTick() {
     if (!_isPlaying || _positions.isEmpty) return;
+    // 這一格距離上一格的真實秒數；用時間推進，螢幕更新率就不會改變回放速度
+    final int nowMs = DateTime.now().millisecondsSinceEpoch;
+    final double deltaSeconds = _lastTickAtMs == 0 ? 1 / 60 : ((nowMs - _lastTickAtMs) / 1000).clamp(0.0, 0.1);
     _trackFrameRate();
 
     final double maxLimit = max(0, _positions.length - 1).toDouble();
-    double step = 0.05 * _playbackSpeed;
-    double nextVal = _playbackPositionRx.value + step;
+    final double nextVal = advancePlaybackPosition(position: _playbackPositionRx.value, maxPosition: maxLimit, speed: _playbackSpeed, deltaSeconds: deltaSeconds);
 
     if (nextVal >= maxLimit) {
       _playbackPositionRx.value = maxLimit;
@@ -1570,27 +1576,20 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     // 已播放軌跡：只補新增點，並把平台通道更新壓到約 10Hz
     _pushPlayedGeometry(idx, smoothLng, smoothLat);
 
-    // 相機跟隨與節流機制
-    if (_followUser) {
-      final now = DateTime.now().millisecondsSinceEpoch;
-      if (now >= _suppressFollowCameraUntilMs && now - _lastCameraAnimTime > _followCameraThrottleMs) {
-        _lastCameraAnimTime = now;
-        LatLngBounds visibleRegion = await _mapController!.getVisibleRegion();
-        double latSpan = visibleRegion.northeast.latitude - visibleRegion.southwest.latitude;
-        double lngSpan = visibleRegion.northeast.longitude - visibleRegion.southwest.longitude;
-
-        double latThreshold = latSpan * 0.35;
-        double lngThreshold = lngSpan * 0.35;
-
-        bool isNearEdge =
-            currentLatLng.latitude > (visibleRegion.northeast.latitude - latThreshold) ||
-            currentLatLng.latitude < (visibleRegion.southwest.latitude + latThreshold) ||
-            currentLatLng.longitude > (visibleRegion.northeast.longitude - lngThreshold) ||
-            currentLatLng.longitude < (visibleRegion.southwest.longitude + lngThreshold);
-
-        if (isNearEdge) {
-          _mapController!.animateCamera(CameraUpdate.newLatLng(currentLatLng), duration: const Duration(milliseconds: 600));
-        }
+    // 相機跟隨：標記還留在畫面裡時鏡頭不動，跑進外圈才把它推回中央
+    final controller = _mapController;
+    if (_followUser && _isPlaying && controller != null && nowMs >= _suppressFollowCameraUntilMs && nowMs - _lastFollowPanMs >= _followPanIntervalMs) {
+      _lastFollowPanMs = nowMs;
+      final LatLngBounds visibleRegion = await controller.getVisibleRegion();
+      final double latSpan = visibleRegion.northeast.latitude - visibleRegion.southwest.latitude;
+      final double lngSpan = visibleRegion.northeast.longitude - visibleRegion.southwest.longitude;
+      final bool nearEdge =
+          currentLatLng.latitude > visibleRegion.northeast.latitude - latSpan * _followPanEdgeFraction ||
+          currentLatLng.latitude < visibleRegion.southwest.latitude + latSpan * _followPanEdgeFraction ||
+          currentLatLng.longitude > visibleRegion.northeast.longitude - lngSpan * _followPanEdgeFraction ||
+          currentLatLng.longitude < visibleRegion.southwest.longitude + lngSpan * _followPanEdgeFraction;
+      if (nearEdge) {
+        controller.animateCamera(CameraUpdate.newLatLng(currentLatLng), duration: const Duration(milliseconds: _followPanAnimMs));
       }
     }
   }
@@ -1612,7 +1611,13 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     double minLon = _positions.map((p) => p.longitude!).reduce(min).toDouble();
     double maxLon = _positions.map((p) => p.longitude!).reduce(max).toDouble();
 
-    _mapController?.animateCamera(CameraUpdate.newLatLngBounds(LatLngBounds(southwest: LatLng(minLat, minLon), northeast: LatLng(maxLat, maxLon)), left: 70, right: 70, top: 70, bottom: 250));
+    final controller = _mapController;
+    // 使用者定過 zoom 就只把軌跡置中，沿用他的 zoom，不重新框住整條軌跡
+    if (_userOwnsZoom) {
+      controller?.animateCamera(CameraUpdate.newLatLngZoom(LatLng((minLat + maxLat) / 2, (minLon + maxLon) / 2), _currentZoom));
+      return;
+    }
+    controller?.animateCamera(CameraUpdate.newLatLngBounds(LatLngBounds(southwest: LatLng(minLat, minLon), northeast: LatLng(maxLat, maxLon)), left: 70, right: 70, top: 70, bottom: 250));
   }
 
   double _distanceBetween(double lat1, double lon1, double lat2, double lon2) {
@@ -1651,9 +1656,14 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
             onStyleLoadedCallback: _onStyleLoaded,
             initialCameraPosition: _lastCameraPosition ?? CameraPosition(target: const LatLng(0, 0), zoom: _currentZoom),
             styleString: Provider.of<MapStyleProvider>(context).getStyle(Theme.of(context).brightness),
+            onCameraMoveStarted: (reason) {
+              if (reason == CameraMoveReason.gesture) _userOwnsZoom = true;
+            },
             onCameraMove: (position) {
               _lastCameraPosition = position;
               _currentZoom = position.zoom;
+              // 只存使用者自己的 zoom；播放與軌跡框選動到的 zoom 不寫進存檔
+              if (!_userOwnsZoom) return;
               _zoomSaveTimer?.cancel();
               _zoomSaveTimer = Timer(const Duration(milliseconds: 300), () {
                 SharedPreferences.getInstance().then((prefs) {
@@ -1754,6 +1764,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     if (target == current) {
       return;
     }
+    _userOwnsZoom = true;
     controller.animateCamera(CameraUpdate.zoomTo(target), duration: const Duration(milliseconds: 250));
   }
 
