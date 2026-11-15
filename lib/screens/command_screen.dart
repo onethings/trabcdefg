@@ -46,7 +46,7 @@ class _CommandScreenState extends State<CommandScreen> {
     _deviceId = prefs.getInt('selectedDeviceId');
     _selectedDeviceName = prefs.getString('selectedDeviceName');
     if (_deviceId == null) {
-      FeedbackService.error('commandDeviceNotFound'.tr);
+      if (mounted) FeedbackService.error('commandDeviceNotFound'.tr, context: context);
     }
     setState(() {});
   }
@@ -80,9 +80,9 @@ class _CommandScreenState extends State<CommandScreen> {
       if (!mounted) return;
       _showCommandTypePicker();
     } on api.ApiException catch (e) {
-      FeedbackService.error('commandTypesLoadFailed'.trParams({'error': e.message ?? ''}));
+      if (mounted) FeedbackService.error('commandTypesLoadFailed'.trParams({'error': e.message ?? ''}), context: context);
     } catch (e) {
-      FeedbackService.error('commandUnknownError'.tr);
+      if (mounted) FeedbackService.error('commandUnknownError'.tr, context: context);
     }
   }
 
@@ -147,9 +147,9 @@ class _CommandScreenState extends State<CommandScreen> {
       );
       Navigator.of(context).pop();
     } on api.ApiException catch (e) {
-      FeedbackService.error('commandSendFailed'.trParams({'error': e.message ?? ''}));
+      if (mounted) FeedbackService.error('commandSendFailed'.trParams({'error': e.message ?? ''}), context: context);
     } catch (e) {
-      FeedbackService.error('commandUnknownErrorDispatch'.tr);
+      if (mounted) FeedbackService.error('commandUnknownErrorDispatch'.tr, context: context);
     } finally {
       if (mounted) setState(() => _isSending = false);
     }

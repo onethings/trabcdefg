@@ -101,7 +101,7 @@ class _DriversScreenState extends State<DriversScreen> {
 
                               FeedbackService.success('Driver deleted successfully', context: context);
                             } catch (e) {
-                              FeedbackService.error('Failed to delete driver: $e');
+                              if (mounted) FeedbackService.error('Failed to delete driver: $e', context: context);
                             }
                           }
                         },
