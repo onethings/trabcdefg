@@ -885,7 +885,7 @@ class AddGeofenceScreenState extends State<AddGeofenceScreen> {
                       ],
                       if (_polygonPoints.isNotEmpty)
                         Align(
-                          alignment: Alignment.centerRight,
+                          alignment: AlignmentDirectional.centerEnd,
                           child: TextButton.icon(
                             icon: const Icon(CupertinoIcons.xmark, size: 18),
                             label: Text('geofenceClearPoints'.tr),

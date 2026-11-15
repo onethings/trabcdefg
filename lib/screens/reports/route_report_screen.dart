@@ -397,7 +397,7 @@ class _RouteReportScreenState extends State<RouteReportScreen> {
                                 builder: (context, snapshot) {
                                   return Text(
                                     snapshot.data ?? '...',
-                                    textAlign: TextAlign.right,
+                                    textAlign: TextAlign.end,
                                     overflow: TextOverflow.ellipsis,
                                     maxLines: 2,
                                     style: TextStyle(fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface),

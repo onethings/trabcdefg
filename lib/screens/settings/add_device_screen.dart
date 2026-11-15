@@ -324,7 +324,7 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
               for (var i = 0; i < _attributeKeyControllers.length; i++)
                 _attributeRow(i),
               Align(
-                alignment: Alignment.centerLeft,
+                alignment: AlignmentDirectional.centerStart,
                 child: OutlinedButton.icon(
                   onPressed: _addAttribute,
                   icon: const Icon(Icons.add),

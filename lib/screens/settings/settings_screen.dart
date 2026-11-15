@@ -558,11 +558,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
       body: SafeArea(
         child: ListView(
           // 增加底部 padding，避免被底部的導航欄 (BottomNavigationBar) 擋住
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 96),
+          padding: const EdgeInsetsDirectional.fromSTEB(20, 12, 20, 96),
           children: [
             Container(
               height: 148,
-              padding: const EdgeInsets.fromLTRB(22, 20, 18, 20),
+              padding: const EdgeInsetsDirectional.fromSTEB(22, 20, 18, 20),
               decoration: BoxDecoration(
                 gradient: LinearGradient(colors: [colorScheme.primary, colorScheme.secondary], begin: Alignment.topLeft, end: Alignment.bottomRight),
                 borderRadius: BorderRadius.circular(24),
@@ -592,7 +592,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                   ),
                   Align(
-                    alignment: Alignment.centerLeft,
+                    alignment: AlignmentDirectional.centerStart,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisAlignment: MainAxisAlignment.center,

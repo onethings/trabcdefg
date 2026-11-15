@@ -23,7 +23,7 @@ Future<DateTime?> showCupertinoDatePickerSheet(
         child: Column(
           children: [
             Align(
-              alignment: Alignment.centerRight,
+              alignment: AlignmentDirectional.centerEnd,
               child: CupertinoButton(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: Text('sharedDone'.tr),
@@ -62,7 +62,7 @@ Future<TimeOfDay?> showCupertinoTimePickerSheet(
         child: Column(
           children: [
             Align(
-              alignment: Alignment.centerRight,
+              alignment: AlignmentDirectional.centerEnd,
               child: CupertinoButton(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: Text('sharedDone'.tr),

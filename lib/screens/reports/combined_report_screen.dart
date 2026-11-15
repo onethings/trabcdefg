@@ -334,7 +334,7 @@ class _CombinedReportScreenState extends State<CombinedReportScreen> {
                             child: Text(
                               snapshot.data ?? '...',
                               style: TextStyle(fontSize: 10, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                              textAlign: TextAlign.right,
+                              textAlign: TextAlign.end,
                               overflow: TextOverflow.ellipsis,
                               maxLines: 2,
                             ),

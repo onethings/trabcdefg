@@ -171,7 +171,7 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
           ? (provider.loadError != null
                 ? ListView(
                     physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.fromLTRB(12, 4, 12, 100),
+                    padding: const EdgeInsetsDirectional.fromSTEB(12, 4, 12, 100),
                     children: [
                       const SizedBox(height: 80),
                       ErrorState(message: 'sharedError'.tr, retryLabel: 'sharedRetry'.tr, onRetry: _refresh),
@@ -179,7 +179,7 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
                   )
                 : ListView(
                     physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.fromLTRB(12, 4, 12, 100),
+                    padding: const EdgeInsetsDirectional.fromSTEB(12, 4, 12, 100),
                     children: [
                       const SizedBox(height: 80),
                       EmptyState(
@@ -193,7 +193,7 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
           : filteredDevices.isEmpty
           ? ListView(
               physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(12, 4, 12, 100),
+              padding: const EdgeInsetsDirectional.fromSTEB(12, 4, 12, 100),
               children: [
                 const SizedBox(height: 80),
                 EmptyState(
@@ -212,7 +212,7 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
             )
           : ListView.builder(
               physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(12, 4, 12, 100),
+              padding: const EdgeInsetsDirectional.fromSTEB(12, 4, 12, 100),
               itemCount: filteredDevices.length,
               itemBuilder: (context, index) {
                 final device = filteredDevices[index];
@@ -485,7 +485,7 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
   Widget _buildSearchBar() {
     final theme = Theme.of(context);
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
+      padding: const EdgeInsetsDirectional.fromSTEB(16, 8, 16, 10),
       child: SizedBox(
         height: 46,
         child: Row(
@@ -666,7 +666,7 @@ class _DeviceListSkeleton extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(12, 4, 12, 100),
+      padding: const EdgeInsetsDirectional.fromSTEB(12, 4, 12, 100),
       children: List.generate(5, (_) => _skeletonCard(context)),
     );
   }

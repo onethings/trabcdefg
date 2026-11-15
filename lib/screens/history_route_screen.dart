@@ -1229,7 +1229,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
 
     return Container(
       key: const ValueKey('history_measure_panel'),
-      padding: const EdgeInsets.fromLTRB(16, 4, 8, 10),
+      padding: const EdgeInsetsDirectional.fromSTEB(16, 4, 8, 10),
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
         borderRadius: BorderRadius.circular(20),
@@ -1731,7 +1731,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
               bottom: 0,
               left: 12,
               child: Align(
-                alignment: Alignment.centerLeft,
+                alignment: AlignmentDirectional.centerStart,
                 widthFactor: 1.0,
                 child: Column(mainAxisSize: MainAxisSize.min, children: [_mapFab(Icons.add, () => _zoomMap(1), "btn_zoom_in"), const SizedBox(height: 8), _mapFab(Icons.remove, () => _zoomMap(-1), "btn_zoom_out")]),
               ),
@@ -1930,7 +1930,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
               ),
               // 倍速選擇器：空間足夠時外觀不變，窄螢幕自動縮放，避免 Row 溢出
               Expanded(
-                child: Align(alignment: Alignment.centerRight, child: FittedBox(fit: BoxFit.scaleDown, child: _buildSpeedSelector())),
+                child: Align(alignment: AlignmentDirectional.centerEnd, child: FittedBox(fit: BoxFit.scaleDown, child: _buildSpeedSelector())),
               ),
               const SizedBox(width: 12),
               IconButton.outlined(onPressed: _exportToGPX, icon: const Icon(Icons.download_rounded, size: 20), tooltip: 'exportGpx'.tr),
@@ -1945,7 +1945,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     final theme = Theme.of(context);
     return Container(
       key: const ValueKey('history_playback_panel_minimal'),
-      padding: const EdgeInsets.fromLTRB(10, 2, 14, 6),
+      padding: const EdgeInsetsDirectional.fromSTEB(10, 2, 14, 6),
       decoration: BoxDecoration(
         color: theme.colorScheme.surface.withValues(alpha: 0.94),
         borderRadius: BorderRadius.circular(22),
@@ -2332,7 +2332,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 8, 0),
+          padding: const EdgeInsetsDirectional.fromSTEB(16, 0, 8, 0),
           child: Row(
             children: [
               Icon(Icons.directions_car_filled_rounded, size: 18, color: theme.colorScheme.primary),

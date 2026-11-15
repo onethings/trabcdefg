@@ -238,7 +238,7 @@ class _ChartReportScreenState extends State<ChartReportScreen> {
                         ),
                         color: colorScheme.surface,
                         child: Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 20, 20, 16),
+                          padding: const EdgeInsetsDirectional.fromSTEB(16, 20, 20, 16),
                           child: Column(
                             children: [
                               _buildLegendBar(),
@@ -607,7 +607,7 @@ class _ChartReportScreenState extends State<ChartReportScreen> {
     final colorScheme = Theme.of(context).colorScheme;
 
     return Container(
-      margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      margin: const EdgeInsetsDirectional.fromSTEB(16, 0, 16, 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

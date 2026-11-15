@@ -393,7 +393,7 @@ class _MonthlyMileageScreenState extends State<MonthlyMileageScreen> {
               : Column(
                   children: [
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(0, 0, 10, 10),
+                      padding: const EdgeInsetsDirectional.fromSTEB(0, 0, 10, 10),
                       child: Container(
                         decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(14)),
                         child: TableCalendar(
@@ -488,7 +488,7 @@ class _MonthlyMileageScreenState extends State<MonthlyMileageScreen> {
                     else
                       Expanded(
                         child: ListView(
-                          padding: const EdgeInsets.fromLTRB(0, 0, 0, 0),
+                          padding: const EdgeInsetsDirectional.fromSTEB(0, 0, 0, 0),
                           children: [
                             _buildDetailCard(cardColor, separatorColor, secondaryLabel),
                             const SizedBox(height: 2),

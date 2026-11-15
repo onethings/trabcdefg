@@ -10,11 +10,11 @@ class FeedbackService {
 
   static const double _kCupertinoTabBarHeight = 50;
 
-  static EdgeInsets _marginFor(BuildContext? context) {
+  static EdgeInsetsGeometry _marginFor(BuildContext? context) {
     final BuildContext? ctx = context ?? messengerKey.currentContext;
     final double safe = (ctx != null ? MediaQuery.maybeOf(ctx) : null)?.padding.bottom ?? 0;
     final bool insideTabs = ctx != null && ctx.findAncestorWidgetOfExactType<CupertinoTabScaffold>() != null;
-    return EdgeInsets.fromLTRB(16, 0, 16, safe + (insideTabs ? _kCupertinoTabBarHeight : 0) + 8);
+    return EdgeInsetsDirectional.fromSTEB(16, 0, 16, safe + (insideTabs ? _kCupertinoTabBarHeight : 0) + 8);
   }
 
   static void success(String message, {BuildContext? context, Duration duration = const Duration(seconds: 3)}) =>

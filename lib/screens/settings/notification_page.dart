@@ -263,7 +263,7 @@ class _NotificationPageState extends State<NotificationPage> {
               child: Column(
                 children: [
                   Align(
-                    alignment: Alignment.centerRight,
+                    alignment: AlignmentDirectional.centerEnd,
                     child: CupertinoButton(
                       padding: const EdgeInsets.symmetric(horizontal: 20),
                       child: Text('sharedSave'.tr),

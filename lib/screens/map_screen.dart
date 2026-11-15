@@ -488,7 +488,7 @@ class _MapScreenState extends State<MapScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                  padding: const EdgeInsetsDirectional.fromSTEB(16, 4, 16, 8),
                   child: Text('pleaseSelectDevice'.tr, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
                 ),
                 for (final device in devices)
@@ -1218,7 +1218,7 @@ class _MapScreenState extends State<MapScreen> {
                           key: _detailSheetKey,
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Padding(padding: const EdgeInsets.fromLTRB(_kEdgeInset, 0, _kEdgeInset, _kControlGap), child: _buildBottomControls(panelProvider, currentDev)),
+                            Padding(padding: const EdgeInsetsDirectional.fromSTEB(_kEdgeInset, 0, _kEdgeInset, _kControlGap), child: _buildBottomControls(panelProvider, currentDev)),
                             DeviceDetailPanel(
                               device: currentDev,
                               position: currentPos ?? api.Position(),
@@ -1344,7 +1344,7 @@ class _MapScreenState extends State<MapScreen> {
           SafeArea(
             bottom: false,
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(_kEdgeInset, _kEdgeInset, _kEdgeInset, 8),
+              padding: const EdgeInsetsDirectional.fromSTEB(_kEdgeInset, _kEdgeInset, _kEdgeInset, 8),
               child: Row(
                 children: [
                   Expanded(

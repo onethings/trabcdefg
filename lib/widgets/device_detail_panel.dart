@@ -116,7 +116,7 @@ class _DeviceDetailPanelState extends State<DeviceDetailPanel> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+      padding: const EdgeInsetsDirectional.fromSTEB(12, 0, 12, 12),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(24),
         child: BackdropFilter(

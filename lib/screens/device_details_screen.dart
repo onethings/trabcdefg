@@ -136,7 +136,7 @@ class _DeviceDetailsScreenState extends State<DeviceDetailsScreen> {
                   final bottomNavigationSpace = MediaQuery.paddingOf(context).bottom + kBottomNavigationBarHeight;
 
                   return SingleChildScrollView(
-                    padding: EdgeInsets.fromLTRB(16, 20, 16, 16 + bottomNavigationSpace),
+                    padding: EdgeInsetsDirectional.fromSTEB(16, 20, 16, 16 + bottomNavigationSpace),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -517,7 +517,7 @@ class _DeviceDetailsScreenState extends State<DeviceDetailsScreen> {
             flex: 2,
             child: Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
           ),
-          Expanded(flex: 3, child: SelectableText(value, textAlign: TextAlign.right)),
+          Expanded(flex: 3, child: SelectableText(value, textAlign: TextAlign.end)),
         ],
       ),
     );
