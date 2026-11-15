@@ -8,7 +8,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timeago/timeago.dart' as timeago;
 import 'package:trabcdefg/providers/traccar_provider.dart';
-import 'package:trabcdefg/screens/livetracking_map_screen.dart';
+import 'package:trabcdefg/services/map_navigation.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
 import 'package:trabcdefg/widgets/offline_address_service.dart';
 
@@ -246,7 +246,7 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
-        onTap: () => Get.to(() => LiveTrackingMapScreen(selectedDevice: device)),
+        onTap: () => context.read<MapNavigation>().focusDevice(device.id!),
         child: Padding(
           padding: const EdgeInsets.all(14),
           child: Column(

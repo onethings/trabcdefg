@@ -35,6 +35,7 @@ import 'package:trabcdefg/services/api_client_factory.dart';
 import 'package:trabcdefg/services/auth_service.dart';
 import 'package:trabcdefg/services/auth_session_store.dart';
 import 'package:trabcdefg/services/localization_service.dart';
+import 'package:trabcdefg/services/map_navigation.dart';
 import 'package:trabcdefg/services/websocket_service.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
 
@@ -124,6 +125,7 @@ class TraccarApp extends StatelessWidget {
         ChangeNotifierProvider<MapStyleProvider>(create: (_) => MapStyleProvider()),
         ChangeNotifierProvider<ThemeProvider>(create: (_) => ThemeProvider()),
         ChangeNotifierProvider<SettingsProvider>(create: (_) => SettingsProvider()),
+        ChangeNotifierProvider<MapNavigation>(create: (_) => MapNavigation()),
       ],
       child: Consumer2<ThemeProvider, SettingsProvider>(
         builder: (context, themeProvider, settingsProvider, child) {

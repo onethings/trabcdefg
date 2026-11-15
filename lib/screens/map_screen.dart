@@ -24,6 +24,7 @@ import 'package:trabcdefg/src/utils/position_coordinates.dart';
 import 'package:trabcdefg/widgets/offline_address_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../services/map_navigation.dart';
 import '../services/marker_icon_service.dart';
 import '../services/tile_cache_service.dart';
 import '../widgets/device_detail_panel.dart';
@@ -88,6 +89,9 @@ class _MapScreenState extends State<MapScreen> {
   final ValueNotifier<String> _selectedAddressNotifier = ValueNotifier("");
   int _deviceSelectionGeneration = 0;
 
+  MapNavigation? _mapNavigation;
+  int? _pendingFocusDeviceId;
+
   bool _isCacheInitialized = false;
   Timer? _zoomDebounce;
 
@@ -133,6 +137,12 @@ class _MapScreenState extends State<MapScreen> {
     if (_currentDevice == null) {
       _loadLastSelectedDevice();
     }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _mapNavigation = context.read<MapNavigation>()..addListener(_onMapFocusRequested);
+      _onMapFocusRequested();
+    });
   }
 
   void _safeSetState(VoidCallback fn) {
@@ -204,8 +214,38 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
+  void _onMapFocusRequested() {
+    final MapNavigation? navigation = _mapNavigation;
+    if (navigation == null) return;
+    final int? pending = navigation.pendingDeviceId;
+    if (pending == null) return;
+    _pendingFocusDeviceId = pending;
+    _maybeConsumePendingFocus();
+  }
+
+  void _maybeConsumePendingFocus() {
+    final MapNavigation? navigation = _mapNavigation;
+    final int? deviceId = _pendingFocusDeviceId;
+    if (navigation == null || deviceId == null) return;
+    if (!_isStyleLoaded || _mapController == null) return;
+
+    _pendingFocusDeviceId = null;
+    navigation.takePendingDeviceId();
+    final api.Device? device = context.read<TraccarProvider>().devices.firstWhereOrNull((d) => d.id == deviceId);
+    if (device == null) return;
+
+    _hasInitialZoomed = true;
+    _onDeviceSelected(device, forceShowPanel: true, zoomToMax: true);
+  }
+
+  void _closeDetailPanel() {
+    if (!_isPanelOpen) return;
+    _bottomSheetController?.close();
+  }
+
   @override
   void dispose() {
+    _mapNavigation?.removeListener(_onMapFocusRequested);
     _zoomDebounce?.cancel();
     _cameraAnimationGraceTimer?.cancel();
 
@@ -244,6 +284,7 @@ class _MapScreenState extends State<MapScreen> {
     _pushTrailGeometry();
 
     await _scheduleMarkerUpdate(traccarProvider);
+    _maybeConsumePendingFocus();
 
     if (widget.selectedDevice == null && !_hasInitialZoomed) {
       final prefs = await SharedPreferences.getInstance();
@@ -1295,123 +1336,129 @@ class _MapScreenState extends State<MapScreen> {
           }
         }
 
-        return SafeArea(
-          top: false,
-          child: Scaffold(
-            extendBodyBehindAppBar: true,
-            key: _scaffoldKey,
-            appBar: AppBar(
-              backgroundColor: Colors.transparent,
-              elevation: 0,
-              surfaceTintColor: Colors.transparent,
-              title: null,
-              flexibleSpace: null,
-              iconTheme: IconThemeData(color: Theme.of(context).brightness == Brightness.dark ? Colors.white : Colors.black),
-            ),
-            drawer: traccarProvider.devices.length > 1 ? _buildDeviceListDrawer(context, traccarProvider) : null,
-            body: Stack(
-              children: [
-                maplibre.MapLibreMap(
-                  key: ValueKey(mapStyleProvider.isSatelliteMode),
-                  initialCameraPosition: _lastCameraPosition ?? maplibre.CameraPosition(target: maplibre.LatLng(initialLat, initialLng), zoom: initialZoom),
-                  styleString: mapStyleProvider.getStyle(Theme.of(context).brightness),
-                  minMaxZoomPreference: const maplibre.MinMaxZoomPreference(null, _kMaxMapZoom),
-                  compassEnabled: false,
-                  trackCameraPosition: true,
-                  myLocationEnabled: _myLocationEnabled,
-                  onUserLocationUpdated: (userLocation) {
-                    _userLocation = userLocation.position;
-                    if (!_centerOnUserWhenLocated) return;
-                    _centerOnUserWhenLocated = false;
-                    _animateCamera(maplibre.CameraUpdate.newLatLngZoom(userLocation.position, 16.0));
-                  },
-                  onCameraMove: (position) {
-                    _lastCameraPosition = position;
-                    _zoomDebounce?.cancel();
-                    _zoomDebounce = Timer(const Duration(milliseconds: 300), () {
-                      SharedPreferences.getInstance().then((prefs) {
-                        prefs.setDouble('map_zoom_level', position.zoom);
+        return PopScope(
+          canPop: !_isPanelOpen,
+          onPopInvokedWithResult: (bool didPop, Object? result) {
+            if (!didPop) _closeDetailPanel();
+          },
+          child: SafeArea(
+            top: false,
+            child: Scaffold(
+              extendBodyBehindAppBar: true,
+              key: _scaffoldKey,
+              appBar: AppBar(
+                backgroundColor: Colors.transparent,
+                elevation: 0,
+                surfaceTintColor: Colors.transparent,
+                title: null,
+                flexibleSpace: null,
+                iconTheme: IconThemeData(color: Theme.of(context).brightness == Brightness.dark ? Colors.white : Colors.black),
+              ),
+              drawer: traccarProvider.devices.length > 1 ? _buildDeviceListDrawer(context, traccarProvider) : null,
+              body: Stack(
+                children: [
+                  maplibre.MapLibreMap(
+                    key: ValueKey(mapStyleProvider.isSatelliteMode),
+                    initialCameraPosition: _lastCameraPosition ?? maplibre.CameraPosition(target: maplibre.LatLng(initialLat, initialLng), zoom: initialZoom),
+                    styleString: mapStyleProvider.getStyle(Theme.of(context).brightness),
+                    minMaxZoomPreference: const maplibre.MinMaxZoomPreference(null, _kMaxMapZoom),
+                    compassEnabled: false,
+                    trackCameraPosition: true,
+                    myLocationEnabled: _myLocationEnabled,
+                    onUserLocationUpdated: (userLocation) {
+                      _userLocation = userLocation.position;
+                      if (!_centerOnUserWhenLocated) return;
+                      _centerOnUserWhenLocated = false;
+                      _animateCamera(maplibre.CameraUpdate.newLatLngZoom(userLocation.position, 16.0));
+                    },
+                    onCameraMove: (position) {
+                      _lastCameraPosition = position;
+                      _zoomDebounce?.cancel();
+                      _zoomDebounce = Timer(const Duration(milliseconds: 300), () {
+                        SharedPreferences.getInstance().then((prefs) {
+                          prefs.setDouble('map_zoom_level', position.zoom);
+                        });
                       });
-                    });
 
-                    if (_isCameraAnimating) return;
+                      if (_isCameraAnimating) return;
 
-                    if (_isFollowingDevice) {
-                      _safeSetState(() {
-                        _isFollowingDevice = false;
-                      });
-                    }
-                  },
-                  onCameraIdle: () {
-                    final cameraPosition = _mapController?.cameraPosition;
-                    if (cameraPosition != null) {
-                      _lastCameraPosition = cameraPosition;
-                      debugPrint('Map zoom: ${cameraPosition.zoom}');
-                    }
-                  },
-                  onStyleLoadedCallback: _onStyleLoaded,
-                  onMapCreated: (controller) {
-                    _mapController = controller;
-
-                    if (_appliedBottomInset > 0) {
-                      controller.updateContentInsets(EdgeInsets.only(bottom: _appliedBottomInset));
-                    }
-
-                    _mapController!.onSymbolTapped.add((symbol) {
-                      _lastSymbolTapAt = DateTime.now();
-                      final deviceIdString = symbol.data?['deviceId'];
-                      final deviceId = int.tryParse(deviceIdString ?? '');
-
-                      if (deviceId != null && mounted) {
-                        final traccarProvider = context.read<TraccarProvider>();
-                        _handleDeviceMarkerTap(deviceId, traccarProvider);
+                      if (_isFollowingDevice) {
+                        _safeSetState(() {
+                          _isFollowingDevice = false;
+                        });
                       }
-                    });
-                  },
-                  onMapClick: (point, latLng) {
-                    final lastSymbolTap = _lastSymbolTapAt;
-                    if (lastSymbolTap != null && DateTime.now().difference(lastSymbolTap) < _kSymbolTapGuard) {
-                      return;
-                    }
-                    if (_isFollowingDevice) {
-                      _safeSetState(() {
-                        _isFollowingDevice = false;
+                    },
+                    onCameraIdle: () {
+                      final cameraPosition = _mapController?.cameraPosition;
+                      if (cameraPosition != null) {
+                        _lastCameraPosition = cameraPosition;
+                        debugPrint('Map zoom: ${cameraPosition.zoom}');
+                      }
+                    },
+                    onStyleLoadedCallback: _onStyleLoaded,
+                    onMapCreated: (controller) {
+                      _mapController = controller;
+
+                      if (_appliedBottomInset > 0) {
+                        controller.updateContentInsets(EdgeInsets.only(bottom: _appliedBottomInset));
+                      }
+
+                      _mapController!.onSymbolTapped.add((symbol) {
+                        _lastSymbolTapAt = DateTime.now();
+                        final deviceIdString = symbol.data?['deviceId'];
+                        final deviceId = int.tryParse(deviceIdString ?? '');
+
+                        if (deviceId != null && mounted) {
+                          final traccarProvider = context.read<TraccarProvider>();
+                          _handleDeviceMarkerTap(deviceId, traccarProvider);
+                        }
                       });
-                    }
-                    if (_bottomSheetController != null) {
-                      _bottomSheetController!.close();
-                      _bottomSheetController = null;
-                    }
-                  },
-                ),
-                Positioned(
-                  top: MediaQuery.of(context).padding.top + kToolbarHeight + _kEdgeInset,
-                  right: _kEdgeInset,
-                  child: _GlassSurface(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        _GlassIconButton(icon: mapStyleProvider.isSatelliteMode ? Icons.satellite_alt : Icons.map, label: 'mapLayerToggle'.tr, isActive: mapStyleProvider.isSatelliteMode, onTap: () => _toggleMapType(mapStyleProvider)),
-                        const _GlassDivider(),
-                        _GlassIconButton(icon: Icons.explore_rounded, label: 'mapCompass'.tr, onTap: () => _animateCamera(maplibre.CameraUpdate.bearingTo(0))),
-                        const _GlassDivider(),
-                        _GlassIconButton(icon: _isFollowingDevice ? Icons.my_location_rounded : Icons.location_searching_rounded, label: 'mapFollowDevice'.tr, isActive: _isFollowingDevice, haptic: true, onTap: _toggleFollowCurrentDevice),
-                        const _GlassDivider(),
-                        _GlassIconButton(icon: Icons.zoom_out_map_rounded, label: 'mapFitAll'.tr, onTap: () => _zoomToFitAll(traccarProvider)),
-                      ],
-                    ),
-                  ),
-                ),
-                if (_isStyleLoaded)
-                  _DataUpdateListener(
-                    data: Object.hash(traccarProvider.positionsRevision, traccarProvider.devicesRevision),
-                    onUpdate: () {
-                      _syncSelectedDeviceFromProvider(traccarProvider);
-                      _scheduleMarkerUpdate(traccarProvider);
+                    },
+                    onMapClick: (point, latLng) {
+                      final lastSymbolTap = _lastSymbolTapAt;
+                      if (lastSymbolTap != null && DateTime.now().difference(lastSymbolTap) < _kSymbolTapGuard) {
+                        return;
+                      }
+                      if (_isFollowingDevice) {
+                        _safeSetState(() {
+                          _isFollowingDevice = false;
+                        });
+                      }
+                      if (_bottomSheetController != null) {
+                        _bottomSheetController!.close();
+                        _bottomSheetController = null;
+                      }
                     },
                   ),
-                if (!_isPanelOpen) Positioned(left: _kEdgeInset, right: _kEdgeInset, bottom: MediaQuery.of(context).padding.bottom + _kControlGap, child: _buildBottomControls(traccarProvider, _currentDevice)),
-              ],
+                  Positioned(
+                    top: MediaQuery.of(context).padding.top + kToolbarHeight + _kEdgeInset,
+                    right: _kEdgeInset,
+                    child: _GlassSurface(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _GlassIconButton(icon: mapStyleProvider.isSatelliteMode ? Icons.satellite_alt : Icons.map, label: 'mapLayerToggle'.tr, isActive: mapStyleProvider.isSatelliteMode, onTap: () => _toggleMapType(mapStyleProvider)),
+                          const _GlassDivider(),
+                          _GlassIconButton(icon: Icons.explore_rounded, label: 'mapCompass'.tr, onTap: () => _animateCamera(maplibre.CameraUpdate.bearingTo(0))),
+                          const _GlassDivider(),
+                          _GlassIconButton(icon: _isFollowingDevice ? Icons.my_location_rounded : Icons.location_searching_rounded, label: 'mapFollowDevice'.tr, isActive: _isFollowingDevice, haptic: true, onTap: _toggleFollowCurrentDevice),
+                          const _GlassDivider(),
+                          _GlassIconButton(icon: Icons.zoom_out_map_rounded, label: 'mapFitAll'.tr, onTap: () => _zoomToFitAll(traccarProvider)),
+                        ],
+                      ),
+                    ),
+                  ),
+                  if (_isStyleLoaded)
+                    _DataUpdateListener(
+                      data: Object.hash(traccarProvider.positionsRevision, traccarProvider.devicesRevision),
+                      onUpdate: () {
+                        _syncSelectedDeviceFromProvider(traccarProvider);
+                        _scheduleMarkerUpdate(traccarProvider);
+                      },
+                    ),
+                  if (!_isPanelOpen) Positioned(left: _kEdgeInset, right: _kEdgeInset, bottom: MediaQuery.of(context).padding.bottom + _kControlGap, child: _buildBottomControls(traccarProvider, _currentDevice)),
+                ],
+              ),
             ),
           ),
         );
