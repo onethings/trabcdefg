@@ -374,11 +374,11 @@ scripts/measure_memory.sh before 5 com.example.trabcdefg 600
 scripts/measure_memory.sh after 5 com.example.trabcdefg 600
 ```
 
-**判讀哪幾欄。** 這支 App 在裝置上空轉時的實測樣貌（本機驗證腳本用，非基準，因為沒有跑劇本）是 `graphics` 約 58 MB、`native` 約 28 MB、`code` 約 31 MB、`java` 約 3 MB，`TOTAL PSS` 約 165 MB。重點看三欄。
+**判讀哪幾欄。** 實測的地圖頁閒置參考點（改動前的 1.0.38，Redmi 2312DRAABC）是 `TOTAL PSS` 約 384 MB，其中 `graphics` 193 MB、`native` 97 MB、`private_other` 31 MB、`java` 4 MB。啟動到地圖初始化完成之間會先經過約 160 MB，初始化期間還有一次約 480 MB 的暫態尖峰，都會自己回落，不要拿那兩段當基準。
 
 - `total_pss_kb` 是總量，看它的**斜率**而不是單點值。
 - `native_kb` 與 `private_other_kb` 是 Dart heap 主要落點。Hive 把 entry 全解進記憶體時，成長會出現在這裡。
-- `graphics_kb` 是地圖與影像。P0-1 若有效，長時間逛地圖之後這一欄的成長應該明顯走平。
+- `graphics_kb` 是 GL 表面與繪製快取，主要由地圖引擎一次性配置。第一次上地圖時它會從約 57 MB 跳到 193 MB，那是正常的初始化，不是洩漏，也不用期待它變小。**判讀 P0-1（圖磚快取）要看 `native_kb` 與 `private_other_kb`**，圖磚位元組是 Dart heap 裡的 `Uint8List`，不會算進 `graphics`。這一條我最初寫反了，實測後更正。
 
 **注意事項。**
 
