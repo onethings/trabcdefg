@@ -252,6 +252,11 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
   List<api.Position> _positions = [];
   final RxDouble _playbackPositionRx = 0.0.obs;
 
+  /// Integer index of [playbackPositionRx]. The stat rows only change when this
+  /// changes, so they follow it and rebuild a few times a second instead of on
+  /// every animation frame.
+  final RxInt _shownIndexRx = 0.obs;
+
   bool _isPlaying = false;
   bool _isLoading = false;
   bool _followUser = true;
@@ -618,6 +623,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
       _isPlaying = false;
       _positions = [];
       _playbackPositionRx.value = 0.0;
+      _shownIndexRx.value = 0;
       _currentAddressRx.value = "";
       _resetAddressSchedule();
       // 換日期/車輛後舊量測點已失去意義
@@ -740,7 +746,9 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     // 圖層已清空，重建完成前不要對已移除的 symbol 送位置更新
     _playbackSymbol = null;
 
-    final List<LatLng> points = _positions.map((p) => LatLng(p.latitude!.toDouble(), p.longitude!.toDouble())).toList();
+    // Only the two ends are used, so do not build a LatLng for every point.
+    final LatLng startPoint = LatLng(_positions.first.latitude!.toDouble(), _positions.first.longitude!.toDouble());
+    final LatLng endPoint = LatLng(_positions.last.latitude!.toDouble(), _positions.last.longitude!.toDouble());
 
     // 1. 建立背景軌跡 (超過1000點移至 Isolate 背景處理避免UI卡頓)
     Map<String, dynamic> routeGeoJson;
@@ -772,8 +780,8 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     // 3. 繪製起終點標籤與停靠點（圖示失敗不可影響軌跡顯示）
     try {
       await controller.addSymbols([
-        SymbolOptions(geometry: points.first, iconImage: _startIconId, iconSize: 1.8, iconAnchor: "bottom"),
-        SymbolOptions(geometry: points.last, iconImage: _endIconId, iconSize: 1.8, iconAnchor: "bottom"),
+        SymbolOptions(geometry: startPoint, iconImage: _startIconId, iconSize: 1.8, iconAnchor: "bottom"),
+        SymbolOptions(geometry: endPoint, iconImage: _endIconId, iconSize: 1.8, iconAnchor: "bottom"),
       ]);
     } catch (e) {
       developer.log('Failed to add start/end markers: $e', name: 'HistoryRouteScreen');
@@ -1571,7 +1579,14 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     _updatePlaybackUI();
   }
 
+  void _publishShownIndex() {
+    final int idx = _playbackPositionRx.value.floor().clamp(0, max(0, _positions.length - 1));
+    if (idx != _shownIndexRx.value) _shownIndexRx.value = idx;
+  }
+
   void _updatePlaybackUI() async {
+    _publishShownIndex();
+
     if (_mapController == null || _positions.isEmpty || _playbackSymbol == null) {
       return;
     }
@@ -1924,7 +1939,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
             ),
           ),
           Obx(() {
-            final int idx = _playbackPositionRx.value.floor().clamp(0, max(0, _positions.length - 1));
+            final int idx = _shownIndexRx.value.clamp(0, max(0, _positions.length - 1));
             final pos = _positions.isEmpty ? null : _positions[idx];
             final recordedAt = pos == null ? null : PositionCleaner.recordingTime(pos);
             final time = recordedAt != null ? DateFormat('HH:mm:ss').format(recordedAt.toLocal()) : "--:--:--";
@@ -2047,7 +2062,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
               const SizedBox(width: 12),
               Expanded(
                 child: Obx(() {
-                  final int idx = _playbackPositionRx.value.floor().clamp(0, max(0, _positions.length - 1));
+                  final int idx = _shownIndexRx.value.clamp(0, max(0, _positions.length - 1));
                   final pos = _positions.isEmpty ? null : _positions[idx];
                   final recordedAt = pos == null ? null : PositionCleaner.recordingTime(pos);
                   final time = recordedAt != null ? DateFormat('MM/dd HH:mm:ss').format(recordedAt.toLocal()) : "--/-- --:--:--";

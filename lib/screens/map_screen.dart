@@ -1592,8 +1592,16 @@ class _MapScreenState extends State<MapScreen> {
                   ),
                 ),
               if (!_isPanelOpen)
-                Consumer<TraccarProvider>(
-                  builder: (context, provider, _) => Positioned(left: _kEdgeInset, right: _kEdgeInset, bottom: MediaQuery.of(context).padding.bottom + _kControlGap, child: _buildBottomControls(provider, _currentDevice)),
+                // The bar shows device names, a position within the list and
+                // follow state. A position packet changes none of that, so key
+                // the rebuild on that key set instead of on every notify, or the
+                // glass surface behind it recomposites several times a second.
+                Selector<TraccarProvider, int>(
+                  selector: (_, provider) {
+                    final List<api.Device> navigable = _navigableDevices(provider);
+                    return Object.hash(Object.hashAll(navigable.map((device) => '${device.id}:${device.name}')), _currentDevice?.id);
+                  },
+                  builder: (context, _, child) => Positioned(left: _kEdgeInset, right: _kEdgeInset, bottom: MediaQuery.of(context).padding.bottom + _kControlGap, child: _buildBottomControls(context.read<TraccarProvider>(), _currentDevice)),
                 ),
               if (_showReturnToFollow && _currentDevice != null)
                 Positioned(

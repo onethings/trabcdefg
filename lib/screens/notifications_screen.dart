@@ -60,8 +60,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   /// Returns true if the event type is configured on the server (or no server config = show all).
-  bool _isEventVisible(api.Event event, TraccarProvider provider) {
-    final serverTypes = provider.getServerEventTypes();
+  /// [serverTypes] is built once per build, not once per event.
+  bool _isEventVisible(api.Event event, Set<String> serverTypes) {
     if (serverTypes.isEmpty) return true; // no server config = show all
     return serverTypes.contains(event.type);
   }
@@ -167,9 +167,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    // Filter events
+    // Filter events. getServerEventTypes() allocates a Set, so build it once
+    // here instead of inside the predicate where it ran per event.
+    final Set<String> serverEventTypes = provider.getServerEventTypes();
     final displayedEvents = provider.events
-        .where((e) => _isEventVisible(e, provider))
+        .where((e) => _isEventVisible(e, serverEventTypes))
         .toList();
 
     return Scaffold(

@@ -1,5 +1,6 @@
 // lib/main.dart
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:hive_flutter/hive_flutter.dart';
@@ -43,6 +44,13 @@ import 'package:trabcdefg/src/generated_api/api.dart' as api;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // debugPrint is not stripped in release, so the ~100 call sites across the app
+  // still format strings and write to logcat. Route them to nothing here and
+  // they stay source-level breadcrumbs for debug builds only.
+  if (kReleaseMode) {
+    debugPrint = (String? message, {int? wrapWidth}) {};
+  }
 
   await LiquidGlassWidgets.initialize();
 
