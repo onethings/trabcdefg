@@ -15,6 +15,7 @@ import 'package:trabcdefg/screens/monthly_mileage_screen.dart';
 import 'package:trabcdefg/screens/settings/add_device_screen.dart';
 import 'package:trabcdefg/services/feedback.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
+import 'package:trabcdefg/src/utils/glass_settings.dart';
 
 class DeviceDetailPanel extends StatefulWidget {
   final api.Device device;
@@ -121,6 +122,7 @@ class _DeviceDetailPanelState extends State<DeviceDetailPanel> {
         shape: const LiquidRoundedSuperellipse(borderRadius: 24),
         quality: GlassQuality.standard,
         platformViewBackdrop: true,
+        settings: mapGlassSettings(context),
         padding: const EdgeInsets.symmetric(vertical: 12),
         child: Column(
               mainAxisSize: MainAxisSize.min,

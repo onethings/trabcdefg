@@ -22,6 +22,7 @@ import 'package:trabcdefg/screens/settings/geofences_screen.dart' hide AppMapTyp
 import 'package:trabcdefg/services/feedback.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
 import 'package:trabcdefg/src/utils/motion.dart';
+import 'package:trabcdefg/src/utils/glass_settings.dart';
 import 'package:trabcdefg/src/utils/position_coordinates.dart';
 import 'package:trabcdefg/src/utils/status_utils.dart';
 import 'package:trabcdefg/widgets/offline_address_service.dart';
@@ -1596,6 +1597,7 @@ class _MapScreenState extends State<MapScreen> {
                           shape: const LiquidRoundedSuperellipse(borderRadius: 16),
                           quality: GlassQuality.standard,
                           platformViewBackdrop: true,
+                          settings: mapGlassSettings(context),
                           padding: const EdgeInsets.all(16),
                           child: EmptyState(icon: Icons.location_off_outlined, title: 'mapNoPositions'.tr, hint: 'mapNoPositionsHint'.tr),
                         ),
@@ -1675,6 +1677,7 @@ class _GlassSurface extends StatelessWidget {
       shape: LiquidRoundedSuperellipse(borderRadius: borderRadius),
       quality: GlassQuality.standard,
       platformViewBackdrop: true,
+      settings: mapGlassSettings(context),
       child: Material(type: MaterialType.transparency, child: child),
     );
   }
