@@ -139,9 +139,12 @@ class TraccarApp extends StatelessWidget {
             themeMode: themeProvider.themeMode,
             builder: (context, child) {
               final data = MediaQuery.of(context);
+              final double systemScale = data.textScaler.scale(1.0);
+              // OS accessibility size times the in-app slider; the clamp keeps 4x combinations from breaking layouts.
+              final double combinedScale = (systemScale * settingsProvider.fontSizeScale).clamp(0.6, 3.0);
               final brightness = Theme.of(context).brightness;
               return MediaQuery(
-                data: data.copyWith(textScaler: TextScaler.linear(settingsProvider.fontSizeScale)),
+                data: data.copyWith(textScaler: TextScaler.linear(combinedScale)),
                 child: CupertinoTheme(
                   data: CupertinoThemeData(brightness: brightness),
                   child: child!,

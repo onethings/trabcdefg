@@ -11,6 +11,7 @@ import 'package:trabcdefg/providers/traccar_provider.dart';
 import 'package:trabcdefg/services/api_config.dart';
 import 'package:trabcdefg/services/auth_session_store.dart';
 import 'package:trabcdefg/services/feedback.dart';
+import 'package:trabcdefg/src/utils/event_labels.dart';
 
 class NotificationPage extends StatefulWidget {
   final int? notificationId;
@@ -343,12 +344,12 @@ class _NotificationPageState extends State<NotificationPage> {
                     ) {
                       final String? localizationKey =
                           notificationTypeKeys[type['type']];
-                      final String displayValue = localizationKey != null
+                      final String label = localizationKey != null
                           ? localizationKey.tr
-                          : type['type'];
+                          : eventTypeLabel(type['type']);
                       return DropdownMenuItem<String>(
                         value: type['type'],
-                        child: Text(displayValue),
+                        child: Text(label),
                       );
                     }).toList(),
                     onChanged: (value) {

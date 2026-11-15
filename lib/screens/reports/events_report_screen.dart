@@ -54,30 +54,36 @@ class _EventsReportScreenState extends State<EventsReportScreen> {
   List<EventReport> _eventsReport = [];
   bool _isLoading = true;
   String? _deviceName;
-  String _selectedEventType = 'eventAll';
+  String _selectedEventType = 'all';
 
+  // Raw server type names. The API filter compares these verbatim; labels are
+  // resolved for display only.
   final List<String> _eventTypes = [
-    'eventAll',
-    'eventDeviceOnline',
-    'eventDeviceUnknown',
-    'eventDeviceOffline',
-    'eventDeviceInactive',
-    'eventQueuedCommandSent',
-    'eventDeviceMoving',
-    'eventDeviceStopped',
-    'eventDeviceOverspeed',
-    'eventDeviceFuelDrop',
-    'eventDeviceFuelIncrease',
-    'eventCommandResult',
-    'eventGeofenceEnter',
-    'eventGeofenceExit',
-    'eventAlarm',
-    'eventIgnitionOn',
-    'eventIgnitionOff',
-    'eventMaintenance',
-    'eventTextMessage',
-    'eventDriverChanged',
-    'eventMedia',
+    'all',
+    'deviceOnline',
+    'deviceUnknown',
+    'deviceOffline',
+    'deviceInactive',
+    'queuedCommandSent',
+    'deviceMoving',
+    'deviceStopped',
+    'deviceOverspeed',
+    'deviceFuelDrop',
+    'deviceFuelIncrease',
+    'commandResult',
+    'geofenceEnter',
+    'geofenceExit',
+    'geofenceCrossed',
+    'proximityEnter',
+    'proximityExit',
+    'unaccompaniedMotion',
+    'alarm',
+    'ignitionOn',
+    'ignitionOff',
+    'maintenance',
+    'textMessage',
+    'driverChanged',
+    'media',
   ];
 
   @override
@@ -122,7 +128,7 @@ class _EventsReportScreenState extends State<EventsReportScreen> {
       final apiClient = traccarProvider.apiClient;
       final queryParams = [api.QueryParam('from', fromDate.toIso8601String()), api.QueryParam('to', toDate.toIso8601String()), api.QueryParam('deviceId', deviceId.toString())];
 
-      if (_selectedEventType != 'eventAll') {
+      if (_selectedEventType != 'all') {
         queryParams.add(api.QueryParam('type', _selectedEventType));
       }
 
@@ -190,7 +196,7 @@ class _EventsReportScreenState extends State<EventsReportScreen> {
                         _fetchEventsReport();
                       });
                     },
-                    items: _eventTypes.map((type) => DropdownMenuItem(value: type, child: Text(type.tr))).toList(),
+                    items: _eventTypes.map((type) => DropdownMenuItem(value: type, child: Text(type == 'all' ? 'eventAll'.tr : eventTypeLabel(type)))).toList(),
                   ),
                 ),
                 Expanded(
