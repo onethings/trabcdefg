@@ -940,4 +940,9 @@ const Map<String, String> enUs = {
   "actionNavigate": "Navigate",
   "commandQueued": "Command queued. It will be sent when the connection returns.",
   "commandQueuedCount": "@count command(s) waiting",
+  "sharedFavorite": "Favorite",
+  "sharedClear": "Clear",
+  "sharedMore": "More",
+  "playbackPlay": "Play",
+  "playbackPause": "Pause",
 };

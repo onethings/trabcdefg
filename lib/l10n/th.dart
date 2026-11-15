@@ -938,4 +938,9 @@ const Map<String, String> th = {
   "actionNavigate": "นำทาง",
   "commandQueued": "คำสั่งอยู่ในคิว จะส่งเมื่อเชื่อมต่อได้",
   "commandQueuedCount": "มีคำสั่งรอ @count รายการ",
+  "sharedFavorite": "รายการโปรด",
+  "sharedClear": "ล้าง",
+  "sharedMore": "เพิ่มเติม",
+  "playbackPlay": "เล่น",
+  "playbackPause": "หยุดชั่วคราว",
 };

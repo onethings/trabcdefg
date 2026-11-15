@@ -940,4 +940,9 @@ const Map<String, String> zhCN = {
   "actionNavigate": "导航",
   "commandQueued": "指令已排队，连线恢复后自动发送。",
   "commandQueuedCount": "有 @count 则指令等待发送",
+  "sharedFavorite": "收藏",
+  "sharedClear": "清除",
+  "sharedMore": "更多",
+  "playbackPlay": "播放",
+  "playbackPause": "暂停",
 };

@@ -16,6 +16,7 @@ import 'package:trabcdefg/services/feedback.dart';
 import 'package:trabcdefg/services/map_navigation.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
 import 'package:trabcdefg/src/utils/status_utils.dart';
+import 'package:trabcdefg/widgets/offline_address_service.dart';
 import 'package:trabcdefg/widgets/skeleton.dart';
 import 'package:trabcdefg/widgets/state_views.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -35,6 +36,7 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
   int _mileageDays = 1; // 1 = today, 3 = last 3 days
   final Map<int, double> _mileageMap = {}; // deviceId -> distance in km
   final bool _isLoadingMileage = false;
+  final Map<String, String> _addressCache = {};
 
   @override
   void initState() {
@@ -280,6 +282,7 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
                             ),
                             IconButton(
                               visualDensity: VisualDensity.compact,
+                              tooltip: 'sharedFavorite'.tr,
                               padding: const EdgeInsets.only(left: 8),
                               constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
                               icon: Icon(isFavorite ? CupertinoIcons.heart_fill : CupertinoIcons.heart, color: isFavorite ? theme.colorScheme.error : theme.colorScheme.outline, size: 20),
@@ -306,6 +309,14 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
                   ),
                   const SizedBox(width: 8),
                   _AccTimerBadge(speed: speedKmH, isStale: isStale, isOn: isIgnitionOn, lastUpdate: lastUpdate, baseColor: statusColor),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Icon(CupertinoIcons.location_solid, size: 14, color: theme.colorScheme.outline),
+                  const SizedBox(width: 7),
+                  Expanded(child: _buildAddressWidget(position?.latitude, position?.longitude)),
                 ],
               ),
               const SizedBox(height: 8),
@@ -383,6 +394,29 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
     if (!mounted) return;
     Get.to(() => const CommandScreen());
   }
+
+  Widget _buildAddressWidget(num? lat, num? lon) {
+    if (lat == null || lon == null) {
+      return _addressText('sharedNoData'.tr);
+    }
+    final cacheKey = "${lat.toStringAsFixed(5)}_${lon.toStringAsFixed(5)}";
+    if (_addressCache.containsKey(cacheKey)) {
+      return _addressText(_addressCache[cacheKey]!);
+    }
+    return FutureBuilder<String>(future: _getAddressAsync(lat, lon, cacheKey), builder: (context, snapshot) => _addressText(snapshot.data ?? '...'));
+  }
+
+  Future<String> _getAddressAsync(num lat, num lon, String cacheKey) async {
+    final address = await OfflineAddressService.getAddress(lat.toDouble(), lon.toDouble());
+    if (mounted) {
+      setState(() {
+        _addressCache[cacheKey] = address;
+      });
+    }
+    return address;
+  }
+
+  Widget _addressText(String text) => Text(text, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis);
 
   Widget _buildMileageWidget(int deviceId) {
     final traccarProvider = Provider.of<TraccarProvider>(context);
@@ -462,7 +496,7 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
                 decoration: InputDecoration(
                   hintText: 'sharedSearchDevices'.tr,
                   prefixIcon: const Icon(CupertinoIcons.search, size: 20),
-                  suffixIcon: _searchQuery.isEmpty ? null : IconButton(onPressed: _searchController.clear, icon: const Icon(Icons.close_rounded, size: 18)),
+                  suffixIcon: _searchQuery.isEmpty ? null : IconButton(onPressed: _searchController.clear, tooltip: 'sharedClear'.tr, icon: const Icon(Icons.close_rounded, size: 18)),
                   filled: true,
                   fillColor: theme.colorScheme.surfaceContainerHighest,
                   contentPadding: const EdgeInsets.symmetric(vertical: 12),

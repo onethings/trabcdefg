@@ -940,4 +940,9 @@ const Map<String, String> zhTw = {
   "actionNavigate": "導覽",
   "commandQueued": "指令已排入佇列，連線恢復後自動送出。",
   "commandQueuedCount": "有 @count 則指令等待送出",
+  "sharedFavorite": "收藏",
+  "sharedClear": "清除",
+  "sharedMore": "更多",
+  "playbackPlay": "播放",
+  "playbackPause": "暫停",
 };

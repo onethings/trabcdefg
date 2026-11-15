@@ -1908,6 +1908,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
               IconButton.filled(
                 style: IconButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.primary, minimumSize: const Size(50, 50)),
                 onPressed: _togglePlayback,
+                tooltip: _isPlaying ? 'playbackPause'.tr : 'playbackPlay'.tr,
                 icon: Icon(_isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded, color: Theme.of(context).colorScheme.onPrimary, size: 30),
               ),
               const SizedBox(width: 4),
@@ -1989,6 +1990,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
                 child: IconButton.filled(
                   style: IconButton.styleFrom(backgroundColor: theme.colorScheme.primary, minimumSize: const Size(40, 40), padding: EdgeInsets.zero),
                   onPressed: _togglePlayback,
+                  tooltip: _isPlaying ? 'playbackPause'.tr : 'playbackPlay'.tr,
                   icon: Icon(_isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded, color: theme.colorScheme.onPrimary, size: 24),
                 ),
               ),

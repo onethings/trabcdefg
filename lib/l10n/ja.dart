@@ -937,4 +937,9 @@ const Map<String, String> ja = {
   "actionNavigate": "ナビ",
   "commandQueued": "コマンドはキューに追加されました。接続が戻ると送信されます。",
   "commandQueuedCount": "@count 件のコマンドが待機中",
+  "sharedFavorite": "お気に入り",
+  "sharedClear": "クリア",
+  "sharedMore": "その他",
+  "playbackPlay": "再生",
+  "playbackPause": "一時停止",
 };

@@ -937,4 +937,9 @@ const Map<String, String> ko = {
   "actionNavigate": "길찾기",
   "commandQueued": "명령이 대기열에 추가되었습니다. 연결이 복구되면 전송됩니다.",
   "commandQueuedCount": "@count개의 명령 대기 중",
+  "sharedFavorite": "즐겨찾기",
+  "sharedClear": "지우기",
+  "sharedMore": "더 보기",
+  "playbackPlay": "재생",
+  "playbackPause": "일시정지",
 };

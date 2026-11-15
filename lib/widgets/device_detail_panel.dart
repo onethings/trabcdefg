@@ -333,36 +333,40 @@ class _DeviceDetailPanelState extends State<DeviceDetailPanel> {
   Widget _buildHeaderActionIcons(BuildContext context) {
     return Row(
       children: [
-        _buildCircleIcon(context, Icons.route_rounded, () => _navigateToMileage(context)),
+        _buildCircleIcon(context, Icons.route_rounded, () => _navigateToMileage(context), semanticsLabel: 'monthlyMileageTitle'.tr),
         const SizedBox(width: 8),
-        _buildCircleIcon(context, CupertinoIcons.refresh, widget.onRefresh),
+        _buildCircleIcon(context, CupertinoIcons.refresh, widget.onRefresh, semanticsLabel: 'sharedRefresh'.tr),
         const SizedBox(width: 8),
         Consumer<TraccarProvider>(
           builder: (context, provider, child) {
             final isFavorite = provider.isFavorite(widget.device.id!);
-            return _buildCircleIcon(context, isFavorite ? CupertinoIcons.heart_fill : CupertinoIcons.heart, () => provider.toggleFavorite(widget.device.id!), color: isFavorite ? Colors.red : null);
+            return _buildCircleIcon(context, isFavorite ? CupertinoIcons.heart_fill : CupertinoIcons.heart, () => provider.toggleFavorite(widget.device.id!), color: isFavorite ? Colors.red : null, semanticsLabel: 'sharedFavorite'.tr);
           },
         ),
         const SizedBox(width: 8),
-        _buildCircleIcon(context, _isExpanded ? CupertinoIcons.chevron_up : CupertinoIcons.chevron_down, _toggleExpanded),
+        _buildCircleIcon(context, _isExpanded ? CupertinoIcons.chevron_up : CupertinoIcons.chevron_down, _toggleExpanded, semanticsLabel: 'sharedMore'.tr),
       ],
     );
   }
 
-  Widget _buildCircleIcon(BuildContext context, IconData icon, VoidCallback onTap, {Color? color}) {
+  Widget _buildCircleIcon(BuildContext context, IconData icon, VoidCallback onTap, {Color? color, String? semanticsLabel}) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     // The 44x44 box is the touch target; the visible circle stays 34pt.
-    return SizedBox(
-      width: 44,
-      height: 44,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: onTap,
-        child: Center(
-          child: Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(color: (isDark ? Colors.white : Colors.black).withValues(alpha: 0.08), shape: BoxShape.circle),
-            child: Icon(icon, size: 18, color: color ?? Theme.of(context).colorScheme.onSurface),
+    return Semantics(
+      button: true,
+      label: semanticsLabel ?? '',
+      child: SizedBox(
+        width: 44,
+        height: 44,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onTap,
+          child: Center(
+            child: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(color: (isDark ? Colors.white : Colors.black).withValues(alpha: 0.08), shape: BoxShape.circle),
+              child: Icon(icon, size: 18, color: color ?? Theme.of(context).colorScheme.onSurface),
+            ),
           ),
         ),
       ),
@@ -386,19 +390,20 @@ class _DeviceDetailPanelState extends State<DeviceDetailPanel> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
-          _buildActionItem(context, CupertinoIcons.location_north, () => _navigateToGoogleMaps()),
-          _buildActionItem(context, CupertinoIcons.info_circle, () => _navigateToDetails(context)),
-          _buildActionItem(context, CupertinoIcons.paperplane, () => _navigateToCommand(context)),
-          _buildActionItem(context, CupertinoIcons.ellipsis, widget.onMoreOptionsPressed),
-          _buildActionItem(context, CupertinoIcons.pencil, () => _navigateToEdit(context)),
-          _buildActionItem(context, CupertinoIcons.trash, widget.onDeletePressed, color: Colors.red),
+          _buildActionItem(context, CupertinoIcons.location_north, () => _navigateToGoogleMaps(), tooltip: 'actionNavigate'.tr),
+          _buildActionItem(context, CupertinoIcons.info_circle, () => _navigateToDetails(context), tooltip: 'sharedInfo'.tr),
+          _buildActionItem(context, CupertinoIcons.paperplane, () => _navigateToCommand(context), tooltip: 'commandTitle'.tr),
+          _buildActionItem(context, CupertinoIcons.ellipsis, widget.onMoreOptionsPressed, tooltip: 'sharedMore'.tr),
+          _buildActionItem(context, CupertinoIcons.pencil, () => _navigateToEdit(context), tooltip: 'sharedEdit'.tr),
+          _buildActionItem(context, CupertinoIcons.trash, widget.onDeletePressed, color: Colors.red, tooltip: 'sharedDelete'.tr),
         ],
       ),
     );
   }
 
-  Widget _buildActionItem(BuildContext context, IconData icon, VoidCallback onTap, {Color? color}) {
+  Widget _buildActionItem(BuildContext context, IconData icon, VoidCallback onTap, {Color? color, String? tooltip}) {
     return IconButton(
+      tooltip: tooltip,
       icon: Icon(icon, size: 22, color: color ?? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.8)),
       onPressed: onTap,
     );

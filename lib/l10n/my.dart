@@ -939,4 +939,9 @@ const Map<String, String> my = {
   "actionNavigate": "လမ်းညွှန်",
   "commandQueued": "အမိန့်ကို တန်းစီထားသည်။ ချိတ်ဆက်မှုပြန်ရလာလျှင် ပို့ပါမည်။",
   "commandQueuedCount": "အမိန့် @count ခု စောင့်နေသည်",
+  "sharedFavorite": "အမိန့်စာ",
+  "sharedClear": "ရှင်းလင်းရန်",
+  "sharedMore": "နောက်ထပ်",
+  "playbackPlay": "ဖွင့်ရန်",
+  "playbackPause": "ခဏရပ်ရန်",
 };
