@@ -475,4 +475,24 @@ scripts/measure_memory.sh after 5 com.example.trabcdefg 600
 
 **第三批剩下的。** P1-1 的整頁訂閱拆解、P1-4（裝置清單的位址 widget 與計時器）、P1-6（儀表板拆訂閱）、P1-10（報表 DataTable 與骨架動畫）、P1-11（20 秒體檢）。這幾項都會動到畫面結構，建議每項一次 commit 並截圖比對。
 
-**再下一批建議。** 照 §8 量 `before`（現在裝置上仍是改動前的 1.0.38）與 `after` 之後，再開 P1-4 之後的項目，因為它們的收益比前八項小。
+### 量測結果（舊版對新版，未達結論）
+
+裝置是 Redmi 2312DRAABC，三次都是乾淨啟動、約 100 秒、取樣間隔 5 秒。
+
+| 執行 | 版本 | total 中位數 | total 峰值 | native 中位數 | graphics 中位數 |
+| --- | --- | --- | --- | --- | --- |
+| 22:43 | 舊（1.0.38） | 380 MB | 384 MB | 93 MB | 193 MB |
+| 22:54 | 舊（1.0.38） | 380 MB | 469 MB | 93 MB | 193 MB |
+| 22:57 | 新 | 381 MB | 474 MB | 102 MB | 181 MB |
+
+**結論：穩定態沒有可測差異，而且這個測法解析不出 P0-1 的效果。** 三個原因都很硬。
+
+1. 樣本間擺幅達 90 MB（地圖載圖磚時 GPU 配置起伏），而 P0-1 能省的量上限就是「圖磚快取大小」。閒置地圖只載幾十張圖磚，省不到十幾 MB，被噪聲完全蓋掉。
+2. 我的改動針對的是**累積**（逛很久之後的成長）與**冷啟動重載**，不是穩定態。穩定態相同本來就是預期結果。
+3. 要讓圖磚快取長到有感的規模（2000 張約 20 到 40 MB），得靠長時間大量瀏覽，而那個量級仍在噪聲範圍內。
+
+**所以 P0-1 的證據等級是「原始碼機制加單元測試」，不是裝置數字。** 機制那一半很硬（hive 的 `framesFromFile` 對非 lazy box 會解所有值，見 §3），淘汰行為有 `test/tile_cache_service_test.dart` 三個案例。量的那一半我不再花時間，因為換任何統計量都救不了訊噪比。
+
+**要真的拿到那個位元組數，唯一便宜的路。** 建一個 profile APK（debuggable），逛到快取滿，然後 `adb shell run-as com.example.trabcdefg du -sb files/app_flutter/mapTilesCache.hive`。那個檔案大小就是舊版開箱時會整個解進 RAM 的位元組數。順帶也能驗證 2000 張上限有沒有生效（檔案不該無限長大）。
+
+**下一批的量測要換指標。** 剩下的是重建次數與待機 CPU，那類改動要看 `adb shell dumpsys gfxinfo com.example.trabcdefg framestats` 的 janky frame 比例或 DevTools 的 rebuild 計數，比 PSS 敏感得多，也不受 ±90 MB 噪聲干擾。

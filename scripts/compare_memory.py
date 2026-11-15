@@ -39,7 +39,10 @@ def stats(rows, column):
     values = [int(row[column]) for row in rows if row[column].strip()]
     if not values:
         return None
-    return {'peak': max(values), 'last': values[-1], 'n': len(values)}
+    ordered = sorted(values)
+    mid = len(ordered) // 2
+    median = ordered[mid] if len(ordered) % 2 else (ordered[mid - 1] + ordered[mid]) // 2
+    return {'peak': max(values), 'last': values[-1], 'median': median, 'n': len(values)}
 
 
 def mb(kb):
@@ -68,20 +71,22 @@ def main():
         print('warning: sample counts differ a lot, the scenarios probably did not match')
 
     print()
-    print(f'{"column":18}{"before peak":>13}{"after peak":>12}{"delta":>9}{"  |":>3}'
-          f'{"before last":>13}{"after last":>12}{"delta":>9}')
+    print(f'{"column":18}{"before median":>15}{"after median":>14}{"delta":>9}{"  |":>3}'
+          f'{"before peak":>13}{"after peak":>12}{"delta":>9}')
     for column in COLUMNS:
         before = stats(runs['before'], column)
         after = stats(runs['after'], column)
         if not before or not after:
             continue
+        median_delta = (after['median'] - before['median']) / 1024
         peak_delta = (after['peak'] - before['peak']) / 1024
-        last_delta = (after['last'] - before['last']) / 1024
-        print(f'{column:18}{mb(before["peak"]):>13}{mb(after["peak"]):>12}{peak_delta:>+9.0f}{"  |":>3}'
-              f'{mb(before["last"]):>13}{mb(after["last"]):>12}{last_delta:>+9.0f}')
+        print(f'{column:18}{mb(before["median"]):>15}{mb(after["median"]):>14}{median_delta:>+9.0f}{"  |":>3}'
+              f'{mb(before["peak"]):>13}{mb(after["peak"]):>12}{peak_delta:>+9.0f}')
 
-    print('\nAll figures in MB. "last" is the final sample, which is why the')
-    print('scenario has to end in the same place on both runs.')
+    print('\nAll figures in MB. Median is the honest statistic: total PSS swings')
+    print('by tens of MB between samples while the map loads tiles, so a single')
+    print('peak or final sample tells you more about which frame you caught than')
+    print('about which build you measured.')
     return 0
 
 
