@@ -1695,6 +1695,9 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
   @override
   Widget build(BuildContext context) {
     final double safeTop = MediaQuery.of(context).padding.top;
+    final bool simpleMode = context.watch<SettingsProvider>().simpleMode;
+    // 簡易模式不使用極簡視圖：切換鈕會被藏起來，停在極簡模式就回不去了。
+    final bool minimalMode = _isMinimalMode && !simpleMode;
     return Scaffold(
       body: Stack(
         children: [
@@ -1731,7 +1734,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
           ),
           if (_isLoading) const Center(child: CircularProgressIndicator()),
 
-          if (!_isMinimalMode)
+          if (!minimalMode)
             Positioned(
               top: safeTop + 12,
               left: 64,
@@ -1739,50 +1742,63 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
               child: Center(child: _buildDeviceDatePill()),
             ),
 
-          AnimatedPositioned(
-            duration: const Duration(milliseconds: 250),
-            curve: Curves.easeOutCubic,
-            top: safeTop + (_isMinimalMode ? 12 : 60),
-            left: 12,
-            child: _mapFab(
-              _isMinimalMode ? Icons.fullscreen_exit_rounded : Icons.fullscreen_rounded,
-              () => _safeSetState(() => _isMinimalMode = !_isMinimalMode),
-              "btn_minimal",
-              active: _isMinimalMode,
-              tooltip: _isMinimalMode ? 'standardViewMode'.tr : 'minimalViewMode'.tr,
+          if (!simpleMode)
+            AnimatedPositioned(
+              duration: const Duration(milliseconds: 250),
+              curve: Curves.easeOutCubic,
+              top: safeTop + (_isMinimalMode ? 12 : 60),
+              left: 12,
+              child: _mapFab(
+                _isMinimalMode ? Icons.fullscreen_exit_rounded : Icons.fullscreen_rounded,
+                () => _safeSetState(() => _isMinimalMode = !_isMinimalMode),
+                "btn_minimal",
+                active: _isMinimalMode,
+                tooltip: _isMinimalMode ? 'standardViewMode'.tr : 'minimalViewMode'.tr,
+              ),
             ),
-          ),
 
-          if (!_isMinimalMode) ...[
+          if (!minimalMode) ...[
             Positioned(
               top: safeTop + 60,
               right: 12,
               child: Column(
-                children: [
-                  _mapFab(Icons.show_chart_rounded, () => _openReportPage((_) => const ChartReportScreen()), "btn_chart", tooltip: 'reportChart'.tr),
-                  const SizedBox(height: 8),
-                  _mapFab(Icons.route_rounded, () => _openReportPage((_) => const TripsReportScreen()), "btn_trips", tooltip: 'reportTrips'.tr),
-                  const SizedBox(height: 8),
-                  _mapFab(Icons.pause_circle_outline_rounded, () => _openReportPage((_) => const StopsReportScreen()), "btn_stops", tooltip: 'reportStops'.tr),
-                  const SizedBox(height: 8),
-                  _mapFab(Icons.pin_drop_rounded, _toggleStopPoints, "btn_stop_points", active: _showStopPoints, tooltip: 'historyStopPointsToggle'.tr),
-                  const SizedBox(height: 8),
-                  _mapFab(Icons.palette_rounded, _showColorModeMenu, "btn_color_mode", active: _routeColorMode != RouteColorMode.single, tooltip: 'routeColorModeTooltip'.tr),
-                  const SizedBox(height: 8),
-                  // _mapFab(Icons.calendar_month, _showCalendarDialog, "btn_cal"),
-                  // const SizedBox(height: 8),
-                  _mapFab(Provider.of<MapStyleProvider>(context).isSatelliteMode ? Icons.map : Icons.satellite_alt, _toggleMapType, "btn_style"),
-                  const SizedBox(height: 8),
-                  _mapFab(
-                    Icons.center_focus_strong,
-                    () {
-                      _safeSetState(() => _followUser = true);
-                      _animateCameraToBounds();
-                    },
-                    "btn_recenter",
-                    active: _followUser,
-                  ),
-                ],
+                children: simpleMode
+                    ? [
+                        _mapFab(
+                          Icons.center_focus_strong,
+                          () {
+                            _safeSetState(() => _followUser = true);
+                            _animateCameraToBounds();
+                          },
+                          "btn_recenter",
+                          active: _followUser,
+                        ),
+                      ]
+                    : [
+                        _mapFab(Icons.show_chart_rounded, () => _openReportPage((_) => const ChartReportScreen()), "btn_chart", tooltip: 'reportChart'.tr),
+                        const SizedBox(height: 8),
+                        _mapFab(Icons.route_rounded, () => _openReportPage((_) => const TripsReportScreen()), "btn_trips", tooltip: 'reportTrips'.tr),
+                        const SizedBox(height: 8),
+                        _mapFab(Icons.pause_circle_outline_rounded, () => _openReportPage((_) => const StopsReportScreen()), "btn_stops", tooltip: 'reportStops'.tr),
+                        const SizedBox(height: 8),
+                        _mapFab(Icons.pin_drop_rounded, _toggleStopPoints, "btn_stop_points", active: _showStopPoints, tooltip: 'historyStopPointsToggle'.tr),
+                        const SizedBox(height: 8),
+                        _mapFab(Icons.palette_rounded, _showColorModeMenu, "btn_color_mode", active: _routeColorMode != RouteColorMode.single, tooltip: 'routeColorModeTooltip'.tr),
+                        const SizedBox(height: 8),
+                        // _mapFab(Icons.calendar_month, _showCalendarDialog, "btn_cal"),
+                        // const SizedBox(height: 8),
+                        _mapFab(Provider.of<MapStyleProvider>(context).isSatelliteMode ? Icons.map : Icons.satellite_alt, _toggleMapType, "btn_style"),
+                        const SizedBox(height: 8),
+                        _mapFab(
+                          Icons.center_focus_strong,
+                          () {
+                            _safeSetState(() => _followUser = true);
+                            _animateCameraToBounds();
+                          },
+                          "btn_recenter",
+                          active: _followUser,
+                        ),
+                      ],
               ),
             ),
             Positioned(
@@ -1904,6 +1920,8 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
   }
 
   Widget _buildPlaybackPanel() {
+    final bool simpleMode = context.watch<SettingsProvider>().simpleMode;
+    final bool minimalMode = _isMinimalMode && !simpleMode;
     return Positioned(
       bottom: 24 + MediaQuery.of(context).padding.bottom,
       left: 16,
@@ -1912,26 +1930,28 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              _mapFab(_isGeofenceLoading ? Icons.hourglass_top_rounded : Icons.fence_rounded, _toggleGeofences, "btn_geofence", active: _showGeofences, tooltip: 'historyGeofenceToggle'.tr),
-              _mapFab(
-                Icons.square_foot,
-                () {
-                  if (_isMeasureMode) {
-                    _exitMeasureMode();
-                  } else {
-                    _enterMeasureMode();
-                  }
-                },
-                "btn_measure",
-                active: _isMeasureMode,
-                tooltip: 'historyMeasureTooltip'.tr,
-              ),
-            ],
-          ),
-          if (_isMeasureMode) ...[
+          // 地理圍欄與面積量測屬進階工具，簡易模式不顯示。
+          if (!simpleMode)
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                _mapFab(_isGeofenceLoading ? Icons.hourglass_top_rounded : Icons.fence_rounded, _toggleGeofences, "btn_geofence", active: _showGeofences, tooltip: 'historyGeofenceToggle'.tr),
+                _mapFab(
+                  Icons.square_foot,
+                  () {
+                    if (_isMeasureMode) {
+                      _exitMeasureMode();
+                    } else {
+                      _enterMeasureMode();
+                    }
+                  },
+                  "btn_measure",
+                  active: _isMeasureMode,
+                  tooltip: 'historyMeasureTooltip'.tr,
+                ),
+              ],
+            ),
+          if (_isMeasureMode && !simpleMode) ...[
             const SizedBox(height: 10),
             _buildMeasurePanel(),
           ],
@@ -1941,7 +1961,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
             switchInCurve: Curves.easeOutCubic,
             switchOutCurve: Curves.easeInCubic,
             layoutBuilder: (currentChild, previousChildren) => Stack(alignment: Alignment.bottomCenter, children: [...previousChildren, ?currentChild]),
-            child: _isMinimalMode ? _buildMinimalPlaybackPanel() : _buildFullPlaybackPanel(),
+            child: minimalMode ? _buildMinimalPlaybackPanel() : _buildFullPlaybackPanel(),
           ),
         ],
       ),
@@ -1949,6 +1969,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
   }
 
   Widget _buildFullPlaybackPanel() {
+    final bool simpleMode = context.watch<SettingsProvider>().simpleMode;
     return Container(
       key: const ValueKey('history_playback_panel_full'),
       padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
@@ -1965,7 +1986,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
               _currentAddressRx.value.isEmpty ? 'sharedLocating'.tr : _currentAddressRx.value,
               style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface),
               textAlign: TextAlign.center,
-              maxLines: 1,
+              maxLines: simpleMode ? 2 : 1,
               overflow: TextOverflow.ellipsis,
             ),
           ),
@@ -2018,12 +2039,15 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
                 onPressed: () => _stepPlayback(1),
                 icon: const Icon(Icons.skip_next_rounded, size: 24),
               ),
-              // 倍速選擇器：空間足夠時外觀不變，窄螢幕自動縮放，避免 Row 溢出
-              Expanded(
-                child: Align(alignment: AlignmentDirectional.centerEnd, child: FittedBox(fit: BoxFit.scaleDown, child: _buildSpeedSelector())),
-              ),
-              const SizedBox(width: 12),
-              IconButton.outlined(onPressed: _exportToGPX, icon: const Icon(Icons.download_rounded, size: 20), tooltip: 'exportGpx'.tr),
+              // 倍速選擇器與 GPX 匯出屬進階操作，簡易模式不顯示。
+              if (!simpleMode) ...[
+                // 倍速選擇器：空間足夠時外觀不變，窄螢幕自動縮放，避免 Row 溢出
+                Expanded(
+                  child: Align(alignment: AlignmentDirectional.centerEnd, child: FittedBox(fit: BoxFit.scaleDown, child: _buildSpeedSelector())),
+                ),
+                const SizedBox(width: 12),
+                IconButton.outlined(onPressed: _exportToGPX, icon: const Icon(Icons.download_rounded, size: 20), tooltip: 'exportGpx'.tr),
+              ],
             ],
           ),
         ],

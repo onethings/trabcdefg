@@ -119,7 +119,11 @@
 - 報表全家（`lib/screens/reports/`）
 - 指令頁（`lib/screens/command_screen.dart`）
 - 裝置詳細頁（`lib/screens/device_details_screen.dart`）
-- 月里程與軌跡（`lib/screens/monthly_mileage_screen.dart`、`lib/screens/history_route_screen.dart`）。例外：軌跡回放頁頂部的車牌日期 pill 已處理，簡易模式下改為上下兩行（車牌在上、日期在下），車牌用滿可用寬度完整顯示，不再被 ellipsis 截掉。
+- 月里程（`lib/screens/monthly_mileage_screen.dart`）與軌跡的其餘頁面未分級。
+- 軌跡回放頁（`lib/screens/history_route_screen.dart`）例外，已做簡易模式調整：
+  - 保留：車牌日期 pill（簡易模式下改上下兩行，車牌完整顯示）、地圖縮放鈕、回到軌跡鈕、底部播放面板（路名可 2 行、統計、時間軸、播放／暫停／前後步進）。
+  - 隱藏：報表三顆（圖表、行程、停留）、停留點標記、路線著色、衛星圖層、地理圍欄、面積量測、極簡視圖切換、倍速選擇、GPX 匯出。
+  - 極簡視圖若在正常模式開啟，簡易模式會強制回到完整視圖（切換鈕被藏起來，停在極簡會回不去）。
 - 分享裝置（`lib/screens/share_device_screen.dart`）
 - 登入、註冊、忘記密碼（前置流程，與是否登入後的介面無關）
 
