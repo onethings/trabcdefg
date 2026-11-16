@@ -1,6 +1,9 @@
 // Classifies a later pass when it comes close to a segment of the earlier
-// recorded route. The spatial grid only narrows the candidate segments; the
-// final decision always uses point-to-segment distance in metres.
+// recorded route. Every decision is point-to-segment distance in metres: the
+// metre grid only narrows the candidates, the minimum gap is travel distance
+// rather than a sample count, and a long chord is split into one-cell pieces so
+// a recording with sparse samples is still indexed. A position without a fix is
+// skipped instead of bending the geometry.
 import 'dart:math' as math;
 import 'dart:typed_data';
 
@@ -12,86 +15,160 @@ const double defaultRepeatCellMeters = 40;
 /// Maximum distance from a previously travelled segment to count as a repeat.
 const double defaultRepeatToleranceMeters = 30;
 
-/// A segment must end at least this many samples before the current point.
-/// This excludes the immediately adjacent part of the same pass.
-const int defaultMinIndexGap = 10;
+/// A segment must end at least this many metres of travel before the current
+/// point. This excludes the immediately adjacent part of the same pass without
+/// assuming how often the tracker reports.
+const double defaultMinGapMeters = 100;
+
+/// A chord this long between consecutive samples is a recording gap, not road
+/// geometry, so it is left out of the index.
+const double _maxIndexedSegmentMeters = 10000;
+
+/// A chord this many times longer than the longer of the chords beside it is a
+/// recording gap too. Road geometry reported every few hundred metres stays
+/// flat, while a lost fix leaves one long jump between two ordinary steps. Such
+/// a jump is drawn straight across the map, so indexing it would colour every
+/// road it crosses.
+const double _gapRatio = 10;
 
 /// Returns one flag per point. A point is repeated when it is within
-/// [toleranceMeters] of a segment that ended at least [minIndexGap] samples
-/// earlier. [lngLatPairs] is longitude/latitude interleaved.
+/// [toleranceMeters] of a segment that ended at least [minGapMeters] of travel
+/// earlier. [lngLatPairs] is longitude/latitude interleaved; a point or a
+/// segment with a non-finite coordinate is skipped.
 ///
-/// Earlier route segments are indexed in metre-grid buckets. Each segment is
-/// inserted into every bucket touched by its bounding box, so a later point
-/// can find a road even when its GPS sample is offset from the old sample.
-Uint8List classifyRepeatPasses(Float64List lngLatPairs, {double cellMeters = defaultRepeatCellMeters, double toleranceMeters = defaultRepeatToleranceMeters, int minIndexGap = defaultMinIndexGap}) {
+/// Earlier route segments are cut into pieces about one cell long, and each
+/// piece is inserted into every metre-grid bucket its bounding box touches, so
+/// a later point finds a road even when its GPS sample is offset from the old
+/// sample. The pieces lie on the chord, so the distance they measure is the
+/// point-to-chord distance; their only job is bounding how much of the grid one
+/// long segment covers.
+Uint8List classifyRepeatPasses(
+  Float64List lngLatPairs, {
+  double cellMeters = defaultRepeatCellMeters,
+  double toleranceMeters = defaultRepeatToleranceMeters,
+  double minGapMeters = defaultMinGapMeters,
+}) {
   final int count = lngLatPairs.length ~/ 2;
   final Uint8List flags = Uint8List(count);
-  if (count < 2 || cellMeters <= 0 || toleranceMeters < 0) return flags;
+  if (count < 2 || cellMeters <= 0 || toleranceMeters < 0 || minGapMeters < 0) return flags;
   final Uint8List candidatesByPoint = Uint8List(count);
 
+  // One position without a fix would otherwise spread NaN through the grid and
+  // throw away the classification of the whole track.
   double latitudeSum = 0;
+  var latitudeCount = 0;
   for (var i = 0; i < count; i++) {
-    latitudeSum += lngLatPairs[i * 2 + 1];
+    final double lat = lngLatPairs[i * 2 + 1];
+    if (!lat.isFinite) continue;
+    latitudeSum += lat;
+    latitudeCount++;
   }
-  final double centreLatitude = latitudeSum / count;
+  final double centreLatitude = latitudeCount == 0 ? 0 : latitudeSum / latitudeCount;
   final double metresPerDegreeLng = _metresPerDegreeLongitude(centreLatitude);
+
+  // Cumulative travel, so the minimum gap is a distance the tracker's reporting
+  // interval cannot stretch. A step to or from a position without a fix adds
+  // nothing, which keeps the series monotonic.
+  final Float64List travelled = Float64List(count);
+  for (var i = 1; i < count; i++) {
+    final double lng1 = lngLatPairs[(i - 1) * 2];
+    final double lat1 = lngLatPairs[(i - 1) * 2 + 1];
+    final double lng2 = lngLatPairs[i * 2];
+    final double lat2 = lngLatPairs[i * 2 + 1];
+    travelled[i] = travelled[i - 1] + (lng1.isFinite && lat1.isFinite && lng2.isFinite && lat2.isFinite ? _metresBetween(lng1, lat1, lng2, lat2) : 0);
+  }
 
   int cellX(double lng) => (lng * metresPerDegreeLng / cellMeters).floor();
   int cellY(double lat) => (lat * _metresPerDegreeLat / cellMeters).floor();
   int key(int x, int y) => x * 1000003 + y;
 
-  // Bucket entries contain the start index of an earlier segment (j -> j+1).
+  // Four doubles per piece: startLng, startLat, endLng, endLat.
+  final List<double> pieces = <double>[];
+
+  // A bucket holds piece indices, not segment start indices.
   final Map<int, List<int>> buckets = <int, List<int>>{};
+
+  double chordMeters(int at) {
+    if (at < 0 || at + 1 >= count) return 0;
+    final double lng1 = lngLatPairs[at * 2];
+    final double lat1 = lngLatPairs[at * 2 + 1];
+    final double lng2 = lngLatPairs[(at + 1) * 2];
+    final double lat2 = lngLatPairs[(at + 1) * 2 + 1];
+    // An immeasurable neighbour switches the gap test off rather than making it
+    // fire on every segment beside a position without a fix.
+    if (!lng1.isFinite || !lat1.isFinite || !lng2.isFinite || !lat2.isFinite) return double.infinity;
+    return _metresBetween(lng1, lat1, lng2, lat2);
+  }
+
+  double longestNeighbourChord(int start) => math.max(chordMeters(start - 1), chordMeters(start + 1));
 
   void indexSegment(int start) {
     final double lng1 = lngLatPairs[start * 2];
     final double lat1 = lngLatPairs[start * 2 + 1];
     final double lng2 = lngLatPairs[(start + 1) * 2];
     final double lat2 = lngLatPairs[(start + 1) * 2 + 1];
+    if (!lng1.isFinite || !lat1.isFinite || !lng2.isFinite || !lat2.isFinite) return;
 
-    // Do not connect across large recording gaps; those are not reliable road
-    // geometry and could otherwise index a huge rectangular area.
-    if (_metresBetween(lng1, lat1, lng2, lat2) > 200) return;
+    final double lengthMeters = _metresBetween(lng1, lat1, lng2, lat2);
+    if (lengthMeters > _maxIndexedSegmentMeters) return;
+    if (lengthMeters > _gapRatio * longestNeighbourChord(start)) return;
 
-    final int minX = cellX(math.min(lng1, lng2));
-    final int maxX = cellX(math.max(lng1, lng2));
-    final int minY = cellY(math.min(lat1, lat2));
-    final int maxY = cellY(math.max(lat1, lat2));
-    // A normal GPS segment touches only a handful of cells. Guard against
-    // malformed coordinates creating an unbounded indexing operation.
-    if ((maxX - minX + 1) * (maxY - minY + 1) > 256) return;
-    for (var x = minX; x <= maxX; x++) {
-      for (var y = minY; y <= maxY; y++) {
-        (buckets[key(x, y)] ??= <int>[]).add(start);
+    // Splitting replaces the old "skip any segment over 200 m" guard and the old
+    // 256-cell bounding-box guard: pieces cap the buckets one long chord
+    // touches, so a sparse recording is indexed instead of dropped.
+    final int piecesCount = math.max(1, (lengthMeters / cellMeters).ceil());
+    for (var k = 0; k < piecesCount; k++) {
+      final double t0 = k / piecesCount;
+      final double t1 = (k + 1) / piecesCount;
+      final double startLng = lng1 + (lng2 - lng1) * t0;
+      final double startLat = lat1 + (lat2 - lat1) * t0;
+      final double endLng = lng1 + (lng2 - lng1) * t1;
+      final double endLat = lat1 + (lat2 - lat1) * t1;
+      final int piece = pieces.length ~/ 4;
+      pieces.addAll(<double>[startLng, startLat, endLng, endLat]);
+
+      final int minX = cellX(math.min(startLng, endLng));
+      final int maxX = cellX(math.max(startLng, endLng));
+      final int minY = cellY(math.min(startLat, endLat));
+      final int maxY = cellY(math.max(startLat, endLat));
+      for (var x = minX; x <= maxX; x++) {
+        for (var y = minY; y <= maxY; y++) {
+          (buckets[key(x, y)] ??= <int>[]).add(piece);
+        }
       }
     }
   }
 
-  int nextSegmentEnd = 1;
+  int nextEnd = 1;
   for (var i = 0; i < count; i++) {
-    // Only index segments whose end is far enough behind the current point.
-    final int latestEligibleEnd = i - minIndexGap;
-    while (nextSegmentEnd <= latestEligibleEnd) {
-      indexSegment(nextSegmentEnd - 1);
-      nextSegmentEnd++;
+    // Index every segment whose end is at least minGapMeters of travel behind
+    // this point. The window only moves forward, so each segment is indexed once.
+    final double limit = travelled[i] - minGapMeters;
+    while (nextEnd < count && travelled[nextEnd] <= limit) {
+      indexSegment(nextEnd - 1);
+      nextEnd++;
     }
 
     final double lng = lngLatPairs[i * 2];
     final double lat = lngLatPairs[i * 2 + 1];
+    if (!lng.isFinite || !lat.isFinite) {
+      candidatesByPoint[i] = 0;
+      continue;
+    }
     final int cx = cellX(lng);
     final int cy = cellY(lat);
     bool repeat = false;
-    final Set<int> checkedSegments = <int>{};
+    final Set<int> checkedPieces = <int>{};
 
-    // With 40 m cells and a 30 m threshold, a 3x3 probe covers every segment
-    // that can be within tolerance. The exact distance check remains 30 m.
+    // With 40 m cells and a 30 m threshold, a 3x3 probe covers every piece that
+    // can be within tolerance. The exact distance check remains 30 m.
     for (var dx = -1; dx <= 1 && !repeat; dx++) {
       for (var dy = -1; dy <= 1 && !repeat; dy++) {
         final List<int>? candidates = buckets[key(cx + dx, cy + dy)];
         if (candidates == null) continue;
-        for (final int start in candidates) {
-          if (!checkedSegments.add(start)) continue;
-          final double distance = _pointToSegmentMeters(lng, lat, lngLatPairs[start * 2], lngLatPairs[start * 2 + 1], lngLatPairs[(start + 1) * 2], lngLatPairs[(start + 1) * 2 + 1], centreLatitude);
+        for (final int piece in candidates) {
+          if (!checkedPieces.add(piece)) continue;
+          final double distance = _pointToSegmentMeters(lng, lat, pieces[piece * 4], pieces[piece * 4 + 1], pieces[piece * 4 + 2], pieces[piece * 4 + 3], centreLatitude);
           if (distance <= toleranceMeters) {
             repeat = true;
             break;

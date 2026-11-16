@@ -1700,8 +1700,8 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     if (positions.isEmpty) return;
     final Float64List packed = Float64List(positions.length * 2);
     for (var i = 0; i < positions.length; i++) {
-      packed[i * 2] = positions[i].longitude?.toDouble() ?? 0;
-      packed[i * 2 + 1] = positions[i].latitude?.toDouble() ?? 0;
+      packed[i * 2] = positions[i].longitude?.toDouble() ?? double.nan;
+      packed[i * 2 + 1] = positions[i].latitude?.toDouble() ?? double.nan;
     }
     final int generation = _playbackGeneration;
     Uint8List flags;
@@ -1717,6 +1717,8 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     for (var i = 1; i < flags.length; i++) {
       if (flags[i] != flags[i - 1]) _repeatBoundaryIndices.add(i);
     }
+    // 旗標晚到時補畫一次，否則暫停中的畫面會停在算完之前那條全藍的線
+    if (_mapController != null) _updatePlaybackUI();
   }
 
   void _onAnimationTick() {
