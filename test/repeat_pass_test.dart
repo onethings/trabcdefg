@@ -20,7 +20,7 @@ Float64List _track(List<List<double>> lngLat) {
 
 /// A straight leg north-east from [lng0], [lat0] covering [metresEast] and
 /// [metresNorth], sampled every [step] metres.
-List<List<double>> _leg(double lng0, double lat0, {required double metresEast, required double metresNorth, double step = 5, int samples = 40}) {
+List<List<double>> _leg(double lng0, double lat0, {required double metresEast, required double metresNorth, int samples = 40}) {
   return [
     for (var i = 0; i <= samples; i++)
       [lng0 + (metresEast * i / samples) / _mPerDegLng, lat0 + (metresNorth * i / samples) / _mPerDegLat],

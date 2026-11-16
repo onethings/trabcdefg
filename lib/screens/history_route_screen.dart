@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'dart:developer' as developer;
 import 'dart:io';
 import 'dart:math';
-import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/cupertino.dart';
@@ -1645,8 +1644,8 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
 
     for (var i = 0; i <= safeIdx; i += step) {
       final p = _positions[i];
-      final double? lng = p.longitude;
-      final double? lat = p.latitude;
+      final num? lng = p.longitude;
+      final num? lat = p.latitude;
       if (lng == null || lat == null) continue;
       addVertex(lng.toDouble(), lat.toDouble(), isRepeatAt(i));
     }
@@ -1692,7 +1691,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     if (!mounted || generation != _playbackGeneration) return;
     _repeatFlags = flags;
     // 旗標晚到時補畫一次，否則暫停中的畫面會停在算完之前那條全藍的線
-    if (_mapController != null) unawaited(_updatePlaybackUI());
+    if (_mapController != null) _updatePlaybackUI();
   }
 
   void _onAnimationTick() {

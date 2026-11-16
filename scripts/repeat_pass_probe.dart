@@ -5,7 +5,7 @@
 
 import 'dart:typed_data';
 
-import '../lib/src/utils/repeat_pass.dart';
+import 'package:trabcdefg/src/utils/repeat_pass.dart';
 
 const double lat0 = 25.033;
 const double mPerDegLat = 110574.0;
@@ -104,7 +104,7 @@ void main() {
     final flags = classifyRepeatPasses(track);
     watch.stop();
     final repeat = countFlags(flags, forward.length);
-    print('TIME  $name: ${watch.elapsedMilliseconds} ms, repeat on return=${repeat}/${backward.length - 1}');
+    print('TIME  $name: ${watch.elapsedMilliseconds} ms, repeat on return=$repeat/${backward.length - 1}');
     if (watch.elapsedMilliseconds > 3000) failures++;
   }
 

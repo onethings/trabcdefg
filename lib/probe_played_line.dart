@@ -73,7 +73,6 @@ class _ProbeScreenState extends State<_ProbeScreen> {
   /// repeat pass.
   static List<List<double>> _buildTrack() {
     const double latitude = 25.033;
-    const double metresPerDegreeLat = 110574.0;
     final double metresPerDegreeLng = 111320.0 * cos(latitude * pi / 180);
     final List<List<double>> points = <List<double>>[];
     const int samples = 600;
