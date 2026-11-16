@@ -457,11 +457,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     }
     // 新 style 會清掉已註冊的圖示，id 快取必須同步失效
     _loadedIconIds.clear();
-    await Future.wait([
-      _ensureMapIcon(_playbackIconId, 'assets/images/arrow.png'),
-      _ensureMapIcon(_startIconId, 'assets/images/start.png'),
-      _ensureMapIcon(_endIconId, 'assets/images/destination.png'),
-    ]);
+    await Future.wait([_ensureMapIcon(_playbackIconId, 'assets/images/arrow.png'), _ensureMapIcon(_startIconId, 'assets/images/start.png'), _ensureMapIcon(_endIconId, 'assets/images/destination.png')]);
     await _refreshPlaybackIconPixels('assets/images/arrow.png');
     // 停靠點編號圖示改由 _ensureStopIcons 依實際停靠數載入
   }
@@ -504,9 +500,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
   /// 停靠點編號圖示：只載入實際需要的張數，並併發註冊；回傳註冊成功的 icon id
   Future<Set<String>> _ensureStopIcons(int count) async {
     final int limit = min(count, _maxStopIconCount);
-    final List<bool> results = await Future.wait([
-      for (int i = 1; i <= limit; i++) _ensureMapIcon("pg_$i", "assets/images/pg_$i.png"),
-    ]);
+    final List<bool> results = await Future.wait([for (int i = 1; i <= limit; i++) _ensureMapIcon("pg_$i", "assets/images/pg_$i.png")]);
     return {
       for (int i = 1; i <= limit; i++)
         if (results[i - 1]) "pg_$i",
@@ -741,12 +735,14 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
   /// 對外入口：請求會排進序列，只執行最後一個，避免圖層 add/remove 交錯
   Future<void> _drawFullRoute({bool fitBounds = true}) {
     final int request = ++_latestDrawRequest;
-    _drawQueue = _drawQueue.then<void>((_) async {
-      if (request != _latestDrawRequest) return; // 已有更新的請求，這次直接跳過
-      await _drawFullRouteNow(fitBounds: fitBounds);
-    }).catchError((Object error, StackTrace stackTrace) {
-      developer.log('Failed to draw route: $error', name: 'HistoryRouteScreen');
-    });
+    _drawQueue = _drawQueue
+        .then<void>((_) async {
+          if (request != _latestDrawRequest) return; // 已有更新的請求，這次直接跳過
+          await _drawFullRouteNow(fitBounds: fitBounds);
+        })
+        .catchError((Object error, StackTrace stackTrace) {
+          developer.log('Failed to draw route: $error', name: 'HistoryRouteScreen');
+        });
     return _drawQueue;
   }
 
@@ -773,7 +769,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     }
 
     await controller.addSource(_routeSourceId, GeojsonSourceProperties(data: routeGeoJson));
-    await controller.addLineLayer(_routeSourceId, _routeLayerId, LineLayerProperties(lineColor: ['get', 'color'], lineWidth: 4.0, lineOpacity: 0.8, lineJoin: 'round', lineCap: 'round'));
+    await controller.addLineLayer(_routeSourceId, _routeLayerId, LineLayerProperties(lineColor: ['get', 'color'], lineWidth: 4.0, lineOpacity: 0.45, lineJoin: 'round', lineCap: 'round'));
 
     // 2. 建立已播放軌跡圖層 (動態更新)
     final Map<String, dynamic> emptyPlayedGeoJson = {
@@ -786,24 +782,23 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
       ],
     };
     await controller.addSource(_playedSourceId, GeojsonSourceProperties(data: emptyPlayedGeoJson));
-    await controller.addLineLayer(_playedSourceId, _playedLayerId, LineLayerProperties(lineColor: '#0F53FE', lineWidth: 5.5, lineOpacity: 1.0, lineJoin: 'round', lineCap: 'round'));
+    await controller.addLineLayer(_playedSourceId, _playedLayerId, LineLayerProperties(lineColor: _routeColorMode == RouteColorMode.single ? '#0F53FE' : '#FF3D00', lineWidth: 6.5, lineOpacity: 1.0, lineJoin: 'round', lineCap: 'round'));
     _playedPrefix.clear();
     _playedPushInFlight = false;
     _playbackGeneration++;
 
     // 3. 繪製起終點標籤與停靠點（圖示失敗不可影響軌跡顯示）
     try {
-      await controller.addSymbols([
-        SymbolOptions(geometry: startPoint, iconImage: _startIconId, iconSize: 1.8, iconAnchor: "bottom"),
-        SymbolOptions(geometry: endPoint, iconImage: _endIconId, iconSize: 1.8, iconAnchor: "bottom"),
-      ]);
+      await controller.addSymbols([SymbolOptions(geometry: startPoint, iconImage: _startIconId, iconSize: 1.8, iconAnchor: "bottom"), SymbolOptions(geometry: endPoint, iconImage: _endIconId, iconSize: 1.8, iconAnchor: "bottom")]);
     } catch (e) {
       developer.log('Failed to add start/end markers: $e', name: 'HistoryRouteScreen');
     }
 
     try {
       // iconSize 依貼圖邊長換算，換多大的圖都維持同樣的畫面尺寸
-      _playbackSymbol = await controller.addSymbol(SymbolOptions(geometry: LatLng(_positions.first.latitude!.toDouble(), _positions.first.longitude!.toDouble()), iconImage: _playbackIconId, iconSize: _playbackIconDisplayPx / _playbackIconPixels, zIndex: 10));
+      _playbackSymbol = await controller.addSymbol(
+        SymbolOptions(geometry: LatLng(_positions.first.latitude!.toDouble(), _positions.first.longitude!.toDouble()), iconImage: _playbackIconId, iconSize: _playbackIconDisplayPx / _playbackIconPixels, zIndex: 10),
+      );
     } catch (e) {
       _playbackSymbol = null;
       developer.log('Failed to add playback marker: $e', name: 'HistoryRouteScreen');
@@ -1278,12 +1273,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
           .toList(),
     };
     await controller.addSource(_measureVertexSourceId, GeojsonSourceProperties(data: vertices));
-    await controller.addCircleLayer(
-      _measureVertexSourceId,
-      _measureVertexLayerId,
-      CircleLayerProperties(circleColor: '#EF6C00', circleRadius: 5, circleStrokeColor: '#FFFFFF', circleStrokeWidth: 2),
-      enableInteraction: false,
-    );
+    await controller.addCircleLayer(_measureVertexSourceId, _measureVertexLayerId, CircleLayerProperties(circleColor: '#EF6C00', circleRadius: 5, circleStrokeColor: '#FFFFFF', circleStrokeWidth: 2), enableInteraction: false);
   }
 
   Widget _buildMeasurePanel() {
@@ -1299,7 +1289,13 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: theme.brightness == Brightness.dark ? 0.4 : 0.1), blurRadius: 16, offset: const Offset(0, 8))],
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: theme.brightness == Brightness.dark ? 0.4 : 0.1),
+            blurRadius: 16,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -1328,22 +1324,21 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
             Text.rich(
               TextSpan(
                 children: [
-                  TextSpan(text: _formatAreaValue(m2, _areaUnit), style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: theme.colorScheme.primary, letterSpacing: -0.5)),
-                  TextSpan(text: ' ${_areaUnit.labelKey.tr}', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: theme.colorScheme.primary)),
+                  TextSpan(
+                    text: _formatAreaValue(m2, _areaUnit),
+                    style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: theme.colorScheme.primary, letterSpacing: -0.5),
+                  ),
+                  TextSpan(
+                    text: ' ${_areaUnit.labelKey.tr}',
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: theme.colorScheme.primary),
+                  ),
                 ],
               ),
             )
           else
             Text('historyMeasureNeedThree'.tr, style: TextStyle(fontSize: 13, color: theme.colorScheme.onSurfaceVariant)),
-          if (hasArea)
-            Text(
-              secondaryUnits.map((u) => '${_formatAreaValue(m2, u)} ${u.labelKey.tr}').join(' · '),
-              style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurfaceVariant),
-            ),
-          Text(
-            '${'historyMeasurePerimeter'.tr}: ${NumberFormat('#,##0.0', 'en_US').format(perimeter)} ${'sharedMeter'.tr}',
-            style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurfaceVariant),
-          ),
+          if (hasArea) Text(secondaryUnits.map((u) => '${_formatAreaValue(m2, u)} ${u.labelKey.tr}').join(' · '), style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurfaceVariant)),
+          Text('${'historyMeasurePerimeter'.tr}: ${NumberFormat('#,##0.0', 'en_US').format(perimeter)} ${'sharedMeter'.tr}', style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurfaceVariant)),
           const SizedBox(height: 6),
           SizedBox(
             height: 36,
@@ -1428,9 +1423,21 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     return _derivedFollowZoom(latitude);
   }
 
-  /// 只由倍速、緯度、可用畫面高度推導，不含使用者的凍結期。
+  /// 只由倍速、這條軌跡的長度、緯度、可用畫面高度推導，不含使用者的凍結期。
   double _derivedFollowZoom(double latitude) {
-    return followZoom(speed: _playbackSpeed, latitude: latitude, viewportHeightPx: _visibleViewportHeight(), userOffsetLog2: _followZoomOffset);
+    return followZoom(
+      trackLengthMeters: _trackLengthMeters(),
+      speed: _playbackSpeed,
+      latitude: latitude,
+      viewportHeightPx: _visibleViewportHeight(),
+      userOffsetLog2: _followZoomOffset,
+    );
+  }
+
+  /// 這條軌跡總長（公尺）。同一趟回放不分長短都是兩分鐘，所以視野必須跟著它縮放。
+  double _trackLengthMeters() {
+    if (_distancePrefixSum.length < 2) return 0;
+    return _distancePrefixSum.last * 1000;
   }
 
   double _visibleViewportHeight() {
@@ -1453,9 +1460,11 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
   }
 
   void _saveFollowZoomOffset() {
-    SharedPreferences.getInstance().then((prefs) {
-      prefs.setDouble(_followZoomOffsetPrefsKey, _followZoomOffset);
-    }).catchError((Object error) => developer.log('Failed to save follow zoom offset: $error', name: 'HistoryRouteScreen'));
+    SharedPreferences.getInstance()
+        .then((prefs) {
+          prefs.setDouble(_followZoomOffsetPrefsKey, _followZoomOffset);
+        })
+        .catchError((Object error) => developer.log('Failed to save follow zoom offset: $error', name: 'HistoryRouteScreen'));
   }
 
   /// 換日期 / 換車輛 / 重新載入軌跡時，丟掉所有排程狀態與在飛請求
@@ -1581,30 +1590,33 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     _playedPrefix.advanceTo(idx, (i) => [_positions[i].longitude!.toDouble(), _positions[i].latitude!.toDouble()]);
 
     final now = DateTime.now().millisecondsSinceEpoch;
-    if (_playedPushInFlight || !_playedBudget.due(now)) {
+    if (_playedPushInFlight || (_isPlaying && !_playedBudget.due(now))) {
       return;
     }
-    _playedPushInFlight = true;
 
-    final coordinates = [..._playedPrefix.vertices, [smoothLng, smoothLat]];
+    final coordinates = [
+      ..._playedPrefix.vertices,
+      [smoothLng, smoothLat],
+    ];
+    _playedPushInFlight = true;
     final geoJson = <String, dynamic>{
       "type": "FeatureCollection",
-      "features": [
-        {
-          "type": "Feature",
-          "geometry": {"type": "LineString", "coordinates": coordinates},
-        },
-      ],
+      "features": coordinates.length < 2
+          ? []
+          : [
+              {
+                "type": "Feature",
+                "geometry": {"type": "LineString", "coordinates": coordinates},
+              },
+            ],
     };
     final int generation = _playbackGeneration;
     unawaited(
-      controller
-          .setGeoJsonSource(_playedSourceId, geoJson)
-          .catchError((Object error) => developer.log('Failed to push played line: $error', name: 'HistoryRouteScreen'))
-          // 換軌跡後回來的舊推送不能把新的閂解掉，否則兩筆寫入會交錯
-          .whenComplete(() {
-            if (generation == _playbackGeneration) _playedPushInFlight = false;
-          }),
+      controller.setGeoJsonSource(_playedSourceId, geoJson).catchError((Object error) => developer.log('Failed to push played line: $error', name: 'HistoryRouteScreen'))
+      // 換軌跡後回來的舊推送不能把新的閂解掉，否則兩筆寫入會交錯
+      .whenComplete(() {
+        if (generation == _playbackGeneration) _playedPushInFlight = false;
+      }),
     );
   }
 
@@ -1693,7 +1705,14 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
       final LatLngBounds visibleRegion = await controller.getVisibleRegion();
       // 這一趟回來時使用者可能已經暫停、放開跟隨或換了軌跡，就不該再動鏡頭
       if (!mounted || generation != _playbackGeneration || !_isPlaying || !_followUser) return;
-      final bool nearEdge = isInEdgeZone(latitude: currentLatLng.latitude, longitude: currentLatLng.longitude, south: visibleRegion.southwest.latitude, west: visibleRegion.southwest.longitude, north: visibleRegion.northeast.latitude, east: visibleRegion.northeast.longitude);
+      final bool nearEdge = isInEdgeZone(
+        latitude: currentLatLng.latitude,
+        longitude: currentLatLng.longitude,
+        south: visibleRegion.southwest.latitude,
+        west: visibleRegion.southwest.longitude,
+        north: visibleRegion.northeast.latitude,
+        east: visibleRegion.northeast.longitude,
+      );
       if (nearEdge) {
         controller.animateCamera(CameraUpdate.newLatLng(currentLatLng), duration: const Duration(milliseconds: _followPanAnimMs));
       }
@@ -1931,7 +1950,9 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
                 children: [
                   Icon(Icons.directions_car_filled_rounded, size: 16, color: theme.colorScheme.primary),
                   const SizedBox(width: 6),
-                  Flexible(child: Text(_selectedDeviceName ?? '--', maxLines: 2, softWrap: true, overflow: TextOverflow.ellipsis, style: nameStyle)),
+                  Flexible(
+                    child: Text(_selectedDeviceName ?? '--', maxLines: 2, softWrap: true, overflow: TextOverflow.ellipsis, style: nameStyle),
+                  ),
                 ],
               ),
               const SizedBox(height: 2),
@@ -1951,20 +1972,12 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
               Icon(Icons.directions_car_filled_rounded, size: 16, color: theme.colorScheme.primary),
               const SizedBox(width: 6),
               Flexible(
-                child: Text(
-                  _selectedDeviceName ?? '--',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: nameStyle,
-                ),
+                child: Text(_selectedDeviceName ?? '--', maxLines: 1, overflow: TextOverflow.ellipsis, style: nameStyle),
               ),
               const SizedBox(width: 8),
               Text('·', style: TextStyle(fontSize: 13, color: theme.colorScheme.onSurfaceVariant)),
               const SizedBox(width: 8),
-              Text(
-                dateLabel,
-                style: dateStyle,
-              ),
+              Text(dateLabel, style: dateStyle),
               const SizedBox(width: 6),
               Icon(Icons.calendar_month_rounded, size: 15, color: theme.colorScheme.onSurfaceVariant),
             ],
@@ -1977,10 +1990,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
       child: InkWell(
         borderRadius: BorderRadius.circular(22),
         onTap: _showCalendarDialog,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-          child: pillContent,
-        ),
+        child: Padding(padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8), child: pillContent),
       ),
     );
   }
@@ -2017,10 +2027,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
                 ),
               ],
             ),
-          if (_isMeasureMode && !simpleMode) ...[
-            const SizedBox(height: 10),
-            _buildMeasurePanel(),
-          ],
+          if (_isMeasureMode && !simpleMode) ...[const SizedBox(height: 10), _buildMeasurePanel()],
           const SizedBox(height: 10),
           AnimatedSwitcher(
             duration: const Duration(milliseconds: 220),
@@ -2109,7 +2116,10 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
               if (!simpleMode) ...[
                 // 倍速選擇器：空間足夠時外觀不變，窄螢幕自動縮放，避免 Row 溢出
                 Expanded(
-                  child: Align(alignment: AlignmentDirectional.centerEnd, child: FittedBox(fit: BoxFit.scaleDown, child: _buildSpeedSelector())),
+                  child: Align(
+                    alignment: AlignmentDirectional.centerEnd,
+                    child: FittedBox(fit: BoxFit.scaleDown, child: _buildSpeedSelector()),
+                  ),
                 ),
                 const SizedBox(width: 12),
                 IconButton.outlined(onPressed: _exportToGPX, icon: const Icon(Icons.download_rounded, size: 20), tooltip: 'exportGpx'.tr),

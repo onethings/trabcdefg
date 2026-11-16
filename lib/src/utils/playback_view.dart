@@ -2,28 +2,43 @@
 //
 // The page holds two views and each one owns its zoom. Overview shows the whole
 // track, so its zoom is the fit and nothing else. Follow shows the ground the
-// vehicle covers next, so its zoom is a ground span divided by the screen the
-// playback panel leaves. A single remembered zoom number serves neither view: it
-// is the wrong number the moment the track length or the playback speed changes,
-// which is why saving the last zoom keeps landing wrong.
+// vehicle covers next, so its zoom is a share of this track divided by the screen
+// the playback panel leaves.
+//
+// A fixed ground span cannot serve every track: one playback takes 120 seconds
+// whether the track is 2 km or 400 km, so a span that reads well on a city drive
+// leaves a highway drive crossing the screen in under a second. The span is
+// therefore a share of the track, and the promise it makes is testable: at any
+// playback speed the marker crosses the visible height in the same wall-clock
+// time, whatever the track length. Only the speed multiplier changes that time.
 //
 // A user who zooms during follow is answering a different question, "bigger or
 // smaller than what the app picked", so what gets remembered is that ratio and
 // not the absolute zoom. The ratio survives a speed change and still leaves the
-// app free to pull back at 20x.
+// app free to pull back at 20x. Nobody has to be asked for a distance.
 
 import 'dart:math' as math;
 
 /// Ground metres one pixel covers at zoom 0 on the equator.
 const double _equatorMetersPerPixelAtZoom0 = 156543.03392;
 
-/// Ground width, in metres of screen height, the follow view shows at 1x.
-const double baseFollowSpanMeters = 1500;
+/// Share of the track the follow view shows at 1x. With a play-through of
+/// [basePlaybackSeconds] this is what makes the marker cross the visible height
+/// in 18 seconds.
+const double baseVisibleTrackFraction = 0.15;
 
-/// How fast the span opens up as the playback speed rises. 0.35 keeps 20x at
-/// roughly three times the 1x span: enough road ahead to read, still a chase
+/// How fast the share opens up as the playback speed rises. 0.35 keeps 20x at
+/// roughly three times the 1x share: enough road ahead to read, still a chase
 /// camera rather than a country view.
 const double _speedSpanExponent = 0.35;
+
+/// Never closer than this, so a very short track does not fill the screen with
+/// a few hundred metres.
+const double minFollowSpanMeters = 400;
+
+/// Never more of the track than this, so fast playback still reads as following
+/// rather than as an overview.
+const double maxTrackFractionOnScreen = 0.9;
 
 const double minFollowZoom = 3;
 const double maxFollowZoom = 19;
@@ -31,10 +46,13 @@ const double maxFollowZoom = 19;
 /// How wide a preference the learned ratio may express, in zoom levels.
 const double maxUserOffsetLog2 = 2;
 
-/// Ground span, in metres of screen height, that [speed] needs.
-double spanMetersForSpeed(double speed) {
+/// Ground span, in metres of screen height, that this track needs at [speed].
+double spanMetersForTrack({required double trackLengthMeters, required double speed}) {
+  if (trackLengthMeters <= 0) return minFollowSpanMeters;
   final double clampedSpeed = speed.clamp(1.0, 20.0);
-  return baseFollowSpanMeters * math.pow(clampedSpeed, _speedSpanExponent);
+  final double raw = trackLengthMeters * baseVisibleTrackFraction * math.pow(clampedSpeed, _speedSpanExponent);
+  final double ceiling = math.max(minFollowSpanMeters, trackLengthMeters * maxTrackFractionOnScreen);
+  return raw.clamp(minFollowSpanMeters, ceiling);
 }
 
 /// Ground metres one pixel covers at [latitude] and [zoom].
@@ -50,10 +68,19 @@ double zoomForSpan({required double spanMeters, required double latitude, requir
   return zoom.clamp(minFollowZoom, maxFollowZoom);
 }
 
-/// Follow zoom for [speed] at [latitude], shifted by the user's own preference.
-double followZoom({required double speed, required double latitude, required double viewportHeightPx, double userOffsetLog2 = 0}) {
-  final double derived = zoomForSpan(spanMeters: spanMetersForSpeed(speed), latitude: latitude, viewportHeightPx: viewportHeightPx);
+/// Follow zoom for this track at [speed], shifted by the user's own preference.
+double followZoom({required double trackLengthMeters, required double speed, required double latitude, required double viewportHeightPx, double userOffsetLog2 = 0}) {
+  final double derived = zoomForSpan(spanMeters: spanMetersForTrack(trackLengthMeters: trackLengthMeters, speed: speed), latitude: latitude, viewportHeightPx: viewportHeightPx);
   return (derived + userOffsetLog2).clamp(minFollowZoom, maxFollowZoom);
+}
+
+/// Seconds the marker takes to cross the visible height, the promise the span
+/// makes. Used by the tests to hold the promise for every track length.
+double secondsToCrossScreen({required double trackLengthMeters, required double speed, required double viewportHeightPx, double baseSeconds = 120}) {
+  final double span = spanMetersForTrack(trackLengthMeters: trackLengthMeters, speed: speed);
+  final double groundMetresPerSecond = trackLengthMeters / (baseSeconds / speed.clamp(1.0, 20.0));
+  if (groundMetresPerSecond <= 0) return 0;
+  return span / groundMetresPerSecond;
 }
 
 /// The offset to remember after the user zooms to [userZoom] while the app had
