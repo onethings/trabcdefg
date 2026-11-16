@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:developer' as developer;
 import 'dart:io';
 import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/cupertino.dart';
@@ -11,6 +12,7 @@ import 'package:trabcdefg/src/utils/camera_follow.dart';
 import 'package:trabcdefg/src/utils/direction.dart';
 import 'package:trabcdefg/src/utils/playback_pacing.dart';
 import 'package:trabcdefg/src/utils/playback_view.dart';
+import 'package:trabcdefg/src/utils/played_prefix.dart';
 import 'package:trabcdefg/src/utils/publish_budget.dart';
 import 'package:trabcdefg/src/utils/repeat_pass.dart';
 import 'package:flutter/scheduler.dart';
@@ -240,6 +242,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
   int _lastTickAtMs = 0;
 
   // 已播放軌跡：每次推送整包換掉 GeoJSON，頂點留樣本上限，推送壓到約 10Hz 且同一時間只跑一個
+  final PlayedPrefix _playedPrefix = PlayedPrefix();
   final PublishBudget _playedBudget = PublishBudget(100);
   bool _playedPushInFlight = false;
   // 換軌跡或換 style 時 +1，讓舊軌跡的在飛推送與相機檢查回來時認得自己已經過期
@@ -247,6 +250,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
 
   /// 每個軌跡點是否重複經過。整條軌跡的性質，載入時算一次，播放時只查表。
   Uint8List? _repeatFlags;
+  List<int> _repeatBoundaryIndices = <int>[];
 
   Timer? _zoomSaveTimer;
   double _frameRate = 60.0; // 實測播放 tick 頻率（fps）
@@ -699,8 +703,10 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
       if (mounted) {
         _safeSetState(() {
           _positions = playbackPositions;
+          _playedPrefix.clear();
           _playedPushInFlight = false;
           _repeatFlags = null;
+          _repeatBoundaryIndices = <int>[];
           _playbackGeneration++;
           _isLoading = false;
           _resetAddressSchedule();
@@ -792,6 +798,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
         lineCap: 'round',
       ),
     );
+    _playedPrefix.clear();
     _playedPushInFlight = false;
     _playbackGeneration++;
     // 新增：如果目前進度不在起點（例如切換顏色模式或地圖圖層），立刻補畫已走過的線段
@@ -1605,7 +1612,8 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     const String repeatPassColor = '#9C27B0';
 
     final int safeIdx = idx.clamp(0, _positions.length - 1);
-    // 頂點數壓在 1500 以內，GeoJSON 才不會隨播放進度膨脹
+    // 頂點數壓在約 1500 以內；但顏色切換點必須保留，否則抽樣會
+    // 跳過重複路段邊界，造成紫色線段看起來斷斷續續。
     final int step = max(1, (safeIdx + 1) ~/ 1500);
 
     final List<Map<String, dynamic>> features = <Map<String, dynamic>>[];
@@ -1638,14 +1646,29 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
       // 換色處從交界點接上，線條才不會斷
       final List<double> junction = run.last;
       flushRun();
-      run = [junction, [lng, lat]];
+      run = [
+        junction,
+        [lng, lat],
+      ];
       runIsRepeat = repeat;
     }
 
+    final Set<int> sampleIndices = <int>{};
     for (var i = 0; i <= safeIdx; i += step) {
+      sampleIndices.add(i);
+    }
+    sampleIndices.add(safeIdx);
+    // 強制保留每個重複/非重複顏色轉換的兩側頂點。
+    for (final int boundary in _repeatBoundaryIndices) {
+      if (boundary > safeIdx) break;
+      sampleIndices.add(boundary - 1);
+      sampleIndices.add(boundary);
+    }
+    final List<int> orderedIndices = sampleIndices.toList()..sort();
+    for (final int i in orderedIndices) {
       final p = _positions[i];
-      final num? lng = p.longitude;
-      final num? lat = p.latitude;
+      final double? lng = p.longitude?.toDouble();
+      final double? lat = p.latitude?.toDouble();
       if (lng == null || lat == null) continue;
       addVertex(lng.toDouble(), lat.toDouble(), isRepeatAt(i));
     }
@@ -1690,8 +1713,10 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     }
     if (!mounted || generation != _playbackGeneration) return;
     _repeatFlags = flags;
-    // 旗標晚到時補畫一次，否則暫停中的畫面會停在算完之前那條全藍的線
-    if (_mapController != null) _updatePlaybackUI();
+    _repeatBoundaryIndices = <int>[];
+    for (var i = 1; i < flags.length; i++) {
+      if (flags[i] != flags[i - 1]) _repeatBoundaryIndices.add(i);
+    }
   }
 
   void _onAnimationTick() {
