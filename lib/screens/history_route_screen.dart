@@ -1613,7 +1613,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
 
     final int safeIdx = idx.clamp(0, _positions.length - 1);
     // 頂點數壓在約 1500 以內；但顏色切換點必須保留，否則抽樣會
-    // 跳過重複路段邊界，造成紫色線段看起來斷斷續續。
+    // 跳過重複路段邊界，造成紫色線段看起來斷斷續續。-ok
     final int step = max(1, (safeIdx + 1) ~/ 1500);
 
     final List<Map<String, dynamic>> features = <Map<String, dynamic>>[];
