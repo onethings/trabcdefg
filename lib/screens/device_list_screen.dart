@@ -9,6 +9,7 @@ import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timeago/timeago.dart' as timeago;
+import 'package:trabcdefg/providers/settings_provider.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
 import 'package:trabcdefg/screens/command_screen.dart';
 import 'package:trabcdefg/screens/notifications_screen.dart';
@@ -125,22 +126,24 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
   @override
   Widget build(BuildContext context) {
     final traccarProvider = Provider.of<TraccarProvider>(context);
+    final bool simpleMode = context.watch<SettingsProvider>().simpleMode;
 
     return Scaffold(
       body: SafeArea(
         bottom: false,
         child: Column(
           children: [
-            _buildSearchBar(),
-            _buildFilterAndToggle(traccarProvider),
-            Expanded(child: _buildBody(traccarProvider)),
+            _buildSearchBar(simpleMode),
+            // 篩選 chip 與里程量測在簡易模式收起來，搜尋框仍可找車。
+            if (!simpleMode) _buildFilterAndToggle(traccarProvider),
+            Expanded(child: _buildBody(traccarProvider, simpleMode)),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildBody(TraccarProvider provider) {
+  Widget _buildBody(TraccarProvider provider, bool simpleMode) {
     if (provider.isLoading && provider.devices.isEmpty) {
       return const _DeviceListSkeleton();
     }
@@ -218,13 +221,13 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
               itemBuilder: (context, index) {
                 final device = filteredDevices[index];
                 final position = provider.getPosition(device.id!);
-                return _buildDeviceCard(device, position, provider, now);
+                return _buildDeviceCard(device, position, provider, now, simpleMode);
               },
             ),
     );
   }
 
-  Widget _buildDeviceCard(api.Device device, api.Position? position, TraccarProvider provider, DateTime now) {
+  Widget _buildDeviceCard(api.Device device, api.Position? position, TraccarProvider provider, DateTime now, bool simpleMode) {
     final isFavorite = provider.isFavorite(device.id!);
     final theme = Theme.of(context);
     final status = resolveDeviceStatus(device, position, now);
@@ -282,14 +285,15 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
                                 style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, fontSize: 16),
                               ),
                             ),
-                            IconButton(
-                              visualDensity: VisualDensity.compact,
-                              tooltip: 'sharedFavorite'.tr,
-                              padding: const EdgeInsets.only(left: 8),
-                              constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
-                              icon: Icon(isFavorite ? CupertinoIcons.heart_fill : CupertinoIcons.heart, color: isFavorite ? theme.colorScheme.error : theme.colorScheme.outline, size: 20),
-                              onPressed: () => provider.toggleFavorite(device.id!),
-                            ),
+                            if (!simpleMode)
+                              IconButton(
+                                visualDensity: VisualDensity.compact,
+                                tooltip: 'sharedFavorite'.tr,
+                                padding: const EdgeInsets.only(left: 8),
+                                constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+                                icon: Icon(isFavorite ? CupertinoIcons.heart_fill : CupertinoIcons.heart, color: isFavorite ? theme.colorScheme.error : theme.colorScheme.outline, size: 20),
+                                onPressed: () => provider.toggleFavorite(device.id!),
+                              ),
                           ],
                         ),
                         Row(
@@ -346,6 +350,7 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
   /// painted over the map.
   Future<void> _showCardActions(api.Device device, api.Position? position) async {
     HapticFeedback.mediumImpact();
+    final bool simpleMode = context.read<SettingsProvider>().simpleMode;
     final _CardAction? action = await showModalBottomSheet<_CardAction>(
       context: context,
       builder: (sheetContext) => SafeArea(
@@ -354,8 +359,9 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             _cardAction(sheetContext, CupertinoIcons.map, 'actionNavigate'.tr, _CardAction.navigate),
-            _cardAction(sheetContext, CupertinoIcons.share, 'sharedShare'.tr, _CardAction.share),
-            _cardAction(sheetContext, CupertinoIcons.paperplane, 'commandTitle'.tr, _CardAction.command),
+            // 分享與下指令會改動外部狀態，簡易模式不提供。
+            if (!simpleMode) _cardAction(sheetContext, CupertinoIcons.share, 'sharedShare'.tr, _CardAction.share),
+            if (!simpleMode) _cardAction(sheetContext, CupertinoIcons.paperplane, 'commandTitle'.tr, _CardAction.command),
           ],
         ),
       ),
@@ -505,7 +511,7 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
     );
   }
 
-  Widget _buildSearchBar() {
+  Widget _buildSearchBar(bool simpleMode) {
     final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsetsDirectional.fromSTEB(16, 8, 16, 10),
@@ -527,49 +533,52 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
                 ),
               ),
             ),
-            IconButton(
-              onPressed: _toggleMileage,
-              tooltip: 'dashboardTodayDistance'.tr,
-              visualDensity: VisualDensity.compact,
-              constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
-              icon: _isLoadingMileage ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : Icon(_showMileage ? Icons.route : Icons.route_outlined, color: _showMileage ? theme.colorScheme.primary : null),
-            ),
-            if (_showMileage)
-              PopupMenuButton<int>(
+            // 里程量測、天數、通知在簡易模式收起來，只留下找車用的搜尋。
+            if (!simpleMode) ...[
+              IconButton(
+                onPressed: _toggleMileage,
                 tooltip: 'dashboardTodayDistance'.tr,
-                onSelected: _setMileageDays,
-                constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
-                icon: Icon(Icons.calendar_month_outlined, color: theme.colorScheme.primary),
-                itemBuilder: (_) => [
-                  PopupMenuItem(
-                    value: 1,
-                    child: Row(
-                      children: [
-                        Icon(Icons.check, size: 18, color: _mileageDays == 1 ? theme.colorScheme.primary : Colors.transparent),
-                        const SizedBox(width: 8),
-                        Text('dashboardTodayDistance'.tr),
-                      ],
-                    ),
-                  ),
-                  PopupMenuItem(
-                    value: 3,
-                    child: Row(
-                      children: [
-                        Icon(Icons.check, size: 18, color: _mileageDays == 3 ? theme.colorScheme.primary : Colors.transparent),
-                        const SizedBox(width: 8),
-                        Text('${'dashboardTodayDistance'.tr} (3 ${'sharedDays'.tr})'),
-                      ],
-                    ),
-                  ),
-                ],
+                visualDensity: VisualDensity.compact,
+                constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+                icon: _isLoadingMileage ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : Icon(_showMileage ? Icons.route : Icons.route_outlined, color: _showMileage ? theme.colorScheme.primary : null),
               ),
-            IconButton(
-              onPressed: () => Get.to(() => const NotificationsScreen()),
-              tooltip: 'sharedNotifications'.tr,
-              visualDensity: VisualDensity.compact,
-              constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
-              icon: const Icon(CupertinoIcons.bell, size: 22),
-            ),
+              if (_showMileage)
+                PopupMenuButton<int>(
+                  tooltip: 'dashboardTodayDistance'.tr,
+                  onSelected: _setMileageDays,
+                  constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+                  icon: Icon(Icons.calendar_month_outlined, color: theme.colorScheme.primary),
+                  itemBuilder: (_) => [
+                    PopupMenuItem(
+                      value: 1,
+                      child: Row(
+                        children: [
+                          Icon(Icons.check, size: 18, color: _mileageDays == 1 ? theme.colorScheme.primary : Colors.transparent),
+                          const SizedBox(width: 8),
+                          Text('dashboardTodayDistance'.tr),
+                        ],
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 3,
+                      child: Row(
+                        children: [
+                          Icon(Icons.check, size: 18, color: _mileageDays == 3 ? theme.colorScheme.primary : Colors.transparent),
+                          const SizedBox(width: 8),
+                          Text('${'dashboardTodayDistance'.tr} (3 ${'sharedDays'.tr})'),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              IconButton(
+                onPressed: () => Get.to(() => const NotificationsScreen()),
+                tooltip: 'sharedNotifications'.tr,
+                visualDensity: VisualDensity.compact,
+                constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+                icon: const Icon(CupertinoIcons.bell, size: 22),
+              ),
+            ],
           ],
         ),
       ),

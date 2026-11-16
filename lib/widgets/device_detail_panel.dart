@@ -16,6 +16,7 @@ import 'package:trabcdefg/screens/settings/add_device_screen.dart';
 import 'package:trabcdefg/services/feedback.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
 import 'package:trabcdefg/src/utils/glass_settings.dart';
+import 'package:trabcdefg/widgets/simple_mode.dart';
 
 class DeviceDetailPanel extends StatefulWidget {
   final api.Device device;
@@ -192,7 +193,22 @@ class _DeviceDetailPanelState extends State<DeviceDetailPanel> {
                 ),
 
                 // Action Buttons (Conditionally Visible)
-                if (_isExpanded) ...[const SizedBox(height: 16), _buildAppleActionButtons(context)],
+                // 簡易模式整條動作列不渲染，刪除設備按鈕因此看不到也按不到。
+                if (_isExpanded)
+                  AdvancedOnly(
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 16),
+                      child: _buildAppleActionButtons(context),
+                    ),
+                  ),
+                // 簡易模式只留一顆大顆的導航鍵，其餘動作列藏起來。
+                if (isSimpleMode(context)) ...[
+                  const SizedBox(height: 12),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: _buildSimpleNavigateButton(),
+                  ),
+                ],
               ],
             ),
       ),
@@ -325,6 +341,12 @@ class _DeviceDetailPanelState extends State<DeviceDetailPanel> {
   }
 
   Widget _buildHeaderActionIcons(BuildContext context) {
+    // 簡易模式只留重新整理；里程報表、我的最愛、展開動作列屬進階。
+    if (isSimpleMode(context)) {
+      return Row(
+        children: [_buildCircleIcon(context, CupertinoIcons.refresh, widget.onRefresh, semanticsLabel: 'sharedRefresh'.tr)],
+      );
+    }
     return Row(
       children: [
         _buildCircleIcon(context, Icons.route_rounded, () => _navigateToMileage(context), semanticsLabel: 'monthlyMileageTitle'.tr),
@@ -340,6 +362,21 @@ class _DeviceDetailPanelState extends State<DeviceDetailPanel> {
         const SizedBox(width: 8),
         _buildCircleIcon(context, _isExpanded ? CupertinoIcons.chevron_up : CupertinoIcons.chevron_down, _toggleExpanded, semanticsLabel: 'sharedMore'.tr),
       ],
+    );
+  }
+
+  Widget _buildSimpleNavigateButton() {
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton.icon(
+        onPressed: _navigateToGoogleMaps,
+        icon: const Icon(CupertinoIcons.location_north, size: 22),
+        label: Text('actionNavigate'.tr, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
+        style: ElevatedButton.styleFrom(
+          minimumSize: const Size.fromHeight(52),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        ),
+      ),
     );
   }
 

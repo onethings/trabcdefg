@@ -732,6 +732,8 @@ const Map<String, String> zhCN = {
   "unknownEvent": "未知事件",
   "settingsFontSize": "字体大小",
   "settingsMarkerSize": "地图图标大小",
+  "settingsSimpleMode": "简易模式",
+  "settingsSimpleModeHint": "只显示必要操作，并放大字体与地图图标；关闭后恢复原样。",
   "settingsNormal": "正常",
   "settingsLarge": "大",
   "settingsExtraLarge": "特大",

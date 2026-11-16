@@ -50,4 +50,13 @@ class SettingsDatabaseHelper {
     }
     return null;
   }
+
+  // The value column is REAL, so flags ride in as 1.0 and 0.0. Callers hand in
+  // a bool and never see this detail.
+  static Future<void> saveFlag(String key, bool value) => saveSetting(key, value ? 1.0 : 0.0);
+
+  static Future<bool?> getFlag(String key) async {
+    final value = await getSetting(key);
+    return value == null ? null : value != 0.0;
+  }
 }

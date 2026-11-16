@@ -699,6 +699,8 @@ const Map<String, String> ko = {
   "unknownEvent": "알 수 없는 이벤트",
   "settingsFontSize": "글자 크기",
   "settingsMarkerSize": "마커 크기",
+  "settingsSimpleMode": "간단 모드",
+  "settingsSimpleModeHint": "필수 조작만 표시하고 글자와 지도 아이콘을 크게 합니다. 끄면 원래대로 돌아갑니다.",
   "settingsNormal": "보통",
   "settingsLarge": "큰",
   "settingsExtraLarge": "아주 큰",

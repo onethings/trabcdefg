@@ -533,13 +533,33 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  Widget _settingsSwitchTile({required IconData icon, required String title, required String subtitle, required bool value, required ValueChanged<bool> onChanged}) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return SwitchListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 3),
+      secondary: Container(
+        width: 36,
+        height: 36,
+        decoration: BoxDecoration(color: colorScheme.primaryContainer, borderRadius: BorderRadius.circular(11)),
+        child: Icon(icon, size: 19, color: colorScheme.onPrimaryContainer),
+      ),
+      title: Text(title),
+      subtitle: Text(subtitle, style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant)),
+      value: value,
+      onChanged: onChanged,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final traccarProvider = context.read<TraccarProvider>();
+    final bool simpleMode = context.watch<SettingsProvider>().simpleMode;
     final colorScheme = Theme.of(context).colorScheme;
 
     // 每個區塊只要有任一標題符合搜尋字串就整區保留。
     final reportMatch = _matches('reportTitle'.tr);
+    final simpleMatch = _matches('settingsSimpleMode'.tr);
     final langMatch = _matches('loginLanguage'.tr) || _matches('settingsTheme'.tr) || _matches('settingsFontSize'.tr) || _matches('settingsMarkerSize'.tr);
     final userMatch = _matches('settingsUser'.tr) || _matches('sharedNotifications'.tr);
     final deviceMatch =
@@ -553,7 +573,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _matches('sharedSavedCommands'.tr) ||
         _matches('sharedInfoTitle'.tr) ||
         _matches('sharedEmulator'.tr);
-    final anyMatch = reportMatch || langMatch || userMatch || deviceMatch;
+    final anyMatch = reportMatch || simpleMatch || langMatch || userMatch || deviceMatch;
 
     return Scaffold(
       body: SafeArea(
@@ -617,7 +637,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 onChanged: (v) => setState(() => _settingsSearch = v.trim().toLowerCase()),
               ),
             ),
-            if (reportMatch)
+            if (simpleMatch)
+              _settingsSection(
+                title: 'settingsSimpleMode'.tr,
+                children: [
+                  _settingsSwitchTile(
+                    icon: Icons.accessibility_new,
+                    title: 'settingsSimpleMode'.tr,
+                    subtitle: 'settingsSimpleModeHint'.tr,
+                    value: simpleMode,
+                    onChanged: (value) => context.read<SettingsProvider>().setSimpleMode(value),
+                  ),
+                ],
+              ),
+            if (reportMatch && !simpleMode)
               _settingsSection(
                 title: 'reportTitle'.tr,
                 children: [
@@ -663,51 +696,54 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     title: 'deviceTitle'.tr,
                     onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const DevicesScreen())),
                   ),
-                  _settingsTile(
-                    icon: CupertinoIcons.location_solid,
-                    title: 'sharedGeofence'.tr,
-                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const GeofencesScreen())),
-                  ),
-                  _settingsTile(
-                    icon: CupertinoIcons.person_2,
-                    title: 'settingsGroups'.tr,
-                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const GroupsScreen())),
-                  ),
-                  _settingsTile(
-                    icon: CupertinoIcons.person,
-                    title: 'sharedDrivers'.tr,
-                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const DriversScreen())),
-                  ),
-                  _settingsTile(
-                    icon: CupertinoIcons.calendar_today,
-                    title: 'sharedCalendars'.tr,
-                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const CalendarsScreen())),
-                  ),
-                  _settingsTile(
-                    icon: Icons.calculate,
-                    title: 'sharedComputedAttributes'.tr,
-                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const ComputedAttributesScreen())),
-                  ),
-                  _settingsTile(
-                    icon: CupertinoIcons.wrench,
-                    title: 'sharedMaintenance'.tr,
-                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const MaintenanceScreen())),
-                  ),
-                  _settingsTile(
-                    icon: Icons.save,
-                    title: 'sharedSavedCommands'.tr,
-                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const SavedCommandsScreen())),
-                  ),
-                  _settingsTile(
-                    icon: CupertinoIcons.info_circle,
-                    title: 'sharedInfoTitle'.tr,
-                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const ServerInfoScreen())),
-                  ),
-                  _settingsTile(
-                    icon: Icons.developer_mode,
-                    title: 'sharedEmulator'.tr,
-                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const EmulatorScreen())),
-                  ),
+                  // 簡易模式只留裝置管理；圍欄、群組等管理入口屬進階功能。
+                  if (!simpleMode) ...[
+                    _settingsTile(
+                      icon: CupertinoIcons.location_solid,
+                      title: 'sharedGeofence'.tr,
+                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const GeofencesScreen())),
+                    ),
+                    _settingsTile(
+                      icon: CupertinoIcons.person_2,
+                      title: 'settingsGroups'.tr,
+                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const GroupsScreen())),
+                    ),
+                    _settingsTile(
+                      icon: CupertinoIcons.person,
+                      title: 'sharedDrivers'.tr,
+                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const DriversScreen())),
+                    ),
+                    _settingsTile(
+                      icon: CupertinoIcons.calendar_today,
+                      title: 'sharedCalendars'.tr,
+                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const CalendarsScreen())),
+                    ),
+                    _settingsTile(
+                      icon: Icons.calculate,
+                      title: 'sharedComputedAttributes'.tr,
+                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const ComputedAttributesScreen())),
+                    ),
+                    _settingsTile(
+                      icon: CupertinoIcons.wrench,
+                      title: 'sharedMaintenance'.tr,
+                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const MaintenanceScreen())),
+                    ),
+                    _settingsTile(
+                      icon: Icons.save,
+                      title: 'sharedSavedCommands'.tr,
+                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const SavedCommandsScreen())),
+                    ),
+                    _settingsTile(
+                      icon: CupertinoIcons.info_circle,
+                      title: 'sharedInfoTitle'.tr,
+                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const ServerInfoScreen())),
+                    ),
+                    _settingsTile(
+                      icon: Icons.developer_mode,
+                      title: 'sharedEmulator'.tr,
+                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const EmulatorScreen())),
+                    ),
+                  ],
                 ],
               ),
             if (_settingsSearch.isNotEmpty && !anyMatch)
@@ -764,12 +800,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                     ],
                                   ),
                                   // 多語言的檢查更新按鈕（譯文較長時自動換行，避免溢出）
-                                  TextButton.icon(
-                                    onPressed: () => _checkGitHubReleaseUpdate(manualCheck: true),
-                                    icon: const Icon(Icons.system_update, size: 16),
-                                    label: Text('checkUpdate'.tr, style: const TextStyle(fontSize: 12)),
-                                    style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), minimumSize: Size.zero, tapTargetSize: MaterialTapTargetSize.shrinkWrap),
-                                  ),
+                                  if (!simpleMode)
+                                    TextButton.icon(
+                                      onPressed: () => _checkGitHubReleaseUpdate(manualCheck: true),
+                                      icon: const Icon(Icons.system_update, size: 16),
+                                      label: Text('checkUpdate'.tr, style: const TextStyle(fontSize: 12)),
+                                      style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), minimumSize: Size.zero, tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                                    ),
                                 ],
                               ),
                             ),

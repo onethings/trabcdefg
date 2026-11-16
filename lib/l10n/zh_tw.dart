@@ -737,6 +737,8 @@ const Map<String, String> zhTw = {
   "unknownEvent": "未知事件",
   "settingsFontSize": "字型大小",
   "settingsMarkerSize": "地圖圖標大小",
+  "settingsSimpleMode": "簡易模式",
+  "settingsSimpleModeHint": "只顯示必要操作，並放大字級與地圖圖標；關閉後恢復原樣。",
   "settingsNormal": "正常",
   "settingsLarge": "大",
   "settingsExtraLarge": "特大",

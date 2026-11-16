@@ -28,10 +28,11 @@ import 'package:trabcdefg/src/utils/status_utils.dart';
 import 'package:trabcdefg/widgets/offline_address_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../services/map_navigation.dart';
-import '../services/marker_icon_service.dart';
-import '../widgets/device_detail_panel.dart';
-import '../widgets/state_views.dart';
+import 'package:trabcdefg/services/map_navigation.dart';
+import 'package:trabcdefg/services/marker_icon_service.dart';
+import 'package:trabcdefg/widgets/device_detail_panel.dart';
+import 'package:trabcdefg/widgets/simple_mode.dart';
+import 'package:trabcdefg/widgets/state_views.dart';
 import 'share_device_screen.dart';
 
 const double _kControlSize = 44;
@@ -101,6 +102,9 @@ class _MapScreenState extends State<MapScreen> {
   bool _myLocationEnabled = false;
   bool _centerOnUserWhenLocated = false;
   maplibre.LatLng? _userLocation;
+
+  /// 上次套用的圖標倍率，用來在倍率變更（含簡易模式切換）時立即重畫標記。
+  double? _lastMarkerScale;
 
   final TextEditingController _drawerSearchController = TextEditingController();
   String _drawerSearchQuery = '';
@@ -234,6 +238,17 @@ class _MapScreenState extends State<MapScreen> {
   void _closeDetailPanel() {
     if (!_isPanelOpen) return;
     _bottomSheetController?.close();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // 圖標倍率（含簡易模式套用的大圖標）變更時立即重畫，不必等下一包位置資料。
+    final double markerScale = context.read<SettingsProvider>().markerSizeScale;
+    if (_lastMarkerScale != null && _lastMarkerScale != markerScale) {
+      _scheduleMarkerUpdate(context.read<TraccarProvider>());
+    }
+    _lastMarkerScale = markerScale;
   }
 
   @override
@@ -1291,6 +1306,8 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   Widget _buildDeviceListDrawer(BuildContext context, TraccarProvider traccarProvider) {
+    // 排序選單只有在裝置多到需要排序時才有用，簡易模式收起來；搜尋保留。
+    final bool simpleMode = isSimpleMode(context);
     final String query = _drawerSearchQuery.trim().toLowerCase();
 
     final devices = traccarProvider.devices.where((device) {
@@ -1352,19 +1369,20 @@ class _MapScreenState extends State<MapScreen> {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  PopupMenuButton<_DrawerSortMode>(
-                    initialValue: _drawerSortMode,
-                    tooltip: 'sharedSortBy'.tr,
-                    onSelected: _setDrawerSortMode,
-                    itemBuilder: (context) => [
-                      for (final mode in _DrawerSortMode.values)
-                        PopupMenuItem<_DrawerSortMode>(
-                          value: mode,
-                          child: Row(children: [Icon(mode.icon, size: 18), const SizedBox(width: 12), Text(mode.labelKey.tr)]),
-                        ),
-                    ],
-                    child: SizedBox(width: 44, height: 44, child: Icon(_drawerSortMode.icon, color: Theme.of(context).colorScheme.onSurface)),
-                  ),
+                  if (!simpleMode)
+                    PopupMenuButton<_DrawerSortMode>(
+                      initialValue: _drawerSortMode,
+                      tooltip: 'sharedSortBy'.tr,
+                      onSelected: _setDrawerSortMode,
+                      itemBuilder: (context) => [
+                        for (final mode in _DrawerSortMode.values)
+                          PopupMenuItem<_DrawerSortMode>(
+                            value: mode,
+                            child: Row(children: [Icon(mode.icon, size: 18), const SizedBox(width: 12), Text(mode.labelKey.tr)]),
+                          ),
+                      ],
+                      child: SizedBox(width: 44, height: 44, child: Icon(_drawerSortMode.icon, color: Theme.of(context).colorScheme.onSurface)),
+                    ),
                 ],
               ),
             ),
@@ -1417,6 +1435,7 @@ class _MapScreenState extends State<MapScreen> {
   Widget build(BuildContext context) {
     final MapStyleProvider mapStyleProvider = context.watch<MapStyleProvider>();
     final TraccarProvider traccarProvider = context.read<TraccarProvider>();
+    final bool simpleMode = isSimpleMode(context);
     final int deviceCount = context.select<TraccarProvider, int>((provider) => provider.devices.length);
 
     if (traccarProvider.isLoading && traccarProvider.devices.isEmpty) {
@@ -1546,14 +1565,19 @@ class _MapScreenState extends State<MapScreen> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      _GlassIconButton(icon: mapStyleProvider.isSatelliteMode ? Icons.satellite_alt : Icons.map, label: 'mapLayerToggle'.tr, isActive: mapStyleProvider.isSatelliteMode, onTap: () => _toggleMapType(mapStyleProvider)),
-                      const _GlassDivider(),
-                      _GlassIconButton(icon: Icons.explore_rounded, label: 'mapCompass'.tr, onTap: () => _animateCamera(maplibre.CameraUpdate.bearingTo(0))),
-                      const _GlassDivider(),
+                      // 圖層、指北針、自動縮放屬進階操作，簡易模式收起來。
+                      if (!simpleMode) ...[
+                        _GlassIconButton(icon: mapStyleProvider.isSatelliteMode ? Icons.satellite_alt : Icons.map, label: 'mapLayerToggle'.tr, isActive: mapStyleProvider.isSatelliteMode, onTap: () => _toggleMapType(mapStyleProvider)),
+                        const _GlassDivider(),
+                        _GlassIconButton(icon: Icons.explore_rounded, label: 'mapCompass'.tr, onTap: () => _animateCamera(maplibre.CameraUpdate.bearingTo(0))),
+                        const _GlassDivider(),
+                      ],
                       _GlassIconButton(icon: _isFollowingDevice ? Icons.my_location_rounded : Icons.location_searching_rounded, label: 'mapFollowDevice'.tr, isActive: _isFollowingDevice, haptic: true, onTap: _toggleFollowCurrentDevice),
                       const _GlassDivider(),
-                      _GlassIconButton(icon: Icons.zoom_out_map_rounded, label: 'mapFitAll'.tr, onTap: () => _zoomToFitAll(context.read<TraccarProvider>())),
-                      _GlassDivider(),
+                      if (!simpleMode) ...[
+                        _GlassIconButton(icon: Icons.zoom_out_map_rounded, label: 'mapFitAll'.tr, onTap: () => _zoomToFitAll(context.read<TraccarProvider>())),
+                        _GlassDivider(),
+                      ],
                       _GlassIconButton(icon: CupertinoIcons.list_bullet, label: 'deviceTitle'.tr, onTap: () => _showDeviceAccessSheet(context.read<TraccarProvider>())),
                     ],
                   ),

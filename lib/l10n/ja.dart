@@ -699,6 +699,8 @@ const Map<String, String> ja = {
   "unknownEvent": "不明なイベント",
   "settingsFontSize": "フォントサイズ",
   "settingsMarkerSize": "マーカーサイズ",
+  "settingsSimpleMode": "シンプルモード",
+  "settingsSimpleModeHint": "必要な操作だけを表示し、文字とマップアイコンを拡大します。オフにすると元に戻ります。",
   "settingsNormal": "標準",
   "settingsLarge": "大",
   "settingsExtraLarge": "特大",

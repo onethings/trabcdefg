@@ -713,6 +713,8 @@ const Map<String, String> my = {
   "unknownEvent": "မသိရသေးသော ဖြစ်ရပ်",
   "settingsFontSize": "စာသား အရွယ်အစား",
   "settingsMarkerSize": "မြေပုံ သင်္ကေတ အရွယ်အစား",
+  "settingsSimpleMode": "ရိုးရှင်းသော မုဒ်",
+  "settingsSimpleModeHint": "လိုအပ်သော ခလုတ်များကိုသာ ပြပြီး စာသားနှင့် မြေပုံသင်္ကေတများကို ကြီးမားစေပါသည်။ ပိတ်လျှင် မူလအတိုင်း ပြန်ပြသည်။",
   "settingsNormal": "သာမန်",
   "settingsLarge": "ကြီး",
   "settingsExtraLarge": "အလွန်ကြီး",

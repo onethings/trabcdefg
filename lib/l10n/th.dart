@@ -699,6 +699,8 @@ const Map<String, String> th = {
   "unknownEvent": "เหตุการณ์ไม่ทราบสาเหตุ",
   "settingsFontSize": "ขนาดตัวอักษร",
   "settingsMarkerSize": "ขนาดเครื่องหมาย",
+  "settingsSimpleMode": "โหมดง่าย",
+  "settingsSimpleModeHint": "แสดงเฉพาะปุ่มที่จำเป็นและขยายตัวอักษรและไอคอนแผนที่ ปิดเพื่อคืนค่าเดิม",
   "settingsNormal": "ปกติ",
   "settingsLarge": "ใหญ่",
   "settingsExtraLarge": "ใหญ่มาก",

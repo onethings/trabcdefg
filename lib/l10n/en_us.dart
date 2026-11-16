@@ -742,6 +742,8 @@ const Map<String, String> enUs = {
   "unknownEvent": "Unknown Event",
   "settingsFontSize": "Font Size",
   "settingsMarkerSize": "Marker Size",
+  "settingsSimpleMode": "Simple Mode",
+  "settingsSimpleModeHint": "Shows only the essential controls and enlarges the text and map icons. Turn it off to restore everything.",
   "settingsNormal": "Normal",
   "settingsLarge": "Large",
   "settingsExtraLarge": "Extra Large",
