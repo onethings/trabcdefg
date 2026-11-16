@@ -175,13 +175,13 @@ class _DeviceDetailPanelState extends State<DeviceDetailPanel> {
                 SizedBox(height: sectionGap),
 
                 // Status Grid：資料驅動 —— 有資料的項目才顯示，沒資料的直接隱藏。
-                // 簡易模式改成每列 2 項並允許 2 行，字放大後數值與標籤不會被截掉。
+                // 一律每列 3 項把格子填滿；簡易模式字大，數值與標籤允許 2 行不截字。
                 Padding(
                   padding: EdgeInsets.symmetric(horizontal: sidePadding),
                   child: Container(
                     padding: EdgeInsets.all(containerPadding),
                     decoration: BoxDecoration(color: (isDark ? Colors.white : Colors.black).withValues(alpha: 0.05), borderRadius: BorderRadius.circular(16)),
-                    child: Column(mainAxisSize: MainAxisSize.min, children: _buildStatusRows(context, columns: simpleMode ? 2 : 3, maxLines: simpleMode ? 2 : 1)),
+                    child: Column(mainAxisSize: MainAxisSize.min, children: _buildStatusRows(context, columns: 3, maxLines: simpleMode ? 2 : 1)),
                   ),
                 ),
 
@@ -383,29 +383,36 @@ class _DeviceDetailPanelState extends State<DeviceDetailPanel> {
   }
 
   Widget _buildSimpleActionButtons(BuildContext context) {
+    // 標文字用 FittedBox(scaleDown)：兩顆按鍵平分寬度、字級 1.4 倍，
+    // 長語系（Navigate 等）也不會斷字換行，只會等比縮小到剛好放得下。
+    Widget label(String key) => FittedBox(
+      fit: BoxFit.scaleDown,
+      child: Text(key.tr, maxLines: 1, softWrap: false, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
+    );
+
+    final ButtonStyle style = ElevatedButton.styleFrom(
+      minimumSize: const Size.fromHeight(52),
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+    );
+
     return Row(
       children: [
         Expanded(
           child: ElevatedButton.icon(
             onPressed: _navigateToGoogleMaps,
-            icon: const Icon(CupertinoIcons.location_north, size: 22),
-            label: Text('actionNavigate'.tr, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
-            style: ElevatedButton.styleFrom(
-              minimumSize: const Size.fromHeight(52),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            ),
+            icon: const Icon(CupertinoIcons.location_north, size: 20),
+            label: label('actionNavigate'),
+            style: style,
           ),
         ),
         const SizedBox(width: 12),
         Expanded(
           child: ElevatedButton.icon(
             onPressed: () => _navigateToHistoryRoute(context),
-            icon: const Icon(CupertinoIcons.play_circle_fill, size: 22),
-            label: Text('reportReplay'.tr, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
-            style: ElevatedButton.styleFrom(
-              minimumSize: const Size.fromHeight(52),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            ),
+            icon: const Icon(CupertinoIcons.play_circle_fill, size: 20),
+            label: label('reportReplay'),
+            style: style,
           ),
         ),
       ],

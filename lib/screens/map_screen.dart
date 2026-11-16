@@ -707,15 +707,6 @@ class _MapScreenState extends State<MapScreen> {
       final previousState = _markerRenderStates[deviceId];
       final bool iconChanged =
           previousState == null || previousState.iconImage != baseIconKey || previousState.course != course || previousState.iconSize != iconSize || previousState.latitude != latLng.latitude || previousState.longitude != latLng.longitude;
-      // 圖示會隨 course 旋轉，label 要放到旋轉後外框之外（貼圖半對角線），
-      // 否則 128px（簡易模式 256px）的車輛圖示會蓋住車牌。
-      final double labelOffsetY = 32.0 * iconSize * 0.7071 + 4;
-      final bool labelChanged =
-          previousState == null ||
-          previousState.labelImage != customLabelId ||
-          previousState.iconSize != iconSize ||
-          previousState.latitude != latLng.latitude ||
-          previousState.longitude != latLng.longitude;
 
       if (_deviceSymbols[deviceId] == null || previousState?.iconImage != baseIconKey) {
         await _iconService.ensureIconLoaded(controller, baseIconKey);
@@ -724,6 +715,17 @@ class _MapScreenState extends State<MapScreen> {
         await _iconService.ensureLabelIconLoaded(controller, plate, customLabelId, isSelected: isSelected);
       }
       if (!mounted || !identical(_mapController, controller) || !_isStyleLoaded) return;
+
+      // 車牌貼在「旋轉後剪影」下方 4px：量的是貼圖實際輪廓，
+      // 正常模式與簡易模式都不會擋住車牌，也不會隔出一大截。
+      final double labelOffsetY = _iconService.iconBottomExtent(baseIconKey, course) * iconSize + 4;
+      final bool labelChanged =
+          previousState == null ||
+          previousState.labelImage != customLabelId ||
+          previousState.iconSize != iconSize ||
+          (previousState.labelOffsetY - labelOffsetY).abs() > 0.5 ||
+          previousState.latitude != latLng.latitude ||
+          previousState.longitude != latLng.longitude;
 
       final deviceData = {'deviceId': deviceId.toString()};
       final maplibre.SymbolOptions iconOptions = maplibre.SymbolOptions(geometry: latLng, iconImage: baseIconKey, iconRotate: course, iconSize: iconSize, iconAnchor: 'center', zIndex: 10);
@@ -748,7 +750,7 @@ class _MapScreenState extends State<MapScreen> {
         await controller.updateSymbol(labelSymbol, labelOptions);
       }
 
-      _markerRenderStates[deviceId] = _MarkerRenderState(latitude: latLng.latitude, longitude: latLng.longitude, course: course, iconSize: iconSize, iconImage: baseIconKey, labelImage: customLabelId);
+      _markerRenderStates[deviceId] = _MarkerRenderState(latitude: latLng.latitude, longitude: latLng.longitude, course: course, iconSize: iconSize, iconImage: baseIconKey, labelImage: customLabelId, labelOffsetY: labelOffsetY);
     }
 
     if (pendingIcons.isNotEmpty) {
@@ -1673,8 +1675,9 @@ class _MarkerRenderState {
   final double iconSize;
   final String iconImage;
   final String labelImage;
+  final double labelOffsetY;
 
-  const _MarkerRenderState({required this.latitude, required this.longitude, required this.course, required this.iconSize, required this.iconImage, required this.labelImage});
+  const _MarkerRenderState({required this.latitude, required this.longitude, required this.course, required this.iconSize, required this.iconImage, required this.labelImage, required this.labelOffsetY});
 }
 
 class _GlassSurface extends StatelessWidget {

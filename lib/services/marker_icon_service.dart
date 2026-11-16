@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -10,7 +11,26 @@ class MarkerIconService {
 
   final Set<String> loadedIcons;
 
+  /// 各圖示的剪影凸包（相對圖示中心、貼圖像素座標，y 向下）。
+  /// 車牌靠它貼在剪影下方，不會被圖示擋住，也不會離太遠。
+  final Map<String, List<Offset>> _outlineHulls = {};
+
   MarkerIconService({required this.loadedIcons});
+
+  /// 車輛剪影在指定航向（度，順時針）下，相對圖示中心向下的最大延伸（貼圖像素）。
+  double iconBottomExtent(String iconKey, double courseDegrees) {
+    final List<Offset>? hull = _outlineHulls[iconKey];
+    if (hull == null || hull.isEmpty) return 16.0;
+    final double a = courseDegrees * math.pi / 180.0;
+    final double sinA = math.sin(a);
+    final double cosA = math.cos(a);
+    double maxBottom = 0;
+    for (final Offset p in hull) {
+      final double y = p.dx * sinA + p.dy * cosA;
+      if (y > maxBottom) maxBottom = y;
+    }
+    return maxBottom;
+  }
 
   Future<void> _ensureIconLoadedInternal(
     maplibre.MapLibreMapController? mapController,
@@ -25,6 +45,9 @@ class MarkerIconService {
 
       await mapController.addImage(iconKey, list);
       loadedIcons.add(iconKey);
+      if (!_outlineHulls.containsKey(iconKey)) {
+        _outlineHulls[iconKey] = await _computeOutlineHull(list);
+      }
     } catch (e) {
       debugPrint("❌ Failed to load icon '$iconKey': $e");
       if (iconKey != 'marker_default_unknown') {
@@ -161,5 +184,69 @@ class MarkerIconService {
     // 但新的 MapScreen 應該改用 ensureIconLoaded + ensureLabelIconLoaded
     await ensureIconLoaded(mapController, baseIconKey);
     await ensureLabelIconLoaded(mapController, plate, customIconId);
+  }
+
+  /// 解碼貼圖、取不透明像素的凸包（座標相對圖片中心，貼圖像素、y 向下）。
+  /// 車牌位置靠這份輪廓算剪影下緣，不需要人工維護常數。
+  Future<List<Offset>> _computeOutlineHull(Uint8List pngBytes) async {
+    ui.Codec? codec;
+    ui.Image? image;
+    try {
+      codec = await ui.instantiateImageCodec(pngBytes);
+      final ui.FrameInfo frame = await codec.getNextFrame();
+      image = frame.image;
+      final ByteData? data = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+      if (data == null) return const <Offset>[];
+
+      final int width = image.width;
+      final int height = image.height;
+      final double centerX = width / 2.0;
+      final double centerY = height / 2.0;
+      final List<Offset> points = <Offset>[];
+      for (int y = 0; y < height; y++) {
+        final int rowOffset = y * width * 4;
+        for (int x = 0; x < width; x++) {
+          if (data.getUint8(rowOffset + x * 4 + 3) > 16) {
+            points.add(Offset(x + 0.5 - centerX, y + 0.5 - centerY));
+          }
+        }
+      }
+      return _convexHull(points);
+    } catch (e) {
+      debugPrint('❌ Failed to measure icon outline: $e');
+      return const <Offset>[];
+    } finally {
+      image?.dispose();
+      codec?.dispose();
+    }
+  }
+
+  /// Andrew 的單調鏈演算法。
+  static List<Offset> _convexHull(List<Offset> points) {
+    if (points.length <= 3) return points;
+    final List<Offset> sorted = List<Offset>.of(points)
+      ..sort((Offset a, Offset b) => a.dx == b.dx ? a.dy.compareTo(b.dy) : a.dx.compareTo(b.dx));
+
+    double cross(Offset o, Offset a, Offset b) => (a.dx - o.dx) * (b.dy - o.dy) - (a.dy - o.dy) * (b.dx - o.dx);
+
+    final List<Offset> lower = <Offset>[];
+    for (final Offset p in sorted) {
+      while (lower.length >= 2 && cross(lower[lower.length - 2], lower.last, p) <= 0) {
+        lower.removeLast();
+      }
+      lower.add(p);
+    }
+
+    final List<Offset> upper = <Offset>[];
+    for (final Offset p in sorted.reversed) {
+      while (upper.length >= 2 && cross(upper[upper.length - 2], upper.last, p) <= 0) {
+        upper.removeLast();
+      }
+      upper.add(p);
+    }
+
+    lower.removeLast();
+    upper.removeLast();
+    return <Offset>[...lower, ...upper];
   }
 }
