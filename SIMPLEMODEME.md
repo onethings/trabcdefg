@@ -119,7 +119,7 @@
 - 報表全家（`lib/screens/reports/`）
 - 指令頁（`lib/screens/command_screen.dart`）
 - 裝置詳細頁（`lib/screens/device_details_screen.dart`）
-- 月里程與軌跡（`lib/screens/monthly_mileage_screen.dart`、`lib/screens/history_route_screen.dart`）
+- 月里程與軌跡（`lib/screens/monthly_mileage_screen.dart`、`lib/screens/history_route_screen.dart`）。例外：軌跡回放頁頂部的車牌日期 pill 已處理，簡易模式下改為上下兩行（車牌在上、日期在下），車牌用滿可用寬度完整顯示，不再被 ellipsis 截掉。
 - 分享裝置（`lib/screens/share_device_screen.dart`）
 - 登入、註冊、忘記密碼（前置流程，與是否登入後的介面無關）
 

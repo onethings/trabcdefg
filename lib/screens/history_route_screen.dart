@@ -27,6 +27,7 @@ import 'package:table_calendar/table_calendar.dart';
 import 'package:trabcdefg/models/report_summary_hive.dart';
 import 'package:trabcdefg/models/route_positions_hive.dart';
 import 'package:trabcdefg/providers/map_style_provider.dart';
+import 'package:trabcdefg/providers/settings_provider.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
 import 'package:trabcdefg/screens/reports/chart_report_screen.dart';
 import 'package:trabcdefg/screens/reports/stops_report_screen.dart';
@@ -1833,6 +1834,59 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
   Widget _buildDeviceDatePill() {
     final theme = Theme.of(context);
     final String dateLabel = DateFormat('yyyy/MM/dd').format(_historyFrom ?? DateTime.now());
+    // 簡易模式字級 1.4 倍：車牌與日期改成上下兩行，車牌用滿可用寬度完整顯示。
+    final bool simpleMode = context.watch<SettingsProvider>().simpleMode;
+
+    final TextStyle nameStyle = TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: theme.colorScheme.onSurface);
+    final TextStyle dateStyle = TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: theme.colorScheme.onSurface);
+
+    final Widget pillContent = simpleMode
+        ? Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.directions_car_filled_rounded, size: 16, color: theme.colorScheme.primary),
+                  const SizedBox(width: 6),
+                  Flexible(child: Text(_selectedDeviceName ?? '--', maxLines: 2, softWrap: true, overflow: TextOverflow.ellipsis, style: nameStyle)),
+                ],
+              ),
+              const SizedBox(height: 2),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(dateLabel, style: dateStyle),
+                  const SizedBox(width: 6),
+                  Icon(Icons.calendar_month_rounded, size: 15, color: theme.colorScheme.onSurfaceVariant),
+                ],
+              ),
+            ],
+          )
+        : Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.directions_car_filled_rounded, size: 16, color: theme.colorScheme.primary),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  _selectedDeviceName ?? '--',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: nameStyle,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text('·', style: TextStyle(fontSize: 13, color: theme.colorScheme.onSurfaceVariant)),
+              const SizedBox(width: 8),
+              Text(
+                dateLabel,
+                style: dateStyle,
+              ),
+              const SizedBox(width: 6),
+              Icon(Icons.calendar_month_rounded, size: 15, color: theme.colorScheme.onSurfaceVariant),
+            ],
+          );
 
     return Material(
       color: theme.colorScheme.surface.withValues(alpha: 0.92),
@@ -1843,30 +1897,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
         onTap: _showCalendarDialog,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.directions_car_filled_rounded, size: 16, color: theme.colorScheme.primary),
-              const SizedBox(width: 6),
-              Flexible(
-                child: Text(
-                  _selectedDeviceName ?? '--',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: theme.colorScheme.onSurface),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Text('·', style: TextStyle(fontSize: 13, color: theme.colorScheme.onSurfaceVariant)),
-              const SizedBox(width: 8),
-              Text(
-                dateLabel,
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: theme.colorScheme.onSurface),
-              ),
-              const SizedBox(width: 6),
-              Icon(Icons.calendar_month_rounded, size: 15, color: theme.colorScheme.onSurfaceVariant),
-            ],
-          ),
+          child: pillContent,
         ),
       ),
     );
