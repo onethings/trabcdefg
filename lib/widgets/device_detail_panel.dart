@@ -19,6 +19,13 @@ import 'package:trabcdefg/src/generated_api/api.dart' as api;
 import 'package:trabcdefg/src/utils/glass_settings.dart';
 import 'package:trabcdefg/widgets/simple_mode.dart';
 
+/// 面板導覽要照亮的區塊。由呼叫端建立並傳入，面板本身不認識導覽。
+class DevicePanelHelperKeys {
+  final GlobalKey header = GlobalKey();
+  final GlobalKey status = GlobalKey();
+  final GlobalKey address = GlobalKey();
+}
+
 class DeviceDetailPanel extends StatefulWidget {
   final api.Device device;
   final api.Position position;
@@ -28,7 +35,10 @@ class DeviceDetailPanel extends StatefulWidget {
   final VoidCallback onDeletePressed;
   final VoidCallback onRefresh;
 
-  const DeviceDetailPanel({super.key, required this.device, required this.position, required this.address, required this.formattedDate, required this.onMoreOptionsPressed, required this.onDeletePressed, required this.onRefresh});
+  /// 有給才掛座標；其他呼叫端不必理會。
+  final DevicePanelHelperKeys? helperKeys;
+
+  const DeviceDetailPanel({super.key, required this.device, required this.position, required this.address, required this.formattedDate, required this.onMoreOptionsPressed, required this.onDeletePressed, required this.onRefresh, this.helperKeys});
 
   @override
   State<DeviceDetailPanel> createState() => _DeviceDetailPanelState();
@@ -150,25 +160,28 @@ class _DeviceDetailPanelState extends State<DeviceDetailPanel> {
                 ],
 
                 // Header (Name, Info, Status Tags)
-                Padding(
-                  padding: EdgeInsets.symmetric(horizontal: sidePadding),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              widget.device.name ?? 'deviceUnknown'.tr,
-                              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, letterSpacing: -0.5, color: Theme.of(context).colorScheme.onSurface),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(widget.formattedDate, style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant)),
-                          ],
+                _maybeKeyed(
+                  widget.helperKeys?.header,
+                  Padding(
+                    padding: EdgeInsets.symmetric(horizontal: sidePadding),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                widget.device.name ?? 'deviceUnknown'.tr,
+                                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, letterSpacing: -0.5, color: Theme.of(context).colorScheme.onSurface),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(widget.formattedDate, style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                            ],
+                          ),
                         ),
-                      ),
-                      _buildHeaderActionIcons(context),
-                    ],
+                        _buildHeaderActionIcons(context),
+                      ],
+                    ),
                   ),
                 ),
 
@@ -176,33 +189,39 @@ class _DeviceDetailPanelState extends State<DeviceDetailPanel> {
 
                 // Status Grid：資料驅動 —— 有資料的項目才顯示，沒資料的直接隱藏。
                 // 一律每列 3 項把格子填滿；簡易模式字大，數值與標籤允許 2 行不截字。
-                Padding(
-                  padding: EdgeInsets.symmetric(horizontal: sidePadding),
-                  child: Container(
-                    padding: EdgeInsets.all(containerPadding),
-                    decoration: BoxDecoration(color: (isDark ? Colors.white : Colors.black).withValues(alpha: 0.05), borderRadius: BorderRadius.circular(16)),
-                    child: Column(mainAxisSize: MainAxisSize.min, children: _buildStatusRows(context, columns: 3, maxLines: simpleMode ? 2 : 1)),
+                _maybeKeyed(
+                  widget.helperKeys?.status,
+                  Padding(
+                    padding: EdgeInsets.symmetric(horizontal: sidePadding),
+                    child: Container(
+                      padding: EdgeInsets.all(containerPadding),
+                      decoration: BoxDecoration(color: (isDark ? Colors.white : Colors.black).withValues(alpha: 0.05), borderRadius: BorderRadius.circular(16)),
+                      child: Column(mainAxisSize: MainAxisSize.min, children: _buildStatusRows(context, columns: 3, maxLines: simpleMode ? 2 : 1)),
+                    ),
                   ),
                 ),
 
                 SizedBox(height: sectionGap),
 
                 // Address Row
-                Padding(
-                  padding: EdgeInsets.symmetric(horizontal: sidePadding),
-                  child: Row(
-                    children: [
-                      Icon(CupertinoIcons.location_solid, size: 14, color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.7)),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text(
-                          widget.address,
-                          style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                          maxLines: simpleMode ? 3 : null,
-                          overflow: TextOverflow.ellipsis,
+                _maybeKeyed(
+                  widget.helperKeys?.address,
+                  Padding(
+                    padding: EdgeInsets.symmetric(horizontal: sidePadding),
+                    child: Row(
+                      children: [
+                        Icon(CupertinoIcons.location_solid, size: 14, color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.7)),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            widget.address,
+                            style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                            maxLines: simpleMode ? 3 : null,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
 
@@ -230,6 +249,9 @@ class _DeviceDetailPanelState extends State<DeviceDetailPanel> {
       ),
     );
   }
+
+  /// 導覽座標由呼叫端決定要不要掛；沒給就原樣回傳，面板不多長一層。
+  Widget _maybeKeyed(Key? key, Widget child) => key == null ? child : KeyedSubtree(key: key, child: child);
 
   Widget _buildStatusDivider(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;

@@ -25,12 +25,14 @@ import 'package:trabcdefg/src/utils/motion.dart';
 import 'package:trabcdefg/src/utils/glass_settings.dart';
 import 'package:trabcdefg/src/utils/position_coordinates.dart';
 import 'package:trabcdefg/src/utils/status_utils.dart';
+import 'package:trabcdefg/storage/map_view_memory.dart';
 import 'package:trabcdefg/widgets/offline_address_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'package:trabcdefg/services/map_navigation.dart';
 import 'package:trabcdefg/services/marker_icon_service.dart';
 import 'package:trabcdefg/widgets/device_detail_panel.dart';
+import 'package:trabcdefg/widgets/first_run_helper.dart';
 import 'package:trabcdefg/widgets/simple_mode.dart';
 import 'package:trabcdefg/widgets/state_views.dart';
 
@@ -60,6 +62,23 @@ class _MapScreenState extends State<MapScreen> {
   maplibre.CameraPosition? _lastCameraPosition;
   bool _isStyleLoaded = false;
   bool _hasInitialZoomed = false;
+
+  /// 使用者自己動過鏡頭（手勢）才為 true；程式動的 fit-all、跟車、開場還原都不算。
+  bool _userOwnsZoom = false;
+
+  /// 地圖頁導覽：第一次進來才自動播，之後用右上角的問號重播。
+  static const String _kMapHelperSeenKey = 'map_helper_seen';
+  static const String _kPanelHelperSeenKey = 'panel_helper_seen';
+  final GlobalKey _helperFollowKey = GlobalKey();
+  final GlobalKey _helperFitAllKey = GlobalKey();
+  final GlobalKey _helperListKey = GlobalKey();
+  final GlobalKey _helperSwitcherKey = GlobalKey();
+  final GlobalKey _helperZoomKey = GlobalKey();
+  bool _mapHelperAttempted = false;
+  bool _panelHelperAttempted = false;
+
+  /// 導覽是一次一個 modal route；這個旗標防止同時開兩份。
+  bool _guideOpen = false;
   final Set<String> _loadedIcons = {};
   final Map<int, maplibre.Symbol> _deviceSymbols = {};
   final Map<int, maplibre.Symbol> _labelSymbols = {};
@@ -107,23 +126,9 @@ class _MapScreenState extends State<MapScreen> {
   /// 上次套用的圖標倍率，用來在倍率變更（含簡易模式切換）時立即重畫標記。
   double? _lastMarkerScale;
 
-  final TextEditingController _drawerSearchController = TextEditingController();
-  String _drawerSearchQuery = '';
-
-  static const String _kDrawerSortModeKey = 'drawer_device_sort_mode';
-  _DrawerSortMode _drawerSortMode = _DrawerSortMode.favorite;
-
   @override
   void initState() {
     super.initState();
-
-    _drawerSearchController.addListener(() {
-      final String query = _drawerSearchController.text;
-      if (query == _drawerSearchQuery) return;
-      _safeSetState(() => _drawerSearchQuery = query);
-    });
-
-    _loadDrawerSortMode();
 
     _iconService = MarkerIconService(loadedIcons: _loadedIcons);
     // Not awaited: the map paints first, and the 20 MB address database copies
@@ -197,7 +202,8 @@ class _MapScreenState extends State<MapScreen> {
 
   Future<void> _loadLastSelectedDevice() async {
     final prefs = await SharedPreferences.getInstance();
-    final lastDeviceId = prefs.getInt('selectedDeviceId');
+    // 地圖只認自己的記憶；`selectedDeviceId` 是全 App 共用的，報告頁也會改它。
+    final int? lastDeviceId = MapViewMemory.read(prefs).deviceId ?? prefs.getInt('selectedDeviceId');
 
     if (lastDeviceId != null && mounted) {
       final provider = context.read<TraccarProvider>();
@@ -261,7 +267,6 @@ class _MapScreenState extends State<MapScreen> {
     _trailPushTimer?.cancel();
 
     _httpClient.close();
-    _drawerSearchController.dispose();
     _panelOpenNotifier.dispose();
     _selectedDeviceNotifier.dispose();
     _selectedPositionNotifier.dispose();
@@ -298,21 +303,130 @@ class _MapScreenState extends State<MapScreen> {
     _maybeConsumePendingFocus();
 
     if (!_hasInitialZoomed) {
+      // 開場只還原一次：認「上次那台車 + 當時的 zoom」，再定位到該車現在的位置。
+      // 位置永遠即時查，不存檔；存下來的只有「誰」和「多大」。
       final prefs = await SharedPreferences.getInstance();
-      final lastDeviceId = prefs.getInt('selectedDeviceId');
+      final memory = MapViewMemory.read(prefs);
+      // 舊版沒有 MapViewMemory，退回它當年用的 key，老用戶不會被清空。
+      final int? lastDeviceId = memory.deviceId ?? prefs.getInt('selectedDeviceId');
+      final double? savedZoom = memory.zoom ?? prefs.getDouble('map_zoom_level');
 
-      if (lastDeviceId != null) {
-        final device = traccarProvider.devices.firstWhereOrNull((d) => d.id == lastDeviceId);
-        if (device != null) {
-          _onDeviceSelected(device, follow: false);
-        } else {
-          _zoomToFitAll(traccarProvider, showFeedback: false);
-        }
-      } else {
+      final api.Device? lastDevice = lastDeviceId == null ? null : await _findDevice(lastDeviceId, traccarProvider);
+      if (lastDevice == null) {
         _zoomToFitAll(traccarProvider, showFeedback: false);
+      } else {
+        _userOwnsZoom = savedZoom != null;
+        await _onDeviceSelected(lastDevice, follow: false, zoomOverride: savedZoom);
       }
       _hasInitialZoomed = true;
     }
+
+    unawaited(_maybeShowMapHelper());
+  }
+
+  /// 上次那台車可能在裝置清單抵達前就查了；有界地等，等不到才放手。
+  Future<api.Device?> _findDevice(int deviceId, TraccarProvider provider) async {
+    for (int attempt = 0; attempt < 10; attempt++) {
+      final api.Device? device = provider.devices.firstWhereOrNull((d) => d.id == deviceId);
+      if (device != null) return device;
+      // 清單已有內容卻沒有這台車，代表車被刪了，不必再等。
+      if (provider.devices.isNotEmpty || !mounted) return null;
+      await Future.delayed(const Duration(milliseconds: 200));
+    }
+    return null;
+  }
+
+  /// 記住「上次看的視角」。只在使用者自己動過鏡頭、或換車之後才寫：
+  /// fit-all、跟車動畫與開場還原都不該改掉使用者的選擇。
+  void _scheduleViewMemorySave() {
+    _zoomDebounce?.cancel();
+    _zoomDebounce = Timer(const Duration(milliseconds: 300), _saveViewMemory);
+  }
+
+  Future<void> _saveViewMemory() async {
+    final int? deviceId = _currentDevice?.id;
+    final double? zoom = _mapController?.cameraPosition?.zoom ?? _lastCameraPosition?.zoom;
+    if (deviceId == null || zoom == null) return;
+    final prefs = await SharedPreferences.getInstance();
+    await MapViewMemory.record(prefs, deviceId: deviceId, zoom: zoom);
+  }
+
+  /// 第一次進到地圖頁時自動播一次；看過就記在 prefs，跳過也算看過。
+  Future<void> _maybeShowMapHelper() async {
+    if (!mounted || _mapHelperAttempted) return;
+    _mapHelperAttempted = true;
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted || (prefs.getBool(_kMapHelperSeenKey) ?? false)) return;
+    // 一台車都沒有時沒東西可導覽，等下次進地圖頁再說。
+    if (context.read<TraccarProvider>().devices.isEmpty) {
+      _mapHelperAttempted = false;
+      return;
+    }
+    await _presentGuide(_mapHelperSteps(context), _kMapHelperSeenKey);
+  }
+
+  void _startMapHelper() {
+    if (!mounted) return;
+    unawaited(_presentGuide(_mapHelperSteps(context), _kMapHelperSeenKey));
+  }
+
+  /// 第一次點開車輛詳情面板時，介紹面板裡的東西。
+  Future<void> _maybeShowPanelHelper(DevicePanelHelperKeys keys) async {
+    if (!mounted || _panelHelperAttempted) return;
+    _panelHelperAttempted = true;
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted || (prefs.getBool(_kPanelHelperSeenKey) ?? false)) return;
+    // 等底部面板滑上來，座標才量得準。
+    await Future.delayed(const Duration(milliseconds: 420));
+    if (!mounted) return;
+    await _presentGuide(<FirstRunHelperStep>[
+      FirstRunHelperStep(targetKey: keys.header, title: 'panelHelperHeaderTitle'.tr, body: 'panelHelperHeaderBody'.tr),
+      FirstRunHelperStep(targetKey: keys.status, title: 'panelHelperStatusTitle'.tr, body: 'panelHelperStatusBody'.tr),
+      FirstRunHelperStep(targetKey: keys.address, title: 'panelHelperAddressTitle'.tr, body: 'panelHelperAddressBody'.tr),
+    ], _kPanelHelperSeenKey);
+  }
+
+  /// 導覽一律用 modal route 呈現：擋在底部面板之上、返回鍵等於跳過，
+  /// 關掉之後才寫旗標（跳過也算看過）。
+  Future<void> _presentGuide(List<FirstRunHelperStep> steps, String seenKey) async {
+    if (!mounted || _guideOpen || steps.isEmpty) return;
+    _guideOpen = true;
+    try {
+      await showGeneralDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        barrierLabel: 'guide',
+        barrierColor: Colors.transparent,
+        transitionDuration: const Duration(milliseconds: 180),
+        pageBuilder: (dialogContext, _, __) => FirstRunHelperOverlay(
+          steps: steps,
+          nextLabel: 'helperNext'.tr,
+          doneLabel: 'helperDone'.tr,
+          skipLabel: 'helperSkip'.tr,
+          counterLabel: (current, total) => 'helperStepOf'.trParams({'current': '$current', 'total': '$total'}),
+          onFinished: () => Navigator.of(dialogContext).pop(),
+        ),
+        transitionBuilder: (_, animation, __, child) => FadeTransition(opacity: animation, child: child),
+      );
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(seenKey, true);
+    } finally {
+      _guideOpen = false;
+    }
+  }
+
+  /// 只看得到就介紹得到：簡易模式藏起來的按鈕、只有一台車時不存在的切換列，
+  /// 都不列進步驟，否則聚光燈會照向不存在的東西。
+  List<FirstRunHelperStep> _mapHelperSteps(BuildContext context) {
+    final bool simpleMode = isSimpleMode(context);
+    final int deviceCount = _navigableDevices(context.read<TraccarProvider>()).length;
+    return <FirstRunHelperStep>[
+      FirstRunHelperStep(targetKey: _helperFollowKey, title: 'mapHelperFollowTitle'.tr, body: 'mapHelperFollowBody'.tr),
+      if (!simpleMode) FirstRunHelperStep(targetKey: _helperFitAllKey, title: 'mapHelperFitAllTitle'.tr, body: 'mapHelperFitAllBody'.tr),
+      FirstRunHelperStep(targetKey: _helperListKey, title: 'mapHelperListTitle'.tr, body: 'mapHelperListBody'.tr),
+      if (deviceCount > 1) FirstRunHelperStep(targetKey: _helperSwitcherKey, title: 'mapHelperSwitcherTitle'.tr, body: 'mapHelperSwitcherBody'.tr),
+      FirstRunHelperStep(targetKey: _helperZoomKey, title: 'mapHelperZoomTitle'.tr, body: 'mapHelperZoomBody'.tr),
+    ];
   }
 
   Future<void> _animateCamera(maplibre.CameraUpdate update) async {
@@ -516,6 +630,12 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
+  /// 導覽用的 GlobalKey 只掛在主畫面的那一份控制列；詳情面板裡也有一份同樣的控制列，
+  /// 兩份同時掛同一個 GlobalKey 會在面板收合的過渡幀炸掉。
+  Widget _maybeKeyed({required bool withHelperKeys, required Key key, required Widget child}) {
+    return withHelperKeys ? KeyedSubtree(key: key, child: child) : child;
+  }
+
   int _deviceIndexIn(List<api.Device> devices, api.Device? device) {
     final index = devices.indexWhere((d) => d.id == device?.id);
     return index < 0 ? 1 : index + 1;
@@ -527,7 +647,7 @@ class _MapScreenState extends State<MapScreen> {
     return devices[index < 0 ? 0 : index];
   }
 
-  Widget _buildBottomControls(TraccarProvider traccarProvider, api.Device? currentDevice) {
+  Widget _buildBottomControls(TraccarProvider traccarProvider, api.Device? currentDevice, {bool withHelperKeys = false}) {
     final List<api.Device> navigableDevices = _navigableDevices(traccarProvider);
     final api.Device? switcherDevice = _switcherDevice(navigableDevices, currentDevice);
     return Row(
@@ -537,91 +657,57 @@ class _MapScreenState extends State<MapScreen> {
           child: Align(
             alignment: Alignment.bottomCenter,
             child: navigableDevices.length > 1
-                ? _DeviceSwitcherBar(
-                    deviceName: switcherDevice?.name,
-                    index: _deviceIndexIn(navigableDevices, currentDevice),
-                    total: navigableDevices.length,
-                    onPrevious: () => _navigateToDevice(-1, traccarProvider),
-                    onNext: () => _navigateToDevice(1, traccarProvider),
-                    onPlateTap: switcherDevice == null ? null : () => _onDeviceSelected(switcherDevice, forceShowPanel: true, zoomToMax: true),
+                ? _maybeKeyed(
+                    withHelperKeys: withHelperKeys,
+                    key: _helperSwitcherKey,
+                    child: _DeviceSwitcherBar(
+                      deviceName: switcherDevice?.name,
+                      index: _deviceIndexIn(navigableDevices, currentDevice),
+                      total: navigableDevices.length,
+                      onPrevious: () => _navigateToDevice(-1, traccarProvider),
+                      onNext: () => _navigateToDevice(1, traccarProvider),
+                      onPlateTap: switcherDevice == null ? null : () => _onDeviceSelected(switcherDevice, forceShowPanel: true, zoomToMax: true),
+                    ),
                   )
                 : const SizedBox.shrink(),
           ),
         ),
-        _GlassSurface(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _GlassIconButton(icon: Icons.my_location_rounded, label: 'mapCurrentLocation'.tr, onTap: _goToCurrentLocation),
-              const _GlassDivider(),
-              _GlassIconButton(icon: Icons.add_rounded, label: 'mapZoomIn'.tr, onTap: () => _animateCamera(maplibre.CameraUpdate.zoomIn())),
-              const _GlassDivider(),
-              _GlassIconButton(icon: Icons.remove_rounded, label: 'mapZoomOut'.tr, onTap: () => _animateCamera(maplibre.CameraUpdate.zoomOut())),
-            ],
+        _maybeKeyed(
+          withHelperKeys: withHelperKeys,
+          key: _helperZoomKey,
+          child: _GlassSurface(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _GlassIconButton(icon: Icons.my_location_rounded, label: 'mapCurrentLocation'.tr, onTap: _goToCurrentLocation),
+                const _GlassDivider(),
+                _GlassIconButton(icon: Icons.add_rounded, label: 'mapZoomIn'.tr, onTap: () => _animateCamera(maplibre.CameraUpdate.zoomIn())),
+                const _GlassDivider(),
+                _GlassIconButton(icon: Icons.remove_rounded, label: 'mapZoomOut'.tr, onTap: () => _animateCamera(maplibre.CameraUpdate.zoomOut())),
+              ],
+            ),
           ),
         ),
       ],
     );
   }
 
-  /// Readable vehicle list for screen readers: the map markers themselves are
-  /// native symbols with no semantics, so this sheet is the accessible path.
-  void _showDeviceAccessSheet(TraccarProvider provider) {
-    final List<api.Device> devices = _navigableDevices(provider);
-    if (devices.isEmpty) {
+  /// 地圖頁唯一的車輛清單入口：搜尋、常用優先、點一列就跳到那台車。
+  ///
+  /// 螢幕閱讀器也走這條路——地圖上的標記是原生 symbol，本身沒有語意。
+  void _showDevicePicker(TraccarProvider provider) {
+    if (_navigableDevices(provider).isEmpty) {
       FeedbackService.info('mapNoPositions'.tr, context: context);
       return;
     }
-    final DateTime now = DateTime.now().toUtc();
     showCupertinoModalPopup<void>(
       context: context,
-      builder: (popupContext) => Material(
-        color: Theme.of(popupContext).colorScheme.surface,
-        child: SafeArea(
-          top: false,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Text('deviceTitle'.tr, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
-              ),
-              Flexible(
-                child: ListView(
-                  children: [
-                    for (final device in devices)
-                      Builder(
-                        builder: (_) {
-                          final api.Position? position = provider.getPosition(device.id!);
-                          final String status = resolveDeviceStatus(device, position, now);
-                          final double speedKmh = (position?.speed ?? 0.0) * 1.852;
-                          final String statusLabel = switch (status) {
-                            'online' => 'deviceStatusOnline'.tr,
-                            'offline' => 'deviceStatusOffline'.tr,
-                            _ => 'deviceStatusUnknown'.tr,
-                          };
-                          final String name = device.name ?? 'deviceUnknown'.tr;
-                          return Semantics(
-                            button: true,
-                            label: '$name, $statusLabel, ${speedKmh.toStringAsFixed(0)} ${'sharedKmh'.tr}',
-                            child: ListTile(
-                              leading: Icon(CupertinoIcons.car_fill, color: _getStatusColor(status)),
-                              title: Text(name),
-                              subtitle: Text('$statusLabel · ${speedKmh.toStringAsFixed(0)} ${'sharedKmh'.tr}'),
-                              onTap: () {
-                                Navigator.of(popupContext).pop();
-                                _onDeviceSelected(device, forceShowPanel: true, zoomToMax: true);
-                              },
-                            ),
-                          );
-                        },
-                      ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
+      builder: (popupContext) => _DevicePickerSheet(
+        provider: provider,
+        onSelected: (device) {
+          Navigator.of(popupContext).pop();
+          _onDeviceSelected(device, forceShowPanel: true, zoomToMax: true);
+        },
       ),
     );
   }
@@ -721,11 +807,7 @@ class _MapScreenState extends State<MapScreen> {
       if (!mounted || !identical(_mapController, controller) || !_isStyleLoaded) return;
 
       // 車牌沿用原本的 15px 偏移，但 zIndex 高於車輛圖示，所以不再被圖示蓋住。
-      final bool labelChanged =
-          previousState == null ||
-          previousState.labelImage != customLabelId ||
-          previousState.latitude != latLng.latitude ||
-          previousState.longitude != latLng.longitude;
+      final bool labelChanged = previousState == null || previousState.labelImage != customLabelId || previousState.latitude != latLng.latitude || previousState.longitude != latLng.longitude;
 
       final deviceData = {'deviceId': deviceId.toString()};
       final maplibre.SymbolOptions iconOptions = maplibre.SymbolOptions(geometry: latLng, iconImage: baseIconKey, iconRotate: course, iconSize: iconSize, iconAnchor: 'center', zIndex: 10);
@@ -1045,7 +1127,13 @@ class _MapScreenState extends State<MapScreen> {
     _onDeviceSelected(nextDevice, forceShowPanel: false, follow: true);
   }
 
-  void _onDeviceSelected(api.Device device, {bool forceShowPanel = false, bool follow = true, bool zoomToMax = false}) async {
+  Future<void> _onDeviceSelected(
+    api.Device device, {
+    bool forceShowPanel = false,
+    bool follow = true,
+    bool zoomToMax = false,
+    double? zoomOverride,
+  }) async {
     final int? deviceId = device.id;
     if (deviceId == null) return;
 
@@ -1096,9 +1184,19 @@ class _MapScreenState extends State<MapScreen> {
 
     await _syncSheetContentInset(animated: false);
     if (!mounted || selectionGeneration != _deviceSelectionGeneration) return;
-    await _animateCamera(zoomToMax ? maplibre.CameraUpdate.newLatLngZoom(latLng, _kMaxMapZoom) : maplibre.CameraUpdate.newLatLng(latLng));
+    // 換車時回到該車自己的 zoom；點 marker（zoomToMax）與開場還原（zoomOverride）優先。
+    final double? rememberedZoom = zoomToMax ? null : zoomOverride ?? (deviceChanged ? MapViewMemory.zoomFor(prefs, deviceId) : null);
+    final maplibre.CameraUpdate cameraUpdate = zoomToMax
+        ? maplibre.CameraUpdate.newLatLngZoom(latLng, _kMaxMapZoom)
+        : rememberedZoom == null
+            ? maplibre.CameraUpdate.newLatLng(latLng)
+            : maplibre.CameraUpdate.newLatLngZoom(latLng, rememberedZoom);
+    await _animateCamera(cameraUpdate);
     if (!mounted || selectionGeneration != _deviceSelectionGeneration) return;
     await _scheduleMarkerUpdate(traccarProvider);
+    if (!mounted || selectionGeneration != _deviceSelectionGeneration) return;
+    // 選了哪台車就是在看哪台車：resume 點跟著換。
+    _scheduleViewMemorySave();
 
     if (immediateAddress != null) return;
 
@@ -1210,6 +1308,9 @@ class _MapScreenState extends State<MapScreen> {
     _safeSetState(() {
       _panelOpenNotifier.value = true;
     });
+    // 每次開面板都給一份新的導覽座標，舊面板還在收合動畫時才不會撞到同一個 GlobalKey。
+    final DevicePanelHelperKeys helperKeys = DevicePanelHelperKeys();
+    unawaited(_maybeShowPanelHelper(helperKeys));
     _bottomSheetController = _scaffoldKey.currentState!.showBottomSheet(backgroundColor: Colors.transparent, elevation: 0, (context) {
       return ValueListenableBuilder<api.Device?>(
         valueListenable: _selectedDeviceNotifier,
@@ -1235,6 +1336,7 @@ class _MapScreenState extends State<MapScreen> {
                           children: [
                             Padding(padding: const EdgeInsetsDirectional.fromSTEB(_kEdgeInset, 0, _kEdgeInset, _kControlGap), child: _buildBottomControls(panelProvider, currentDev)),
                             DeviceDetailPanel(
+                              helperKeys: helperKeys,
                               device: currentDev,
                               position: currentPos ?? api.Position(),
                               address: currentAddr,
@@ -1283,170 +1385,11 @@ class _MapScreenState extends State<MapScreen> {
     return hasValidPositionCoordinates(position);
   }
 
-  Color _getStatusColor(String? status) {
-    switch (status) {
-      case 'online':
-        return Colors.green;
-      case 'offline':
-        return Colors.red;
-      case 'unknown':
-        return Colors.grey;
-      case 'static':
-        return Colors.blue;
-      case 'idle':
-        return Colors.orange;
-      default:
-        return Theme.of(context).colorScheme.onSurface;
-    }
-  }
-
-  Future<void> _loadDrawerSortMode() async {
-    final prefs = await SharedPreferences.getInstance();
-    final String? stored = prefs.getString(_kDrawerSortModeKey);
-    final mode = _DrawerSortMode.values.firstWhereOrNull((m) => m.name == stored);
-    if (mode != null && mounted) {
-      _safeSetState(() => _drawerSortMode = mode);
-    }
-  }
-
-  void _setDrawerSortMode(_DrawerSortMode mode) {
-    if (mode == _drawerSortMode) return;
-    _safeSetState(() => _drawerSortMode = mode);
-    SharedPreferences.getInstance().then((prefs) => prefs.setString(_kDrawerSortModeKey, mode.name));
-  }
-
-  Widget _buildDeviceListDrawer(BuildContext context, TraccarProvider traccarProvider) {
-    // 排序選單只有在裝置多到需要排序時才有用，簡易模式收起來；搜尋保留。
-    final bool simpleMode = isSimpleMode(context);
-    final String query = _drawerSearchQuery.trim().toLowerCase();
-
-    final devices = traccarProvider.devices.where((device) {
-      if (query.isEmpty) return true;
-      final String name = (device.name ?? '').toLowerCase();
-      final String uniqueId = (device.uniqueId ?? '').toLowerCase();
-      final String deviceId = (device.id ?? '').toString();
-      return name.contains(query) || uniqueId.contains(query) || deviceId.contains(query);
-    }).toList();
-
-    final Map<int, double> speedByDeviceId = {
-      for (final device in devices)
-        if (device.id != null) device.id!: (_positionForDevice(traccarProvider, device.id)?.speed ?? 0.0).toDouble(),
-    };
-
-    devices.sort((a, b) {
-      final aFav = traccarProvider.isFavorite(a.id!);
-      final bFav = traccarProvider.isFavorite(b.id!);
-      if (aFav != bFav) return aFav ? -1 : 1;
-
-      switch (_drawerSortMode) {
-        case _DrawerSortMode.favorite:
-          break;
-        case _DrawerSortMode.online:
-          final bool aOnline = a.status == 'online';
-          final bool bOnline = b.status == 'online';
-          if (aOnline != bOnline) return aOnline ? -1 : 1;
-          break;
-        case _DrawerSortMode.speed:
-          final int bySpeed = (speedByDeviceId[b.id] ?? 0).compareTo(speedByDeviceId[a.id] ?? 0);
-          if (bySpeed != 0) return bySpeed;
-          break;
-      }
-
-      return (a.name ?? '').compareTo(b.name ?? '');
-    });
-
-    return Drawer(
-      child: Column(
-        children: [
-          SafeArea(
-            bottom: false,
-            child: Padding(
-              padding: const EdgeInsetsDirectional.fromSTEB(_kEdgeInset, _kEdgeInset, _kEdgeInset, 8),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _drawerSearchController,
-                      textInputAction: TextInputAction.search,
-                      decoration: InputDecoration(
-                        hintText: 'sharedSearchDevices'.tr,
-                        prefixIcon: const Icon(CupertinoIcons.search),
-                        suffixIcon: _drawerSearchQuery.isEmpty ? null : IconButton(icon: const Icon(Icons.close_rounded), tooltip: 'sharedCancel'.tr, onPressed: () => _drawerSearchController.clear()),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide.none),
-                        filled: true,
-                        fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  if (!simpleMode)
-                    PopupMenuButton<_DrawerSortMode>(
-                      initialValue: _drawerSortMode,
-                      tooltip: 'sharedSortBy'.tr,
-                      onSelected: _setDrawerSortMode,
-                      itemBuilder: (context) => [
-                        for (final mode in _DrawerSortMode.values)
-                          PopupMenuItem<_DrawerSortMode>(
-                            value: mode,
-                            child: Row(children: [Icon(mode.icon, size: 18), const SizedBox(width: 12), Text(mode.labelKey.tr)]),
-                          ),
-                      ],
-                      child: SizedBox(width: 44, height: 44, child: Icon(_drawerSortMode.icon, color: Theme.of(context).colorScheme.onSurface)),
-                    ),
-                ],
-              ),
-            ),
-          ),
-          Expanded(
-            child: devices.isEmpty
-                ? Center(child: Text('sharedNoData'.tr))
-                : ListView.builder(
-                    itemCount: devices.length,
-                    itemBuilder: (context, index) {
-                      final device = devices[index];
-                      final position = _positionForDevice(traccarProvider, device.id);
-
-                      final speed = (position?.speed ?? 0.0).toStringAsFixed(1);
-                      final isIgnitionOn = (position?.attributes as Map<String, dynamic>?)?['ignition'] == true;
-
-                      return ListTile(
-                        title: Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                device.name ?? 'deviceUnknown'.tr,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(fontWeight: FontWeight.w500, color: _getStatusColor(device.status)),
-                              ),
-                            ),
-                            if (double.parse(speed) > 0.0) ...[const SizedBox(width: 8), Text('$speed ${'sharedKmh'.tr}', style: Theme.of(context).textTheme.bodySmall)],
-                            const SizedBox(width: 8),
-                            Icon(Icons.key, color: isIgnitionOn ? Colors.green : Colors.red, size: 16),
-                          ],
-                        ),
-                        onTap: () {
-                          Navigator.of(context).pop();
-
-                          if (position != null) {
-                            _onDeviceSelected(device, forceShowPanel: true);
-                          }
-                        },
-                      );
-                    },
-                  ),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final MapStyleProvider mapStyleProvider = context.watch<MapStyleProvider>();
     final TraccarProvider traccarProvider = context.read<TraccarProvider>();
     final bool simpleMode = isSimpleMode(context);
-    final int deviceCount = context.select<TraccarProvider, int>((provider) => provider.devices.length);
 
     if (traccarProvider.isLoading && traccarProvider.devices.isEmpty) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
@@ -1489,7 +1432,6 @@ class _MapScreenState extends State<MapScreen> {
             flexibleSpace: null,
             iconTheme: IconThemeData(color: Theme.of(context).brightness == Brightness.dark ? Colors.white : Colors.black),
           ),
-          drawer: deviceCount > 1 ? Consumer<TraccarProvider>(builder: (context, provider, _) => _buildDeviceListDrawer(context, provider)) : null,
           body: Stack(
             children: [
               maplibre.MapLibreMap(
@@ -1506,14 +1448,19 @@ class _MapScreenState extends State<MapScreen> {
                   _centerOnUserWhenLocated = false;
                   _animateCamera(maplibre.CameraUpdate.newLatLngZoom(userLocation.position, 16.0));
                 },
+                onCameraMoveStarted: (reason) {
+                  // 只有手勢才算使用者的 zoom；fit-all、跟車、開場還原都是程式動的。
+                  // 手勢打斷動畫時，動畫就算結束，後續的移動由使用者作主。
+                  if (reason == maplibre.CameraMoveReason.gesture) {
+                    _userOwnsZoom = true;
+                    _isCameraAnimating = false;
+                    _cameraAnimationGraceTimer?.cancel();
+                  }
+                },
                 onCameraMove: (position) {
                   _lastCameraPosition = position;
-                  _zoomDebounce?.cancel();
-                  _zoomDebounce = Timer(const Duration(milliseconds: 300), () {
-                    SharedPreferences.getInstance().then((prefs) {
-                      prefs.setDouble('map_zoom_level', position.zoom);
-                    });
-                  });
+                  // 動畫途中的 zoom 不是終點，等它停下再記，免得存到一半的倍率。
+                  if (_userOwnsZoom && !_isCameraAnimating) _scheduleViewMemorySave();
 
                   if (_isCameraAnimating) return;
 
@@ -1576,14 +1523,25 @@ class _MapScreenState extends State<MapScreen> {
                       // 圖層切換保留（空照圖看地形很實用）；指北針與自動縮放屬進階操作，簡易模式收起來。
                       _GlassIconButton(icon: mapStyleProvider.isSatelliteMode ? Icons.satellite_alt : Icons.map, label: 'mapLayerToggle'.tr, isActive: mapStyleProvider.isSatelliteMode, onTap: () => _toggleMapType(mapStyleProvider)),
                       const _GlassDivider(),
+                      if (!simpleMode) ...[_GlassIconButton(icon: Icons.explore_rounded, label: 'mapCompass'.tr, onTap: () => _animateCamera(maplibre.CameraUpdate.bearingTo(0))), const _GlassDivider()],
+                      KeyedSubtree(
+                        key: _helperFollowKey,
+                        child: _GlassIconButton(icon: _isFollowingDevice ? Icons.my_location_rounded : Icons.location_searching_rounded, label: 'mapFollowDevice'.tr, isActive: _isFollowingDevice, haptic: true, onTap: _toggleFollowCurrentDevice),
+                      ),
+                      const _GlassDivider(),
                       if (!simpleMode) ...[
-                        _GlassIconButton(icon: Icons.explore_rounded, label: 'mapCompass'.tr, onTap: () => _animateCamera(maplibre.CameraUpdate.bearingTo(0))),
+                        KeyedSubtree(
+                          key: _helperFitAllKey,
+                          child: _GlassIconButton(icon: Icons.zoom_out_map_rounded, label: 'mapFitAll'.tr, onTap: () => _zoomToFitAll(context.read<TraccarProvider>())),
+                        ),
                         const _GlassDivider(),
                       ],
-                      _GlassIconButton(icon: _isFollowingDevice ? Icons.my_location_rounded : Icons.location_searching_rounded, label: 'mapFollowDevice'.tr, isActive: _isFollowingDevice, haptic: true, onTap: _toggleFollowCurrentDevice),
+                      KeyedSubtree(
+                        key: _helperListKey,
+                        child: _GlassIconButton(icon: CupertinoIcons.list_bullet, label: 'deviceTitle'.tr, onTap: () => _showDevicePicker(context.read<TraccarProvider>())),
+                      ),
                       const _GlassDivider(),
-                      if (!simpleMode) ...[_GlassIconButton(icon: Icons.zoom_out_map_rounded, label: 'mapFitAll'.tr, onTap: () => _zoomToFitAll(context.read<TraccarProvider>())), _GlassDivider()],
-                      _GlassIconButton(icon: CupertinoIcons.list_bullet, label: 'deviceTitle'.tr, onTap: () => _showDeviceAccessSheet(context.read<TraccarProvider>())),
+                      _GlassIconButton(icon: Icons.help_outline_rounded, label: 'mapHelperReplay'.tr, onTap: _startMapHelper),
                     ],
                   ),
                 ),
@@ -1630,7 +1588,7 @@ class _MapScreenState extends State<MapScreen> {
                     final List<api.Device> navigable = _navigableDevices(provider);
                     return Object.hash(Object.hashAll(navigable.map((device) => '${device.id}:${device.name}')), _currentDevice?.id);
                   },
-                  builder: (context, _, child) => Positioned(left: _kEdgeInset, right: _kEdgeInset, bottom: MediaQuery.of(context).padding.bottom + _kControlGap, child: _buildBottomControls(context.read<TraccarProvider>(), _currentDevice)),
+                  builder: (context, _, child) => Positioned(left: _kEdgeInset, right: _kEdgeInset, bottom: MediaQuery.of(context).padding.bottom + _kControlGap, child: _buildBottomControls(context.read<TraccarProvider>(), _currentDevice, withHelperKeys: true)),
                 ),
               if (_showReturnToFollow && _currentDevice != null)
                 Positioned(
@@ -1883,19 +1841,155 @@ class _DataUpdateListenerState extends State<_DataUpdateListener> {
   Widget build(BuildContext context) => const SizedBox.shrink();
 }
 
-enum _DrawerSortMode {
-  favorite('sharedPriority', Icons.star_rounded),
-
-  online('dashboardOnline', Icons.wifi_tethering_rounded),
-
-  speed('positionSpeed', Icons.speed_rounded);
-
-  const _DrawerSortMode(this.labelKey, this.icon);
-
-  final String labelKey;
-
-  final IconData icon;
-}
-
 // 改進：直接輸出完整 8 位數 ARGB 十六進位碼（#AARRGGBB），完美支援 MapLibre 軌跡透明度渲染
 String _toHexColor(Color color) => '#${color.toARGB32().toRadixString(16).padLeft(8, '0')}';
+
+/// 線上／離線等狀態的顏色只在這裡定義，車輛清單與其他清單都用它。
+Color _statusColorOf(BuildContext context, String? status) {
+  switch (status) {
+    case 'online':
+      return Colors.green;
+    case 'offline':
+      return Colors.red;
+    case 'unknown':
+      return Colors.grey;
+    case 'static':
+      return Colors.blue;
+    case 'idle':
+      return Colors.orange;
+    default:
+      return Theme.of(context).colorScheme.onSurface;
+  }
+}
+
+
+/// 地圖頁唯一的車輛清單：搜尋、常用優先、點一列就跳到那台車。
+///
+/// 這也是螢幕閱讀器的路徑——地圖上的標記是原生 symbol，本身沒有語意。
+class _DevicePickerSheet extends StatefulWidget {
+  const _DevicePickerSheet({required this.provider, required this.onSelected});
+
+  final TraccarProvider provider;
+  final ValueChanged<api.Device> onSelected;
+
+  @override
+  State<_DevicePickerSheet> createState() => _DevicePickerSheetState();
+}
+
+class _DevicePickerSheetState extends State<_DevicePickerSheet> {
+  final TextEditingController _searchController = TextEditingController();
+  String _query = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _searchController.addListener(() {
+      final String query = _searchController.text.trim().toLowerCase();
+      if (query == _query) return;
+      setState(() => _query = query);
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  List<api.Device> _devices() {
+    final List<api.Device> devices = widget.provider.devices.where((device) {
+      if (_query.isEmpty) return true;
+      final String name = (device.name ?? '').toLowerCase();
+      final String uniqueId = (device.uniqueId ?? '').toLowerCase();
+      return name.contains(_query) || uniqueId.contains(_query) || (device.id ?? '').toString().contains(_query);
+    }).toList();
+
+    devices.sort((a, b) {
+      final bool aFavorite = a.id != null && widget.provider.isFavorite(a.id!);
+      final bool bFavorite = b.id != null && widget.provider.isFavorite(b.id!);
+      if (aFavorite != bFavorite) return aFavorite ? -1 : 1;
+      return (a.name ?? '').compareTo(b.name ?? '');
+    });
+    return devices;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final DateTime now = DateTime.now().toUtc();
+    final List<api.Device> devices = _devices();
+
+    return Material(
+      color: theme.colorScheme.surface,
+      child: SafeArea(
+        top: false,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.7),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 12),
+              Container(width: 40, height: 4, decoration: BoxDecoration(color: theme.colorScheme.outlineVariant, borderRadius: BorderRadius.circular(2))),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                child: Text('deviceTitle'.tr, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: TextField(
+                  controller: _searchController,
+                  textInputAction: TextInputAction.search,
+                  decoration: InputDecoration(
+                    hintText: 'sharedSearchDevices'.tr,
+                    prefixIcon: const Icon(CupertinoIcons.search),
+                    suffixIcon: _query.isEmpty
+                        ? null
+                        : IconButton(icon: const Icon(Icons.close_rounded), tooltip: 'sharedCancel'.tr, onPressed: () => _searchController.clear()),
+                    filled: true,
+                    fillColor: theme.colorScheme.surfaceContainerHighest,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide.none),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Flexible(
+                child: devices.isEmpty
+                    ? Center(
+                        child: Padding(padding: const EdgeInsets.all(24), child: Text('sharedNoData'.tr)),
+                      )
+                    : ListView(
+                        children: [
+                          for (final device in devices) _buildTile(context, device, now),
+                        ],
+                      ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTile(BuildContext context, api.Device device, DateTime now) {
+    final api.Position? position = device.id == null ? null : widget.provider.getPosition(device.id!);
+    final String status = resolveDeviceStatus(device, position, now);
+    final double speedKmh = (position?.speed ?? 0.0) * 1.852;
+    final String statusLabel = switch (status) {
+      'online' => 'deviceStatusOnline'.tr,
+      'offline' => 'deviceStatusOffline'.tr,
+      _ => 'deviceStatusUnknown'.tr,
+    };
+    final String name = device.name ?? 'deviceUnknown'.tr;
+
+    return Semantics(
+      button: true,
+      label: '$name, $statusLabel, ${speedKmh.toStringAsFixed(0)} ${'sharedKmh'.tr}',
+      child: ListTile(
+        leading: Icon(CupertinoIcons.car_fill, color: _statusColorOf(context, status)),
+        title: Text(name),
+        subtitle: Text('$statusLabel · ${speedKmh.toStringAsFixed(0)} ${'sharedKmh'.tr}'),
+        onTap: () => widget.onSelected(device),
+      ),
+    );
+  }
+}

@@ -148,8 +148,14 @@ App 的使用方式要符合預期。核心功能做到極致。
 本 App 的核心是「車隊的即時狀態」，不是「管理伺服器設定」。檢查點：
 
 - 開 App 預設回到上次的 tab（已實作，`main_screen.dart` 記住 `last_main_tab_index`），保留使用者的動線記憶。
-- 地圖頁的上方抽屜（`_buildDeviceListDrawer`）與底部裝置切換列（`_DeviceSwitcherBar`）重複提供「切換車輛」功能。兩者在多車情境同時出現時，使用者要猜哪個才是主要入口。
+- 地圖頁回到「上次看的那台車 + 當時的 zoom」（已實作，`storage/map_view_memory.dart` 的 `MapViewMemory`）。兩層在同一次寫入完成：全域 resume 點 `mapview.last_device_id` / `mapview.last_zoom` 決定重開 App 看哪台車，每車 `mapview.zoom.<id>` 決定換車時的視角；車輛位置永遠即時查、不存檔。只有使用者手勢或換車才寫，fit-all／跟車／開場還原不寫。地圖頁不要讀 `selectedDeviceId`，那個 key 由報告與裝置清單共用。
+- 地圖頁「切換車輛」只有兩個入口，各有分工：右側玻璃列的清單鈕（`_DevicePickerSheet`，可搜尋、常用優先、也是螢幕閱讀器的路徑）負責找車，底部切換列（`_DeviceSwitcherBar`）負責在相鄰車輛間快速前後。原本第三個入口——左上抽屜（`_buildDeviceListDrawer`，漢堡選單）——已移除：它與清單鈕重複，而且只是一個沒標籤的漢堡圖示，使用者要猜哪個才是主要入口。**不要再加回第三個清單入口**；要加功能就加在 `_DevicePickerSheet` 裡。
 - 報表 hub 已有今日／本週／本月／上月／自訂的範圍捷徑（`reports_screen.dart` 的 `DateRangePreset`），並記得上次選的裝置。這個思路要推廣到所有清單篩選。
+- 登入頁第一次打開時有導覽（已實作，`widgets/first_run_helper.dart` + `login_screen.dart` 的 `_helperSteps`）：一次照亮一個元件，依序介紹語言、伺服器、帳號、登入、註冊、忘記密碼、伺服器位址、伺服器版本、手機版本、主顏色。看過或跳過都寫 `login_helper_seen`，之後不再自動播放；右上角問號可重播。新增登入頁元件時，順手補一個 `GlobalKey` 與一步文案（en_US／zh／zh_TW／my／th／ja／ko）。
+- 地圖頁第一次進入時也有導覽（已實作，`map_screen.dart` 的 `_mapHelperSteps`，旗標 `map_helper_seen`，右側玻璃列的問號鈕可重播）：跟車（含「拖動就停止跟車」與返回徽章）、框選全部、車輛清單（含點標記等價）、切換列、縮放與我的位置。步驟是**依當下可見性產生**的——簡易模式不列框選全部，只有一台車不列切換列——因為聚光燈照到不存在的元件會退化成置中卡片，等於默默失效。
+- 車輛詳情面板第一次被打開時也有導覽（已實作，`map_screen.dart` 的 `_maybeShowPanelHelper`，旗標 `panel_helper_seen`）：這台車（車名、最後定位時間、右側圓鈕與展開箭頭）、即時狀態格、地址。面板是滑上來的 bottom sheet，所以它的導覽必須是 **modal route**（`_presentGuide` 用 `showGeneralDialog`）才蓋得住它——地圖頁的導覽也走同一條路，返回鍵因此等於跳過；登入頁沒有東西會蓋在它上面，直接把 `FirstRunHelperOverlay` 放在頁面 Stack 就好；面板本身不認識導覽，只接收一個 `DevicePanelHelperKeys`（`widgets/device_detail_panel.dart`），每次開面板都給新的一份，避免舊面板收合動畫撞到同一個 `GlobalKey`。面板導覽沒有重播鈕（面板是過渡畫面，塞問號會更亂）；要再看一次就是重新開面板——前提是旗標已清。
+- 導覽不是萬用補丁。值得做導覽的條件是三項全中：① 該畫面是核心工作的起點 ② 控制項從圖示／文字看不出用途 ③ 用錯有代價。登入頁與地圖頁過關，device list 與 settings 不過關（清單＋表單本身就自我說明，設定頁改版又最頻繁，導覽會比它介紹的內容更快過期）。那兩頁改用低成本手段：圖示提示、空狀態說明（`EmptyState` 的 hint）、危險操作前的確認。**用導覽解釋一個讓人困惑的重複設計是錯的**——先修設計，再導覽剩下的部分，地圖頁的抽屜就是這樣處理的。
+- 新導覽一律重用 `FirstRunHelperOverlay`（它不認識任何翻譯 key，文案由呼叫端傳）與 `helperNext`／`helperDone`／`helperSkip`／`helperStepOf` 這組共用按鈕文案；只有步驟專屬文案才用自己的前綴（`loginHelper*`、`mapHelper*`、`panelHelper*`）。
 
 ### 4.2 包容性與無障礙（Accessibility）
 
@@ -316,7 +322,7 @@ App 的使用方式要符合預期。核心功能做到極致。
 **P1-1 地圖導航統一（最重要的一項）**
 
 - 目標：App 只有一個「地圖的世界」。裝置列表的點擊直接落在主地圖，刪除 `LiveTrackingMapScreen`。
-- 做法：新增 `MapNavigation`（`ChangeNotifier`，放 `lib/services/` 或 `lib/providers/`）持有 `focusDevice(int deviceId)` 的意圖。`main.dart` 註冊 provider；`MainScreen` 改用 `CupertinoTabController` 傳給 `CupertinoTabScaffold`（Flutter SDK 已支援 `controller` 參數），監聽意圖後設 `_controller.index = 1`；`MapScreen` 在地圖就緒（`_onStyleLoaded`）後取走意圖，呼叫既有的 `_onDeviceSelected(device, forceShowPanel: true, zoomToMax: true)`；`device_list_screen.dart:249` 改成 `context.read<MapNavigation>().focusDevice(device.id!)`。地圖左側的 `_buildDeviceListDrawer` 保留，已有搜尋、排序、收藏，不需要把裝置列表搬進抽屜。
+- 做法：新增 `MapNavigation`（`ChangeNotifier`，放 `lib/services/` 或 `lib/providers/`）持有 `focusDevice(int deviceId)` 的意圖。`main.dart` 註冊 provider；`MainScreen` 改用 `CupertinoTabController` 傳給 `CupertinoTabScaffold`（Flutter SDK 已支援 `controller` 參數），監聽意圖後設 `_controller.index = 1`；`MapScreen` 在地圖就緒（`_onStyleLoaded`）後取走意圖，呼叫既有的 `_onDeviceSelected(device, forceShowPanel: true, zoomToMax: true)`；`device_list_screen.dart:249` 改成 `context.read<MapNavigation>().focusDevice(device.id!)`。地圖上的裝置清單是右側玻璃列的 `_DevicePickerSheet`（可搜尋、常用優先），原本的抽屜已移除，不必再把裝置列表搬進地圖。
 - 落點：`device_list_screen.dart:249`（唯一呼叫點）、`main_screen.dart`、`main.dart`、`map_screen.dart`；刪除 `livetracking_map_screen.dart` 前，先確認它獨有的東西已進 `DeviceDetailPanel`（導航到 Google Maps、里程入口、地址列面板已有）。
 - 驗收：從列表點一台車，直接切到地圖 tab，該車被選中、追蹤開啟、面板展開；地圖控制列與原本主地圖完全相同；地圖尚未建立時（首次點擊）同樣成立；系統返回鍵不回首頁，維持 tab 模型。
 - 意圖只能消費一次：`takePendingDeviceId()` 取走即清空；`MapScreen` 另外用本地 `_pendingFocusDeviceId` 加一個「已套用」旗標，避免「監聽器」與「style 載入」兩條路徑重複套用。套用後設 `_hasInitialZoomed = true`，擋掉 `_onStyleLoaded` 裡的 prefs 還原或 fit-all 二次縮放。衛星模式切換會 re-key 地圖（`map_screen.dart:1315`），但 style 重載只走 `_syncSelectedDeviceFromProvider`（同檔 621-636，只換裝置物件、不動相機），不會再觸發聚焦。

@@ -15,6 +15,7 @@ import 'package:trabcdefg/services/auth_service.dart';
 import 'package:trabcdefg/services/feedback.dart';
 import 'package:trabcdefg/services/localization_service.dart';
 import 'package:trabcdefg/src/generated_api/api.dart' as api;
+import 'package:trabcdefg/widgets/first_run_helper.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -36,14 +37,68 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
 
+  /// 首次啟動導覽：每一步照亮一個真實元件，所以先把這些元件標上座標。
+  static const String _kHelperSeenKey = 'login_helper_seen';
+  final GlobalKey _helperLanguageKey = GlobalKey();
+  final GlobalKey _helperServerKey = GlobalKey();
+  final GlobalKey _helperEmailKey = GlobalKey();
+  final GlobalKey _helperLoginKey = GlobalKey();
+  final GlobalKey _helperRegisterKey = GlobalKey();
+  final GlobalKey _helperResetKey = GlobalKey();
+  final GlobalKey _helperServerAddressKey = GlobalKey();
+  final GlobalKey _helperServerVersionKey = GlobalKey();
+  final GlobalKey _helperAppVersionKey = GlobalKey();
+  final GlobalKey _helperThemeKey = GlobalKey();
+  bool _helperVisible = false;
+
   @override
   void initState() {
     super.initState();
     _loadVersion();
     _loadSavedServerUrl();
+    _maybeShowFirstRunHelper();
     _animationController = AnimationController(vsync: this, duration: const Duration(milliseconds: 1000));
     _fadeAnimation = CurvedAnimation(parent: _animationController, curve: Curves.easeIn);
     _animationController.forward();
+  }
+
+  /// 只有第一次打開 App 才自動播放；設定記在 prefs，跳過也算看過。
+  /// 已經存過伺服器代表這個人用過 App（例如登出後回到登入頁），不再強迫看一次。
+  void _maybeShowFirstRunHelper() {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      final prefs = await SharedPreferences.getInstance();
+      if (!mounted || (prefs.getBool(_kHelperSeenKey) ?? false)) return;
+      if ((prefs.getString('traccarServerUrl') ?? '').isNotEmpty) return;
+      setState(() => _helperVisible = true);
+    });
+  }
+
+  void _startHelper() {
+    if (!mounted || _helperVisible) return;
+    setState(() => _helperVisible = true);
+  }
+
+  Future<void> _finishHelper() async {
+    if (!mounted) return;
+    setState(() => _helperVisible = false);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kHelperSeenKey, true);
+  }
+
+  List<FirstRunHelperStep> get _helperSteps {
+    return <FirstRunHelperStep>[
+      FirstRunHelperStep(targetKey: _helperLanguageKey, title: 'loginHelperLanguageTitle'.tr, body: 'loginHelperLanguageBody'.tr),
+      FirstRunHelperStep(targetKey: _helperServerKey, title: 'loginHelperServerTitle'.tr, body: 'loginHelperServerBody'.tr),
+      FirstRunHelperStep(targetKey: _helperEmailKey, title: 'loginHelperEmailTitle'.tr, body: 'loginHelperEmailBody'.tr),
+      FirstRunHelperStep(targetKey: _helperLoginKey, title: 'loginHelperLoginTitle'.tr, body: 'loginHelperLoginBody'.tr),
+      FirstRunHelperStep(targetKey: _helperRegisterKey, title: 'loginHelperRegisterTitle'.tr, body: 'loginHelperRegisterBody'.tr),
+      FirstRunHelperStep(targetKey: _helperResetKey, title: 'loginHelperResetTitle'.tr, body: 'loginHelperResetBody'.tr),
+      FirstRunHelperStep(targetKey: _helperServerAddressKey, title: 'loginHelperServerAddressTitle'.tr, body: 'loginHelperServerAddressBody'.tr),
+      FirstRunHelperStep(targetKey: _helperServerVersionKey, title: 'loginHelperServerVersionTitle'.tr, body: 'loginHelperServerVersionBody'.tr),
+      FirstRunHelperStep(targetKey: _helperAppVersionKey, title: 'loginHelperAppVersionTitle'.tr, body: 'loginHelperAppVersionBody'.tr),
+      FirstRunHelperStep(targetKey: _helperThemeKey, title: 'loginHelperThemeTitle'.tr, body: 'loginHelperThemeBody'.tr),
+    ];
   }
 
   Future<void> _loadVersion() async {
@@ -238,6 +293,19 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
           // 頂部與底部裝飾性組件
           _buildTopActions(theme),
           _buildBottomInfo(theme, themeProvider),
+
+          // 第一次打開 App 的導覽；可以從右上角的問號再看一次。
+          if (_helperVisible)
+            Positioned.fill(
+              child: FirstRunHelperOverlay(
+                steps: _helperSteps,
+                nextLabel: 'helperNext'.tr,
+                doneLabel: 'helperDone'.tr,
+                skipLabel: 'helperSkip'.tr,
+                counterLabel: (current, total) => 'helperStepOf'.trParams({'current': '$current', 'total': '$total'}),
+                onFinished: _finishHelper,
+              ),
+            ),
         ],
       ),
     );
@@ -268,7 +336,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
           padding: const EdgeInsets.all(24),
           child: Column(
             children: [
-              _buildTextField(controller: _emailController, label: 'userEmail'.tr, icon: Icons.alternate_email_rounded),
+              _buildTextField(controller: _emailController, label: 'userEmail'.tr, icon: Icons.alternate_email_rounded, fieldKey: _helperEmailKey),
               const SizedBox(height: 16),
               _buildTextField(
                 controller: _passwordController,
@@ -286,9 +354,10 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     );
   }
 
-  Widget _buildTextField({required TextEditingController controller, required String label, required IconData icon, bool obscure = false, Widget? suffix, VoidCallback? onTap, bool readOnly = false}) {
+  Widget _buildTextField({required TextEditingController controller, required String label, required IconData icon, bool obscure = false, Widget? suffix, VoidCallback? onTap, bool readOnly = false, Key? fieldKey}) {
     final theme = Theme.of(context);
     return Column(
+      key: fieldKey,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
@@ -323,6 +392,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
 
   Widget _buildSubmitButton(ThemeData theme) {
     return SizedBox(
+      key: _helperLoginKey,
       width: double.infinity,
       height: 58,
       child: ElevatedButton(
@@ -342,9 +412,9 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        TextButton(onPressed: () => Get.toNamed('/register'), child: Text('loginRegister'.tr)),
+        TextButton(key: _helperRegisterKey, onPressed: () => Get.toNamed('/register'), child: Text('loginRegister'.tr)),
         Text('|', style: TextStyle(color: theme.colorScheme.outlineVariant)),
-        TextButton(onPressed: () => Get.toNamed('/reset-password'), child: Text('loginReset'.tr)),
+        TextButton(key: _helperResetKey, onPressed: () => Get.toNamed('/reset-password'), child: Text('loginReset'.tr)),
       ],
     );
   }
@@ -357,14 +427,21 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
+            IconButton(
+              onPressed: _startHelper,
+              tooltip: 'loginHelperReplay'.tr,
+              icon: Icon(Icons.help_outline_rounded, size: 20, color: theme.colorScheme.primary.withValues(alpha: 0.5)),
+            ),
             // Discreet entry point for technicians only — the server address
             // itself stays out of the login flow.
             IconButton(
+              key: _helperServerKey,
               onPressed: () => _showServerDialog(context),
               tooltip: 'SelectServer'.tr,
               icon: Icon(Icons.settings_outlined, size: 20, color: theme.colorScheme.primary.withValues(alpha: 0.5)),
             ),
             IconButton(
+              key: _helperLanguageKey,
               onPressed: () => _showLanguageDialog(context),
               icon: Icon(Icons.translate_rounded, color: theme.colorScheme.primary),
             ),
@@ -388,6 +465,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               GestureDetector(
+                key: _helperServerAddressKey,
                 onTap: () => _showServerDialog(context),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -398,12 +476,13 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                   ],
                 ),
               ),
-              if (_serverVersion != null) ...[const SizedBox(height: 2), Text('${'settingsServerVersion'.tr}: $_serverVersion', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withValues(alpha: 0.35), fontSize: 11))],
+              if (_serverVersion != null) ...[const SizedBox(height: 2), Text('${'settingsServerVersion'.tr}: $_serverVersion', key: _helperServerVersionKey, style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withValues(alpha: 0.35), fontSize: 11))],
               const SizedBox(height: 2),
-              Text('v $_version', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withValues(alpha: 0.4))),
+              Text('v $_version', key: _helperAppVersionKey, style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withValues(alpha: 0.4))),
             ],
           ),
           Row(
+            key: _helperThemeKey,
             children: [
               _buildThemeDot(themeProvider, AppThemePreset.obsidian, const Color(0xFF1A1A1A)),
               _buildThemeDot(themeProvider, AppThemePreset.deepSea, const Color(0xFF0D1B2A)),
