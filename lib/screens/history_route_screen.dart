@@ -1764,6 +1764,9 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
               child: Column(
                 children: simpleMode
                     ? [
+                        // 圖層切換保留（空照圖看地形很實用）。
+                        _mapFab(Provider.of<MapStyleProvider>(context).isSatelliteMode ? Icons.map : Icons.satellite_alt, _toggleMapType, "btn_style"),
+                        const SizedBox(height: 8),
                         _mapFab(
                           Icons.center_focus_strong,
                           () {

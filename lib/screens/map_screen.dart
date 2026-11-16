@@ -1573,10 +1573,10 @@ class _MapScreenState extends State<MapScreen> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // 圖層、指北針、自動縮放屬進階操作，簡易模式收起來。
+                      // 圖層切換保留（空照圖看地形很實用）；指北針與自動縮放屬進階操作，簡易模式收起來。
+                      _GlassIconButton(icon: mapStyleProvider.isSatelliteMode ? Icons.satellite_alt : Icons.map, label: 'mapLayerToggle'.tr, isActive: mapStyleProvider.isSatelliteMode, onTap: () => _toggleMapType(mapStyleProvider)),
+                      const _GlassDivider(),
                       if (!simpleMode) ...[
-                        _GlassIconButton(icon: mapStyleProvider.isSatelliteMode ? Icons.satellite_alt : Icons.map, label: 'mapLayerToggle'.tr, isActive: mapStyleProvider.isSatelliteMode, onTap: () => _toggleMapType(mapStyleProvider)),
-                        const _GlassDivider(),
                         _GlassIconButton(icon: Icons.explore_rounded, label: 'mapCompass'.tr, onTap: () => _animateCamera(maplibre.CameraUpdate.bearingTo(0))),
                         const _GlassDivider(),
                       ],
