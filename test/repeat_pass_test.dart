@@ -46,6 +46,71 @@ void main() {
     });
   });
 
+  // A tracker with a moving vehicle sends a position every few hundred metres,
+  // not every few metres. The 200 m segment guard used to drop those segments,
+  // so the return pass stayed in the first-pass colour on a real recording.
+  group('a real tracker reports every few hundred metres', () {
+    test('the return of a 300 m sampled out-and-back is a repeat', () {
+      final List<List<double>> out = _leg(121.5, _lat, metresEast: 3000, metresNorth: 0, samples: 10);
+      final List<List<double>> back = out.reversed.toList();
+      final Uint8List flags = classifyRepeatPasses(_track([...out, ...back.skip(1)]));
+
+      final int backFlags = flags.sublist(out.length).reduce((a, b) => a + b);
+      expect(backFlags, greaterThan((back.length - 1) * 0.8), reason: 'the return trip is a repeat');
+    });
+
+    test('the return of a 500 m sampled out-and-back is a repeat', () {
+      final List<List<double>> out = _leg(121.5, _lat, metresEast: 3000, metresNorth: 0, samples: 6);
+      final List<List<double>> back = out.reversed.toList();
+      final Uint8List flags = classifyRepeatPasses(_track([...out, ...back.skip(1)]));
+
+      final int backFlags = flags.sublist(out.length).reduce((a, b) => a + b);
+      expect(backFlags, greaterThan((back.length - 1) * 0.8), reason: 'the return trip is a repeat');
+    });
+
+    // 150 m is inside the old 200 m index guard, so this isolates the
+    // sample-count gap: ten samples is 1.5 km of travel, not 100 m.
+    test('the whole return is marked at 150 m spacing', () {
+      final List<List<double>> out = _leg(121.5, _lat, metresEast: 3000, metresNorth: 0, samples: 20);
+      final List<List<double>> back = out.reversed.toList();
+      final Uint8List flags = classifyRepeatPasses(_track([...out, ...back.skip(1)]));
+
+      final int backFlags = flags.sublist(out.length).reduce((a, b) => a + b);
+      expect(backFlags, greaterThan((back.length - 1) * 0.8), reason: 'the return trip is a repeat');
+    });
+
+    test('a divided carriageway 20 m away is the same road at 250 m spacing', () {
+      final List<List<double>> out = _leg(121.5, _lat, metresEast: 2500, metresNorth: 0, samples: 10);
+      final List<List<double>> back = _leg(121.5, _lat + 20 / _mPerDegLat, metresEast: 2500, metresNorth: 0, samples: 10).reversed.toList();
+      final Uint8List flags = classifyRepeatPasses(_track([...out, ...back.skip(1)]));
+
+      final int backFlags = flags.sublist(out.length).reduce((a, b) => a + b);
+      expect(backFlags, greaterThan((back.length - 1) * 0.5), reason: 'the other lane is the same road');
+    });
+
+    test('a loop along the same street marks every later pass', () {
+      final List<List<double>> ab = _leg(121.5, _lat, metresEast: 2500, metresNorth: 0, samples: 10);
+      final List<List<double>> ba = ab.reversed.toList();
+      final List<List<double>> ac = _leg(121.5, _lat, metresEast: 1800, metresNorth: 0, samples: 7);
+      final Uint8List flags = classifyRepeatPasses(_track([...ab, ...ba.skip(1), ...ac.skip(1)]));
+
+      final int acFlags = flags.sublist(ab.length + ba.length - 1).reduce((a, b) => a + b);
+      expect(acFlags, greaterThan((ac.length - 1) * 0.8), reason: 'the street was driven before');
+    });
+
+    test('a position without a fix is never a repeat and does not break the pass', () {
+      final List<List<double>> out = _leg(121.5, _lat, metresEast: 1200, metresNorth: 0, samples: 12);
+      final List<List<double>> back = out.reversed.toList();
+      final List<List<double>> track = [...out, ...back.skip(1)];
+      final int missing = track.length ~/ 2;
+      track[missing] = [double.nan, double.nan];
+      final Uint8List flags = classifyRepeatPasses(_track(track));
+
+      expect(flags[missing], 0, reason: 'a missing fix is not a repeat');
+      expect(flags.where((f) => f == 1).length, greaterThan(0), reason: 'the rest of the return is still marked');
+    });
+  });
+
   group('a different road is not the same road', () {
     test('a parallel street 45 m away stays a first pass', () {
       final List<List<double>> first = _leg(121.5, _lat, metresEast: 400, metresNorth: 0);

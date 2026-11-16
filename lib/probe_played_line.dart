@@ -70,12 +70,13 @@ class _ProbeScreenState extends State<_ProbeScreen> {
   }
 
   /// Out along a street and back with a small offset, so the return leg is a
-  /// repeat pass.
+  /// repeat pass. The samples are 250 m apart, the spacing of a real recording;
+  /// a dense synthetic track hides the sparse-sample bugs the classifier has.
   static List<List<double>> _buildTrack() {
     const double latitude = 25.033;
     final double metresPerDegreeLng = 111320.0 * cos(latitude * pi / 180);
     final List<List<double>> points = <List<double>>[];
-    const int samples = 600;
+    const int samples = 12;
     const double metres = 3000;
 
     for (var i = 0; i <= samples; i++) {

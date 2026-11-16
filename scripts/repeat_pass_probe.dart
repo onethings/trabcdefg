@@ -1,8 +1,14 @@
 // Plain-Dart harness for the repeat-pass classifier. Runs without Flutter so the
 // classification and its cost can be measured on the bare Dart VM.
 //
+// A real tracker reports a position every few hundred metres while the vehicle
+// moves, not every few metres. The first checks use dense synthetic tracks; the
+// sparse ones use the spacing of a real recording, because a classifier that
+// only works on dense samples is what left the history screen partly purple.
+//
 //   dart scripts/repeat_pass_probe.dart
 
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:trabcdefg/src/utils/repeat_pass.dart';
@@ -50,6 +56,154 @@ void check(String label, bool ok, String detail) {
 
 var failures = 0;
 
+/// Mirrors the classifier's default; kept local so the harness still compiles
+/// against the sample-count version it has to fail on.
+const double probeMinGapMeters = 100;
+
+/// The same contract computed the slow, obvious way: every candidate segment is
+/// tested, nothing is bucketed or split into pieces. A grid or piece fault then
+/// shows up as a flag difference instead of a plausible-looking line. The rules
+/// themselves (metre gap, recording-gap guard) are restated here deliberately,
+/// so a change to them has to be made in both places.
+const double _probeMaxIndexedSegmentMeters = 10000;
+const double _probeGapRatio = 10;
+
+Uint8List referenceFlags(Float64List lngLatPairs, {double cellMeters = defaultRepeatCellMeters, double toleranceMeters = defaultRepeatToleranceMeters, double minGapMeters = probeMinGapMeters}) {
+  final int count = lngLatPairs.length ~/ 2;
+  final Uint8List candidates = Uint8List(count);
+  if (count < 2) return candidates;
+
+  double latitudeSum = 0;
+  var latitudeCount = 0;
+  for (var i = 0; i < count; i++) {
+    final double lat = lngLatPairs[i * 2 + 1];
+    if (!lat.isFinite) continue;
+    latitudeSum += lat;
+    latitudeCount++;
+  }
+  final double centreLatitude = latitudeCount == 0 ? 0 : latitudeSum / latitudeCount;
+
+  double chordMeters(int at) {
+    if (at < 0 || at + 1 >= count) return 0;
+    if (!_finiteAt(lngLatPairs, at) || !_finiteAt(lngLatPairs, at + 1)) return double.infinity;
+    return _metresBetween(lngLatPairs, at, at + 1);
+  }
+
+  final List<double> travelled = List<double>.filled(count, 0);
+  for (var i = 1; i < count; i++) {
+    travelled[i] = travelled[i - 1] + (_finiteAt(lngLatPairs, i - 1) && _finiteAt(lngLatPairs, i) ? _metresBetween(lngLatPairs, i - 1, i) : 0);
+  }
+
+  for (var i = 0; i < count; i++) {
+    if (!_finiteAt(lngLatPairs, i)) continue;
+    for (var start = 0; start + 1 < count; start++) {
+      if (travelled[start + 1] > travelled[i] - minGapMeters) break;
+      if (!_finiteAt(lngLatPairs, start) || !_finiteAt(lngLatPairs, start + 1)) continue;
+      final double lengthMeters = _metresBetween(lngLatPairs, start, start + 1);
+      if (lengthMeters > _probeMaxIndexedSegmentMeters) continue;
+      if (lengthMeters > _probeGapRatio * math.max(chordMeters(start - 1), chordMeters(start + 1))) continue;
+      if (_pointToSegment(lngLatPairs, i, start, start + 1, centreLatitude) <= toleranceMeters) {
+        candidates[i] = 1;
+        break;
+      }
+    }
+  }
+
+  final Uint8List flags = Uint8List(count);
+  for (var i = 0; i < count; i++) {
+    if (candidates[i] == 0) continue;
+    final bool neighbour = (i > 0 && candidates[i - 1] == 1) || (i + 1 < count && candidates[i + 1] == 1);
+    if (neighbour) flags[i] = 1;
+  }
+  return flags;
+}
+
+bool _finiteAt(Float64List pairs, int i) => pairs[i * 2].isFinite && pairs[i * 2 + 1].isFinite;
+
+double _metresBetween(Float64List pairs, int a, int b) {
+  const double radiansPerDegree = 0.017453292519943295;
+  final double dLat = (pairs[b * 2 + 1] - pairs[a * 2 + 1]) * radiansPerDegree;
+  final double dLng = (pairs[b * 2] - pairs[a * 2]) * radiansPerDegree;
+  final double h = math.sin(dLat / 2) * math.sin(dLat / 2) + math.cos(pairs[a * 2 + 1] * radiansPerDegree) * math.cos(pairs[b * 2 + 1] * radiansPerDegree) * math.sin(dLng / 2) * math.sin(dLng / 2);
+  if (h.isNaN) return 0;
+  return 2 * 6371000 * math.asin(math.sqrt(h));
+}
+
+double _pointToSegment(Float64List pairs, int point, int start, int end, double referenceLatitude) {
+  final double mx = 111320.0 * math.cos(referenceLatitude * math.pi / 180);
+  final double px = (pairs[point * 2] - pairs[start * 2]) * mx;
+  final double py = (pairs[point * 2 + 1] - pairs[start * 2 + 1]) * mPerDegLat;
+  final double ex = (pairs[end * 2] - pairs[start * 2]) * mx;
+  final double ey = (pairs[end * 2 + 1] - pairs[start * 2 + 1]) * mPerDegLat;
+  final double lengthSquared = ex * ex + ey * ey;
+  if (lengthSquared == 0) return math.sqrt(px * px + py * py);
+  final double t = ((px * ex + py * ey) / lengthSquared).clamp(0.0, 1.0).toDouble();
+  final double dx = px - t * ex;
+  final double dy = py - t * ey;
+  return math.sqrt(dx * dx + dy * dy);
+}
+
+/// A random walk that revisits its own street: every step picks a heading, and
+/// occasionally it walks back over the last few steps instead. Steps span
+/// [minStepMeters, maxStepMeters], so the same check covers a dense recording
+/// and the few-hundred-metre spacing of a real tracker.
+List<List<double>> randomTrack(math.Random rng, {int steps = 120, int returns = 6, double minStepMeters = 20, double maxStepMeters = 300}) {
+  final List<List<double>> points = <List<double>>[
+    [121.5, lat0],
+  ];
+  double heading = rng.nextDouble() * 2 * math.pi;
+  for (var s = 0; s < steps; s++) {
+    if (returns > 0 && points.length >= 3 && rng.nextDouble() < 0.03) {
+      returns--;
+      final int span = math.min(6, points.length - 2);
+      final int from = points.length - 1 - span;
+      for (var k = 0; k <= span; k++) {
+        points.add([points[from + k][0], points[from + k][1]]);
+      }
+      continue;
+    }
+    heading += (rng.nextDouble() - 0.5) * 0.9;
+    final double step = minStepMeters + rng.nextDouble() * (maxStepMeters - minStepMeters);
+    final List<double> last = points.last;
+    points.add([last[0] + math.cos(heading) * step / mPerDegLng, last[1] + math.sin(heading) * step / mPerDegLat]);
+  }
+  return points;
+}
+
+/// Differential check: the fast classifier and the reference must flag exactly
+/// the same points, including on tracks with positions that have no fix.
+void differentialChecks() {
+  final math.Random rng = math.Random(11);
+  var compared = 0;
+  var mismatches = 0;
+  for (var t = 0; t < 80; t++) {
+    // The first half walks in dense steps, the second half in the steps a
+    // tracker actually reports while the vehicle moves.
+    final List<List<double>> track = t < 40 ? randomTrack(rng) : randomTrack(rng, steps: 60, minStepMeters: 200, maxStepMeters: 600);
+    if (t.isEven) {
+      track[3 + t % 5] = [double.nan, double.nan];
+    }
+    final Float64List packed = pack(track);
+    late final Uint8List fast;
+    try {
+      fast = classifyRepeatPasses(packed);
+    } catch (error) {
+      mismatches++;
+      print('THROW track=$t $error');
+      continue;
+    }
+    final Uint8List slow = referenceFlags(packed);
+    for (var i = 0; i < fast.length; i++) {
+      compared++;
+      if (fast[i] != slow[i]) {
+        mismatches++;
+        print('MISMATCH track=$t point=$i fast=${fast[i]} reference=${slow[i]}');
+      }
+    }
+  }
+  check('random tracks agree with the reference classifier', mismatches == 0, '$compared flags, $mismatches mismatches (a throw counts as a mismatch)');
+}
+
 void main() {
   // 1. out and back on the same street
   final out = leg(121.5, lat0, east: 400, north: 0, stepMetres: 5);
@@ -89,7 +243,58 @@ void main() {
   final f4 = classifyRepeatPasses(pack(short));
   check('short track never repeats itself', countFlags(f4, 0) == 0, 'points=${short.length}');
 
-  // 5. cost on realistic and dense tracks
+  // 5. sparse samples, the way a real tracker reports while moving. The
+  //    return pass must still read as a repeat at any of these spacings.
+  for (final strided in [
+    ['300 m samples', 300.0],
+    ['500 m samples', 500.0],
+  ]) {
+    final String name = strided[0] as String;
+    final double step = strided[1] as double;
+    final o = leg(121.5, lat0, east: 3000, north: 0, stepMetres: step);
+    final b = o.reversed.toList();
+    final f = classifyRepeatPasses(pack([...o, ...b.skip(1)]));
+    final total = b.length - 1;
+    final repeat = countFlags(f, o.length);
+    check('out and back with $name marks the return', repeat > total * 0.8, 'repeat=$repeat of $total');
+  }
+
+  // 150 m samples are inside the old 200 m index guard, so this isolates the
+  // sample-count gap: 10 samples is 1.5 km of travel, not 100 m.
+  {
+    final o = leg(121.5, lat0, east: 3000, north: 0, stepMetres: 150);
+    final b = o.reversed.toList();
+    final f = classifyRepeatPasses(pack([...o, ...b.skip(1)]));
+    final total = b.length - 1;
+    final repeat = countFlags(f, o.length);
+    check('150 m samples: the whole return is marked', repeat > total * 0.8, 'repeat=$repeat of $total');
+  }
+
+  // 6. a divided carriageway driven the other way, with sparse samples
+  {
+    final o = leg(121.5, lat0, east: 2500, north: 0, stepMetres: 250);
+    final b = leg(121.5, lat0 + 20 / mPerDegLat, east: 2500, north: 0, stepMetres: 250).reversed.toList();
+    final f = classifyRepeatPasses(pack([...o, ...b.skip(1)]));
+    final repeat = countFlags(f, o.length);
+    check('divided carriageway, 250 m samples', repeat > (b.length - 1) * 0.5, 'repeat=$repeat of ${b.length - 1}');
+  }
+
+  // 7. a loop that comes back along the same street: A -> B -> A -> C
+  {
+    final ab = leg(121.5, lat0, east: 2500, north: 0, stepMetres: 250);
+    final ba = ab.reversed.toList();
+    final ac = leg(121.5, lat0, east: 1800, north: 0, stepMetres: 250);
+    final f = classifyRepeatPasses(pack([...ab, ...ba.skip(1), ...ac.skip(1)]));
+    final start = ab.length + ba.length - 1;
+    final repeat = countFlags(f, start);
+    final total = ac.length - 1;
+    check('loop A->B->A->C marks the A->C leg', repeat > total * 0.8, 'repeat=$repeat of $total');
+  }
+
+  // 8. the same classification as a slow reference on random tracks
+  differentialChecks();
+
+  // 9. cost on realistic and dense tracks
   for (final spec in [
     ['20k points, 5 m apart (100 km out and back)', 20000, 5.0],
     ['80k points, 0.5 m apart (dense)', 80000, 0.5],
