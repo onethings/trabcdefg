@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:developer' as developer;
 import 'dart:io';
 import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/cupertino.dart';
@@ -11,8 +12,8 @@ import 'package:trabcdefg/src/utils/camera_follow.dart';
 import 'package:trabcdefg/src/utils/direction.dart';
 import 'package:trabcdefg/src/utils/playback_pacing.dart';
 import 'package:trabcdefg/src/utils/playback_view.dart';
-import 'package:trabcdefg/src/utils/played_prefix.dart';
 import 'package:trabcdefg/src/utils/publish_budget.dart';
+import 'package:trabcdefg/src/utils/repeat_pass.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
@@ -119,6 +120,9 @@ _CleanedTrack _cleanTrackIsolate(_TrackCleanupParams params) {
   final cleaned = PositionCleaner.clean(params.positions);
   return _CleanedTrack(cleaned, params.encode ? RoutePositionsHive.toJsonList(cleaned) : const []);
 }
+
+/// 重複經過的判斷在背景 isolate 跑，密集軌跡才不會卡住載入那一幀。
+Uint8List _classifyRepeatPassesIsolate(Float64List lngLatPairs) => classifyRepeatPasses(lngLatPairs);
 
 class _GeoJsonParams {
   final List<api.Position> positions;
@@ -237,11 +241,13 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
   int _lastTickAtMs = 0;
 
   // 已播放軌跡：每次推送整包換掉 GeoJSON，頂點留樣本上限，推送壓到約 10Hz 且同一時間只跑一個
-  final PlayedPrefix _playedPrefix = PlayedPrefix();
   final PublishBudget _playedBudget = PublishBudget(100);
   bool _playedPushInFlight = false;
   // 換軌跡或換 style 時 +1，讓舊軌跡的在飛推送與相機檢查回來時認得自己已經過期
   int _playbackGeneration = 0;
+
+  /// 每個軌跡點是否重複經過。整條軌跡的性質，載入時算一次，播放時只查表。
+  Uint8List? _repeatFlags;
 
   Timer? _zoomSaveTimer;
   double _frameRate = 60.0; // 實測播放 tick 頻率（fps）
@@ -694,14 +700,15 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
       if (mounted) {
         _safeSetState(() {
           _positions = playbackPositions;
-          _playedPrefix.clear();
           _playedPushInFlight = false;
+          _repeatFlags = null;
           _playbackGeneration++;
           _isLoading = false;
           _resetAddressSchedule();
         });
 
         _calculateDistancePrefixSum();
+        unawaited(_classifyRepeatPasses(playbackPositions));
         _refreshAddressNow(); // 先解析起點路名
 
         if (_mapController != null) {
@@ -774,8 +781,18 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     // 2. 建立已播放軌跡圖層 (動態更新)
     final Map<String, dynamic> emptyPlayedGeoJson = {"type": "FeatureCollection", "features": []};
     await controller.addSource(_playedSourceId, GeojsonSourceProperties(data: emptyPlayedGeoJson));
-    await controller.addLineLayer(_playedSourceId, _playedLayerId, LineLayerProperties(lineColor: _routeColorMode == RouteColorMode.single ? '#0F53FE' : '#FF3D00', lineWidth: 6.5, lineOpacity: 1.0, lineJoin: 'round', lineCap: 'round'));
-    _playedPrefix.clear();
+    // await controller.addLineLayer(_playedSourceId, _playedLayerId, LineLayerProperties(lineColor: _routeColorMode == RouteColorMode.single ? '#0F53FE' : '#FF3D00', lineWidth: 6.5, lineOpacity: 1.0, lineJoin: 'round', lineCap: 'round'));
+    await controller.addLineLayer(
+      _playedSourceId,
+      _playedLayerId,
+      LineLayerProperties(
+        lineColor: ['get', 'color'], // 改成依每個線段的 color 屬性上色
+        lineWidth: 6.5,
+        lineOpacity: 1.0,
+        lineJoin: 'round',
+        lineCap: 'round',
+      ),
+    );
     _playedPushInFlight = false;
     _playbackGeneration++;
     // 新增：如果目前進度不在起點（例如切換顏色模式或地圖圖層），立刻補畫已走過的線段
@@ -1575,37 +1592,107 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
 
   void _pushPlayedGeometry(int idx, double smoothLng, double smoothLat) {
     final controller = _mapController;
-    if (controller == null) return;
-
-    _playedPrefix.advanceTo(idx, (i) => [_positions[i].longitude!.toDouble(), _positions[i].latitude!.toDouble()]);
+    if (controller == null || _positions.isEmpty) return;
 
     final now = DateTime.now().millisecondsSinceEpoch;
     if (_playedPushInFlight || (_isPlaying && !_playedBudget.due(now))) {
       return;
     }
 
-    final List<List<double>> coordinates = [
-      ..._playedPrefix.vertices,
-      [smoothLng, smoothLat],
-    ];
-    if (coordinates.length < 2) return;
+    // 重複判斷整條軌跡只算一次（_repeatFlags），這裡只查表，不重算，
+    // 否則每次推送都要重掃已播放的座標，長軌跡會變成平方級成本。
+    final Uint8List? repeatFlags = _repeatFlags;
+    final String firstPassColor = _routeColorMode == RouteColorMode.single ? '#0F53FE' : '#FF3D00';
+    const String repeatPassColor = '#9C27B0';
+
+    final int safeIdx = idx.clamp(0, _positions.length - 1);
+    // 頂點數壓在 1500 以內，GeoJSON 才不會隨播放進度膨脹
+    final int step = max(1, (safeIdx + 1) ~/ 1500);
+
+    final List<Map<String, dynamic>> features = <Map<String, dynamic>>[];
+    List<List<double>> run = <List<double>>[];
+    bool runIsRepeat = false;
+
+    bool isRepeatAt(int index) => repeatFlags != null && index >= 0 && index < repeatFlags.length && repeatFlags[index] == 1;
+
+    void flushRun() {
+      if (run.length < 2) return;
+      features.add({
+        'type': 'Feature',
+        'properties': {'color': runIsRepeat ? repeatPassColor : firstPassColor},
+        'geometry': {'type': 'LineString', 'coordinates': run},
+      });
+    }
+
+    void addVertex(double lng, double lat, bool repeat) {
+      if (run.isEmpty) {
+        run = [
+          [lng, lat],
+        ];
+        runIsRepeat = repeat;
+        return;
+      }
+      if (repeat == runIsRepeat) {
+        run.add([lng, lat]);
+        return;
+      }
+      // 換色處從交界點接上，線條才不會斷
+      final List<double> junction = run.last;
+      flushRun();
+      run = [junction, [lng, lat]];
+      runIsRepeat = repeat;
+    }
+
+    for (var i = 0; i <= safeIdx; i += step) {
+      final p = _positions[i];
+      final double? lng = p.longitude;
+      final double? lat = p.latitude;
+      if (lng == null || lat == null) continue;
+      addVertex(lng.toDouble(), lat.toDouble(), isRepeatAt(i));
+    }
+    addVertex(smoothLng, smoothLat, isRepeatAt(safeIdx));
+    flushRun();
+
+    if (features.isEmpty) return;
 
     _playedPushInFlight = true;
-    final geoJson = <String, dynamic>{
-      "type": "FeatureCollection",
-      "features": [
-        {
-          "type": "Feature",
-          "geometry": {"type": "LineString", "coordinates": coordinates},
-        },
-      ],
-    };
+    final geoJson = <String, dynamic>{'type': 'FeatureCollection', 'features': features};
     final int generation = _playbackGeneration;
+
     unawaited(
-      controller.setGeoJsonSource(_playedSourceId, geoJson).catchError((Object error) => developer.log('Failed to push played line: $error', name: 'HistoryRouteScreen')).whenComplete(() {
-        if (generation == _playbackGeneration) _playedPushInFlight = false;
-      }),
+      controller
+          .setGeoJsonSource(_playedSourceId, geoJson)
+          .catchError((Object error) {
+            developer.log('Failed to push played line: $error', name: 'HistoryRouteScreen');
+          })
+          .whenComplete(() {
+            if (generation == _playbackGeneration) {
+              _playedPushInFlight = false;
+            }
+          }),
     );
+  }
+
+  /// 重複經過的判斷是整條軌跡的性質，載入時算一次就好。
+  Future<void> _classifyRepeatPasses(List<api.Position> positions) async {
+    if (positions.isEmpty) return;
+    final Float64List packed = Float64List(positions.length * 2);
+    for (var i = 0; i < positions.length; i++) {
+      packed[i * 2] = positions[i].longitude?.toDouble() ?? 0;
+      packed[i * 2 + 1] = positions[i].latitude?.toDouble() ?? 0;
+    }
+    final int generation = _playbackGeneration;
+    Uint8List flags;
+    try {
+      flags = positions.length > _trackCleanupIsolateThreshold ? await compute(_classifyRepeatPassesIsolate, packed) : classifyRepeatPasses(packed);
+    } catch (error) {
+      developer.log('Failed to classify repeat passes: $error', name: 'HistoryRouteScreen');
+      return;
+    }
+    if (!mounted || generation != _playbackGeneration) return;
+    _repeatFlags = flags;
+    // 旗標晚到時補畫一次，否則暫停中的畫面會停在算完之前那條全藍的線
+    if (_mapController != null) unawaited(_updatePlaybackUI());
   }
 
   void _onAnimationTick() {
