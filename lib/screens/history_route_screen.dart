@@ -772,21 +772,17 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     await controller.addLineLayer(_routeSourceId, _routeLayerId, LineLayerProperties(lineColor: ['get', 'color'], lineWidth: 4.0, lineOpacity: 0.45, lineJoin: 'round', lineCap: 'round'));
 
     // 2. 建立已播放軌跡圖層 (動態更新)
-    final Map<String, dynamic> emptyPlayedGeoJson = {
-      "type": "FeatureCollection",
-      "features": [
-        {
-          "type": "Feature",
-          "geometry": {"type": "LineString", "coordinates": []},
-        },
-      ],
-    };
+    final Map<String, dynamic> emptyPlayedGeoJson = {"type": "FeatureCollection", "features": []};
     await controller.addSource(_playedSourceId, GeojsonSourceProperties(data: emptyPlayedGeoJson));
     await controller.addLineLayer(_playedSourceId, _playedLayerId, LineLayerProperties(lineColor: _routeColorMode == RouteColorMode.single ? '#0F53FE' : '#FF3D00', lineWidth: 6.5, lineOpacity: 1.0, lineJoin: 'round', lineCap: 'round'));
     _playedPrefix.clear();
     _playedPushInFlight = false;
     _playbackGeneration++;
-
+    // 新增：如果目前進度不在起點（例如切換顏色模式或地圖圖層），立刻補畫已走過的線段
+    if (_playbackPositionRx.value > 0) {
+      final int idx = _playbackPositionRx.value.floor().clamp(0, _positions.length - 1);
+      _pushPlayedGeometry(idx, _positions[idx].longitude!.toDouble(), _positions[idx].latitude!.toDouble());
+    }
     // 3. 繪製起終點標籤與停靠點（圖示失敗不可影響軌跡顯示）
     try {
       await controller.addSymbols([SymbolOptions(geometry: startPoint, iconImage: _startIconId, iconSize: 1.8, iconAnchor: "bottom"), SymbolOptions(geometry: endPoint, iconImage: _endIconId, iconSize: 1.8, iconAnchor: "bottom")]);
@@ -1588,27 +1584,25 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
       return;
     }
 
-    final coordinates = [
+    final List<List<double>> coordinates = [
       ..._playedPrefix.vertices,
       [smoothLng, smoothLat],
     ];
+    if (coordinates.length < 2) return;
+
     _playedPushInFlight = true;
     final geoJson = <String, dynamic>{
       "type": "FeatureCollection",
-      "features": coordinates.length < 2
-          ? []
-          : [
-              {
-                "type": "Feature",
-                "geometry": {"type": "LineString", "coordinates": coordinates},
-              },
-            ],
+      "features": [
+        {
+          "type": "Feature",
+          "geometry": {"type": "LineString", "coordinates": coordinates},
+        },
+      ],
     };
     final int generation = _playbackGeneration;
     unawaited(
-      controller.setGeoJsonSource(_playedSourceId, geoJson).catchError((Object error) => developer.log('Failed to push played line: $error', name: 'HistoryRouteScreen'))
-      // 換軌跡後回來的舊推送不能把新的閂解掉，否則兩筆寫入會交錯
-      .whenComplete(() {
+      controller.setGeoJsonSource(_playedSourceId, geoJson).catchError((Object error) => developer.log('Failed to push played line: $error', name: 'HistoryRouteScreen')).whenComplete(() {
         if (generation == _playbackGeneration) _playedPushInFlight = false;
       }),
     );
@@ -2745,7 +2739,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
                                 left: 0,
                                 right: 0,
                                 child: Text(
-                                  '${distanceInKm.toStringAsFixed(1)} km',
+                                  '${distanceInKm.round()}',
                                   textAlign: TextAlign.center,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
