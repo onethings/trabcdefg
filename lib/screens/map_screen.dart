@@ -707,7 +707,15 @@ class _MapScreenState extends State<MapScreen> {
       final previousState = _markerRenderStates[deviceId];
       final bool iconChanged =
           previousState == null || previousState.iconImage != baseIconKey || previousState.course != course || previousState.iconSize != iconSize || previousState.latitude != latLng.latitude || previousState.longitude != latLng.longitude;
-      final bool labelChanged = previousState == null || previousState.labelImage != customLabelId || previousState.latitude != latLng.latitude || previousState.longitude != latLng.longitude;
+      // 圖示會隨 course 旋轉，label 要放到旋轉後外框之外（貼圖半對角線），
+      // 否則 128px（簡易模式 256px）的車輛圖示會蓋住車牌。
+      final double labelOffsetY = 32.0 * iconSize * 0.7071 + 4;
+      final bool labelChanged =
+          previousState == null ||
+          previousState.labelImage != customLabelId ||
+          previousState.iconSize != iconSize ||
+          previousState.latitude != latLng.latitude ||
+          previousState.longitude != latLng.longitude;
 
       if (_deviceSymbols[deviceId] == null || previousState?.iconImage != baseIconKey) {
         await _iconService.ensureIconLoaded(controller, baseIconKey);
@@ -720,7 +728,7 @@ class _MapScreenState extends State<MapScreen> {
       final deviceData = {'deviceId': deviceId.toString()};
       final maplibre.SymbolOptions iconOptions = maplibre.SymbolOptions(geometry: latLng, iconImage: baseIconKey, iconRotate: course, iconSize: iconSize, iconAnchor: 'center', zIndex: 10);
       final int labelZIndex = isSelected ? 6 : 5;
-      final maplibre.SymbolOptions labelOptions = maplibre.SymbolOptions(geometry: latLng, iconImage: customLabelId, iconRotate: 0.0, iconOffset: const Offset(0, 15), iconSize: 1.2, iconAnchor: 'top', zIndex: labelZIndex);
+      final maplibre.SymbolOptions labelOptions = maplibre.SymbolOptions(geometry: latLng, iconImage: customLabelId, iconRotate: 0.0, iconOffset: Offset(0, labelOffsetY), iconSize: 1.2, iconAnchor: 'top', zIndex: labelZIndex);
 
       final iconSymbol = _deviceSymbols[deviceId];
       if (iconSymbol == null) {

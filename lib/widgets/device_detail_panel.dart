@@ -11,6 +11,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:trabcdefg/providers/traccar_provider.dart';
 import 'package:trabcdefg/screens/command_screen.dart';
 import 'package:trabcdefg/screens/device_details_screen.dart';
+import 'package:trabcdefg/screens/history_route_screen.dart';
 import 'package:trabcdefg/screens/monthly_mileage_screen.dart';
 import 'package:trabcdefg/screens/settings/add_device_screen.dart';
 import 'package:trabcdefg/services/feedback.dart';
@@ -116,6 +117,13 @@ class _DeviceDetailPanelState extends State<DeviceDetailPanel> {
     }
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bool simpleMode = isSimpleMode(context);
+    // 簡易模式字級是 1.4 倍：左右內距收窄、區塊間距與容器內距縮小，盡量把空間留給內容。
+    final double sidePadding = simpleMode ? 12 : 16;
+    final double sectionGap = simpleMode ? 8 : 12;
+    final double containerPadding = simpleMode ? 10 : 12;
+    // 內容超過 55% 畫面高度就改為滾動，字放大後不會被裁掉。
+    final double maxBodyHeight = MediaQuery.sizeOf(context).height * 0.55;
 
     return Padding(
       padding: const EdgeInsetsDirectional.fromSTEB(12, 0, 12, 12),
@@ -125,20 +133,25 @@ class _DeviceDetailPanelState extends State<DeviceDetailPanel> {
         platformViewBackdrop: true,
         settings: mapGlassSettings(context),
         padding: const EdgeInsets.symmetric(vertical: 12),
-        child: Column(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: maxBodyHeight),
+          child: SingleChildScrollView(
+            child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Handle bar
-                Container(
-                  height: 4,
-                  width: 36,
-                  decoration: BoxDecoration(color: (isDark ? Colors.white : Colors.black).withValues(alpha: 0.12), borderRadius: BorderRadius.circular(2)),
-                ),
-                const SizedBox(height: 12),
+                // Handle bar：簡易模式不需要（面板不可拖曳），省下空白。
+                if (!simpleMode) ...[
+                  Container(
+                    height: 4,
+                    width: 36,
+                    decoration: BoxDecoration(color: (isDark ? Colors.white : Colors.black).withValues(alpha: 0.12), borderRadius: BorderRadius.circular(2)),
+                  ),
+                  const SizedBox(height: 12),
+                ],
 
                 // Header (Name, Info, Status Tags)
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  padding: EdgeInsets.symmetric(horizontal: sidePadding),
                   child: Row(
                     children: [
                       Expanded(
@@ -159,24 +172,24 @@ class _DeviceDetailPanelState extends State<DeviceDetailPanel> {
                   ),
                 ),
 
-                const SizedBox(height: 12),
+                SizedBox(height: sectionGap),
 
-                // Status Grid：資料驅動 —— 有資料的項目才顯示（一列 3 個，
-                // 超過自動換列），沒資料的直接隱藏，維持面板簡潔。
+                // Status Grid：資料驅動 —— 有資料的項目才顯示，沒資料的直接隱藏。
+                // 簡易模式改成每列 2 項並允許 2 行，字放大後數值與標籤不會被截掉。
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  padding: EdgeInsets.symmetric(horizontal: sidePadding),
                   child: Container(
-                    padding: const EdgeInsets.all(12),
+                    padding: EdgeInsets.all(containerPadding),
                     decoration: BoxDecoration(color: (isDark ? Colors.white : Colors.black).withValues(alpha: 0.05), borderRadius: BorderRadius.circular(16)),
-                    child: Column(mainAxisSize: MainAxisSize.min, children: _buildStatusRows(context)),
+                    child: Column(mainAxisSize: MainAxisSize.min, children: _buildStatusRows(context, columns: simpleMode ? 2 : 3, maxLines: simpleMode ? 2 : 1)),
                   ),
                 ),
 
-                const SizedBox(height: 12),
+                SizedBox(height: sectionGap),
 
                 // Address Row
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  padding: EdgeInsets.symmetric(horizontal: sidePadding),
                   child: Row(
                     children: [
                       Icon(CupertinoIcons.location_solid, size: 14, color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.7)),
@@ -185,6 +198,7 @@ class _DeviceDetailPanelState extends State<DeviceDetailPanel> {
                         child: Text(
                           widget.address,
                           style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                          maxLines: simpleMode ? 3 : null,
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
@@ -201,16 +215,18 @@ class _DeviceDetailPanelState extends State<DeviceDetailPanel> {
                       child: _buildAppleActionButtons(context),
                     ),
                   ),
-                // 簡易模式只留一顆大顆的導航鍵，其餘動作列藏起來。
-                if (isSimpleMode(context)) ...[
-                  const SizedBox(height: 12),
+                // 簡易模式只留兩顆大按鍵：左邊導覽、右邊軌跡回放；其餘動作列藏起來。
+                if (simpleMode) ...[
+                  SizedBox(height: sectionGap),
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: _buildSimpleNavigateButton(),
+                    padding: EdgeInsets.symmetric(horizontal: sidePadding),
+                    child: _buildSimpleActionButtons(context),
                   ),
                 ],
               ],
             ),
+          ),
+        ),
       ),
     );
   }
@@ -220,14 +236,15 @@ class _DeviceDetailPanelState extends State<DeviceDetailPanel> {
     return Container(height: 24, width: 0.5, color: (isDark ? Colors.white : Colors.black).withValues(alpha: 0.1));
   }
 
-  /// 一列放 3 個項目，超過就換列（列內沿用原本的細分隔線語彙）。
-  List<Widget> _buildStatusRows(BuildContext context) {
-    final items = _buildStatusItems(context);
+  /// 每列 [columns] 個項目，超過就換列（列內沿用原本的細分隔線語彙）。
+  /// [maxLines] 控制數值與標籤最多幾行：簡易模式字大，給到 2 行才不會被截掉。
+  List<Widget> _buildStatusRows(BuildContext context, {required int columns, required int maxLines}) {
+    final items = _buildStatusItems(context, maxLines: maxLines);
     final children = <Widget>[];
 
-    for (var i = 0; i < items.length; i += 3) {
+    for (var i = 0; i < items.length; i += columns) {
       if (i > 0) children.add(const SizedBox(height: 12));
-      final rowItems = items.skip(i).take(3).toList();
+      final rowItems = items.skip(i).take(columns).toList();
       children.add(
         Row(
           children: [
@@ -242,60 +259,60 @@ class _DeviceDetailPanelState extends State<DeviceDetailPanel> {
 
   /// 狀態項目清單：只有「真的有資料」的才產生 widget。
   /// 規則：null 或 0 一律視為沒資料（GPS 沒回報時就是 0，顯示 0 沒有意義）。
-  List<Widget> _buildStatusItems(BuildContext context) {
+  List<Widget> _buildStatusItems(BuildContext context, {required int maxLines}) {
     final items = <Widget>[];
 
     // 1) 車速：直接採用回傳值（單位依伺服器設定，不在此換算）
     final speed = widget.position.speed;
-    items.add(_buildStatusItem(context, Icons.speed_rounded, '${speed?.toStringAsFixed(0) ?? 0} ${'sharedKmh'.tr}', 'positionSpeed'.tr));
+    items.add(_buildStatusItem(context, Icons.speed_rounded, '${speed?.toStringAsFixed(0) ?? 0} ${'sharedKmh'.tr}', 'positionSpeed'.tr, maxLines: maxLines));
 
     // 2) 電量
     final battery = _getAttribute(widget.position, 'batteryLevel');
     if (battery is num) {
-      items.add(_buildStatusItem(context, CupertinoIcons.battery_charging, '${battery.toStringAsFixed(0)}%', 'positionBattery'.tr));
+      items.add(_buildStatusItem(context, CupertinoIcons.battery_charging, '${battery.toStringAsFixed(0)}%', 'positionBattery'.tr, maxLines: maxLines));
     }
 
     // 3) 點火狀態
     final ignition = _getAttribute(widget.position, 'ignition');
     if (ignition is bool) {
-      items.add(_buildStatusItem(context, CupertinoIcons.power, ignition ? 'sharedOn'.tr : 'sharedOff'.tr, 'positionIgnition'.tr));
+      items.add(_buildStatusItem(context, CupertinoIcons.power, ignition ? 'sharedOn'.tr : 'sharedOff'.tr, 'positionIgnition'.tr, maxLines: maxLines));
     }
 
     // 4) 當日里程（今日 summary.distance，單位公尺）
     final todayDistance = _dailySummary?.distance;
     if (todayDistance != null && todayDistance > 0) {
-      items.add(_buildStatusItem(context, Icons.route_rounded, '${(todayDistance / 1000).toInt()} ${'sharedKm'.tr}', 'dashboardTodayDistance'.tr));
+      items.add(_buildStatusItem(context, Icons.route_rounded, '${(todayDistance / 1000).toInt()} ${'sharedKm'.tr}', 'dashboardTodayDistance'.tr, maxLines: maxLines));
     }
     
     // 5) 當日點火時數（summary.engineHours 單位是毫秒）
     final engineHours = _dailySummary?.engineHours;
     if (engineHours != null && engineHours > 0) {
-      items.add(_buildStatusItem(context, CupertinoIcons.timer, _formatEngineHours(engineHours), 'reportEngineHours'.tr));
+      items.add(_buildStatusItem(context, CupertinoIcons.timer, _formatEngineHours(engineHours), 'reportEngineHours'.tr, maxLines: maxLines));
     }
 
     // 6) 總里程（優先 odometer，部分裝置只回報 totalDistance）
     final odometer = _getAttribute(widget.position, 'odometer') ?? _getAttribute(widget.position, 'totalDistance');
     if (odometer is num && odometer > 0) {
-      items.add(_buildStatusItem(context, CupertinoIcons.gauge, '${(odometer / 1000).toStringAsFixed(0)} ${'sharedKm'.tr}', 'deviceTotalDistance'.tr));
+      items.add(_buildStatusItem(context, CupertinoIcons.gauge, '${(odometer / 1000).toStringAsFixed(0)} ${'sharedKm'.tr}', 'deviceTotalDistance'.tr, maxLines: maxLines));
     }
 
     // 7) 海拔（公尺；0 或 null 視為沒資料）
     final altitude = widget.position.altitude;
     if (altitude is num && altitude != 0) {
-      items.add(_buildStatusItem(context, Icons.terrain_rounded, '${altitude.toStringAsFixed(0)} ${'sharedMeters'.tr}', 'positionAltitude'.tr));
+      items.add(_buildStatusItem(context, Icons.terrain_rounded, '${altitude.toStringAsFixed(0)} ${'sharedMeters'.tr}', 'positionAltitude'.tr, maxLines: maxLines));
     }
 
     // 8) 油量（油箱剩餘油位，公升）
     final fuel = _getAttribute(widget.position, 'fuel') ?? _getAttribute(widget.position, 'fuelLevel');
     if (fuel is num && fuel > 0) {
-      items.add(_buildStatusItem(context, Icons.local_gas_station_rounded, '${fuel.toStringAsFixed(1)} ${'sharedLiter'.tr}', 'dashboardFuelLevel'.tr));
+      items.add(_buildStatusItem(context, Icons.local_gas_station_rounded, '${fuel.toStringAsFixed(1)} ${'sharedLiter'.tr}', 'dashboardFuelLevel'.tr, maxLines: maxLines));
     }
 
     // 9) 當日油耗（今日 summary.spentFuel，公升）——跟「油量」是兩件事，
     //    有資料就兩個都顯示：油箱還剩多少 vs 今天用掉多少。
     final spentFuel = _dailySummary?.spentFuel;
     if (spentFuel != null && spentFuel > 0) {
-      items.add(_buildStatusItem(context, CupertinoIcons.drop, '${spentFuel.toStringAsFixed(1)} ${'sharedLiter'.tr}', 'dashboardSpentFuel'.tr));
+      items.add(_buildStatusItem(context, CupertinoIcons.drop, '${spentFuel.toStringAsFixed(1)} ${'sharedLiter'.tr}', 'dashboardSpentFuel'.tr, maxLines: maxLines));
     }
 
     return items;
@@ -309,7 +326,7 @@ class _DeviceDetailPanelState extends State<DeviceDetailPanel> {
     return '${(milliseconds / 3600000).toStringAsFixed(1)} ${'sharedHour'.tr}';
   }
 
-  Widget _buildStatusItem(BuildContext context, IconData icon, String value, String label) {
+  Widget _buildStatusItem(BuildContext context, IconData icon, String value, String label, {required int maxLines}) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -322,7 +339,7 @@ class _DeviceDetailPanelState extends State<DeviceDetailPanel> {
             Flexible(
               child: Text(
                 value,
-                maxLines: 1,
+                maxLines: maxLines,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
               ),
@@ -332,7 +349,7 @@ class _DeviceDetailPanelState extends State<DeviceDetailPanel> {
         const SizedBox(height: 2),
         Text(
           label,
-          maxLines: 1,
+          maxLines: maxLines,
           overflow: TextOverflow.ellipsis,
           style: TextStyle(fontSize: 9, color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.7)),
         ),
@@ -365,19 +382,52 @@ class _DeviceDetailPanelState extends State<DeviceDetailPanel> {
     );
   }
 
-  Widget _buildSimpleNavigateButton() {
-    return SizedBox(
-      width: double.infinity,
-      child: ElevatedButton.icon(
-        onPressed: _navigateToGoogleMaps,
-        icon: const Icon(CupertinoIcons.location_north, size: 22),
-        label: Text('actionNavigate'.tr, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
-        style: ElevatedButton.styleFrom(
-          minimumSize: const Size.fromHeight(52),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+  Widget _buildSimpleActionButtons(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: ElevatedButton.icon(
+            onPressed: _navigateToGoogleMaps,
+            icon: const Icon(CupertinoIcons.location_north, size: 22),
+            label: Text('actionNavigate'.tr, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
+            style: ElevatedButton.styleFrom(
+              minimumSize: const Size.fromHeight(52),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            ),
+          ),
         ),
-      ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: ElevatedButton.icon(
+            onPressed: () => _navigateToHistoryRoute(context),
+            icon: const Icon(CupertinoIcons.play_circle_fill, size: 22),
+            label: Text('reportReplay'.tr, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
+            style: ElevatedButton.styleFrom(
+              minimumSize: const Size.fromHeight(52),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            ),
+          ),
+        ),
+      ],
     );
+  }
+
+  /// 開啟今天時段的軌跡回放。HistoryRouteScreen 從 prefs 讀裝置與時間範圍。
+  Future<void> _navigateToHistoryRoute(BuildContext context) async {
+    final deviceId = widget.device.id;
+    if (deviceId == null) return;
+    final now = DateTime.now();
+    final from = DateTime(now.year, now.month, now.day, 0, 0, 0);
+    final to = DateTime(now.year, now.month, now.day, 23, 59, 59);
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('selectedDeviceId', deviceId);
+    await prefs.setString('selectedDeviceName', widget.device.name ?? '');
+    await prefs.setString('historyFrom', from.toUtc().toIso8601String());
+    await prefs.setString('historyTo', to.toUtc().toIso8601String());
+
+    if (!context.mounted) return;
+    Navigator.of(context, rootNavigator: true).push(MaterialPageRoute(builder: (context) => const HistoryRouteScreen()));
   }
 
   Widget _buildCircleIcon(BuildContext context, IconData icon, VoidCallback onTap, {Color? color, String? semanticsLabel}) {
