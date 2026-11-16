@@ -33,6 +33,7 @@ import 'package:trabcdefg/services/marker_icon_service.dart';
 import 'package:trabcdefg/widgets/device_detail_panel.dart';
 import 'package:trabcdefg/widgets/simple_mode.dart';
 import 'package:trabcdefg/widgets/state_views.dart';
+
 import 'share_device_screen.dart';
 
 const double _kControlSize = 44;
@@ -581,7 +582,10 @@ class _MapScreenState extends State<MapScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Padding(padding: const EdgeInsets.all(16), child: Text('deviceTitle'.tr, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600))),
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text('deviceTitle'.tr, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
+              ),
               Flexible(
                 child: ListView(
                   children: [
@@ -716,21 +720,17 @@ class _MapScreenState extends State<MapScreen> {
       }
       if (!mounted || !identical(_mapController, controller) || !_isStyleLoaded) return;
 
-      // 車牌貼在「旋轉後剪影」下方 4px：量的是貼圖實際輪廓，
-      // 正常模式與簡易模式都不會擋住車牌，也不會隔出一大截。
-      final double labelOffsetY = _iconService.iconBottomExtent(baseIconKey, course) * iconSize + 4;
+      // 車牌沿用原本的 15px 偏移，但 zIndex 高於車輛圖示，所以不再被圖示蓋住。
       final bool labelChanged =
           previousState == null ||
           previousState.labelImage != customLabelId ||
-          previousState.iconSize != iconSize ||
-          (previousState.labelOffsetY - labelOffsetY).abs() > 0.5 ||
           previousState.latitude != latLng.latitude ||
           previousState.longitude != latLng.longitude;
 
       final deviceData = {'deviceId': deviceId.toString()};
       final maplibre.SymbolOptions iconOptions = maplibre.SymbolOptions(geometry: latLng, iconImage: baseIconKey, iconRotate: course, iconSize: iconSize, iconAnchor: 'center', zIndex: 10);
-      final int labelZIndex = isSelected ? 6 : 5;
-      final maplibre.SymbolOptions labelOptions = maplibre.SymbolOptions(geometry: latLng, iconImage: customLabelId, iconRotate: 0.0, iconOffset: Offset(0, labelOffsetY), iconSize: 1.2, iconAnchor: 'top', zIndex: labelZIndex);
+      final int labelZIndex = isSelected ? 12 : 11;
+      final maplibre.SymbolOptions labelOptions = maplibre.SymbolOptions(geometry: latLng, iconImage: customLabelId, iconRotate: 0.0, iconOffset: const Offset(0, 15), iconSize: 1.2, iconAnchor: 'top', zIndex: labelZIndex);
 
       final iconSymbol = _deviceSymbols[deviceId];
       if (iconSymbol == null) {
@@ -750,7 +750,7 @@ class _MapScreenState extends State<MapScreen> {
         await controller.updateSymbol(labelSymbol, labelOptions);
       }
 
-      _markerRenderStates[deviceId] = _MarkerRenderState(latitude: latLng.latitude, longitude: latLng.longitude, course: course, iconSize: iconSize, iconImage: baseIconKey, labelImage: customLabelId, labelOffsetY: labelOffsetY);
+      _markerRenderStates[deviceId] = _MarkerRenderState(latitude: latLng.latitude, longitude: latLng.longitude, course: course, iconSize: iconSize, iconImage: baseIconKey, labelImage: customLabelId);
     }
 
     if (pendingIcons.isNotEmpty) {
@@ -1489,9 +1489,7 @@ class _MapScreenState extends State<MapScreen> {
             flexibleSpace: null,
             iconTheme: IconThemeData(color: Theme.of(context).brightness == Brightness.dark ? Colors.white : Colors.black),
           ),
-          drawer: deviceCount > 1
-              ? Consumer<TraccarProvider>(builder: (context, provider, _) => _buildDeviceListDrawer(context, provider))
-              : null,
+          drawer: deviceCount > 1 ? Consumer<TraccarProvider>(builder: (context, provider, _) => _buildDeviceListDrawer(context, provider)) : null,
           body: Stack(
             children: [
               maplibre.MapLibreMap(
@@ -1584,10 +1582,7 @@ class _MapScreenState extends State<MapScreen> {
                       ],
                       _GlassIconButton(icon: _isFollowingDevice ? Icons.my_location_rounded : Icons.location_searching_rounded, label: 'mapFollowDevice'.tr, isActive: _isFollowingDevice, haptic: true, onTap: _toggleFollowCurrentDevice),
                       const _GlassDivider(),
-                      if (!simpleMode) ...[
-                        _GlassIconButton(icon: Icons.zoom_out_map_rounded, label: 'mapFitAll'.tr, onTap: () => _zoomToFitAll(context.read<TraccarProvider>())),
-                        _GlassDivider(),
-                      ],
+                      if (!simpleMode) ...[_GlassIconButton(icon: Icons.zoom_out_map_rounded, label: 'mapFitAll'.tr, onTap: () => _zoomToFitAll(context.read<TraccarProvider>())), _GlassDivider()],
                       _GlassIconButton(icon: CupertinoIcons.list_bullet, label: 'deviceTitle'.tr, onTap: () => _showDeviceAccessSheet(context.read<TraccarProvider>())),
                     ],
                   ),
@@ -1654,7 +1649,10 @@ class _MapScreenState extends State<MapScreen> {
                         children: [
                           Icon(Icons.my_location_rounded, size: 16, color: Theme.of(context).colorScheme.onPrimary),
                           const SizedBox(width: 6),
-                          Text('followReturn'.tr, style: TextStyle(color: Theme.of(context).colorScheme.onPrimary, fontWeight: FontWeight.w600, fontSize: 12)),
+                          Text(
+                            'followReturn'.tr,
+                            style: TextStyle(color: Theme.of(context).colorScheme.onPrimary, fontWeight: FontWeight.w600, fontSize: 12),
+                          ),
                         ],
                       ),
                     ),
@@ -1675,9 +1673,8 @@ class _MarkerRenderState {
   final double iconSize;
   final String iconImage;
   final String labelImage;
-  final double labelOffsetY;
 
-  const _MarkerRenderState({required this.latitude, required this.longitude, required this.course, required this.iconSize, required this.iconImage, required this.labelImage, required this.labelOffsetY});
+  const _MarkerRenderState({required this.latitude, required this.longitude, required this.course, required this.iconSize, required this.iconImage, required this.labelImage});
 }
 
 class _GlassSurface extends StatelessWidget {
