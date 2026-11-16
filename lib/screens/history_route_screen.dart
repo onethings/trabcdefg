@@ -1425,13 +1425,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
 
   /// 只由倍速、這條軌跡的長度、緯度、可用畫面高度推導，不含使用者的凍結期。
   double _derivedFollowZoom(double latitude) {
-    return followZoom(
-      trackLengthMeters: _trackLengthMeters(),
-      speed: _playbackSpeed,
-      latitude: latitude,
-      viewportHeightPx: _visibleViewportHeight(),
-      userOffsetLog2: _followZoomOffset,
-    );
+    return followZoom(trackLengthMeters: _trackLengthMeters(), speed: _playbackSpeed, latitude: latitude, viewportHeightPx: _visibleViewportHeight(), userOffsetLog2: _followZoomOffset);
   }
 
   /// 這條軌跡總長（公尺）。同一趟回放不分長短都是兩分鐘，所以視野必須跟著它縮放。
@@ -2335,12 +2329,13 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
 
   // --- 日曆邏輯 ---
 
-  Future<void> _fetchMonthlyData(DateTime month) async {
+  Future<void> _fetchMonthlyData(DateTime month, {VoidCallback? onUpdated}) async {
     if (_deviceId == null) {
       return;
     }
 
     if (_dailySummaries.isNotEmpty && month.month == _focusedDay.month && month.year == _focusedDay.year) {
+      onUpdated?.call();
       return;
     }
 
@@ -2348,6 +2343,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
       _isCalendarLoading = true;
       _focusedDay = month;
     });
+    onUpdated?.call();
 
     if (!mounted) {
       return;
@@ -2384,6 +2380,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     _safeSetState(() {
       _isCalendarLoading = false;
     });
+    onUpdated?.call();
 
     Future<void> fetchDay(DateTime date) async {
       final dayUtc = DateTime.utc(date.year, date.month, date.day);
@@ -2449,13 +2446,13 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
       pendingDays.add(date);
     }
 
-    // 每天一個請求很慢，改以 4 個並行抓取，每批結束才刷新一次 UI
     const int concurrency = 4;
     for (var i = 0; i < pendingDays.length; i += concurrency) {
       final chunk = pendingDays.sublist(i, min(i + concurrency, pendingDays.length));
       await Future.wait(chunk.map(fetchDay));
       if (mounted) {
         _safeSetState(() {});
+        onUpdated?.call();
       }
     }
   }
@@ -2674,10 +2671,6 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
       await initializeDateFormatting(localeString, null);
     }
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _fetchMonthlyData(_focusedDay);
-    });
-
     if (!mounted) {
       return;
     }
@@ -2691,7 +2684,14 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
       builder: (context) => StatefulBuilder(
         builder: (context, modalSetState) {
           void refreshDialog() {
-            if (isDialogOpen) modalSetState(() {});
+            if (isDialogOpen && mounted) modalSetState(() {});
+          }
+
+          // 首次開啟時綁定 refreshDialog，確保抓完資料能立刻重繪彈窗
+          if (_dailySummaries.isEmpty && !_isCalendarLoading) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              _fetchMonthlyData(_focusedDay, onUpdated: refreshDialog);
+            });
           }
 
           return AlertDialog(
@@ -2699,7 +2699,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
             content: SizedBox(
               width: 340,
-              height: 580,
+              height: 620,
               child: Column(
                 children: [
                   if (_isDialogDevicePickerOpen)
@@ -2715,17 +2715,14 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
                         firstDay: DateTime.utc(2020),
                         lastDay: DateTime.now(),
                         focusedDay: _focusedDay,
+                        rowHeight: 60,
                         daysOfWeekHeight: 24,
                         selectedDayPredicate: (d) => isSameDay(_selectedCalendarDay, d),
                         onPageChanged: (focusedDay) {
                           modalSetState(() {
                             _focusedDay = focusedDay;
                           });
-                          _fetchMonthlyData(focusedDay).then((_) {
-                            if (mounted) {
-                              modalSetState(() {});
-                            }
-                          });
+                          _fetchMonthlyData(focusedDay, onUpdated: refreshDialog);
                         },
                         onDaySelected: (sel, foc) {
                           _onDaySelected(sel, foc);
@@ -2744,10 +2741,15 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
                               }
 
                               return Positioned(
-                                bottom: 4,
+                                bottom: 2,
+                                left: 0,
+                                right: 0,
                                 child: Text(
                                   '${distanceInKm.toStringAsFixed(1)} km',
-                                  style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: isSameDay(_selectedCalendarDay, date) ? Colors.white : Colors.blue[700]),
+                                  textAlign: TextAlign.center,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: isSameDay(_selectedCalendarDay, date) ? Theme.of(context).colorScheme.primary : Colors.blue[700]),
                                 ),
                               );
                             }
@@ -2760,14 +2762,14 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
                           defaultTextStyle: TextStyle(color: Theme.of(context).colorScheme.onSurface),
                           weekendTextStyle: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7)),
                           outsideTextStyle: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3)),
-                          cellMargin: const EdgeInsets.all(4),
+                          cellMargin: const EdgeInsets.only(left: 4, right: 4, top: 2, bottom: 14),
                         ),
                         headerStyle: HeaderStyle(
                           formatButtonVisible: false,
                           titleCentered: true,
                           titleTextStyle: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontSize: 17, fontWeight: FontWeight.bold),
                           leftChevronIcon: Icon(isRtlOf(context) ? Icons.chevron_right : Icons.chevron_left, color: Theme.of(context).colorScheme.primary),
-                          rightChevronIcon: Icon(isRtlOf(context) ? CupertinoIcons.chevron_left : CupertinoIcons.chevron_right, color: Theme.of(context).colorScheme.primary),
+                          rightChevronIcon: Icon(isRtlOf(context) ? Icons.chevron_left : Icons.chevron_right, color: Theme.of(context).colorScheme.primary),
                         ),
                         daysOfWeekStyle: DaysOfWeekStyle(
                           weekdayStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12),
