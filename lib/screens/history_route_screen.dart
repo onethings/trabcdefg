@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:trabcdefg/src/utils/camera_follow.dart';
 import 'package:trabcdefg/src/utils/direction.dart';
 import 'package:trabcdefg/src/utils/playback_pacing.dart';
+import 'package:trabcdefg/src/utils/playback_view.dart';
 import 'package:trabcdefg/src/utils/played_prefix.dart';
 import 'package:trabcdefg/src/utils/publish_budget.dart';
 import 'package:flutter/scheduler.dart';
@@ -276,9 +277,14 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
   bool _isDialogDevicePickerOpen = false;
   final TextEditingController _dialogDeviceSearchController = TextEditingController();
   double _currentZoom = 14.0;
-  // zoom 由使用者作主：一次手勢、一次縮放鈕，或一份存下來的 zoom 都算，
-  // 之後播放鍵與軌跡載入只移動中心點，不再改 zoom。
-  bool _userOwnsZoom = false;
+  // 跟隨視野的 zoom 是推導出來的（見 playback_view.dart），使用者自己拉出來的
+  // 偏好只記成相對偏移，這樣換倍速、換軌跡長度都不會把他的選擇弄丟。
+  double _followZoomOffset = 0;
+  // 使用者最後一次自己動 zoom 的時間；這段時間內不覆寫他的鏡頭
+  int _userZoomTouchedAtMs = 0;
+  bool _gestureInProgress = false;
+  double _zoomAtGestureStart = 0;
+  double _lastDerivedSpeed = 0;
 
   CameraPosition? _lastCameraPosition;
   bool _keepCameraOnStyleReload = false;
@@ -319,9 +325,13 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
   // 邊緣判斷每次都要跟可見範圍借一次平台通道，200ms 一次足以在高倍速下接住標記
   final PublishBudget _cameraBudget = PublishBudget(200);
 
-  static const double _followZoomLevel = 15.0; //16.0
   static const int _followPanAnimMs = 250;
   static const int _focusCameraAnimMs = 800;
+  static const int _followZoomAnimMs = 500;
+  // 底部回放面板與頂部資訊列遮住上下兩段，實際看得到的只有中間這塊，
+  // 推導 zoom 時用這塊的高度，畫面算起來才不會比眼睛看到的更遠
+  static const double _visibleViewportFraction = 0.7;
+  static const String _followZoomOffsetPrefsKey = 'follow_zoom_offset';
 
   // 放大動畫進行中時暫停跟隨鏡頭，避免跟隨鏡頭取消放大動畫
   int _suppressFollowCameraUntilMs = 0;
@@ -521,6 +531,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     final fromString = prefs.getString('historyFrom');
     final toString = prefs.getString('historyTo');
     final lastZoom = prefs.getDouble('history_zoom_level');
+    final savedZoomOffset = prefs.getDouble(_followZoomOffsetPrefsKey);
     final savedColorMode = prefs.getString('route_color_mode');
 
     if (savedColorMode != null) {
@@ -536,7 +547,9 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     _safeSetState(() {
       if (lastZoom != null) {
         _currentZoom = lastZoom;
-        _userOwnsZoom = true;
+      }
+      if (savedZoomOffset != null) {
+        _followZoomOffset = savedZoomOffset;
       }
       _deviceId = deviceId;
       _focusedDay = defaultDate;
@@ -1391,7 +1404,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     _playbackAnimationController?.repeat();
   }
 
-  // 開始播放時把鏡頭拉近到目前播放位置；使用者自己定過 zoom 就只置中，不動 zoom
+  // 開始播放時把鏡頭移到目前播放位置並擺到跟隨視野；使用者剛自己動過 zoom 就只置中。
   void _focusCameraOnPlayback() {
     final controller = _mapController;
     if (controller == null || _positions.isEmpty) return;
@@ -1399,13 +1412,50 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     final int idx = _playbackPositionRx.value.floor().clamp(0, _positions.length - 1);
     final pos = _positions[idx];
     final point = LatLng(pos.latitude!.toDouble(), pos.longitude!.toDouble());
-    final double currentZoom = controller.cameraPosition?.zoom ?? _currentZoom;
-    final double targetZoom = playbackStartZoom(current: currentZoom, userOwnsZoom: _userOwnsZoom, followZoom: _followZoomLevel);
+    final double targetZoom = _followZoomOrKeep(point.latitude);
     final int now = DateTime.now().millisecondsSinceEpoch;
 
+    _lastDerivedSpeed = _playbackSpeed;
     _suppressFollowCameraUntilMs = now + _focusCameraAnimMs + 100;
     _cameraBudget.reset();
     controller.animateCamera(CameraUpdate.newLatLngZoom(point, targetZoom), duration: const Duration(milliseconds: _focusCameraAnimMs));
+  }
+
+  /// 跟隨鏡頭該用的 zoom。使用者剛動過就回傳他現在的 zoom，等於不動。
+  double _followZoomOrKeep(double latitude) {
+    final int nowMs = DateTime.now().millisecondsSinceEpoch;
+    if (isInsideZoomFreeze(nowMs: nowMs, lastUserZoomAtMs: _userZoomTouchedAtMs)) return _currentZoom;
+    return _derivedFollowZoom(latitude);
+  }
+
+  /// 只由倍速、緯度、可用畫面高度推導，不含使用者的凍結期。
+  double _derivedFollowZoom(double latitude) {
+    return followZoom(speed: _playbackSpeed, latitude: latitude, viewportHeightPx: _visibleViewportHeight(), userOffsetLog2: _followZoomOffset);
+  }
+
+  double _visibleViewportHeight() {
+    final size = MediaQuery.maybeSizeOf(context);
+    if (size == null) return 800 * _visibleViewportFraction;
+    return size.height * _visibleViewportFraction;
+  }
+
+  /// 使用者自己挑了 zoom：記下他能插手的時間，播放中就順便把偏好折進偏移。
+  void _noteUserZoom(double zoom) {
+    final int nowMs = DateTime.now().millisecondsSinceEpoch;
+    _userZoomTouchedAtMs = nowMs;
+    if (!_isPlaying || _positions.isEmpty) return;
+    final int idx = _playbackPositionRx.value.floor().clamp(0, _positions.length - 1);
+    final double latitude = _positions[idx].latitude!.toDouble();
+    final double settled = settleFollowOffset(currentOffset: _followZoomOffset, userZoom: zoom, derivedZoom: _derivedFollowZoom(latitude));
+    if ((settled - _followZoomOffset).abs() < 0.01) return;
+    _followZoomOffset = settled;
+    _saveFollowZoomOffset();
+  }
+
+  void _saveFollowZoomOffset() {
+    SharedPreferences.getInstance().then((prefs) {
+      prefs.setDouble(_followZoomOffsetPrefsKey, _followZoomOffset);
+    }).catchError((Object error) => developer.log('Failed to save follow zoom offset: $error', name: 'HistoryRouteScreen'));
   }
 
   /// 換日期 / 換車輛 / 重新載入軌跡時，丟掉所有排程狀態與在飛請求
@@ -1628,10 +1678,18 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     // 已播放軌跡：只補新增點，並把平台通道更新壓到約 10Hz
     _pushPlayedGeometry(idx, smoothLng, smoothLat);
 
-    // 相機跟隨：標記還留在畫面裡時鏡頭不動，跑進外圈才把它推回中央
+    // 相機跟隨：標記還留在畫面裡時鏡頭不動，跑進外圈才把它推回中央。
+    // 倍速換了就跟著換視野：20x 一小時走完的路用 1x 的視野看只會看到箭頭亂跳。
     final controller = _mapController;
     if (_followUser && _isPlaying && controller != null && nowMs >= _suppressFollowCameraUntilMs && _cameraBudget.due(nowMs)) {
       final int generation = _playbackGeneration;
+      final bool zoomStale = _playbackSpeed != _lastDerivedSpeed && !isInsideZoomFreeze(nowMs: nowMs, lastUserZoomAtMs: _userZoomTouchedAtMs);
+      if (zoomStale) {
+        _lastDerivedSpeed = _playbackSpeed;
+        controller.animateCamera(CameraUpdate.newLatLngZoom(currentLatLng, _derivedFollowZoom(currentLatLng.latitude)), duration: const Duration(milliseconds: _followZoomAnimMs));
+        _suppressFollowCameraUntilMs = nowMs + _followZoomAnimMs + 100;
+        return;
+      }
       final LatLngBounds visibleRegion = await controller.getVisibleRegion();
       // 這一趟回來時使用者可能已經暫停、放開跟隨或換了軌跡，就不該再動鏡頭
       if (!mounted || generation != _playbackGeneration || !_isPlaying || !_followUser) return;
@@ -1660,11 +1718,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     double maxLon = _positions.map((p) => p.longitude!).reduce(max).toDouble();
 
     final controller = _mapController;
-    // 使用者定過 zoom 就只把軌跡置中，沿用他的 zoom，不重新框住整條軌跡
-    if (_userOwnsZoom) {
-      controller?.animateCamera(CameraUpdate.newLatLngZoom(LatLng((minLat + maxLat) / 2, (minLon + maxLon) / 2), _currentZoom));
-      return;
-    }
+    // 總覽就是「整條軌跡」這個視圖，它的 zoom 只能是框住軌跡，跟使用者偏好無關。
     controller?.animateCamera(CameraUpdate.newLatLngBounds(LatLngBounds(southwest: LatLng(minLat, minLon), northeast: LatLng(maxLat, maxLon)), left: 70, right: 70, top: 70, bottom: 250));
   }
 
@@ -1708,20 +1762,20 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
             initialCameraPosition: _lastCameraPosition ?? CameraPosition(target: const LatLng(0, 0), zoom: _currentZoom),
             styleString: Provider.of<MapStyleProvider>(context).getStyle(Theme.of(context).brightness),
             onCameraMoveStarted: (reason) {
-              if (reason == CameraMoveReason.gesture) _userOwnsZoom = true;
+              if (reason != CameraMoveReason.gesture) return;
+              _gestureInProgress = true;
+              _zoomAtGestureStart = _currentZoom;
             },
             onCameraMove: (position) {
               _lastCameraPosition = position;
               _currentZoom = position.zoom;
-              // 只存使用者自己的 zoom；播放與軌跡框選動到的 zoom 不寫進存檔
-              if (!_userOwnsZoom) return;
-              _zoomSaveTimer?.cancel();
-              _zoomSaveTimer = Timer(const Duration(milliseconds: 300), () {
-                SharedPreferences.getInstance().then((prefs) {
-                  prefs.setDouble('history_zoom_level', _currentZoom);
-                });
-              });
+              // 手指捏合拉開就是在挑 zoom，跟播放時的每格移動無關
+              if (_gestureInProgress && (position.zoom - _zoomAtGestureStart).abs() > 0.05) {
+                _noteUserZoom(position.zoom);
+              }
+              _saveCameraZoomSoon();
             },
+            onCameraIdle: () => _gestureInProgress = false,
             myLocationEnabled: false,
             trackCameraPosition: true,
             onMapClick: (_, LatLng point) {
@@ -1831,8 +1885,17 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     if (target == current) {
       return;
     }
-    _userOwnsZoom = true;
+    _noteUserZoom(target);
     controller.animateCamera(CameraUpdate.zoomTo(target), duration: const Duration(milliseconds: 250));
+  }
+
+  void _saveCameraZoomSoon() {
+    _zoomSaveTimer?.cancel();
+    _zoomSaveTimer = Timer(const Duration(milliseconds: 300), () {
+      SharedPreferences.getInstance().then((prefs) {
+        prefs.setDouble('history_zoom_level', _currentZoom);
+      });
+    });
   }
 
   Widget _mapFab(IconData icon, VoidCallback onPressed, String tag, {bool active = false, String? tooltip}) {

@@ -51,16 +51,4 @@ void main() {
       expect(at(5.5, 5, band: 0.5), isTrue);
     });
   });
-
-  group('zoom at the start of a playback', () {
-    test('a zoom the user set survives pressing play', () {
-      expect(playbackStartZoom(current: 11, userOwnsZoom: true, followZoom: 15), 11);
-      expect(playbackStartZoom(current: 18, userOwnsZoom: true, followZoom: 15), 18);
-    });
-
-    test('otherwise the view comes up to the follow level and never past it', () {
-      expect(playbackStartZoom(current: 11, userOwnsZoom: false, followZoom: 15), 15);
-      expect(playbackStartZoom(current: 17, userOwnsZoom: false, followZoom: 15), 17);
-    });
-  });
 }

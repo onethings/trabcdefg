@@ -14,12 +14,3 @@ const double defaultEdgeBandFraction = 0.35;
 bool isInEdgeZone({required double latitude, required double longitude, required double south, required double west, required double north, required double east, double band = defaultEdgeBandFraction}) {
   return latitude > north - (north - south) * band || latitude < south + (north - south) * band || longitude > east - (east - west) * band || longitude < west + (east - west) * band;
 }
-
-/// Zoom to start a playback at.
-///
-/// The play button may bring a zoomed-out view up to [followZoom] once, but a
-/// zoom the user set, by gesture, button, or a saved value, is theirs and
-/// survives pressing play.
-double playbackStartZoom({required double current, required bool userOwnsZoom, required double followZoom}) {
-  return userOwnsZoom ? current : (current < followZoom ? followZoom : current);
-}
