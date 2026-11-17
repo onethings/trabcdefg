@@ -74,14 +74,17 @@ class _MainScreenState extends State<MainScreen> {
     }
     return CupertinoTabScaffold(
       controller: _tabController,
+      // 使用 DecoratedBox / Container 將 TabBar 包覆，加上陰影與微調邊框，讓底部導航欄與頁面完美區隔
       tabBar: CupertinoTabBar(
         onTap: _onTabTapped,
+        backgroundColor: Theme.of(context).colorScheme.surface.withValues(alpha: 0.92), // 稍微帶點透明的毛玻璃底色
         activeColor: Theme.of(context).colorScheme.primary,
         inactiveColor: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
-        items: [
-          BottomNavigationBarItem(icon: const Icon(CupertinoIcons.list_bullet), label: 'deviceTitle'.tr),
-          BottomNavigationBarItem(icon: const Icon(CupertinoIcons.map), label: 'mapTitle'.tr),
-          BottomNavigationBarItem(icon: const Icon(CupertinoIcons.settings), label: 'settingsTitle'.tr),
+        border: Border(top: BorderSide(color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.4), width: 0.5)),
+        items: const [
+          BottomNavigationBarItem(icon: Icon(CupertinoIcons.list_bullet), label: 'deviceTitle'),
+          BottomNavigationBarItem(icon: Icon(CupertinoIcons.map), label: 'mapTitle'),
+          BottomNavigationBarItem(icon: Icon(CupertinoIcons.settings), label: 'settingsTitle'),
         ],
       ),
       tabBuilder: (context, index) {
