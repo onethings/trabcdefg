@@ -274,6 +274,14 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
   bool _followUser = true;
   double _playbackSpeed = 1.0;
 
+  /// 每載入一條新軌跡就自動回放一次，跟 Playback.dart 進畫面就自己播的習慣一致。
+  /// 總覽演完到開始播放之間留一段停頓，讓使用者先看清整條路線。
+  static const Duration _autoPlayDelay = Duration(seconds: 2);
+  Timer? _autoPlayTimer;
+
+  /// 這條軌跡已經自動播過（或使用者先按了播放），換日期或車輛時重置。
+  bool _autoPlayConsumed = false;
+
   AnimationController? _playbackAnimationController;
 
   int? _deviceId;
@@ -416,6 +424,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
   void dispose() {
     _playbackAnimationController?.stop();
     _playbackAnimationController?.dispose();
+    _autoPlayTimer?.cancel();
     _zoomSaveTimer?.cancel();
     _dialogDeviceSearchController.dispose();
     super.dispose();
@@ -449,6 +458,10 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     final bool keepCamera = _keepCameraOnStyleReload;
     _keepCameraOnStyleReload = false;
     await _drawFullRoute(fitBounds: !keepCamera);
+    // 軌跡比地圖先到的情況：這裡是它第一次有機會畫出來，也是唯一該自動回放的位置。
+    if (!keepCamera) {
+      unawaited(_scheduleAutoPlayback(Future<void>.value()));
+    }
     // 需在軌跡圖層建立後才重畫，belowLayerId 才找得到 _routeLayerId
     if (_showGeofences) {
       await _drawGeofences();
@@ -625,26 +638,6 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     }
   }
 
-  /// 只有補直線需要連網，端點是這裡唯一的開關：留空字串就完全不補路，軌跡回到
-  /// 「清洗 + 抽稀」的結果。公開示範站（valhalla1.openstreetmap.de）有流量限制，
-  /// 而且缺口兩端的座標都會送到第三方主機，量大或在意隱私請換自架主機。
-  static const String _valhallaRouteUrl = 'https://valhalla1.openstreetmap.de/route';
-
-  /// 清洗與抽稀已經在 [_cleanTrackIsolate] 做完（計算量大，可能還在背景 isolate
-  /// 跑），這裡只接著做需要連網的那一步：把太長的直線缺口補成實際道路。
-  ///
-  /// 回傳同一個 [simplified] 實例代表沒有補到任何東西，呼叫端可據此決定要不要
-  /// 重寫快取。任何失敗都退回原軌跡，不影響主流程。
-  Future<List<api.Position>> _fillStraightGaps(List<api.Position> simplified) async {
-    if (simplified.length < 2 || _valhallaRouteUrl.isEmpty) return simplified;
-    try {
-      return await PositionCleaner.fillStraightGaps(simplified, routeUrl: _valhallaRouteUrl);
-    } catch (error) {
-      developer.log('Gap routing wrapper failed: $error', name: 'HistoryRouteScreen');
-      return simplified;
-    }
-  }
-
   Future<void> _fetchHistoryRoute({DateTime? selectedDay}) async {
     if (selectedDay != null) {
       _historyFrom = DateTime(selectedDay.year, selectedDay.month, selectedDay.day, 0, 0, 0);
@@ -656,6 +649,8 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     }
 
     _playbackAnimationController?.stop();
+    _autoPlayTimer?.cancel();
+    _autoPlayConsumed = false; // 換了日期或車輛就是一條新軌跡，重新自動回放一次
     _safeSetState(() {
       _isLoading = true;
       _isPlaying = false;
@@ -707,25 +702,16 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
       // way the GeoJSON layer does.
       final cleanupParams = _TrackCleanupParams(fetchedPositions, encode: fetchedFromNetwork);
       final cleanedTrack = fetchedPositions.length > _trackCleanupIsolateThreshold ? await compute(_cleanTrackIsolate, cleanupParams) : _cleanTrackIsolate(cleanupParams);
-
-      // The network hop cannot ride inside compute, and it must not hold up the
-      // cleaning pass either, so it runs here on whatever the isolate returned.
-      final cleanedPositions = await _fillStraightGaps(cleanedTrack.positions);
+      final cleanedPositions = cleanedTrack.positions;
 
       if (cleanedPositions.length != fetchedPositions.length) {
         developer.log('Cleaned track: ${fetchedPositions.length} -> ${cleanedPositions.length} points', name: 'HistoryRouteScreen');
       }
       if (fetchedFromNetwork && cleanedPositions.isNotEmpty) {
-        // Spliced road geometry only exists after this step, so it needs its own
-        // encode; unchanged tracks reuse the one the isolate already built.
-        final positionsJson = identical(cleanedPositions, cleanedTrack.positions) ? cleanedTrack.positionsJson : RoutePositionsHive.toJsonList(cleanedPositions);
-        await routeBox.put(hiveKey, RoutePositionsHive(dateKey: hiveKey, positionsJson: positionsJson, cachedAt: DateTime.now()));
+        await routeBox.put(hiveKey, RoutePositionsHive(dateKey: hiveKey, positionsJson: cleanedTrack.positionsJson, cachedAt: DateTime.now()));
       }
 
-      // Stops are judged on the sampled track, before the road geometry is
-      // spliced in: the inserted points subdivide the gaps, and the "parked for
-      // five minutes" test reads exactly those gaps.
-      _calculateStops(cleanedTrack.positions);
+      _calculateStops(cleanedPositions);
 
       final movingPositions = cleanedPositions.where((p) => (p.speed ?? 0) > 0).toList();
       final playbackPositions = movingPositions.isNotEmpty ? movingPositions : cleanedPositions;
@@ -747,7 +733,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
         _refreshAddressNow(); // 先解析起點路名
 
         if (_mapController != null) {
-          unawaited(_drawFullRoute());
+          unawaited(_scheduleAutoPlayback(_drawFullRoute()));
         }
       }
     } catch (e) {
@@ -1433,6 +1419,14 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
       return;
     }
 
+    _autoPlayConsumed = true;
+    _startPlayback();
+  }
+
+  /// 手動按播放與自動回放共用同一段啟動流程。
+  void _startPlayback() {
+    if (_positions.isEmpty) return;
+
     final double maxLimit = max(0, _positions.length - 1).toDouble();
     if (_playbackPositionRx.value >= maxLimit) {
       _playbackPositionRx.value = 0;
@@ -1446,6 +1440,19 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     _addressRequestedAtMs = 0; // 重新開始時立刻允許預取
     _safeSetState(() => _isPlaying = true);
     _playbackAnimationController?.repeat();
+  }
+
+  /// 等總覽演完再自動接上回放。已在播放、或這條軌跡播過就不再插手，使用者按過
+  /// 暫停之後也不會被自動重新啟動。
+  Future<void> _scheduleAutoPlayback(Future<void> drawing) async {
+    await drawing;
+    if (!mounted || _autoPlayConsumed || _isPlaying || _isLoading || _positions.isEmpty) return;
+    _autoPlayConsumed = true;
+    _autoPlayTimer?.cancel();
+    _autoPlayTimer = Timer(_autoPlayDelay, () {
+      if (!mounted || _isPlaying || _isLoading || _positions.isEmpty) return;
+      _startPlayback();
+    });
   }
 
   // 開始播放時把鏡頭移到目前播放位置並擺到跟隨視野；使用者剛自己動過 zoom 就只置中。

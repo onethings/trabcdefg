@@ -8,4 +8,8 @@ analyzer:
     - macos/**
     - linux/**
     - lib/src/generated_api/**
+    # Reference copy of another app's playback screen. It imports packages this
+    # project does not depend on, so analysing it reports errors that cannot be
+    # fixed and buries the real ones.
+    - Playback.dart
 include: package:flutter_lints/flutter.yaml
