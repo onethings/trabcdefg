@@ -81,10 +81,10 @@ class _MainScreenState extends State<MainScreen> {
         activeColor: Theme.of(context).colorScheme.primary,
         inactiveColor: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
         border: Border(top: BorderSide(color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.4), width: 0.5)),
-        items: const [
-          BottomNavigationBarItem(icon: Icon(CupertinoIcons.list_bullet), label: 'deviceTitle'),
-          BottomNavigationBarItem(icon: Icon(CupertinoIcons.map), label: 'mapTitle'),
-          BottomNavigationBarItem(icon: Icon(CupertinoIcons.settings), label: 'settingsTitle'),
+        items: [
+          BottomNavigationBarItem(icon: Icon(CupertinoIcons.list_bullet), label: 'deviceTitle'.tr),
+          BottomNavigationBarItem(icon: Icon(CupertinoIcons.map), label: 'mapTitle'.tr),
+          BottomNavigationBarItem(icon: Icon(CupertinoIcons.settings), label: 'settingsTitle'.tr),
         ],
       ),
       tabBuilder: (context, index) {
