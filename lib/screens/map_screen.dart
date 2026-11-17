@@ -1127,13 +1127,7 @@ class _MapScreenState extends State<MapScreen> {
     _onDeviceSelected(nextDevice, forceShowPanel: false, follow: true);
   }
 
-  Future<void> _onDeviceSelected(
-    api.Device device, {
-    bool forceShowPanel = false,
-    bool follow = true,
-    bool zoomToMax = false,
-    double? zoomOverride,
-  }) async {
+  Future<void> _onDeviceSelected(api.Device device, {bool forceShowPanel = false, bool follow = true, bool zoomToMax = false, double? zoomOverride}) async {
     final int? deviceId = device.id;
     if (deviceId == null) return;
 
@@ -1189,8 +1183,8 @@ class _MapScreenState extends State<MapScreen> {
     final maplibre.CameraUpdate cameraUpdate = zoomToMax
         ? maplibre.CameraUpdate.newLatLngZoom(latLng, _kMaxMapZoom)
         : rememberedZoom == null
-            ? maplibre.CameraUpdate.newLatLng(latLng)
-            : maplibre.CameraUpdate.newLatLngZoom(latLng, rememberedZoom);
+        ? maplibre.CameraUpdate.newLatLng(latLng)
+        : maplibre.CameraUpdate.newLatLngZoom(latLng, rememberedZoom);
     await _animateCamera(cameraUpdate);
     if (!mounted || selectionGeneration != _deviceSelectionGeneration) return;
     await _scheduleMarkerUpdate(traccarProvider);
@@ -1335,21 +1329,37 @@ class _MapScreenState extends State<MapScreen> {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Padding(padding: const EdgeInsetsDirectional.fromSTEB(_kEdgeInset, 0, _kEdgeInset, _kControlGap), child: _buildBottomControls(panelProvider, currentDev)),
-                            DeviceDetailPanel(
-                              helperKeys: helperKeys,
-                              device: currentDev,
-                              position: currentPos ?? api.Position(),
-                              address: currentAddr,
-                              formattedDate: _formatDate(currentPos?.fixTime),
-                              onMoreOptionsPressed: () => _showMoreOptionsDialog(currentDev, currentPos),
-                              onDeletePressed: () {
-                                _bottomSheetController?.close();
-                                _showDeleteConfirmationDialog(currentDev);
-                              },
-                              onRefresh: () async {
-                                final traccarProvider = context.read<TraccarProvider>();
-                                await traccarProvider.fetchInitialData();
-                              },
+                            Container(
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).colorScheme.surface,
+                                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.15),
+                                    blurRadius: 16,
+                                    offset: const Offset(0, -4), // 向上投射陰影，凸顯浮動面板效果
+                                  ),
+                                ],
+                              ),
+                              child: ClipRRect(
+                                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+                                child: DeviceDetailPanel(
+                                  helperKeys: helperKeys,
+                                  device: currentDev,
+                                  position: currentPos ?? api.Position(),
+                                  address: currentAddr,
+                                  formattedDate: _formatDate(currentPos?.fixTime),
+                                  onMoreOptionsPressed: () => _showMoreOptionsDialog(currentDev, currentPos),
+                                  onDeletePressed: () {
+                                    _bottomSheetController?.close();
+                                    _showDeleteConfirmationDialog(currentDev);
+                                  },
+                                  onRefresh: () async {
+                                    final traccarProvider = context.read<TraccarProvider>();
+                                    await traccarProvider.fetchInitialData();
+                                  },
+                                ),
+                              ),
                             ),
                           ],
                         ),
@@ -1588,7 +1598,8 @@ class _MapScreenState extends State<MapScreen> {
                     final List<api.Device> navigable = _navigableDevices(provider);
                     return Object.hash(Object.hashAll(navigable.map((device) => '${device.id}:${device.name}')), _currentDevice?.id);
                   },
-                  builder: (context, _, child) => Positioned(left: _kEdgeInset, right: _kEdgeInset, bottom: MediaQuery.of(context).padding.bottom + _kControlGap, child: _buildBottomControls(context.read<TraccarProvider>(), _currentDevice, withHelperKeys: true)),
+                  builder: (context, _, child) =>
+                      Positioned(left: _kEdgeInset, right: _kEdgeInset, bottom: MediaQuery.of(context).padding.bottom + _kControlGap, child: _buildBottomControls(context.read<TraccarProvider>(), _currentDevice, withHelperKeys: true)),
                 ),
               if (_showReturnToFollow && _currentDevice != null)
                 Positioned(
@@ -1644,13 +1655,25 @@ class _GlassSurface extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GlassContainer(
-      padding: padding,
-      shape: LiquidRoundedSuperellipse(borderRadius: borderRadius),
-      quality: GlassQuality.standard,
-      platformViewBackdrop: true,
-      settings: mapGlassSettings(context),
-      child: Material(type: MaterialType.transparency, child: child),
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(borderRadius),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.12), // 柔和的陰影顏色
+            blurRadius: 12, // 陰影擴散範圍
+            offset: const Offset(0, 4), // 向下微微偏移
+          ),
+        ],
+      ),
+      child: GlassContainer(
+        padding: padding,
+        shape: LiquidRoundedSuperellipse(borderRadius: borderRadius),
+        quality: GlassQuality.standard,
+        platformViewBackdrop: true,
+        settings: mapGlassSettings(context),
+        child: Material(type: MaterialType.transparency, child: child),
+      ),
     );
   }
 }
@@ -1862,7 +1885,6 @@ Color _statusColorOf(BuildContext context, String? status) {
   }
 }
 
-
 /// 地圖頁唯一的車輛清單：搜尋、常用優先、點一列就跳到那台車。
 ///
 /// 這也是螢幕閱讀器的路徑——地圖上的標記是原生 symbol，本身沒有語意。
@@ -1929,7 +1951,11 @@ class _DevicePickerSheetState extends State<_DevicePickerSheet> {
             mainAxisSize: MainAxisSize.min,
             children: [
               const SizedBox(height: 12),
-              Container(width: 40, height: 4, decoration: BoxDecoration(color: theme.colorScheme.outlineVariant, borderRadius: BorderRadius.circular(2))),
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(color: theme.colorScheme.outlineVariant, borderRadius: BorderRadius.circular(2)),
+              ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
                 child: Text('deviceTitle'.tr, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
@@ -1942,9 +1968,7 @@ class _DevicePickerSheetState extends State<_DevicePickerSheet> {
                   decoration: InputDecoration(
                     hintText: 'sharedSearchDevices'.tr,
                     prefixIcon: const Icon(CupertinoIcons.search),
-                    suffixIcon: _query.isEmpty
-                        ? null
-                        : IconButton(icon: const Icon(Icons.close_rounded), tooltip: 'sharedCancel'.tr, onPressed: () => _searchController.clear()),
+                    suffixIcon: _query.isEmpty ? null : IconButton(icon: const Icon(Icons.close_rounded), tooltip: 'sharedCancel'.tr, onPressed: () => _searchController.clear()),
                     filled: true,
                     fillColor: theme.colorScheme.surfaceContainerHighest,
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide.none),
@@ -1957,11 +1981,7 @@ class _DevicePickerSheetState extends State<_DevicePickerSheet> {
                     ? Center(
                         child: Padding(padding: const EdgeInsets.all(24), child: Text('sharedNoData'.tr)),
                       )
-                    : ListView(
-                        children: [
-                          for (final device in devices) _buildTile(context, device, now),
-                        ],
-                      ),
+                    : ListView(children: [for (final device in devices) _buildTile(context, device, now)]),
               ),
             ],
           ),

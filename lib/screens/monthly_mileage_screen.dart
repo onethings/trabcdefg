@@ -465,10 +465,12 @@ class _MonthlyMileageScreenState extends State<MonthlyMileageScreen> {
                                         '${distanceInKm.toStringAsFixed(0)}km',
                                         style: TextStyle(fontSize: 10, color: isSelected ? CupertinoColors.white : CupertinoColors.systemBlue, fontWeight: FontWeight.w500),
                                       ),
-                                      Text(
-                                        '${engineHoursInHours.toStringAsFixed(1)}h',
-                                        style: const TextStyle(fontSize: 10, color: CupertinoColors.systemOrange, fontWeight: FontWeight.w500),
-                                      ),
+                                      engineHoursInHours == 0
+                                          ? const SizedBox.shrink()
+                                          : Text(
+                                              '${engineHoursInHours.toInt()}h', // 或者是用其他方式格式化
+                                              style: const TextStyle(fontSize: 10, color: CupertinoColors.systemOrange, fontWeight: FontWeight.w500),
+                                            ),
                                     ],
                                   ),
                                 );
