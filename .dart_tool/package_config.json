@@ -15,7 +15,7 @@
     },
     {
       "name": "android_file_picker",
-      "rootUri": "file:///Users/kevinyang/.pub-cache/hosted/pub.dev/android_file_picker-2.1.6",
+      "rootUri": "file:///Users/kevinyang/.pub-cache/hosted/pub.dev/android_file_picker-2.2.0",
       "packageUri": "lib/",
       "languageVersion": "3.10"
     },
@@ -219,7 +219,7 @@
     },
     {
       "name": "equatable",
-      "rootUri": "file:///Users/kevinyang/.pub-cache/hosted/pub.dev/equatable-2.1.0",
+      "rootUri": "file:///Users/kevinyang/.pub-cache/hosted/pub.dev/equatable-3.0.0",
       "packageUri": "lib/",
       "languageVersion": "3.0"
     },
@@ -255,7 +255,7 @@
     },
     {
       "name": "file_picker",
-      "rootUri": "file:///Users/kevinyang/.pub-cache/hosted/pub.dev/file_picker-13.3.3",
+      "rootUri": "file:///Users/kevinyang/.pub-cache/hosted/pub.dev/file_picker-13.4.0",
       "packageUri": "lib/",
       "languageVersion": "3.10"
     },
@@ -273,7 +273,7 @@
     },
     {
       "name": "file_picker_platform_interface",
-      "rootUri": "file:///Users/kevinyang/.pub-cache/hosted/pub.dev/file_picker_platform_interface-4.2.0",
+      "rootUri": "file:///Users/kevinyang/.pub-cache/hosted/pub.dev/file_picker_platform_interface-4.3.0",
       "packageUri": "lib/",
       "languageVersion": "3.10"
     },
@@ -441,7 +441,7 @@
     },
     {
       "name": "image",
-      "rootUri": "file:///Users/kevinyang/.pub-cache/hosted/pub.dev/image-4.13.0",
+      "rootUri": "file:///Users/kevinyang/.pub-cache/hosted/pub.dev/image-4.13.1",
       "packageUri": "lib/",
       "languageVersion": "3.0"
     },
@@ -519,15 +519,9 @@
     },
     {
       "name": "liquid_glass_widgets",
-      "rootUri": "file:///Users/kevinyang/.pub-cache/hosted/pub.dev/liquid_glass_widgets-1.17.3",
+      "rootUri": "file:///Users/kevinyang/.pub-cache/hosted/pub.dev/liquid_glass_widgets-1.17.5",
       "packageUri": "lib/",
       "languageVersion": "3.5"
-    },
-    {
-      "name": "lists",
-      "rootUri": "file:///Users/kevinyang/.pub-cache/hosted/pub.dev/lists-1.0.1",
-      "packageUri": "lib/",
-      "languageVersion": "2.12"
     },
     {
       "name": "logging",
@@ -573,9 +567,9 @@
     },
     {
       "name": "mgrs_dart",
-      "rootUri": "file:///Users/kevinyang/.pub-cache/hosted/pub.dev/mgrs_dart-2.0.0",
+      "rootUri": "file:///Users/kevinyang/.pub-cache/hosted/pub.dev/mgrs_dart-3.0.0",
       "packageUri": "lib/",
-      "languageVersion": "2.12"
+      "languageVersion": "3.0"
     },
     {
       "name": "mime",
@@ -771,9 +765,9 @@
     },
     {
       "name": "proj4dart",
-      "rootUri": "file:///Users/kevinyang/.pub-cache/hosted/pub.dev/proj4dart-2.1.0",
+      "rootUri": "file:///Users/kevinyang/.pub-cache/hosted/pub.dev/proj4dart-3.0.0",
       "packageUri": "lib/",
-      "languageVersion": "2.12"
+      "languageVersion": "3.0"
     },
     {
       "name": "provider",
@@ -876,6 +870,12 @@
       "rootUri": "file:///Users/kevinyang/.pub-cache/hosted/pub.dev/simple_gesture_detector-0.2.1",
       "packageUri": "lib/",
       "languageVersion": "2.12"
+    },
+    {
+      "name": "simple_sparse_list",
+      "rootUri": "file:///Users/kevinyang/.pub-cache/hosted/pub.dev/simple_sparse_list-0.1.4",
+      "packageUri": "lib/",
+      "languageVersion": "3.0"
     },
     {
       "name": "sky_engine",
@@ -999,9 +999,9 @@
     },
     {
       "name": "unicode",
-      "rootUri": "file:///Users/kevinyang/.pub-cache/hosted/pub.dev/unicode-0.3.1",
+      "rootUri": "file:///Users/kevinyang/.pub-cache/hosted/pub.dev/unicode-1.1.9",
       "packageUri": "lib/",
-      "languageVersion": "2.12"
+      "languageVersion": "3.0"
     },
     {
       "name": "universal_io",
@@ -1017,7 +1017,7 @@
     },
     {
       "name": "url_launcher_android",
-      "rootUri": "file:///Users/kevinyang/.pub-cache/hosted/pub.dev/url_launcher_android-6.3.33",
+      "rootUri": "file:///Users/kevinyang/.pub-cache/hosted/pub.dev/url_launcher_android-6.3.35",
       "packageUri": "lib/",
       "languageVersion": "3.12"
     },
