@@ -119,7 +119,8 @@ class _CleanedTrack {
 
 _CleanedTrack _cleanTrackIsolate(_TrackCleanupParams params) {
   final cleaned = PositionCleaner.clean(params.positions);
-  return _CleanedTrack(cleaned, params.encode ? RoutePositionsHive.toJsonList(cleaned) : const []);
+  final simplified = PositionCleaner.douglasPeucker(cleaned, tolerance: 0.00005);
+  return _CleanedTrack(simplified, params.encode ? RoutePositionsHive.toJsonList(simplified) : const []);
 }
 
 /// 重複經過的判斷在背景 isolate 跑，密集軌跡才不會卡住載入那一幀。
@@ -624,6 +625,26 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     }
   }
 
+  /// 只有補直線需要連網，端點是這裡唯一的開關：留空字串就完全不補路，軌跡回到
+  /// 「清洗 + 抽稀」的結果。公開示範站（valhalla1.openstreetmap.de）有流量限制，
+  /// 而且缺口兩端的座標都會送到第三方主機，量大或在意隱私請換自架主機。
+  static const String _valhallaRouteUrl = 'https://valhalla1.openstreetmap.de/route';
+
+  /// 清洗與抽稀已經在 [_cleanTrackIsolate] 做完（計算量大，可能還在背景 isolate
+  /// 跑），這裡只接著做需要連網的那一步：把太長的直線缺口補成實際道路。
+  ///
+  /// 回傳同一個 [simplified] 實例代表沒有補到任何東西，呼叫端可據此決定要不要
+  /// 重寫快取。任何失敗都退回原軌跡，不影響主流程。
+  Future<List<api.Position>> _fillStraightGaps(List<api.Position> simplified) async {
+    if (simplified.length < 2 || _valhallaRouteUrl.isEmpty) return simplified;
+    try {
+      return await PositionCleaner.fillStraightGaps(simplified, routeUrl: _valhallaRouteUrl);
+    } catch (error) {
+      developer.log('Gap routing wrapper failed: $error', name: 'HistoryRouteScreen');
+      return simplified;
+    }
+  }
+
   Future<void> _fetchHistoryRoute({DateTime? selectedDay}) async {
     if (selectedDay != null) {
       _historyFrom = DateTime(selectedDay.year, selectedDay.month, selectedDay.day, 0, 0, 0);
@@ -686,16 +707,25 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
       // way the GeoJSON layer does.
       final cleanupParams = _TrackCleanupParams(fetchedPositions, encode: fetchedFromNetwork);
       final cleanedTrack = fetchedPositions.length > _trackCleanupIsolateThreshold ? await compute(_cleanTrackIsolate, cleanupParams) : _cleanTrackIsolate(cleanupParams);
-      final cleanedPositions = cleanedTrack.positions;
+
+      // The network hop cannot ride inside compute, and it must not hold up the
+      // cleaning pass either, so it runs here on whatever the isolate returned.
+      final cleanedPositions = await _fillStraightGaps(cleanedTrack.positions);
 
       if (cleanedPositions.length != fetchedPositions.length) {
         developer.log('Cleaned track: ${fetchedPositions.length} -> ${cleanedPositions.length} points', name: 'HistoryRouteScreen');
       }
       if (fetchedFromNetwork && cleanedPositions.isNotEmpty) {
-        await routeBox.put(hiveKey, RoutePositionsHive(dateKey: hiveKey, positionsJson: cleanedTrack.positionsJson, cachedAt: DateTime.now()));
+        // Spliced road geometry only exists after this step, so it needs its own
+        // encode; unchanged tracks reuse the one the isolate already built.
+        final positionsJson = identical(cleanedPositions, cleanedTrack.positions) ? cleanedTrack.positionsJson : RoutePositionsHive.toJsonList(cleanedPositions);
+        await routeBox.put(hiveKey, RoutePositionsHive(dateKey: hiveKey, positionsJson: positionsJson, cachedAt: DateTime.now()));
       }
 
-      _calculateStops(cleanedPositions);
+      // Stops are judged on the sampled track, before the road geometry is
+      // spliced in: the inserted points subdivide the gaps, and the "parked for
+      // five minutes" test reads exactly those gaps.
+      _calculateStops(cleanedTrack.positions);
 
       final movingPositions = cleanedPositions.where((p) => (p.speed ?? 0) > 0).toList();
       final playbackPositions = movingPositions.isNotEmpty ? movingPositions : cleanedPositions;
