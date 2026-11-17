@@ -138,7 +138,7 @@ class PositionCleaner {
     }
   }
 
-  /// 把「兩次取樣隔太遠、只能畫成直線」的路段補成實際道路幾何。
+  /// 把「兩次取樣隔太遠、只能畫成直線」的路段補成實際道路幾何。.
   ///
   /// 用的是 Valhalla 的 `/route`：兩個錨點之間請它算一條路。不用 `trace_route`
   /// 的 map matching 有兩個原因——只有兩個輸入點時它做的其實就是 routing，而它
@@ -240,14 +240,7 @@ class PositionCleaner {
   ///
   /// 回傳的點不含兩個錨點本身：錨點保留自己真正的取樣時間，補出來的中間點則
   /// 依沿路累積距離把時間線性內插回兩個錨點之間，播放的時間軸仍然是單調的。
-  static Future<List<api.Position>> _routeBetween(
-    api.Position from,
-    api.Position to, {
-    required String routeUrl,
-    required String costing,
-    required Duration timeout,
-    required http.Client client,
-  }) async {
+  static Future<List<api.Position>> _routeBetween(api.Position from, api.Position to, {required String routeUrl, required String costing, required Duration timeout, required http.Client client}) async {
     final response = await client
         .post(
           Uri.parse(routeUrl),
@@ -290,28 +283,14 @@ class PositionCleaner {
     for (var i = 1; i < decoded.length - 1; i++) {
       final fraction = totalMeters <= 0 ? 0.0 : cumulative[i] / totalMeters;
       final time = startTime == null || endTime == null ? null : startTime.add(endTime.difference(startTime) * fraction);
-      positions.add(
-        api.Position(
-          deviceId: from.deviceId,
-          latitude: decoded[i][0],
-          longitude: decoded[i][1],
-          fixTime: time,
-          deviceTime: time,
-          speed: knots,
-          valid: true,
-        ),
-      );
+      positions.add(api.Position(deviceId: from.deviceId, latitude: decoded[i][0], longitude: decoded[i][1], fixTime: time, deviceTime: time, speed: knots, valid: true));
     }
     return positions;
   }
 
   /// 一筆 `/route` 的 location。`radius` 讓郊區那幾個離路有點遠的取樣仍然找得到
   /// 最近的路，不然 Valhalla 會回 `No path could be found`。
-  static Map<String, Object> _routeLocation(api.Position position) => <String, Object>{
-    'lat': position.latitude!.toDouble(),
-    'lon': position.longitude!.toDouble(),
-    'radius': 60,
-  };
+  static Map<String, Object> _routeLocation(api.Position position) => <String, Object>{'lat': position.latitude!.toDouble(), 'lon': position.longitude!.toDouble(), 'radius': 60};
 
   /// Polyline 解碼，回傳 `[lat, lon]` 成對的座標（Valhalla 預設 precision 6，
   /// 而且跟 Google 一樣是先緯度後經度）。
