@@ -1952,13 +1952,13 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
           ),
           if (_isLoading) const Center(child: CircularProgressIndicator()),
 
-          if (!minimalMode)
-            Positioned(
-              top: safeTop + 12,
-              left: 64,
-              right: 64,
-              child: Center(child: _buildDeviceDatePill()),
-            ),
+          Positioned(
+            top: minimalMode ? null : safeTop + 12, // 一般模式：顯示在上方
+            bottom: minimalMode ? 150 : null, // 極簡模式：顯示在下方（浮在回放列上方）
+            left: 64,
+            right: 64,
+            child: Center(child: _buildDeviceDatePill()),
+          ),
 
           if (!simpleMode)
             AnimatedPositioned(
@@ -2289,24 +2289,25 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
     final theme = Theme.of(context);
     return Container(
       key: const ValueKey('history_playback_panel_minimal'),
-      padding: const EdgeInsetsDirectional.fromSTEB(10, 2, 14, 6),
+      padding: const EdgeInsetsDirectional.fromSTEB(14, 6, 14, 10),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surface.withValues(alpha: 0.94),
+        color: theme.colorScheme.surface.withValues(alpha: 0.95),
         borderRadius: BorderRadius.circular(22),
         boxShadow: [BoxShadow(color: theme.brightness == Brightness.dark ? Colors.black.withValues(alpha: 0.35) : Colors.black.withValues(alpha: 0.08), blurRadius: 14, offset: const Offset(0, 6))],
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          // 第一行：進度條
           Obx(() {
             final double maxVal = max(0, _positions.length - 1).toDouble();
             return SizedBox(
-              height: 18,
+              height: 20,
               child: SliderTheme(
                 data: SliderTheme.of(context).copyWith(
-                  trackHeight: 2,
-                  thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 4),
-                  overlayShape: const RoundSliderOverlayShape(overlayRadius: 10),
+                  trackHeight: 3,
+                  thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 5),
+                  overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
                   activeTrackColor: theme.colorScheme.primary,
                   inactiveTrackColor: theme.colorScheme.primary.withValues(alpha: 0.15),
                 ),
@@ -2317,67 +2318,88 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
                     _playbackPositionRx.value = v;
                     _updatePlaybackUI();
                   },
-                  onChangeEnd: (_) => _refreshAddressNow(), // 拖曳結束立刻校正路名
+                  onChangeEnd: (_) => _refreshAddressNow(),
                 ),
               ),
             );
           }),
+          const SizedBox(height: 2),
+          // 第二行：控制按鈕、倍速選單與時間資訊
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              IconButton(
-                style: IconButton.styleFrom(minimumSize: const Size(44, 44)),
-                onPressed: () => _stepPlayback(-1),
-                icon: const Icon(Icons.skip_previous_rounded, size: 22),
-              ),
-              IconButton(
-                style: IconButton.styleFrom(minimumSize: const Size(44, 44)),
-                onPressed: () => _stepPlayback(1),
-                icon: const Icon(Icons.skip_next_rounded, size: 22),
-              ),
-              SizedBox(
-                width: 40,
-                height: 40,
-                child: IconButton.filled(
-                  style: IconButton.styleFrom(backgroundColor: theme.colorScheme.primary, minimumSize: const Size(40, 40), padding: EdgeInsets.zero),
-                  onPressed: _togglePlayback,
-                  tooltip: _isPlaying ? 'playbackPause'.tr : 'playbackPlay'.tr,
-                  icon: Icon(_isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded, color: theme.colorScheme.onPrimary, size: 24),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Obx(() {
-                  final int idx = _shownIndexRx.value.clamp(0, max(0, _positions.length - 1));
-                  final pos = _positions.isEmpty ? null : _positions[idx];
-                  final recordedAt = pos == null ? null : PositionCleaner.recordingTime(pos);
-                  final time = recordedAt != null ? DateFormat('MM/dd HH:mm:ss').format(recordedAt.toLocal()) : "--/-- --:--:--";
-                  final speed = pos != null ? ((pos.speed ?? 0) * 1.852).toStringAsFixed(1) : "0.0";
-                  return Row(
-                    children: [
-                      Expanded(
-                        flex: 3,
-                        child: Text(
-                          time,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: theme.colorScheme.onSurface, letterSpacing: -0.2),
-                        ),
+              // 左側：回放控制按鈕群
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(constraints: const BoxConstraints(minWidth: 36, minHeight: 36), padding: EdgeInsets.zero, onPressed: () => _stepPlayback(-1), icon: const Icon(Icons.skip_previous_rounded, size: 22)),
+                  SizedBox(
+                    width: 36,
+                    height: 36,
+                    child: IconButton.filled(
+                      style: IconButton.styleFrom(backgroundColor: theme.colorScheme.primary, padding: EdgeInsets.zero),
+                      onPressed: _togglePlayback,
+                      tooltip: _isPlaying ? 'playbackPause'.tr : 'playbackPlay'.tr,
+                      icon: Icon(_isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded, color: theme.colorScheme.onPrimary, size: 22),
+                    ),
+                  ),
+                  IconButton(constraints: const BoxConstraints(minWidth: 36, minHeight: 36), padding: EdgeInsets.zero, onPressed: () => _stepPlayback(1), icon: const Icon(Icons.skip_next_rounded, size: 22)),
+                  const SizedBox(width: 4),
+                  // 倍速下拉選單
+                  PopupMenuButton<double>(
+                    initialValue: _playbackSpeed,
+                    tooltip: 'playbackSpeed'.tr,
+                    onSelected: (s) {
+                      _safeSetState(() => _playbackSpeed = s);
+                      _savePlaybackSpeedToHive(s);
+                      _addressRequestedAtMs = 0;
+                    },
+                    itemBuilder: (context) => _playbackSpeeds.map((s) {
+                      return PopupMenuItem<double>(
+                        value: s,
+                        child: Text('${s.toInt()}x', style: const TextStyle(fontWeight: FontWeight.bold)),
+                      );
+                    }).toList(),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                      decoration: BoxDecoration(color: theme.colorScheme.surfaceContainerHighest, borderRadius: BorderRadius.circular(8)),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            '${_playbackSpeed.toInt()}x',
+                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: theme.colorScheme.primary),
+                          ),
+                          const SizedBox(width: 2),
+                          Icon(Icons.arrow_drop_down, size: 16, color: theme.colorScheme.onSurfaceVariant),
+                        ],
                       ),
-                      const SizedBox(width: 8),
-                      Flexible(
-                        flex: 2,
-                        child: Text(
-                          "$speed ${'sharedKmh'.tr}",
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          textAlign: TextAlign.end,
-                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: theme.colorScheme.primary),
-                        ),
-                      ),
-                    ],
-                  );
-                }),
+                    ),
+                  ),
+                ],
               ),
+              // 右側：時間與時速（上下排佈，確保能完整呈現）
+              Obx(() {
+                final int idx = _shownIndexRx.value.clamp(0, max(0, _positions.length - 1));
+                final pos = _positions.isEmpty ? null : _positions[idx];
+                final recordedAt = pos == null ? null : PositionCleaner.recordingTime(pos);
+                final time = recordedAt != null ? DateFormat('HH:mm:ss').format(recordedAt.toLocal()) : "--:--:--";
+                final speed = pos != null ? ((pos.speed ?? 0) * 1.852).toStringAsFixed(1) : "0.0";
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      time,
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: theme.colorScheme.onSurface, letterSpacing: -0.2),
+                    ),
+                    Text(
+                      "$speed ${'sharedKmh'.tr}",
+                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: theme.colorScheme.primary),
+                    ),
+                  ],
+                );
+              }),
             ],
           ),
         ],
