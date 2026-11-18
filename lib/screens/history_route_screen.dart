@@ -1414,7 +1414,11 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
 
     if (_isPlaying) {
       _playbackAnimationController?.stop();
-      _safeSetState(() => _isPlaying = false);
+      // ★ 如果希望暫停時自動退出全屏，可以加上這行（若不需要自動退出可不加）
+      _safeSetState(() {
+        _isPlaying = false;
+        _isMinimalMode = false;
+      });
       _refreshAddressNow(); // 暫停時立刻校正目前位置的路名
       return;
     }
@@ -1438,7 +1442,10 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
 
     _lastTickAtMs = 0;
     _addressRequestedAtMs = 0; // 重新開始時立刻允許預取
-    _safeSetState(() => _isPlaying = true);
+    _safeSetState(() {
+      _isPlaying = true;
+      _isMinimalMode = true;
+    });
     _playbackAnimationController?.repeat();
   }
 
@@ -1968,26 +1975,34 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
               ),
             ),
 
+          // 2. ★ 【新增這段】無論是否全屏 (minimalMode 為 true 或 false)，「切換地圖」與「置中」按鈕永遠顯示在右側相同位置
+          Positioned(
+            top: safeTop + 0, //60
+            right: 12,
+            child: Column(
+              children: [
+                _mapFab(Provider.of<MapStyleProvider>(context).isSatelliteMode ? Icons.map : Icons.satellite_alt, _toggleMapType, "btn_style"),
+                const SizedBox(height: 8),
+                _mapFab(
+                  Icons.center_focus_strong,
+                  () {
+                    _safeSetState(() => _followUser = true);
+                    _animateCameraToBounds();
+                  },
+                  "btn_recenter",
+                  active: _followUser,
+                ),
+              ],
+            ),
+          ),
+
           if (!minimalMode) ...[
             Positioned(
-              top: safeTop + 60,
+              top: safeTop + 112,
               right: 12,
               child: Column(
                 children: simpleMode
-                    ? [
-                        // 圖層切換保留（空照圖看地形很實用）。
-                        _mapFab(Provider.of<MapStyleProvider>(context).isSatelliteMode ? Icons.map : Icons.satellite_alt, _toggleMapType, "btn_style"),
-                        const SizedBox(height: 8),
-                        _mapFab(
-                          Icons.center_focus_strong,
-                          () {
-                            _safeSetState(() => _followUser = true);
-                            _animateCameraToBounds();
-                          },
-                          "btn_recenter",
-                          active: _followUser,
-                        ),
-                      ]
+                    ? []
                     : [
                         _mapFab(Icons.show_chart_rounded, () => _openReportPage((_) => const ChartReportScreen()), "btn_chart", tooltip: 'reportChart'.tr),
                         const SizedBox(height: 8),
@@ -2001,17 +2016,17 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
                         const SizedBox(height: 8),
                         // _mapFab(Icons.calendar_month, _showCalendarDialog, "btn_cal"),
                         // const SizedBox(height: 8),
-                        _mapFab(Provider.of<MapStyleProvider>(context).isSatelliteMode ? Icons.map : Icons.satellite_alt, _toggleMapType, "btn_style"),
-                        const SizedBox(height: 8),
-                        _mapFab(
-                          Icons.center_focus_strong,
-                          () {
-                            _safeSetState(() => _followUser = true);
-                            _animateCameraToBounds();
-                          },
-                          "btn_recenter",
-                          active: _followUser,
-                        ),
+                        //      _mapFab(Provider.of<MapStyleProvider>(context).isSatelliteMode ? Icons.map : Icons.satellite_alt, _toggleMapType, "btn_style"),
+                        //      const SizedBox(height: 8),
+                        // _mapFab(
+                        //   Icons.center_focus_strong,
+                        //   () {
+                        //     _safeSetState(() => _followUser = true);
+                        //     _animateCameraToBounds();
+                        //   },
+                        //   "btn_recenter",
+                        //   active: _followUser,
+                        // ),
                       ],
               ),
             ),
@@ -2026,6 +2041,7 @@ class _HistoryRouteScreenState extends State<HistoryRouteScreen> with TickerProv
               ),
             ),
           ],
+
           _buildPlaybackPanel(),
         ],
       ),
