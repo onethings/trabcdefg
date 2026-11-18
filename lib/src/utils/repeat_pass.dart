@@ -24,12 +24,19 @@ const double defaultMinGapMeters = 100;
 /// geometry, so it is left out of the index.
 const double _maxIndexedSegmentMeters = 10000;
 
-/// A chord this many times longer than the longer of the chords beside it is a
-/// recording gap too. Road geometry reported every few hundred metres stays
-/// flat, while a lost fix leaves one long jump between two ordinary steps. Such
-/// a jump is drawn straight across the map, so indexing it would colour every
-/// road it crosses.
+/// A chord this many times longer than the shorter plausible chord beside it is
+/// a recording gap or a GPS jump. A lost fix leaves one long jump between two
+/// ordinary steps, and a jammed fix leaves a jump out and back: comparing with
+/// the shorter side catches both halves. A genuinely sparse stretch is long on
+/// both sides, so it stays indexed.
 const double _gapRatio = 10;
+
+/// Chords shorter than this are standing noise, not spacing evidence. Parked
+/// positions repeat the same coordinate, and treating that zero-length step as
+/// the shorter side would throw away the first ordinary step away from the
+/// parking spot. Kept just above zero so a slow crawl of a few metres still
+/// counts as a real step beside a jump.
+const double _minSpacingEvidenceMeters = 1;
 
 /// Returns one flag per point. A point is repeated when it is within
 /// [toleranceMeters] of a segment that ended at least [minGapMeters] of travel
@@ -100,7 +107,18 @@ Uint8List classifyRepeatPasses(
     return _metresBetween(lng1, lat1, lng2, lat2);
   }
 
-  double longestNeighbourChord(int start) => math.max(chordMeters(start - 1), chordMeters(start + 1));
+  // The shorter of the two chords that carry spacing evidence. A jump is
+  // preceded or followed by an ordinary step, so the shorter side is the
+  // yardstick; a real sparse stretch is long on both sides and stays indexed.
+  double shortestPlausibleNeighbour(int start) {
+    var shortest = double.infinity;
+    for (final int k in <int>[start - 1, start + 1]) {
+      final double chord = chordMeters(k);
+      if (!chord.isFinite || chord < _minSpacingEvidenceMeters) continue;
+      if (chord < shortest) shortest = chord;
+    }
+    return shortest.isFinite ? shortest : 0;
+  }
 
   void indexSegment(int start) {
     final double lng1 = lngLatPairs[start * 2];
@@ -111,7 +129,8 @@ Uint8List classifyRepeatPasses(
 
     final double lengthMeters = _metresBetween(lng1, lat1, lng2, lat2);
     if (lengthMeters > _maxIndexedSegmentMeters) return;
-    if (lengthMeters > _gapRatio * longestNeighbourChord(start)) return;
+    final double plausibleNeighbour = shortestPlausibleNeighbour(start);
+    if (plausibleNeighbour > 0 && lengthMeters > _gapRatio * plausibleNeighbour) return;
 
     // Splitting replaces the old "skip any segment over 200 m" guard and the old
     // 256-cell bounding-box guard: pieces cap the buckets one long chord

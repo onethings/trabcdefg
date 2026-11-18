@@ -111,6 +111,52 @@ void main() {
     });
   });
 
+  // A GPS fix that jumps away and back is a recording artifact, not a road.
+  // The straight line between the jump's ends cuts across the map, and indexing
+  // it colours every road that line crosses. The 2026-11 jammer exports show
+  // this shape: a fix 4 km away, then a fix back, with ordinary steps either
+  // side, so the old longer-neighbour rule let both chords into the index.
+  group('a jump in the recording is not a road', () {
+    test('the straight line of a jump out and back is not indexed', () {
+      final List<List<double>> road = _leg(121.5, _lat, metresEast: 0, metresNorth: 2000, samples: 400);
+      final List<double> far = road.last;
+      final List<List<double>> spiked = <List<double>>[
+        ...road,
+        [far[0] + 3000 / _mPerDegLng, far[1]],
+        far,
+      ];
+      // Later the vehicle drives the line the jump's chord crossed.
+      final List<List<double>> crossed = <List<double>>[
+        for (var i = 0; i <= 600; i++) [far[0] + (3000 * i / 600) / _mPerDegLng, far[1]],
+      ];
+      final Uint8List flags = classifyRepeatPasses(_track([...spiked, ...crossed.skip(1)]));
+      final int firstFlagged = flags.sublist(spiked.length + 20).where((int f) => f == 1).length;
+      expect(firstFlagged, 0, reason: 'a jump chord is not road geometry');
+    });
+
+    test('a genuinely sparse stretch is long on both sides and stays indexed', () {
+      final List<List<double>> dense = _leg(121.5, _lat, metresEast: 0, metresNorth: 60, samples: 12);
+      final List<List<double>> sparse = <List<double>>[
+        for (var i = 0; i <= 6; i++) [dense.last[0], dense.last[1] + (600 * i / 6) / _mPerDegLat],
+      ];
+      final List<List<double>> back = sparse.reversed.toList();
+      final Uint8List flags = classifyRepeatPasses(_track([...dense, ...sparse.skip(1), ...back.skip(1)]));
+      final int backFlags = flags.sublist(dense.length + sparse.length - 1).where((int f) => f == 1).length;
+      expect(backFlags, greaterThan((back.length - 1) * 0.8), reason: 'a sparse road is still a road');
+    });
+
+    test('a parked burst is not spacing evidence for the first step out', () {
+      final List<List<double>> parked = <List<double>>[
+        for (var i = 0; i < 20; i++) [121.5, _lat],
+      ];
+      final List<List<double>> out = _leg(121.5, _lat, metresEast: 400, metresNorth: 0, samples: 40);
+      final List<List<double>> back = out.reversed.toList();
+      final Uint8List flags = classifyRepeatPasses(_track([...parked, ...out.skip(1), ...back.skip(1)]));
+      final int backFlags = flags.sublist(parked.length + out.length - 1).where((int f) => f == 1).length;
+      expect(backFlags, greaterThan((back.length - 1) * 0.8), reason: 'the parked duplicate chords are not spacing evidence');
+    });
+  });
+
   group('a different road is not the same road', () {
     test('a parallel street 45 m away stays a first pass', () {
       final List<List<double>> first = _leg(121.5, _lat, metresEast: 400, metresNorth: 0);

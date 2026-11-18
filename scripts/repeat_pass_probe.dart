@@ -67,6 +67,7 @@ const double probeMinGapMeters = 100;
 /// so a change to them has to be made in both places.
 const double _probeMaxIndexedSegmentMeters = 10000;
 const double _probeGapRatio = 10;
+const double _probeMinSpacingEvidenceMeters = 1;
 
 Uint8List referenceFlags(Float64List lngLatPairs, {double cellMeters = defaultRepeatCellMeters, double toleranceMeters = defaultRepeatToleranceMeters, double minGapMeters = probeMinGapMeters}) {
   final int count = lngLatPairs.length ~/ 2;
@@ -89,6 +90,18 @@ Uint8List referenceFlags(Float64List lngLatPairs, {double cellMeters = defaultRe
     return _metresBetween(lngLatPairs, at, at + 1);
   }
 
+  // Mirrors the shipped shortest-plausible-neighbour rule: the shorter chord
+  // with spacing evidence is the yardstick for a jump.
+  double shortestPlausibleNeighbour(int start) {
+    var shortest = double.infinity;
+    for (final int k in <int>[start - 1, start + 1]) {
+      final double chord = chordMeters(k);
+      if (!chord.isFinite || chord < _probeMinSpacingEvidenceMeters) continue;
+      if (chord < shortest) shortest = chord;
+    }
+    return shortest.isFinite ? shortest : 0;
+  }
+
   final List<double> travelled = List<double>.filled(count, 0);
   for (var i = 1; i < count; i++) {
     travelled[i] = travelled[i - 1] + (_finiteAt(lngLatPairs, i - 1) && _finiteAt(lngLatPairs, i) ? _metresBetween(lngLatPairs, i - 1, i) : 0);
@@ -101,7 +114,8 @@ Uint8List referenceFlags(Float64List lngLatPairs, {double cellMeters = defaultRe
       if (!_finiteAt(lngLatPairs, start) || !_finiteAt(lngLatPairs, start + 1)) continue;
       final double lengthMeters = _metresBetween(lngLatPairs, start, start + 1);
       if (lengthMeters > _probeMaxIndexedSegmentMeters) continue;
-      if (lengthMeters > _probeGapRatio * math.max(chordMeters(start - 1), chordMeters(start + 1))) continue;
+      final double plausibleNeighbour = shortestPlausibleNeighbour(start);
+      if (plausibleNeighbour > 0 && lengthMeters > _probeGapRatio * plausibleNeighbour) continue;
       if (_pointToSegment(lngLatPairs, i, start, start + 1, centreLatitude) <= toleranceMeters) {
         candidates[i] = 1;
         break;
