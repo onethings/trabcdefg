@@ -10,16 +10,43 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-class AuthSessionStore {
-  AuthSessionStore._();
+/// The key-value backend behind [AuthSessionStore]. Production uses the
+/// platform keystore; tests pass an in-memory map so two stores can model the
+/// same device across an app restart.
+abstract class SecureStore {
+  Future<String?> read(String key);
+  Future<void> write(String key, String value);
+  Future<void> delete(String key);
+}
 
-  static final AuthSessionStore instance = AuthSessionStore._();
+/// Android Keystore / iOS Keychain.
+class KeychainStore implements SecureStore {
+  const KeychainStore();
 
   static const _storage = FlutterSecureStorage(
     iOptions: IOSOptions(
       accessibility: KeychainAccessibility.first_unlock_this_device,
     ),
   );
+
+  @override
+  Future<String?> read(String key) => _storage.read(key: key);
+
+  @override
+  Future<void> write(String key, String value) =>
+      _storage.write(key: key, value: value);
+
+  @override
+  Future<void> delete(String key) => _storage.delete(key: key);
+}
+
+class AuthSessionStore {
+  AuthSessionStore({SecureStore? storage})
+    : _storage = storage ?? const KeychainStore();
+
+  static final AuthSessionStore instance = AuthSessionStore();
+
+  final SecureStore _storage;
 
   static const _sessionKey = 'auth_session_id';
 
@@ -60,7 +87,7 @@ class AuthSessionStore {
 
     String? storedSessionId;
     try {
-      storedSessionId = await _storage.read(key: _sessionKey);
+      storedSessionId = await _storage.read(_sessionKey);
     } catch (e) {
       debugPrint('AuthSessionStore: failed to read secure storage: $e');
     }
@@ -72,7 +99,7 @@ class AuthSessionStore {
       // plain-text copy so users are not forced to log in again.
       storedSessionId = legacySessionId;
       try {
-        await _storage.write(key: _sessionKey, value: storedSessionId);
+        await _storage.write(_sessionKey, storedSessionId);
       } catch (e) {
         debugPrint('AuthSessionStore: failed to migrate session: $e');
       }
@@ -94,7 +121,7 @@ class AuthSessionStore {
     _password = password;
 
     try {
-      await _storage.write(key: _sessionKey, value: sessionId);
+      await _storage.write(_sessionKey, sessionId);
     } catch (e) {
       debugPrint('AuthSessionStore: failed to save session: $e');
     }
@@ -106,7 +133,7 @@ class AuthSessionStore {
   Future<void> updateSession(String sessionId) async {
     _sessionId = sessionId;
     try {
-      await _storage.write(key: _sessionKey, value: sessionId);
+      await _storage.write(_sessionKey, sessionId);
     } catch (e) {
       debugPrint('AuthSessionStore: failed to update session: $e');
     }
@@ -120,7 +147,7 @@ class AuthSessionStore {
     _password = null;
 
     try {
-      await _storage.delete(key: _sessionKey);
+      await _storage.delete(_sessionKey);
     } catch (e) {
       debugPrint('AuthSessionStore: failed to delete session: $e');
     }
