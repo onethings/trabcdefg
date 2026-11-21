@@ -71,11 +71,9 @@ class AuthService {
     );
   }
 
-  /// Attempts to renew an expired session using credentials kept in memory.
-  ///
-  /// The password is never persisted, so this only works within the process
-  /// that performed the original login. After an app restart the user has to
-  /// sign in again.
+  /// Attempts to renew an expired session using the credentials saved at
+  /// login. They live in the platform keystore, so this also works in a process
+  /// that never saw the login itself.
   Future<bool> tryAutoRelogin() async {
     final result = await refreshSession(
       client: apiClient,
@@ -86,10 +84,10 @@ class AuthService {
 
   /// Re-logs in through [client] and updates [store] with the new session id.
   ///
-  /// Only a definitive rejection (400/401/403, or credentials no longer held
-  /// in memory) is reported as [SessionRefreshResult.rejected]. Transport
-  /// errors and 5xx responses are [SessionRefreshResult.inconclusive] so the
-  /// caller does not discard a session that is probably still valid.
+  /// Only a definitive rejection (400/401/403, or no credentials on record) is
+  /// reported as [SessionRefreshResult.rejected]. Transport errors and 5xx
+  /// responses are [SessionRefreshResult.inconclusive] so the caller does not
+  /// discard a session that is probably still valid.
   static Future<SessionRefreshResult> refreshSession({
     required ApiClient client,
     required AuthSessionStore store,

@@ -1,10 +1,11 @@
 // lib/services/auth_session_store.dart
-// Stores the server session in the platform keystore (Android Keystore /
-// iOS Keychain) instead of plain-text SharedPreferences.
+// Stores the server session and the credentials that renew it in the platform
+// keystore (Android Keystore / iOS Keychain) instead of plain-text
+// SharedPreferences.
 //
-// Credentials (email + password) are kept in memory only for the lifetime of
-// the process so the app can silently renew an expired session. They are never
-// written to disk.
+// The server expires a session on its own schedule (24 hours by default) and a
+// mobile app is usually killed in between, so the credentials have to outlive
+// the process. They live in the keystore, never in SharedPreferences.
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -49,6 +50,8 @@ class AuthSessionStore {
   final SecureStore _storage;
 
   static const _sessionKey = 'auth_session_id';
+  static const _emailKey = 'auth_email';
+  static const _passwordKey = 'auth_password';
 
   /// Keys written by older builds in plain-text SharedPreferences.
   static const _legacyKeys = <String>[
@@ -72,45 +75,47 @@ class AuthSessionStore {
 
   String? get sessionId => _sessionId;
 
-  /// Only available for the current process — used for one silent re-login
-  /// when the saved session expires.
+  /// Used for one silent re-login when the saved session expires.
   String? get email => _email;
   String? get password => _password;
 
-  /// Loads the persisted session and removes credentials that older builds
-  /// stored in plain text.
+  /// Loads the persisted session and credentials, and removes the copies that
+  /// older builds kept in plain text.
   Future<void> load() async {
     if (_loaded) return;
 
     final prefs = await SharedPreferences.getInstance();
+
+    _sessionId = await _read(_sessionKey);
+    _email = await _read(_emailKey);
+    _password = await _read(_passwordKey);
+
     final legacySessionId = prefs.getString('jSessionId');
-
-    String? storedSessionId;
-    try {
-      storedSessionId = await _storage.read(_sessionKey);
-    } catch (e) {
-      debugPrint('AuthSessionStore: failed to read secure storage: $e');
-    }
-
-    if (storedSessionId == null &&
+    if ((_sessionId == null || _sessionId!.isEmpty) &&
         legacySessionId != null &&
         legacySessionId.isNotEmpty) {
       // Migrate the existing session to secure storage before deleting the
       // plain-text copy so users are not forced to log in again.
-      storedSessionId = legacySessionId;
-      try {
-        await _storage.write(_sessionKey, storedSessionId);
-      } catch (e) {
-        debugPrint('AuthSessionStore: failed to migrate session: $e');
-      }
+      _sessionId = legacySessionId;
+      await _write(_sessionKey, legacySessionId);
     }
 
-    _sessionId = storedSessionId;
+    final legacyEmail = prefs.getString('saved_email');
+    final legacyPassword = prefs.getString('saved_password');
+    if (_email == null && legacyEmail != null && legacyPassword != null) {
+      // `fix session expired by auto update session` (6906b04) kept these in
+      // plain text; without them an expired session cannot be renewed.
+      _email = legacyEmail;
+      _password = legacyPassword;
+      await _write(_emailKey, legacyEmail);
+      await _write(_passwordKey, legacyPassword);
+    }
+
     await _removeLegacyPrefs(prefs);
     _loaded = true;
   }
 
-  /// Persists the new session id and keeps the credentials in memory only.
+  /// Persists the new session id and the credentials that renew it.
   Future<void> saveCredentials({
     required String sessionId,
     required String email,
@@ -120,11 +125,9 @@ class AuthSessionStore {
     _email = email;
     _password = password;
 
-    try {
-      await _storage.write(_sessionKey, sessionId);
-    } catch (e) {
-      debugPrint('AuthSessionStore: failed to save session: $e');
-    }
+    await _write(_sessionKey, sessionId);
+    await _write(_emailKey, email);
+    await _write(_passwordKey, password);
 
     onSessionUpdated?.call(sessionId);
   }
@@ -132,11 +135,7 @@ class AuthSessionStore {
   /// Updates the session after a successful silent re-login.
   Future<void> updateSession(String sessionId) async {
     _sessionId = sessionId;
-    try {
-      await _storage.write(_sessionKey, sessionId);
-    } catch (e) {
-      debugPrint('AuthSessionStore: failed to update session: $e');
-    }
+    await _write(_sessionKey, sessionId);
     onSessionUpdated?.call(sessionId);
   }
 
@@ -146,11 +145,9 @@ class AuthSessionStore {
     _email = null;
     _password = null;
 
-    try {
-      await _storage.delete(_sessionKey);
-    } catch (e) {
-      debugPrint('AuthSessionStore: failed to delete session: $e');
-    }
+    await _delete(_sessionKey);
+    await _delete(_emailKey);
+    await _delete(_passwordKey);
 
     final prefs = await SharedPreferences.getInstance();
     await _removeLegacyPrefs(prefs);
@@ -162,6 +159,31 @@ class AuthSessionStore {
       } catch (e) {
         debugPrint('AuthSessionStore: session-cleared callback failed: $e');
       }
+    }
+  }
+
+  Future<String?> _read(String key) async {
+    try {
+      return await _storage.read(key);
+    } catch (e) {
+      debugPrint('AuthSessionStore: failed to read $key: $e');
+      return null;
+    }
+  }
+
+  Future<void> _write(String key, String value) async {
+    try {
+      await _storage.write(key, value);
+    } catch (e) {
+      debugPrint('AuthSessionStore: failed to write $key: $e');
+    }
+  }
+
+  Future<void> _delete(String key) async {
+    try {
+      await _storage.delete(key);
+    } catch (e) {
+      debugPrint('AuthSessionStore: failed to delete $key: $e');
     }
   }
 
