@@ -26,7 +26,7 @@ enum SessionRefreshResult {
 
 /// Wraps an [http.Client] to handle expired sessions.
 ///
-/// When the server returns 401 for a request:
+/// When the server answers that a request is not authenticated:
 /// 1. [refreshSession] is invoked exactly once, even if many requests fail
 ///    concurrently (single-flight).
 /// 2. If the refresh succeeds, the original request is retried once with the
@@ -69,7 +69,7 @@ class AuthInterceptingClient extends http.BaseClient {
 
     final response = await _inner.send(request);
 
-    if (response.statusCode != 401 || isLoginRequest) {
+    if (isLoginRequest || !_sessionRejected(request, response.statusCode)) {
       return response;
     }
 
@@ -101,7 +101,7 @@ class AuthInterceptingClient extends http.BaseClient {
     _applySessionCookie(retryRequest);
 
     final retryResponse = await _inner.send(retryRequest);
-    if (retryResponse.statusCode == 401) {
+    if (_sessionRejected(retryRequest, retryResponse.statusCode)) {
       await _notifyUnauthorized();
     }
     return retryResponse;
@@ -109,6 +109,19 @@ class AuthInterceptingClient extends http.BaseClient {
 
   bool _isLoginRequest(http.BaseRequest request) =>
       request.method == 'POST' && request.url.path.endsWith('/session');
+
+  /// True when the server answered that this request carried no valid session.
+  ///
+  /// Traccar returns 401 from the endpoints behind its security filter, but
+  /// GET /session is `@PermitAll` and reports the missing session as 404. A
+  /// reopened app asks for the session first, so both codes mean the same
+  /// thing here and both have to renew.
+  bool _sessionRejected(http.BaseRequest request, int statusCode) {
+    if (statusCode == 401) return true;
+    return statusCode == 404 &&
+        request.method == 'GET' &&
+        request.url.path.endsWith('/session');
+  }
 
   void _applySessionCookie(http.BaseRequest request) {
     final sessionId = sessionIdProvider?.call();
